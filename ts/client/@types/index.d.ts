@@ -15,6 +15,12 @@ declare global {
    * (`PXL_PERF_DRIVE=1`). */
   const __PERF_DRIVE__: boolean;
 
+  /** Whether the bundle is the page's. */
+  const __WEB__: boolean;
+
+  /** Whether the bundle is a device's, an iPhone's or an Android phone's. */
+  const __NATIVE__: boolean;
+
   namespace NodeJS {
     interface Require {
       /** The address of a worker's bundle, which Metro builds from `name`. */

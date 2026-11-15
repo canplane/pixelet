@@ -10,8 +10,8 @@ use crate::status::errno::Errno;
 use crate::status::error::XputeError;
 
 use super::spec::{
-    AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ,
-    GET_DESC, GET_LEN, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ,
+    ALIGN_SZ, AlignUnit, Array, GET_DESC, GET_LEN, GET_WORD, HDR_SZ, MAGIC, NONE, NodeType,
+    NodeValue, ScalarType, SequenceType, SpecialType, TYPE_IS_LEAF, WORD_SZ,
 };
 
 pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;
@@ -709,7 +709,7 @@ impl<'a> StrList<'a> {
         })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &'a str> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = &'a str> + use<'a> {
         let s = *self;
         (0..s.len).filter_map(move |i| s.get(i))
     }

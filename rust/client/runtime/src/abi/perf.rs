@@ -79,5 +79,5 @@ pub fn strtab(side_: &_rt::Side) -> Result<Vec<u8>, _rt::Errno> {
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method, Packet, Side};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

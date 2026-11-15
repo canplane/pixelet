@@ -11,8 +11,8 @@
 use pxl_engine::clipmap::{self as cells, Lookup};
 use pxl_engine::ground::{Cell, Extent};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
+use pxl_spec::space::coord::zoom::{Zoom, units};
+use pxl_spec::space::hierarchy::tree::{Node, ancestor_of, region};
 use pxl_spec::space::layer::area::Shard;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;

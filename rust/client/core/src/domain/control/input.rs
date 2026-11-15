@@ -19,10 +19,10 @@ use crate::domain::control::param::{
 
 use crate::abi::input::Drag;
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::controller::{active, Active};
-use crate::domain::control::camera::gesture::{linear, Anchor};
+use crate::domain::control::camera::controller::{Active, active};
+use crate::domain::control::camera::gesture::{Anchor, linear};
 use crate::domain::control::camera::orbit;
-use crate::domain::control::camera::state::{camera_state, IntentPatch};
+use crate::domain::control::camera::state::{IntentPatch, camera_state};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::setting::settings;

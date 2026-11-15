@@ -8,7 +8,7 @@
 use crate::domain::scene::model::asset::{model_of, registered_model};
 use crate::sys::io::loader::{load_image, load_of};
 use pxl_content::generation;
-use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec::asset::decor::{DECORS, Decor};
 
 /// The most models decor registers: one for each variant, and each variant is
 /// a draw group (pxl-content generation.rs `GROUP_CNT`). Two variants that name

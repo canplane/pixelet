@@ -31,7 +31,7 @@
 // placed one's are the placement's.
 
 use crate::asset::catalog::Slot;
-use crate::asset::id::{asset_id, AssetId, Kind};
+use crate::asset::id::{AssetId, Kind, asset_id};
 use crate::ground::GroundId;
 
 /// The most variants a decor has.

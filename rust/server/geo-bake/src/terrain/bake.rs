@@ -11,8 +11,8 @@ use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::separation::WayRange;
-use crate::terrain::pipeline::feature::{local, Feature};
-use crate::terrain::pipeline::ground::{bake_ground, Coast};
+use crate::terrain::pipeline::feature::{Feature, local};
+use crate::terrain::pipeline::ground::{Coast, bake_ground};
 use crate::terrain::pipeline::overture::policy::{bases, buildings, ways};
 use crate::terrain::repository::{CoastRow, TileSource};
 use crate::wkb::wkb_to_geometries;

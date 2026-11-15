@@ -10,7 +10,7 @@ fn field_of_view() {
 
 #[test]
 fn zoom_cell_dist() {
-    use crate::space::coord::zoom::{units, UNIT_ZOOM};
+    use crate::space::coord::zoom::{UNIT_ZOOM, units};
     for z in [0, UNIT_ZOOM, UNIT_ZOOM + 5] {
         assert_eq!(
             units(z) / split_dist(z),

@@ -27,7 +27,7 @@ Run from a tree whose HEAD is the commit to send, with nothing uncommitted:
 make -j8 check check-build check-xpute && make -j8 test test-xpute test-gpu
 ```
 
-A change that touches a GPU call also takes xpute's GPU tests, as
+A change that touches a GPU call also takes the GPU's tests, as
 [CONTRIBUTING.md](../../../CONTRIBUTING.md#checking-a-change) says.
 
 ## Squash

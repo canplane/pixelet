@@ -16,12 +16,12 @@ use std::process::ExitCode;
 
 use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::Overture;
-use pxl_geo_bake::division::{leaf, READS};
+use pxl_geo_bake::division::{READS, leaf};
 use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
-use pxl_geo_bake::tile::walk::{over, Outcome};
-use pxl_geo_bake::util::{pack, Level};
-use pxl_spec::bake::tile::division::{DivisionTile, DIVISION_LEAF};
+use pxl_geo_bake::tile::walk::{Outcome, over};
+use pxl_geo_bake::util::{Level, pack};
+use pxl_spec::bake::tile::division::{DIVISION_LEAF, DivisionTile};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 fn run() -> Result<(), String> {

@@ -8,7 +8,7 @@ use core::mem::{offset_of, size_of};
 use crate::spec::phase::Phase;
 use pxl_engine::count;
 
-use crate::perf::word::{as_words, as_words_mut, words, zeroed, AsWords};
+use crate::perf::word::{AsWords, as_words, as_words_mut, words, zeroed};
 use crate::spec::perf::{frame, frame_group, worst};
 use crate::spec::step::EffectName;
 use pxl_render::ray;

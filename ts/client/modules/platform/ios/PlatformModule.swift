@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/ios/PlatformModule.swift
+// @pxl/client/modules/platform/ios/PlatformModule.swift
 
 import CoreLocation
 import ExpoModulesCore
@@ -9,8 +9,8 @@ import UIKit
 /// The device's half of the client's services on iOS (the .native files in
 /// ts/client/src/service/platform/), as one module that answers what the UI
 /// asks of the system. The core is in xpute's own module
-/// (@xpute/native-runtime), and the view it draws into in
-/// @xpute/gpu-native-runtime's.
+/// (@xpute/expo), and the view it draws into in
+/// @pxl/gpu/expo's.
 public class PlatformModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")

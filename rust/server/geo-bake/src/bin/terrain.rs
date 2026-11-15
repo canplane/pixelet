@@ -30,7 +30,7 @@ use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::tile::walk::{self, Outcome};
-use pxl_geo_bake::util::{pack, Level};
+use pxl_geo_bake::util::{Level, pack};
 
 const CLASSIFY_BATCH: usize = 2000;
 

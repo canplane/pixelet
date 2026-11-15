@@ -8,7 +8,7 @@
 use pxl_content::param::night;
 use pxl_spec::space::coord::v3::{self, V3};
 
-use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
+use crate::look::atmosphere::{MOON_LIGHT, NIGHT_COLOR, moon_phase_light};
 
 /// The lane's floats, a vec4 each unless said: the sun's direction and a pad; the moon's
 /// direction and its light; the moon's color and a pad, the sun's color being white; the

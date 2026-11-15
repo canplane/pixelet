@@ -1,23 +1,21 @@
 # pixelet's TypeScript workspace. It holds the client, which is one Expo app
 # for the page and the device; the build scripts its bundler reads the client
-# through; the XR app (xr); the shader tools; and xpute's packages, as xpute's
-# own workspace lists them.
+# through; the XR app (xr); the shader tools; the GPU, pixelet's plugin of
+# xpute (gpu/); and xpute's packages, as xpute's own workspace lists them.
 packages:
   - client
   - xr
   - build
   - tool/shader
+  - gpu
   - ../xpute/kit/ts
   - ../xpute/link/ts
-  - ../xpute/web/host
-  - ../xpute/web/runtime
-  - ../xpute/native/runtime/expo
-  - ../xpute/gpu/link/ts
-  - ../xpute/gpu/web/host
-  - ../xpute/gpu/native/runtime/expo
-  - ../xpute/dev/golden/ts
+  - ../xpute/host/ts
+  - ../xpute/runtime/web
+  - ../xpute/expo
+  - ../xpute/golden/ts
 
 # Only webgpu may run its install script, which installs the binary of Dawn,
 # the WebGPU implementation the shader test compiles shaders on.
-onlyBuiltDependencies:
-  - webgpu
+allowBuilds:
+  webgpu: true

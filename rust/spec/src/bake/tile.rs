@@ -9,8 +9,8 @@ use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 use crate::bake::malformed;
 use crate::bake::publication::BaseKind;
-use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
-use crate::space::layer::lattice::{coarsest, Lattice, GROUND};
+use crate::space::coord::zoom::{LEAF_ZOOM, Zoom};
+use crate::space::layer::lattice::{GROUND, Lattice, coarsest};
 
 pub mod division;
 pub mod earth;
@@ -69,16 +69,16 @@ pub struct Row {
     /// The most bytes a packet of it takes: what a client may hold one in,
     /// and refuses one past. The Earth's follows from its lanes; every other
     /// kind's is a room its bake refuses a tile past.
-    pub pkt_cap: usize,
+    pub pkt_cap: u32,
 }
 
 impl BaseKind {
     pub const fn row(self) -> Row {
         let (lattice, leaf, pkt_cap) = match self {
-            BaseKind::Terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
-            BaseKind::Place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
-            BaseKind::Division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
-            BaseKind::Earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_BYTES),
+            BaseKind::Terrain => (GROUND, LEAF_ZOOM, terrain::PKT_CAP),
+            BaseKind::Place => (place::PLACE_LATTICE, LEAF_ZOOM, place::PKT_CAP),
+            BaseKind::Division => (GROUND, division::DIVISION_LEAF, division::PKT_CAP),
+            BaseKind::Earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_SZ),
         };
         Row {
             lattice,

@@ -43,7 +43,8 @@ install-py:
 # since CI checks nothing (.agents/skills/deploy/SKILL.md): `check-build`, the
 # client's bundle as a deploy builds it (the Worker is bundled by the deploy
 # itself, in CI, which runs wrangler); xpute's own checks and tests, a project
-# of its own; and `test-gpu`, the renderer's passes on this machine's GPU.
+# of its own; and `test-gpu`, the GPU's crates and the renderer's passes on
+# this machine's GPU.
 check: check-ts check-rust check-rules check-spec
 check-ts:
 	pnpm --dir ts check
@@ -73,8 +74,11 @@ test-xpute:
 	+cd xpute && cargo test --workspace
 	pnpm --dir xpute test
 	$(MAKE) -C xpute/cpp test
+# The GPU crates' tests take the Mac's GPU without holding it, so they run
+# under its module; the renderer's passes hold it themselves
+# (pxl-render tests/gpu/lock.rs), and under the module would wait on it.
 test-gpu:
-	+cd rust && cargo test-gpu
+	+cd rust && ../script/perf/mac.py cargo test-gpu-host && cargo test-gpu
 
 fmt: fmt-ts fmt-rust fmt-xpute
 fmt-ts:

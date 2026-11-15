@@ -9,16 +9,16 @@
 use core::cell::Cell;
 
 use crate::frame::shader::record::{
-    reads_shadow_map, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
-    PIPELINE_SKINNED,
+    PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED,
+    reads_shadow_map,
 };
-use crate::frame::shader::word::{draw, ghost_box, instance, location, skinned, DRAW_FLOATS};
+use crate::frame::shader::word::{DRAW_FLOATS, draw, ghost_box, instance, location, skinned};
 use crate::gpu::api::in_flight;
 use pxl_content::generation::{TALLEST, WIDEST};
 use pxl_engine::light;
 use pxl_global::Global;
-use pxl_spec::space::coord::q3::{from_real, ONE, Q3};
+use pxl_spec::space::coord::q3::{ONE, Q3, from_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::between;
 use xpute_kit::abi::word::split64;
@@ -26,7 +26,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::mem;
 
-/// An upload record's words: handle, address (two words, xpute-gpu-link `addr`), byte length,
+/// An upload record's words: handle, address (two words, pxl-gpu-link `addr`), byte length,
 /// vertex count and index count.
 pub const UPLOAD_WORDS: usize = 6;
 /// A draw record's words: handle, two words the pipeline gives a meaning, the slot where the
@@ -190,11 +190,11 @@ fn list_arrays() -> &'static mut ListMemory {
 }
 
 /// The bytes the lists' arrays take for `live` live uploads.
-pub const fn lists_bytes(live: usize) -> u32 {
+pub const fn lists_sz(live: usize) -> u32 {
     (2 * (UPLOAD_WORDS + 1) * live * 4) as u32
 }
 
-/// Lays the lists' arrays for `live` uploads in `room`, `lists_bytes(live)` zeroed, the
+/// Lays the lists' arrays for `live` uploads in `room`, `lists_sz(live)` zeroed, the
 /// lists' alone for as long as the core runs.
 pub fn set_lists(room: &'static mut [u32], live: usize) {
     let (u, f) = (UPLOAD_WORDS * live, live);
@@ -943,7 +943,7 @@ pub(crate) fn test_lists() -> std::sync::MutexGuard<'static, ()> {
     let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     SET.call_once(|| {
         const LIVE: usize = 64;
-        set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
+        set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
     });
     guard
 }

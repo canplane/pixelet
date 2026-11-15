@@ -4,12 +4,11 @@
 
 use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
-use xpute_kit::wire::xtp::MAX_PKT_SZ;
 
 use std::borrow::Cow;
 use std::collections::TryReserveError;
 
-use super::{occupancy_of, Occupancy, Tile};
+use super::{Occupancy, Tile, occupancy_of};
 use crate::bake::malformed;
 use crate::bake::publication::BaseKind;
 use crate::bake::separation::{self, Separation};
@@ -25,19 +24,19 @@ pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::Sentinel;
 use crate::brick::{
-    lines_words, of_idx, Brick, BRICK, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BIN_CNT,
-    WAYS_SHIFT,
+    BRICK, Brick, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BIN_CNT, WAYS_SHIFT,
+    lines_words, of_idx,
 };
 use crate::ground;
-use crate::ground::{GroundId, ELE_PADDED_SPAN};
+use crate::ground::{ELE_PADDED_SPAN, GroundId};
 use crate::space::coord::world::wrap_idx;
 use crate::space::layer::area::Shard;
 use crate::way;
-use crate::way::{hdr, HDR_WORDS, SEGMENT_WORDS};
+use crate::way::{HDR_WORDS, SEGMENT_WORDS, hdr};
 
 /// The most a packet takes: what a client holds one in and refuses one
 /// past, and where a bake refuses a tile.
-pub(crate) const MAX_PKT_BYTES: usize = 2 << 20;
+pub(crate) const PKT_CAP: u32 = 2 << 20;
 
 /// The samples, the asset ids, the occupancy, the separation.
 type Packet = (Vec<i16>, Vec<GroundId>, u8, separation::Packet);
@@ -365,7 +364,7 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, XputeError> {
             tile.occupancy.bits(),
             tile.separation.pkt(),
         ),
-        MAX_PKT_SZ,
+        PKT_CAP,
     )
 }
 
@@ -400,7 +399,7 @@ pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], XputeError> {
 
 /// Decodes a tile as a client holds it: its padded samples straight into `ele`, in
 /// the terrain's fixed range, and its lines onto the heap, owned by the tile, as large as the bake's limit
-/// on a tile's bytes lets them be (`MAX_PKT_BYTES`); a heap that refuses them answers for
+/// on a tile's bytes lets them be (`PKT_CAP`); a heap that refuses them answers for
 /// itself. Its cells go to its clip levels (`cells_of`).
 pub fn decode_into<E: From<XputeError> + From<TryReserveError>>(
     pkt: &[u8],

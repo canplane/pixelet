@@ -13,7 +13,7 @@ use std::process::{Command, Stdio};
 pub fn format_text(path: &str, text: String) -> Result<String, String> {
     let mut cmd = if path.ends_with(".rs") {
         let mut c = Command::new("rustfmt");
-        c.args(["--edition", "2021", "--emit", "stdout"]);
+        c.args(["--edition", "2024", "--emit", "stdout"]);
         c
     } else if [".ts", ".json", ".json5"].iter().any(|e| path.ends_with(e)) {
         let file = Path::new(path);

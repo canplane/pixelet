@@ -18,17 +18,17 @@
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{BOUNDS, ROUND};
-use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, Zoom, units};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{at_zoom, finest, Descent, Ray, Until};
+use super::ray::{Descent, Ray, Until, at_zoom, finest};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
-use pxl_engine::cast::{fill_bound, Detail};
+use pxl_engine::cast::{Detail, fill_bound};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The height of a walker's center standing on a floor whose top is `top`:

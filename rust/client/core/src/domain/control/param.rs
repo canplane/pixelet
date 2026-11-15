@@ -6,7 +6,7 @@
 //! pivot goes before it is off the device.
 
 use pxl_spec::space::camera::grid;
-use pxl_spec::space::coord::zoom::{units, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{MIN_ZOOM, units};
 use pxl_spec::space::layer::lattice::GROUND;
 
 // ---- the camera ----

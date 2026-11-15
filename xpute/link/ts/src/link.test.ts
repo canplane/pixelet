@@ -10,6 +10,7 @@ import {
 import { type Frame, HDR_SZ, lay, read } from "./frame.ts";
 import { LAYOUT } from "./frame.spec.ts";
 import { CANCEL, NAMED, ROOT, Side, type Tag } from "./link.ts";
+import { Table } from "./resource.ts";
 
 const INBOX = 4 * LAYOUT.WORDS;
 const CAP = 64;
@@ -35,13 +36,10 @@ function link(): {
   let later: Tag | null = null;
   const side = new Side({
     mem,
-    init: () => 0n,
-    boot: () => {},
     in: () => {
       frames.push(read(view, INBOX));
       return 0;
     },
-    trap: () => {},
   });
   side.mount_named(SERVED, {
     call(m, tag) {
@@ -54,13 +52,13 @@ function link(): {
     },
     drop() {},
   });
-  assert.ok(side.init([]));
+  side.set_layout(0n);
   return { side, view, frames, later: () => later! };
 }
 
 test("the answer a side lays in the frame its request came in is marked RES and carries the request's tag", () => {
   const { side, view } = link();
-  const out = Side.imports(() => side).link_out;
+  const out = (at: bigint) => side.recv(at);
   for (const [tag, method, result] of [
     [5, 0, 0],
     [6, 2, ERRNO_EMSGSIZE],
@@ -84,7 +82,7 @@ test("the answer a side lays in the frame its request came in is marked RES and 
 
 test("a later answer is marked RES and carries the request's tag", () => {
   const { side, view, frames, later } = link();
-  const out = Side.imports(() => side).link_out;
+  const out = (at: bigint) => side.recv(at);
   for (const [tag, sz, result] of [
     [5, 4, 0],
     [6, CAP, ERRNO_EMSGSIZE],
@@ -104,41 +102,9 @@ test("a later answer is marked RES and carries the request's tag", () => {
   }
 });
 
-test("a world importing what no server mounts refuses to start, naming each, and the guest is never entered", () => {
-  const traps: unknown[] = [];
-  let entered = false;
-  const side = new Side({
-    mem: new ArrayBuffer(8),
-    init: () => {
-      entered = true;
-      return 0n;
-    },
-    boot: () => {},
-    in: () => 0,
-    trap: (e) => traps.push(e),
-  });
-  const [named, opened, missing, missing_too] = [1, 2, 3, 4].map(
-    (k) => (NAMED | k) >>> 0,
-  ) as [number, number, number, number];
-  side.mount_named(named, { call: () => 0, drop() {} });
-  side.mount(opened, [{ tag: "str", val: "opened" }], () => ({
-    call: () => 0,
-    drop() {},
-  }));
-  const imports = [
-    ["named", named],
-    ["opened", opened],
-    ["missing", missing],
-    ["missing-too", missing_too],
-  ] as const;
-  assert.equal(side.init(imports), false);
-  assert.deepEqual(traps, ["no server mounts missing, missing-too"]);
-  assert.equal(entered, false);
-});
-
 test("a cancel runs the stop its request put once, and none once the request has answered", () => {
   const { side, view, later } = link();
-  const out = Side.imports(() => side).link_out;
+  const out = (at: bigint) => side.recv(at);
   const send = (tag: Tag, handle: number, method: number, arg: Tag | null) => {
     if (arg !== null) view.setUint32(OUTBOX + HDR_SZ, arg, true);
     lay(view, OUTBOX, {
@@ -163,4 +129,22 @@ test("a cancel runs the stop its request put once, and none once the request has
   side.task_return(later(), 0);
   send(9, ROOT, CANCEL, 8);
   assert.equal(stops, 1);
+});
+
+test("a table holds an object under a handle the other end issued, as under its own, and its slot follows that end's next generation", () => {
+  const issuer = new Table<number>();
+  const holder = new Table<number>();
+  const a = issuer.add(1);
+  const b = issuer.add(2);
+  holder.put(b, 2);
+  assert.equal(holder.get(b), 2);
+  assert.equal(holder.get(a), undefined);
+  assert.equal(holder.remove(b), 2);
+  assert.equal(issuer.remove(b), 2);
+  const c = issuer.add(3);
+  holder.put(c, 3);
+  holder.put(a, 1);
+  assert.equal(holder.get(b), undefined);
+  assert.equal(holder.get(c), 3);
+  assert.equal(holder.get(a), 1);
 });

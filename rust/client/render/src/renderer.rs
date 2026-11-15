@@ -26,24 +26,24 @@ use crate::frame::shader::record::{
     PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_SKINNED,
 };
 use crate::frame::shader::sequence;
+use crate::frame::shader::word::SHADOW_SIZE;
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CORNER_AO, DRIFT_Q, DRIFT_R, EDGE_STRENGTH, EYE, GIZMO, JITTER, LIGHT_STEPS,
     LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
-    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    SHADOW_TEXEL, VIEW_PROJ, VIEWPORT, VIGNETTE,
 };
-use crate::frame::shader::word::SHADOW_SIZE;
-use crate::frame::shader::word::{clouds, BOX_VERTEX_CNT, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS};
+use crate::frame::shader::word::{BOX_VERTEX_CNT, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, clouds};
 use crate::frame::shelf::Atlas;
 use crate::gpu::api;
 use crate::gpu::api::{
+    Device, Entry, Format, Gpu, Group, Image, Load, RenderContext, TrackedRenderPass, WORLD_COLOR,
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
-    pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
-    Format, Gpu, Group, Image, Load, RenderContext, TrackedRenderPass, WORLD_COLOR,
+    pass_desc, release, sampler_entry, texture_usage, view_entry, word_sz,
 };
-use crate::gpu::draw::{drifts, uniform_of, Draw, DrawTable, Position};
 use crate::gpu::draw::{
-    DrawStat, DrawUpdate, DRAW_PIPELINES, DRAW_WORDS, REWRITE_WORDS, UPLOAD_WORDS,
+    DRAW_PIPELINES, DRAW_WORDS, DrawStat, DrawUpdate, REWRITE_WORDS, UPLOAD_WORDS,
 };
+use crate::gpu::draw::{Draw, DrawTable, Position, drifts, uniform_of};
 use crate::gpu::generator::Mask;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
@@ -52,7 +52,7 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::{put_mat, put_steps};
 use crate::gpu::read::{Read, SlotMirror};
 use crate::gpu::surface::{
-    on_surfaces_lost, slot_of, surface, surfaces, Surface, SETTLE_FRAME_CNT, SURFACE_CAP,
+    SETTLE_FRAME_CNT, SURFACE_CAP, Surface, on_surfaces_lost, slot_of, surface, surfaces,
 };
 use crate::gpu::text::TextOf;
 use crate::gpu::tile::{self, Damage, TileGrid};
@@ -71,7 +71,7 @@ use crate::pass::impostor::ImpostorPass;
 use crate::pass::location::LocationPass;
 use crate::pass::mark::{CopyCache, DamageInput};
 use crate::pass::marker::MarkerPass;
-use crate::pass::model::{frame_entries, frame_layout, on_skins_lost, Extent, Stage};
+use crate::pass::model::{Extent, Stage, frame_entries, frame_layout, on_skins_lost};
 use crate::pass::propagate::{self, Propagate};
 use crate::pass::resolve::Resolve;
 use crate::pass::shadow::{self, Shadow};
@@ -80,7 +80,7 @@ use crate::pass::sky::SkyPass;
 use crate::pass::star::StarPass;
 use crate::ray::{Cast, GroundInput, RayCount, RayPass};
 use crate::spec::api::surface_role;
-use crate::spec::span::{FrameKind, GpuSpanName, GPU_SPAN_PER_PX};
+use crate::spec::span::{FrameKind, GPU_SPAN_PER_PX, GpuSpanName};
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -444,10 +444,10 @@ pub fn on_surface_closed(slot: usize, s: Surface) {
     for id in s.targets() {
         release(id);
     }
-    if let Some(r) = RENDERER.get(|| None).as_mut() {
-        if let Some(pass) = r.character_passes[slot].take() {
-            pass.release();
-        }
+    if let Some(r) = RENDERER.get(|| None).as_mut()
+        && let Some(pass) = r.character_passes[slot].take()
+    {
+        pass.release();
     }
 }
 
@@ -463,7 +463,7 @@ pub struct Renderer {
     sky: SkyPass,
     ghost: Pipeline,
     draws_buf: u32,
-    draws_bytes: u32,
+    draws_sz: u32,
     /// The ghost box's group 0 (`box_groups`).
     box_group: Group,
     /// The model passes' group 0 (pass/model.rs `frame_entries`).
@@ -554,7 +554,7 @@ impl Renderer {
     /// asked for once it draws.
     fn new(g: &Gpu, device: Device, mut pipelines: PipelineCache) -> Renderer {
         let frame_buf = g.buf(
-            word_bytes(FRAME_FLOATS),
+            word_sz(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buf);
@@ -608,7 +608,7 @@ impl Renderer {
             last_frame_uploads: CopyCache::default(),
             last_frame_words: [0.0; FRAME_FLOATS],
             last_frame_buf: g.buf(
-                word_bytes(FRAME_FLOATS),
+                word_sz(FRAME_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             ao_read: Read::default(),
@@ -617,7 +617,7 @@ impl Renderer {
             frame: [0.0; FRAME_FLOATS],
             sky,
             draws_buf,
-            draws_bytes: DRAWS_INIT * 4,
+            draws_sz: DRAWS_INIT * 4,
             box_group: Group::default(),
             model_group,
             shadow,
@@ -997,13 +997,13 @@ impl Renderer {
         // The draws' uniforms go in a buffer with room for them all. Only the
         // slots the frame changed are written, one record for each run of
         // adjacent slots (`SlotMirror::write`).
-        let uniform_bytes = word_bytes(uniforms.len());
-        let grew = uniform_bytes > self.draws_bytes;
+        let uniform_sz = word_sz(uniforms.len());
+        let grew = uniform_sz > self.draws_sz;
         if grew {
             release(self.draws_buf);
-            self.draws_bytes = uniform_bytes * 2;
+            self.draws_sz = uniform_sz * 2;
             self.draws_buf = g.buf(
-                self.draws_bytes,
+                self.draws_sz,
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
             self.box_groups(g);
@@ -1013,7 +1013,7 @@ impl Renderer {
             g,
             self.draws_buf,
             bytes(uniforms),
-            word_bytes(DRAW_FLOATS) as usize,
+            word_sz(DRAW_FLOATS) as usize,
             update.changes.iter().map(|c| c.slot),
         );
         // What the passes made of the draws stands while the frame changed

@@ -21,9 +21,5 @@ pub const EIGHTH_CNT: u32 = 8;
 /// together (pxl-engine answer.rs `cover`) alike.
 pub const fn eighths(fill: u32) -> u32 {
     let k = fill / (FULL / EIGHTH_CNT);
-    if k > EIGHTH_CNT {
-        EIGHTH_CNT
-    } else {
-        k
-    }
+    if k > EIGHTH_CNT { EIGHTH_CNT } else { k }
 }

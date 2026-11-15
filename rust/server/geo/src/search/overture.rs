@@ -4,8 +4,8 @@
 
 use deadpool_postgres::Pool;
 use serde::Serialize;
-use tokio_postgres::types::ToSql;
 use tokio_postgres::Row;
+use tokio_postgres::types::ToSql;
 
 use pxl_spec::bake::tile::place::category_of;
 use pxl_spec::division::{DivisionPart, Subtype};

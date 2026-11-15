@@ -1,6 +1,6 @@
 // pxl-render/look/color.rs
 
-use pxl_spec::color::{linear, Rgb};
+use pxl_spec::color::{Rgb, linear};
 
 /// The color `n` in linear light, which every shader lights and blends in.
 pub fn linear_rgb(n: Rgb) -> [f64; 3] {

@@ -16,12 +16,12 @@ mod gpu;
 use pxl_content::generation::{TALLEST, WIDEST};
 use pxl_engine::light::{self, Light};
 use pxl_engine::{eye, param, ray};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE};
+use pxl_render::frame::shader::record::{SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE, src};
 use pxl_render::frame::shader::word::SHADOW_SIZE;
 use pxl_render::frame::shader::word::SQUARE_SIDE;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 
-use gpu::{mix, Gpu, LightBox, Tally};
+use gpu::{Gpu, LightBox, Tally, mix};
 
 /// The side of the shadow map as shipped, in texels, and the number of tiles along it.
 const SIZE: u32 = SHADOW_SIZE;

@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 
 use pxl_spec::bake::tile::Tile;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
+use pxl_spec::space::layer::quadrant::{Quadrant, quad_rows};
 
 use crate::util;
-use crate::util::{pack, unpack, write_atomic, Level};
+use crate::util::{Level, pack, unpack, write_atomic};
 
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
 /// from the next finer one's; a parent reads its four children unless
@@ -179,10 +179,10 @@ pub struct Staged<'a> {
 
 impl Staged<'_> {
     pub fn content(&self, p: Quadrant) -> Result<Option<Vec<u8>>, String> {
-        if p.zoom != self.leaf || self.whole.contains(&p.shard()) {
-            if let Some(c) = self.stage.content(p)? {
-                return Ok(Some(c));
-            }
+        if (p.zoom != self.leaf || self.whole.contains(&p.shard()))
+            && let Some(c) = self.stage.content(p)?
+        {
+            return Ok(Some(c));
         }
         if self.removed.contains(&p) {
             return Ok(None);

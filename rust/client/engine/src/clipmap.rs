@@ -17,11 +17,11 @@ use crate::ground::Cell;
 use crate::ground::Extent;
 use crate::way;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
-use pxl_spec::ground::{asset_ids, top, GroundId};
+use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT, bricks_zoom, idx_of, of_idx};
+use pxl_spec::ground::{GroundId, asset_ids, top};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, MIN_ZOOM, Zoom, idx_at};
 use pxl_spec::space::hierarchy::tree::child_of;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
@@ -295,7 +295,7 @@ pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
 /// order: its columns, its levels, its cells as laid and the first word of its run of kept
 /// spans. The clip levels' bricks are one storage buffer bound whole on a GPU, under WebGPU's floor
-/// (pxl-render ray/ground.rs `GROUND_BYTES`).
+/// (pxl-render ray/ground.rs `GROUND_SZ`).
 pub const COLUMNS_AT: u32 = 0;
 pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
@@ -704,11 +704,7 @@ pub fn fold(w: &impl BrickSource, cell_zoom: Zoom, l: u32, b: u32) -> [u32; JOIN
 fn brick_bound(w: &impl BrickSource, cell_zoom: Zoom, q: [i32; 2]) -> Extent {
     let mut place = Lookup::NONE;
     let (b, _, here, _) = bounded(w, &mut place, cell_zoom, (cell_zoom - BRICK_MIP_LAST, q));
-    if here {
-        b
-    } else {
-        [ground::UNBOUNDED; 2]
-    }
+    if here { b } else { [ground::UNBOUNDED; 2] }
 }
 const _: () = assert!(
     FIRST_CELL_ZOOM >= BRICK_MIP_LAST,

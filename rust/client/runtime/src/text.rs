@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 use pxl_spec::color::Rgba;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Lent;
-use xpute_link::{mem, Side};
+use xpute_link::{Side, mem};
 
 use crate::abi::text;
 
@@ -114,7 +114,7 @@ pub(crate) fn serve(side: &'static Side) {
 
 /// Says what an iPhone app's Swift answers the core's text with.
 #[cfg(not(target_os = "android"))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn pxl_text_on(
     width: unsafe extern "C" fn(f64, f64, *const u8, usize) -> f64,
     raster: unsafe extern "C" fn(f64, f64, u32, *const u8, usize, f64, u32, u32, *mut u8),
@@ -129,10 +129,10 @@ mod android {
 
     use xpute_kit::status::bug::OrBug;
     use xpute_kit::status::errno::Errno;
-    use xpute_native_runtime::jni::sys::{jbyteArray, jint, jobject, jvalue, JNIEnv};
-    use xpute_native_runtime::jni::{call, class, env, Class};
+    use xpute_runtime_native::jni::sys::{JNIEnv, jbyteArray, jint, jobject, jvalue};
+    use xpute_runtime_native::jni::{Class, call, class, env};
 
-    use super::{text_on, Rgba, SystemText};
+    use super::{Rgba, SystemText, text_on};
 
     /// The class `PxlNative` and its static methods at `WIDTH` and `RASTER`.
     static CLASS: OnceLock<Class<2>> = OnceLock::new();
@@ -209,7 +209,7 @@ mod android {
     ///
     /// # Safety
     /// Only JNI calls this, with the environment and object of its call.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_textOn(
         e: *mut JNIEnv,
         this: jobject,

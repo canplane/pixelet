@@ -16,7 +16,7 @@ use crate::link::{in_guest, in_init};
 /// failure is told by the trap alone, as on a page. Both hooks are the
 /// process's on a device, so what is not the guest's own (another thread's,
 /// or the host's while the guest is out on `link_out`) goes on to the hook
-/// before, its runtime's (xpute-native-runtime native.rs `hook`), as it
+/// before, its runtime's (xpute-runtime-native native.rs `hook`), as it
 /// would have. A bug has no message; a panic `bug` did not raise, the
 /// standard library's or a dependency's, is told with its own.
 pub fn hook() {

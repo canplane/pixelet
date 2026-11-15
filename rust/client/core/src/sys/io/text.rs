@@ -127,8 +127,7 @@ fn is_space(c: char) -> bool {
 
 /// The characters no line may start with: closing marks and, in Japanese, the
 /// small kana and the marks that lean on the character before them.
-const NO_LINE_START: &str =
-    "、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)]}";
+const NO_LINE_START: &str = "、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)]}";
 
 /// The characters no line may end with: opening marks.
 const NO_LINE_END: &str = "（［｛〔〈《「『【“‘([{";

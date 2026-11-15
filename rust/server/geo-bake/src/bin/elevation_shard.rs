@@ -14,8 +14,8 @@
 //!
 //!   ./infra/geo/elevation/ingest.sh   # reads it
 
-use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
-use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};
+use pxl_spec::space::layer::quadrant::{Quadrant, quad_rows};
 use std::process::ExitCode;
 
 use pxl_geo_bake::cli;

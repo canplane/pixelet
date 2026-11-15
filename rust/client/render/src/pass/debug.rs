@@ -4,16 +4,14 @@
 //! finished, in passes of their own, and the camera grid over all of them,
 //! off the sky's ray.
 
-use crate::frame::shader::record::{
-    DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
-};
+use crate::frame::shader::record::{DEBUG_FACE_VERTEX_SZ, DEBUG_VERTEX_SZ, PIPELINE_DEBUG_FACE};
 use crate::frame::shader::record::{PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
-use crate::gpu::api::{buf_entry, pass_desc, Gpu, Load, RenderContext};
+use crate::gpu::api::{Gpu, Load, RenderContext, buf_entry, pass_desc};
 use crate::gpu::draw::uniform_of;
 use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
-use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
+use crate::pass::model::{DRAW_SZ, UniformBuffer, put_uniform};
 use crate::spec::span::GpuSpanName;
 
 /// The gizmos draw their faces into the world's depth at the canvas's size,
@@ -48,7 +46,7 @@ impl DebugPass {
             pipeline,
             face,
             frame_group,
-            uniforms: UniformBuffer::new(DRAW_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_SZ, align),
             grid,
             grid_group,
         }
@@ -124,8 +122,8 @@ impl DebugPass {
                     pass,
                     0,
                     buf,
-                    line_cnt * DEBUG_VERTEX_BYTES,
-                    face_cnt * DEBUG_FACE_VERTEX_BYTES,
+                    line_cnt * DEBUG_VERTEX_SZ,
+                    face_cnt * DEBUG_FACE_VERTEX_SZ,
                 );
                 g.draw(pass, face_cnt, 1, 0, 0);
             }
@@ -153,7 +151,7 @@ impl DebugPass {
             for (k, _, buf, line_cnt, _, slots) in sets().filter(|s| (s.4 > 0) == has_face) {
                 let (group, off) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[off]);
-                g.set_vertex_buf(pass, 0, buf, 0, line_cnt * DEBUG_VERTEX_BYTES);
+                g.set_vertex_buf(pass, 0, buf, 0, line_cnt * DEBUG_VERTEX_SZ);
                 // Each segment is one instance, and its two vertices are read
                 // as one stride (record.rs `DEBUG_BUFS`). Six vertices make
                 // the quad that draws it.

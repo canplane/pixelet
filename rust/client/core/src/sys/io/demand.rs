@@ -100,7 +100,7 @@ impl Stream {
     /// have none, because only the heap bounds them.
     pub const fn max_body(self) -> Option<u32> {
         match self.layer() {
-            Some(layer) => Some(layer.row().pkt_cap as u32),
+            Some(layer) => Some(layer.row().pkt_cap),
             None => None,
         }
     }
@@ -109,10 +109,10 @@ impl Stream {
     pub const fn of_layer(layer: BaseKind) -> Stream {
         let mut s = 0;
         while s < Stream::ALL.len() {
-            if let Source::Base(l) = Stream::ALL[s].row().source {
-                if l as u32 == layer as u32 {
-                    return Stream::ALL[s];
-                }
+            if let Source::Base(l) = Stream::ALL[s].row().source
+                && l as u32 == layer as u32
+            {
+                return Stream::ALL[s];
             }
             s += 1;
         }

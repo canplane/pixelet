@@ -6,7 +6,7 @@
 //! and this file is the only place the layout is written.
 
 use crate::beam;
-use crate::object::{Cut, CUT_WORDS};
+use crate::object::{CUT_WORDS, Cut};
 
 /// The eye's position in Q3 steps, X, Y and Z.
 pub const ORIGIN: usize = 0;

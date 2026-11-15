@@ -10,22 +10,22 @@
 use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
 use crate::gpu::draw::DRAW_WORDS;
-use crate::gpu::draw::{uniform_of, DrawStat, DrawTable};
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use crate::gpu::draw::{DrawStat, DrawTable, uniform_of};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::sequence;
 use crate::frame::shader::word::DECOR_GROUP_CNT;
 use crate::gpu::api::{
-    buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
-    view_entry, Format, Gpu, Load, TrackedRenderPass,
+    Format, Gpu, Load, TrackedRenderPass, buf_range_entry, buffer_usage, bytes, pass_desc, release,
+    sampler_entry, texture_usage, view_entry,
 };
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
 use crate::pass::decor::DecorPass;
-use crate::pass::mark::{put_whole, MarkPass};
+use crate::pass::mark::{MarkPass, put_whole};
 use crate::pass::model::{
-    draw_model, draw_models, put_uniform, Extent, ModelDraw, UniformBuffer, DRAW_BYTES,
+    DRAW_SZ, Extent, ModelDraw, UniformBuffer, draw_model, draw_models, put_uniform,
 };
 
 /// The side of an atlas layer, in texels. An impostor is drawn only smaller
@@ -33,7 +33,7 @@ use crate::pass::model::{
 /// `DECOR_MODEL_CELLS`). A cell is 45 drawn pixels at the middle of a view
 /// 2160 CSS pixels high at a pixel ratio of 2.
 const IMPOSTOR_SIZE: u32 = 128;
-const FIT_BYTES: u32 = 16;
+const FIT_SZ: u32 = 16;
 
 type BakeKey = (u32, Option<u32>, Extent);
 
@@ -95,7 +95,7 @@ impl ImpostorPass {
         );
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
         let fits = g.buf(
-            DECOR_GROUP_CNT as u32 * FIT_BYTES,
+            DECOR_GROUP_CNT as u32 * FIT_SZ,
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let group = g.bind_group(
@@ -103,14 +103,14 @@ impl ImpostorPass {
             &[
                 view_entry(0, atlas_view),
                 sampler_entry(1, sampler),
-                buf_range_entry(2, fits, 0, DECOR_GROUP_CNT as u32 * FIT_BYTES),
+                buf_range_entry(2, fits, 0, DECOR_GROUP_CNT as u32 * FIT_SZ),
             ],
         );
         ImpostorPass {
             draw,
             bake,
-            uniforms: UniformBuffer::new(DRAW_BYTES, align),
-            fit_uniforms: UniformBuffer::new(FIT_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_SZ, align),
+            fit_uniforms: UniformBuffer::new(FIT_SZ, align),
             atlas,
             depth_view,
             fits,
@@ -174,10 +174,9 @@ impl ImpostorPass {
         for k in 0..DECOR_GROUP_CNT {
             if let Some(w) =
                 self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w))
+                && let Some(model) = decor.model_of(g, k as u32, uploads)
             {
-                if let Some(model) = decor.model_of(g, k as u32, uploads) {
-                    (due[len], len) = ((k, w, model), len + 1);
-                }
+                (due[len], len) = ((k, w, model), len + 1);
             }
         }
         let due = &due[..len];
@@ -191,7 +190,7 @@ impl ImpostorPass {
             due.iter(),
             true,
             |buf, &(_, w, _)| {
-                buf[..FIT_BYTES as usize].copy_from_slice(bytes(&fit_of(w.2)));
+                buf[..FIT_SZ as usize].copy_from_slice(bytes(&fit_of(w.2)));
             },
         );
         let Some(slots) = self.fit_uniforms.slots() else {

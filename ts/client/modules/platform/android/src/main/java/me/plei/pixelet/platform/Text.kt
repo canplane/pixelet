@@ -1,4 +1,4 @@
-// @pxl/app/modules/platform/android/src/main/java/me/plei/pixelet/platform/Text.kt
+// @pxl/client/modules/platform/android/src/main/java/me/plei/pixelet/platform/Text.kt
 
 package me.plei.pixelet.platform
 

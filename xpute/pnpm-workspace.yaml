@@ -3,14 +3,11 @@
 packages:
   - kit/ts
   - link/ts
-  - web/host
-  - web/runtime
-  - native/runtime/expo
-  - gpu/link/ts
-  - gpu/web/host
-  - gpu/native/runtime/expo
-  - dev/golden/ts
+  - host/ts
+  - runtime/web
+  - expo
+  - golden/ts
 
 # koffi opens a native guest.
-onlyBuiltDependencies:
-  - koffi
+allowBuilds:
+  koffi: true

@@ -3,7 +3,7 @@
 use super::*;
 use crate::frame::shader::record::PIPELINE_CNT;
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::world::{nearest, ROUND};
+use pxl_spec::space::coord::world::{ROUND, nearest};
 
 /// The f64 difference from the eye narrowed to f32, which a `Position` taken from the eye is
 /// held to.
@@ -32,11 +32,7 @@ impl Noise {
 fn ulps(a: f32, b: f32) -> u32 {
     let key = |v: f32| {
         let i = v.to_bits() as i32;
-        if i < 0 {
-            i32::MIN - i
-        } else {
-            i
-        }
+        if i < 0 { i32::MIN - i } else { i }
     };
     key(a).abs_diff(key(b))
 }

@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
-use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
+use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
 
 use crate::fmt::format_text;
 
@@ -736,8 +736,7 @@ pub fn rs_member(k: &str) -> String {
 }
 
 /// C++'s keywords and alternative tokens, which an identifier takes `_` after.
-const CPP_KEYWORDS: &str =
-    "alignas alignof and and_eq asm auto bitand bitor bool break case catch \
+const CPP_KEYWORDS: &str = "alignas alignof and and_eq asm auto bitand bitor bool break case catch \
     char char8_t char16_t char32_t class compl concept const consteval constexpr constinit \
     const_cast continue co_await co_return co_yield decltype default delete do double \
     dynamic_cast else enum explicit export extern false float for friend goto if inline int \

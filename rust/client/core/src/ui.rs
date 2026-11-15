@@ -7,7 +7,7 @@
 use crate::domain::layer::Base as _;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, Zoom, units};
 
 use crate::abi::overlay::{DivisionPart, LonLat, Message, PivotState, Snapshot};
 use crate::domain::control::camera::controller;
@@ -22,7 +22,7 @@ use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::stage::screen_shows_world;
-use crate::domain::setting::{are_settings_loaded, settings, SettingKey};
+use crate::domain::setting::{SettingKey, are_settings_loaded, settings};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::pointer;

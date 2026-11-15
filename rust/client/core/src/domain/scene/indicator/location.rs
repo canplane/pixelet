@@ -14,8 +14,8 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::change::Memo;
 use crate::domain::query::World;
+use crate::domain::query::change::Memo;
 use crate::domain::scene::animation;
 use crate::domain::scene::environment;
 use crate::domain::scene::frame::Frame;
@@ -27,7 +27,7 @@ use crate::domain::scene::model::draw_list;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
-use crate::domain::view::lens::{visible_step_s, StepClock};
+use crate::domain::view::lens::{StepClock, visible_step_s};
 use crate::sys::sched::{invalidate, invalidate_at};
 use pxl_global::Global;
 use pxl_render::frame::shader::word;

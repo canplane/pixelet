@@ -15,7 +15,7 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::frame::refused_frames;
 use crate::perf::frame::overran;
-use crate::perf::frame::{FrameSample, RaySample, GPU_SPAN_CNT};
+use crate::perf::frame::{FrameSample, GPU_SPAN_CNT, RaySample};
 use crate::perf::record::{
     perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
     perf_tasks_since, step_stats,

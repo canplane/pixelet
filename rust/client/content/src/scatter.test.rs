@@ -2,7 +2,7 @@
 
 use super::*;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
-use pxl_spec::share::{eighths, FULL};
+use pxl_spec::share::{FULL, eighths};
 use pxl_spec::space::hierarchy::tree::{child_idx, child_of};
 
 /// A decor's cells hold one at its chance: over a square of leaf cells, the

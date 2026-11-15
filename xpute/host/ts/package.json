@@ -1,0 +1,26 @@
+{
+  "name": "@xpute/host",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/canplane/xpute",
+    "directory": "host/ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "files": [
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "exports": {
+    ".": "./src/mod.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@xpute/link": "workspace:*",
+    "@xpute/kit": "workspace:*"
+  }
+}

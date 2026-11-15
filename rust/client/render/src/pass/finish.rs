@@ -12,12 +12,12 @@
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_FINISH, PIPELINE_SCREEN_SHOW};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, release, view_entry, word_bytes, Gpu, Group, Load,
-    RenderContext, TARGET_CAP,
+    Gpu, Group, Load, RenderContext, TARGET_CAP, buf_entry, buffer_usage, bytes, pass_desc,
+    release, view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::surface::Surface;
-use crate::gpu::tile::{TileGrid, SIDE};
+use crate::gpu::tile::{SIDE, TileGrid};
 use crate::spec::span::GpuSpanName;
 
 pub struct Finish {
@@ -42,11 +42,8 @@ impl Finish {
         Finish {
             pipeline: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
             picture: pipelines.build_targets(g, PIPELINE_SCREEN_FINISH, g.canvas(), TARGET_CAP),
-            tiles: g.buf(
-                word_bytes(8),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
-            every: g.buf(word_bytes(1), buffer_usage::STORAGE),
+            tiles: g.buf(word_sz(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+            every: g.buf(word_sz(1), buffer_usage::STORAGE),
             show: pipelines.build(g, PIPELINE_SCREEN_SHOW, g.canvas()),
             groups: [Group::default(), Group::default()],
             show_group: Group::default(),

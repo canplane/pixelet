@@ -1,10 +1,10 @@
 // pxl-tool/spec/asset.rs
 
 use xpute_gen::spec::data::enum_members;
-use xpute_gen::spec::{rs_enum, ts_enum, Member};
+use xpute_gen::spec::{Member, rs_enum, ts_enum};
 
-use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
-use super::{file, json_str, line_comments, mark, read, rs_field, Node, Output};
+use super::catalog::{CUBE_JSON, DECOR_JSON, slots};
+use super::{Node, Output, file, json_str, line_comments, mark, read, rs_field};
 const ID_JSON: &str = "spec/spec/asset/id.json5";
 const COLOR_JSON: &str = "spec/spec/asset/color.json5";
 

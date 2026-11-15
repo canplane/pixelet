@@ -1,7 +1,7 @@
 # The toolchain is pinned to the patch, so that a toolchain release cannot turn
 # a lint on under it.
 [toolchain]
-channel = "1.98.1"
+channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
 # A guest is compiled to a module for this target.

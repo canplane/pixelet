@@ -13,10 +13,10 @@ use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::segment::Part;
 use crate::separation::WayRange;
-use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
-use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
+use crate::terrain::pipeline::feature::{Feature, Layer, Rank, closes};
+use crate::terrain::pipeline::overture::between::{Line, merged, uncovered};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::{carto_u, waterway_width, width_u, WIDEST_LINE};
+use crate::terrain::pipeline::overture::width::{WIDEST_LINE, carto_u, waterway_width, width_u};
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 

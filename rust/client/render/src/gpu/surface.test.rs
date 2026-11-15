@@ -1,7 +1,7 @@
 // pxl-render/gpu/surface.test.rs
 
 use super::*;
-use crate::gpu::api::word_bytes;
+use crate::gpu::api::word_sz;
 use pxl_engine::beam;
 use pxl_spec::space::camera::grid::HALF_TAN;
 
@@ -64,7 +64,7 @@ fn drawn_cap_fits_every_buffer() {
             let aspect = size[0] as f32 / size[1] as f32;
             let tan = [HALF_TAN * aspect, HALF_TAN];
             let words = beam::Grid::of(tan).walked_at() + ray::holes_words(size);
-            let bytes = u64::from(word_bytes(words as usize));
+            let bytes = u64::from(word_sz(words as usize));
             assert!(floor::fits(bytes, true), "{size:?}: {bytes} bytes");
         }
     }

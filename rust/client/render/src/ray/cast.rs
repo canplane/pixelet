@@ -20,23 +20,23 @@ use crate::frame::shader::sequence;
 use pxl_content::generation::{self, GROUP_CNT};
 use pxl_engine::clipmap;
 use pxl_engine::{beam, eye, light, node_cache, object, ray};
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
-use xpute_gpu_guest::encode::Id;
+use pxl_gpu_guest::encode::Id;
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use super::RayPass;
 use super::count::{self, CountBuffer, Counter, RayCount};
 use super::raster::Raster;
 use super::schedule::{CastRead, Schedule};
-use super::RayPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::group::{
     BEAMS, CAST_TILES, CAST_TILES_OF_BINDS, CORNERS_ASK_BINDS, CORNERS_WALK_BINDS, LAST_BINDS,
     LATTICE_LAST_BINDS, LIGHT_ARGS, LIGHT_CORNERS_ASK_BINDS, LIGHT_CORNERS_WALK_BINDS, LIGHT_DRAWS,
     LIGHT_LAST_BINDS, LIGHT_LATTICE_LAST_BINDS, LIGHT_LIST, LIGHT_MARK_BINDS,
     LIGHT_MARK_DRAWS_BINDS, LIGHT_MARK_DRAWS_OPEN_BINDS, LIGHT_MISSES, LIGHT_PROPAGATE_BINDS,
-    LIGHT_RASTER_ARGS, LIGHT_RECEIVER_TILES, LIGHT_SAMPLES_ASK_BINDS, LIGHT_SAMPLES_WALK_BINDS,
-    LIGHT_SAMPLE_HIT_BINDS, LIGHT_SLIDE_BINDS, LIGHT_SLOTS_BINDS, LIGHT_WALK_ASK_BINDS,
+    LIGHT_RASTER_ARGS, LIGHT_RECEIVER_TILES, LIGHT_SAMPLE_HIT_BINDS, LIGHT_SAMPLES_ASK_BINDS,
+    LIGHT_SAMPLES_WALK_BINDS, LIGHT_SLIDE_BINDS, LIGHT_SLOTS_BINDS, LIGHT_WALK_ASK_BINDS,
     LIGHT_WALK_BINDS, LIGHT_WORLD_BINDS, MARKS, NODE_CACHE, PIXELS_BINDS, QUEUES,
     SAMPLES_ASK_BINDS, SAMPLES_WALK_BINDS, WALK_ASK_BINDS, WALK_BINDS, WORLD_BINDS,
 };
@@ -53,15 +53,15 @@ use crate::frame::shader::record::{
     COMPUTE_QUEUE_SAMPLES, COMPUTE_QUEUE_SAMPLES_PARKED, LIGHT_HDR_BINDING,
 };
 use crate::frame::shader::word::SHADOW_SIZE;
-use crate::frame::shader::word::{screen, CELL_SIDE, ROW_LANE_CNT, SQUARE_SIDE};
+use crate::frame::shader::word::{CELL_SIDE, ROW_LANE_CNT, SQUARE_SIDE, screen};
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, frame_entries, release, view_entry, word_bytes,
-    write_buffer_sz, Entry, Gpu, Layout, RenderContext,
+    Entry, Gpu, Layout, RenderContext, buf_entry, buffer_usage, bytes, frame_entries, release,
+    view_entry, word_sz, write_buffer_sz,
 };
 use crate::gpu::draw::ReceiverBox;
 use crate::gpu::generator::{
-    cut_rects, hold, DecorFrame, Generation, Generator, IndirectDraw, Mask,
+    DecorFrame, Generation, Generator, IndirectDraw, Mask, cut_rects, hold,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
@@ -360,7 +360,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     floor::fits(
-        word_bytes(
+        word_sz(
             CAST_TILES_START.len()
                 + (DRAWN_CAP[0].div_ceil(screen::TILE) * DRAWN_CAP[1].div_ceil(screen::TILE))
                     as usize
@@ -492,16 +492,16 @@ impl RayPass {
             light_holes,
             queue_groups: Default::default(),
             queues: buf(
-                word_bytes(ray::QUEUE_WORDS as usize),
+                word_sz(ray::QUEUE_WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
             marks: buf(
-                word_bytes(ray::MISS_ARGS_WORDS),
+                word_sz(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::COPY_SRC,
             ),
             forget_pipeline,
             node_cache: buf(
-                word_bytes(node_cache::WORDS as usize),
+                word_sz(node_cache::WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
             frame: 0,
@@ -525,7 +525,7 @@ impl RayPass {
             light_slide,
             light_groups: Default::default(),
             light_none: buf(
-                word_bytes(2 * generation::drawing::REGION_CNT as usize),
+                word_sz(2 * generation::drawing::REGION_CNT as usize),
                 storage,
             ),
             light_number: 0,
@@ -533,7 +533,7 @@ impl RayPass {
             light_ready: false,
             light_list: 0,
             light_misses: buf(
-                word_bytes(ray::MISS_ARGS_WORDS),
+                word_sz(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::COPY_SRC,
             ),
             light_args: 0,
@@ -543,13 +543,13 @@ impl RayPass {
             light_slide_cast: 0,
             light_content: Read::default(),
             light_read_was: buf(
-                word_bytes((light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE)) as usize),
+                word_sz((light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE)) as usize),
                 buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
             ),
             light_receiver_read: Read::default(),
             light_receiver_boxes: Vec::with_capacity(light::RECEIVER_BOX_CAP),
             light_hdr: buf(
-                word_bytes(light::HDR_WORDS),
+                word_sz(light::HDR_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             light_columns: Vec::with_capacity(light::COLUMN_CAP),
@@ -557,18 +557,18 @@ impl RayPass {
             draws_rec: false,
             light_idle: [0; 3].map(|_| {
                 buf(
-                    word_bytes(light::RECEIVER_TILES_WORDS as usize),
+                    word_sz(light::RECEIVER_TILES_WORDS as usize),
                     storage | buffer_usage::COPY_SRC,
                 )
             }),
             light_draws: false,
             group: api::Group::default(),
             eye: buf(
-                word_bytes(eye::WORDS),
+                word_sz(eye::WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             clipmap: buf(
-                word_bytes(clipmap::TABLE_WORDS as usize),
+                word_sz(clipmap::TABLE_WORDS as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
             shards: 0,
@@ -672,7 +672,7 @@ impl RayPass {
             }
             c.shard_cap = cast.shards.len();
             c.shards = g.buf(
-                word_bytes(4 * c.shard_cap),
+                word_sz(4 * c.shard_cap),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
         }
@@ -688,7 +688,7 @@ impl RayPass {
             }
             c.object_cap = o.cap;
             c.objects = g.buf(
-                word_bytes(2 * o.cap),
+                word_sz(2 * o.cap),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
             c.object_revision = None;
@@ -711,30 +711,30 @@ impl RayPass {
             } else {
                 c.forget = true;
             }
-            let written_bytes = |lane: &[u32]| {
+            let written_sz = |lane: &[u32]| {
                 o.written_groups
                     .iter()
                     .map(|&f| write_buffer_sz(bytes(child_group(lane, f))))
                     .sum::<usize>()
             };
             if c.object_revision == Some(o.since)
-                && api::room(written_bytes(o.first_child) + written_bytes(o.data))
+                && api::room(written_sz(o.first_child) + written_sz(o.data))
             {
                 for &first in o.written_groups {
                     g.write_buf(
                         c.objects,
-                        word_bytes(first as usize),
+                        word_sz(first as usize),
                         bytes(child_group(o.first_child, first)),
                     );
                     g.write_buf(
                         c.objects,
-                        word_bytes(o.cap + first as usize),
+                        word_sz(o.cap + first as usize),
                         bytes(child_group(o.data, first)),
                     );
                 }
             } else {
                 g.upload_buf(c.objects, 0, bytes(o.first_child));
-                g.upload_buf(c.objects, word_bytes(o.cap), bytes(o.data));
+                g.upload_buf(c.objects, word_sz(o.cap), bytes(o.data));
             }
             c.object_revision = Some(o.revision);
         }
@@ -954,7 +954,7 @@ impl RayPass {
             if c.beams != 0 {
                 release(c.beams);
             }
-            let size = word_bytes(need as usize);
+            let size = word_sz(need as usize);
             xpute_kit::ensure!(floor::fits(size as u64, true), ENOTRECOVERABLE, need);
             (c.beams, c.beam_cap) = (
                 g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
@@ -1081,7 +1081,7 @@ impl RayPass {
         if plan.light.is_none() {
             g.write_buf(
                 c.light_hdr,
-                word_bytes(light::HDR_WORLD_RECEIVERS),
+                word_sz(light::HDR_WORLD_RECEIVERS),
                 bytes(&[0u32]),
             );
         }
@@ -1275,7 +1275,7 @@ impl RayPass {
             if across * down != c.cast_tiles_cap {
                 release(c.cast_tiles);
                 c.cast_tiles = g.buf(
-                    word_bytes(CAST_TILES_START.len() + (across * down) as usize),
+                    word_sz(CAST_TILES_START.len() + (across * down) as usize),
                     buffer_usage::STORAGE | buffer_usage::INDIRECT | buffer_usage::COPY_DST,
                 );
                 c.cast_tiles_cap = across * down;
@@ -1424,7 +1424,7 @@ impl RayPass {
                     c.light_receiver_tiles,
                     const { sequence::RECEIVER_TILES_BACK.to_at() },
                 ),
-                word_bytes(light::RECEIVER_TILES_CARRY as usize),
+                word_sz(light::RECEIVER_TILES_CARRY as usize),
             );
             g.copy_buf(
                 encoder,
@@ -1513,8 +1513,8 @@ impl RayPass {
                     g.clear_buf(
                         encoder,
                         c.beams,
-                        word_bytes(c.grid.walked_at() as usize),
-                        word_bytes(ray::walked_words(c.size) as usize),
+                        word_sz(c.grid.walked_at() as usize),
+                        word_sz(ray::walked_words(c.size) as usize),
                     );
                 }
                 let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
@@ -1546,7 +1546,7 @@ impl RayPass {
                 (c.marks, sequence::EYE_HOLES_CNT.from_at()),
                 (
                     c.beams,
-                    word_bytes((c.grid.walked_at() + ray::holes_at(c.size)) as usize),
+                    word_sz((c.grid.walked_at() + ray::holes_at(c.size)) as usize),
                 ),
                 4,
             );
@@ -1592,7 +1592,7 @@ impl RayPass {
                 let shift = dy * n + dx;
                 let all = n * n;
                 if shift.abs() < all {
-                    let words = |w: i32| word_bytes(w as usize);
+                    let words = |w: i32| word_sz(w as usize);
                     let out = (c.light_read_was, 0);
                     let reads = (c.light_list, sequence::LIGHT_READS_OUT.from_at());
                     g.copy_buf(encoder, reads, out, words(all));
@@ -1684,7 +1684,7 @@ impl RayPass {
                     c.light_list,
                     const { sequence::RECEIVER_TILES_KEEP.to_at() },
                 ),
-                word_bytes(light::RECEIVER_TILES_CARRY as usize),
+                word_sz(light::RECEIVER_TILES_CARRY as usize),
             );
             g.copy_buf(
                 encoder,
@@ -1836,9 +1836,9 @@ impl RayPass {
                     c.light_args = light_args_buf(g);
                     let dispatch = buffer_usage::STORAGE | buffer_usage::INDIRECT;
                     c.light_draws_dispatch =
-                        g.buf(word_bytes(light::DRAWS_DISPATCH_WORDS as usize), dispatch);
+                        g.buf(word_sz(light::DRAWS_DISPATCH_WORDS as usize), dispatch);
                     c.light_receiver_tiles = g.buf(
-                        word_bytes(light::RECEIVER_TILES_WORDS as usize),
+                        word_sz(light::RECEIVER_TILES_WORDS as usize),
                         buffer_usage::STORAGE
                             | buffer_usage::COPY_DST
                             | buffer_usage::INDIRECT
@@ -2001,7 +2001,7 @@ fn light_receiver_tiles(owes: bool) -> [u32; light::RECEIVER_TILES_WORDS as usiz
 /// Makes the light's args buffer (`light::args_words`).
 fn light_args_buf(g: &Gpu) -> u32 {
     g.buf(
-        word_bytes(light::args_words(SHADOW_SIZE) as usize),
+        word_sz(light::args_words(SHADOW_SIZE) as usize),
         buffer_usage::STORAGE
             | buffer_usage::COPY_DST
             | buffer_usage::INDIRECT
@@ -2013,7 +2013,7 @@ fn light_args_buf(g: &Gpu) -> u32 {
 /// hits (`light::buf_words`).
 fn light_list(g: &Gpu) -> u32 {
     g.buf(
-        word_bytes(light::buf_words(SHADOW_SIZE) as usize),
+        word_sz(light::buf_words(SHADOW_SIZE) as usize),
         buffer_usage::STORAGE
             | buffer_usage::COPY_DST
             | buffer_usage::INDIRECT
@@ -2058,8 +2058,21 @@ fn light_groups(
     bindings: [u32; 13],
     [hdr, visibility]: [u32; 2],
 ) -> [(Layout, Vec<Entry>); LIGHT_GROUP_CNT] {
-    let [eye, clipmap, ground, folds, shards, objects, pool, light, rays, drawing, regions, instances, _] =
-        bindings;
+    let [
+        eye,
+        clipmap,
+        ground,
+        folds,
+        shards,
+        objects,
+        pool,
+        light,
+        rays,
+        drawing,
+        regions,
+        instances,
+        _,
+    ] = bindings;
     let head = buf_entry(LIGHT_HDR_BINDING, hdr);
     let rest = [
         buf_entry(0, eye),
@@ -2203,7 +2216,7 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
     }
     g.end(pass);
     if let Some((from, to)) = r.hits {
-        g.copy_buf(encoder, (r.queue, from), (r.node_cache, to), word_bytes(4));
+        g.copy_buf(encoder, (r.queue, from), (r.node_cache, to), word_sz(4));
     }
     let pass = g.compute_pass(encoder, ctx.stamp(spans[1]).pass());
     g.set_bind_group(pass, 0, last_group, &[]);

@@ -19,13 +19,21 @@
       "ignoreDependencies": ["react"],
     },
     // The client's `exports` name its whole src/ for the workspace's own
-    // imports, not as an entry. A platform file is an entry of knip's Metro
-    // plugin, whose exports knip does not judge; a default's are judged
-    // through its imports. conform.ts, which tsc alone reads, is no entry: it
-    // names every export of each default.
+    // imports, not as an entry. A platform file (`x.web.ts`, `x.native.ts`,
+    // an override `x.ios.tsx`) is an entry of knip's Metro plugin, whose
+    // exports knip does not judge; an override's default's are judged through
+    // its imports. conform.ts, which tsc alone reads, is no entry: it names
+    // every export of each page's file and each default. knip does not
+    // resolve an import of `x.ts` to `x.web.ts` or `x.native.ts`, as Metro
+    // does (ts/build/path.ts `platform_file`), so the imports of each pair are
+    // not reported unresolved (ignoreUnresolved); both type-checks, the page's
+    // and the device's, resolve every import.
     "client": {
       "entry": ["src/runtime/worker.ts", "plugin/*.ts", "script/*.ts"],
       "ignoreFiles": ["src/conform.ts"],
+      "ignoreUnresolved": [
+        "(?:^|/)(?:page|boot|db|device|locale|log|online|origin|safe-area|sensor|share|storage|viewport|visibility|surface|above-keyboard|backdrop|motion|pan|typeface)\\.tsx?$",
+      ],
       "ignoreDependencies": ["expo-updates", "babel-preset-expo"],
       "includeSubpathExports": true,
     },
@@ -39,18 +47,15 @@
     "tool/shader": {
       "entry": ["probe.ts"],
     },
+    // Its native code builds on xpute's Expo module's.
+    "gpu": {
+      "entry": ["host/script/*.ts"],
+      "ignoreDependencies": ["@xpute/expo"],
+    },
     "../xpute/link/ts": {},
-    "../xpute/web/host": {},
-    "../xpute/web/runtime": {},
-    "../xpute/native/runtime/expo": {},
-    "../xpute/gpu/link/ts": {},
-    "../xpute/gpu/web/host": {
-      "entry": ["script/*.ts"],
-    },
-    // Its native code builds on the native runtime's.
-    "../xpute/gpu/native/runtime/expo": {
-      "ignoreDependencies": ["@xpute/native-runtime"],
-    },
-    "../xpute/dev/golden/ts": {},
+    "../xpute/host/ts": {},
+    "../xpute/runtime/web": {},
+    "../xpute/expo": {},
+    "../xpute/golden/ts": {},
   },
 }

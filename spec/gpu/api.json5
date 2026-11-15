@@ -1,0 +1,294 @@
+{
+  $description: "The calls a guest makes to a GPU it cannot reach, written as records of a stream\n(pxl-gpu-guest stream.rs). The vocabulary is WebGPU's, with its descriptors written out as words, and\nit serves any program. A record is an op, a count, and the op's words in the order the\nop's doc lists them. Bytes go as a count followed by padded words, as the stream lays\nthem. Objects are named by the guest's handles (abi/handle). An optional field holds NONE\nwhen it is unset. Render and compute ops sit side by side.\n\nA transaction (pxl-gpu-guest stream.rs) that does not commit drops its records and gives back the\nhandles they took, so the host never hears of those objects. The encoder's begin and\ncommit open and close the transaction on both the stream and the handle table.\n\nWhere a record names the guest's memory, the bytes it reads or the fence word it answers at\n(OPS), the memory address is a u64 on every platform (link/wit/types.wit `lent`), written as\ntwo words, its low word first.",
+  $extensions: { xpute: { uses: ["spec/gpu/enum.json5"] } },
+  SURFACE_URI: {
+    $description: "The URI a guest that draws serves its surface under (spec/gpu/wit/surface.wit `surface`),\nwhich its host opens.",
+    $value: ["pxl:gpu", "surface"],
+  },
+  NONE: {
+    $value: 4294967295,
+    $type: "u32",
+    $description: "The value of an optional field that is unset, such as an absent index or handle.",
+  },
+  SLOT_BITS: {
+    $value: 16,
+    $type: "u32",
+    $description: "The low bits of a handle, which hold its slot; the high 16 hold the slot's generation.\nBoth sides split a handle the same way.",
+  },
+  SURFACE_PREFERRED: {
+    $value: 255,
+    $type: "u32",
+    $description: "A value for CONFIGURE's format word that stands for the format the host's surface\nprefers.",
+  },
+  BINDING_ENTRY_WORDS: {
+    $value: 6,
+    $type: "u32",
+    $description: "The length in words of one entry of a bind group layout (BIND_GROUP_LAYOUT).",
+  },
+  RESOURCE_ENTRY_WORDS: {
+    $value: 5,
+    $type: "u32",
+    $description: "The length in words of one entry of a bind group (BIND_GROUP).",
+  },
+  op: {
+    $type: "u32",
+    $description: "The ops, numbered from 1; an op of 0 ends a stream.",
+    BUFFER: {
+      $value: 1,
+      $description: "id, size, usage (BUFFER_USAGE), mapped at creation (0 or 1).",
+    },
+    TEXTURE: {
+      $value: 2,
+      $description: "id, width, height, depth or layers, mip levels, samples, dimension (TEXTURE_DIMENSION), format (TEXTURE_FORMAT), usage (TEXTURE_USAGE), view formats' count, that many formats.",
+    },
+    VIEW: {
+      $value: 3,
+      $description: "id, texture, format or NONE, dimension (TEXTURE_VIEW_DIMENSION) or NONE, aspect (TEXTURE_ASPECT), base mip, mips or NONE, base layer, layers or NONE.",
+    },
+    SAMPLER: {
+      $value: 4,
+      $description: "id, address u, v, w (ADDRESS_MODE), mag and min (FILTER_MODE), mipmap (MIPMAP_FILTER_MODE), lod min and max (f32 bits), compare (COMPARE_FUNCTION) or NONE, max anisotropy.",
+    },
+    SHADER_MODULE: { $value: 5, $description: "id, the WGSL source as bytes." },
+    BIND_GROUP_LAYOUT: {
+      $value: 6,
+      $description: "id, entries' count, then each entry's BINDING_ENTRY_WORDS: binding, visibility (SHADER_STAGE), kind (BINDING_KIND) and three words the kind reads — a buffer its type (BUFFER_BINDING_TYPE), dynamic offset (0 or 1), min binding size; a sampler its type (SAMPLER_BINDING_TYPE); a texture its sample type (TEXTURE_SAMPLE_TYPE), view dimension, multisampled (0 or 1); a storage texture its access (STORAGE_TEXTURE_ACCESS), format, view dimension.",
+    },
+    PIPELINE_LAYOUT: {
+      $value: 7,
+      $description: "id, bind group layouts' count, that many ids.",
+    },
+    BIND_GROUP: {
+      $value: 8,
+      $description: "id, layout, entries' count, then each entry's RESOURCE_ENTRY_WORDS: binding, kind (RESOURCE_KIND), the object's id, offset, size or NONE (a buffer's; 0 for the others).",
+    },
+    RENDER_PIPELINE: {
+      $value: 9,
+      $description: "id, layout or NONE for an automatic one; vertex: module, entry (bytes), buffers' count, each: stride, step (VERTEX_STEP_MODE), attributes' count, each: format (VERTEX_FORMAT), offset, location; primitive: topology (PRIMITIVE_TOPOLOGY), strip index format (INDEX_FORMAT) or NONE, front face (FRONT_FACE), cull (CULL_MODE), unclipped depth (0 or 1); depth-stencil: format or NONE for none, the rest present either way: depth write (0 or 1), compare, stencil front and back each compare, fail, depth fail and pass (STENCIL_OPERATION), read mask, write mask, bias (i32), slope scale and clamp (f32 bits); multisample: count, mask, alpha to coverage (0 or 1); fragment: module or NONE for none, the rest present either way (no bytes, no targets): entry (bytes), targets' count, each: format, blend color op, src, dst and alpha op, src, dst (BLEND_OPERATION, BLEND_FACTOR) or NONE in the color op for no blending and the five after it present either way, write mask (COLOR_WRITE).",
+    },
+    COMPUTE_PIPELINE: {
+      $value: 10,
+      $description: "id, layout or NONE, module, entry (bytes).",
+    },
+    QUERY_SET: { $value: 11, $description: "id, type (QUERY_TYPE), count." },
+    DESTROY: {
+      $value: 12,
+      $description: "id, which may name any object an op above made.",
+    },
+    WRITE_BUFFER: { $value: 13, $description: "buffer, offset, the bytes." },
+    WRITE_BUFFER_AT: {
+      $value: 14,
+      $description: "buffer, offset, address, bytes. The host reads the bytes where they lie in the guest's\nmemory when it runs the record, and makes no copy of them first. From the stream's\nflush until `gpu.run` answers, the guest neither rewrites nor frees them (stream.rs).",
+    },
+    WRITE_TEXTURE: {
+      $value: 15,
+      $description: "texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes.",
+    },
+    WRITE_TEXTURE_AT: {
+      $value: 16,
+      $description: "The words of WRITE_TEXTURE, except that the bytes are given as an address and a count in\nthe guest's memory, which the host reads as it reads WRITE_BUFFER_AT's.",
+    },
+    COPY_EXTERNAL_IMAGE: {
+      $value: 17,
+      $description: "texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0\nor 1), address, bytes, word, ticket. The bytes are an encoded image (PNG, JPEG, WebP),\nwhich the host decodes into the texture. The word and the one after it are the\nrequest's fence and result (RESULT): OK once the image is in the texture, or REFUSED\nwhen the host cannot decode the image. A request whose texture has been destroyed\ngets no answer.",
+    },
+    ENCODER: { $value: 18, $description: "id." },
+    COPY_BUFFER_TO_BUFFER: {
+      $value: 19,
+      $description: "encoder, source, its offset, destination, its offset, size.",
+    },
+    COPY_BUFFER_TO_TEXTURE: {
+      $value: 20,
+      $description: "encoder, buffer, offset, bytes per row, rows per image, texture, mip, origin x, y, z, aspect, width, height, depth.",
+    },
+    COPY_TEXTURE_TO_BUFFER: {
+      $value: 21,
+      $description: "encoder, texture, mip, origin x, y, z, aspect, buffer, offset, bytes per row, rows per image, width, height, depth.",
+    },
+    COPY_TEXTURE_TO_TEXTURE: {
+      $value: 22,
+      $description: "encoder, source, mip, origin x, y, z, aspect, destination, mip, origin x, y, z, aspect, width, height, depth.",
+    },
+    CLEAR_BUFFER: {
+      $value: 23,
+      $description: "encoder, buffer, offset, size or NONE.",
+    },
+    RESOLVE_QUERY_SET: {
+      $value: 24,
+      $description: "encoder, query set, first, count, buffer, offset.",
+    },
+    RENDER_PASS: {
+      $value: 25,
+      $description: "id, encoder, color attachments' count, each: view, resolve view or NONE, load (LOAD_OP), store (STORE_OP), clear r, g, b, a (f32 bits); depth-stencil: view or NONE for none, the rest present either way: depth load, store, clear (f32 bits), read only (0 or 1), stencil load, store, clear, read only; timestamps: query set or NONE, begin index or NONE, end index or NONE; occlusion query set or NONE.",
+    },
+    COMPUTE_PASS: {
+      $value: 26,
+      $description: "id, encoder; timestamps: query set or NONE, begin index or NONE, end index or NONE.",
+    },
+    SET_PIPELINE: {
+      $value: 27,
+      $description: "pass, pipeline; the pipeline is a render or a compute pipeline, as the pass is.",
+    },
+    SET_BIND_GROUP: {
+      $value: 28,
+      $description: "pass, index, group, dynamic offsets' count, that many offsets.",
+    },
+    SET_VERTEX_BUFFER: {
+      $value: 29,
+      $description: "pass, slot, buffer, offset, size or NONE.",
+    },
+    SET_INDEX_BUFFER: {
+      $value: 30,
+      $description: "pass, buffer, format (INDEX_FORMAT), offset, size or NONE.",
+    },
+    SET_VIEWPORT: {
+      $value: 31,
+      $description: "pass, x, y, width, height, min depth, max depth (f32 bits).",
+    },
+    SET_SCISSOR: { $value: 32, $description: "pass, x, y, width, height." },
+    SET_BLEND_CONSTANT: {
+      $value: 33,
+      $description: "pass, r, g, b, a (f32 bits).",
+    },
+    SET_STENCIL_REFERENCE: { $value: 34, $description: "pass, reference." },
+    DRAW: {
+      $value: 35,
+      $description: "pass, vertices, instances, first vertex, first instance.",
+    },
+    DRAW_INDEXED: {
+      $value: 36,
+      $description: "pass, indices, instances, first index, base vertex (i32), first instance.",
+    },
+    DRAW_INDIRECT: { $value: 37, $description: "pass, buffer, offset." },
+    DRAW_INDEXED_INDIRECT: {
+      $value: 38,
+      $description: "pass, buffer, offset.",
+    },
+    DISPATCH: { $value: 39, $description: "pass, workgroups x, y, z." },
+    DISPATCH_INDIRECT: { $value: 40, $description: "pass, buffer, offset." },
+    END: {
+      $value: 41,
+      $description: "pass. The record ends the pass and lets go of it, so no DESTROY follows.",
+    },
+    SUBMIT: {
+      $value: 42,
+      $description: "encoders' count, that many encoders. The record finishes each encoder and lets go of it,\nso no DESTROY follows.",
+    },
+    MAP_ASYNC: {
+      $value: 43,
+      $description: "buffer, offset, size, address, word, ticket. WebGPU's mapAsync for reading, on a buffer\nthe guest made with MAP_READ | COPY_DST and copied into on an encoder it submitted\nearlier. Once the buffer is mapped, the host copies the range to the address and\nunmaps the buffer. The word and the one after it are the request's fence and result\n(RESULT): OK, or REFUSED when the device refused the mapping and nothing was copied.",
+    },
+    QUEUE_DONE: {
+      $value: 44,
+      $description: "word, ticket. The word is the request's fence (RESULT), answered once the work submitted\nbefore this record is done.",
+    },
+    CONFIGURE: {
+      $value: 45,
+      $description: "surface, format (TEXTURE_FORMAT, or SURFACE_PREFERRED), usage (TEXTURE_USAGE), alpha mode (CANVAS_ALPHA_MODE).",
+    },
+    RESIZE: { $value: 46, $description: "surface, width, height." },
+    CURRENT: {
+      $value: 47,
+      $description: "id, surface. The id names a view of the surface's texture for this entry.",
+    },
+    RENDER_PIPELINE_ASYNC: {
+      $value: 49,
+      $description: "RENDER_PIPELINE's words, then word, ticket. WebGPU's createRenderPipelineAsync; the word\nis the request's fence (RESULT), answered once the pipeline is made, and until then the\nguest names the pipeline in no other record. When the device refuses the pipeline, the\nhost makes it as RENDER_PIPELINE would, reports the error as that op would, and still\nwrites the word. A host with no asynchronous call makes the pipeline at once and\nwrites the word the same way, before the next entry reads it.",
+    },
+    COMPUTE_PIPELINE_ASYNC: {
+      $value: 50,
+      $description: "COMPUTE_PIPELINE's words, then word, ticket. WebGPU's createComputePipelineAsync, whose\nword is answered as RENDER_PIPELINE_ASYNC's is.",
+    },
+    LABEL: {
+      $value: 51,
+      $description: "id, the label as bytes. The label is the name the device gives the object in its\nmessages, as WebGPU's label is. The id may name any object, encoder or pass that an\nearlier record made. A host that cannot name an object after it is made ignores the\nrecord.",
+    },
+  },
+  BINDING_KIND: {
+    $type: "enum",
+    $value: ["buffer", "sampler", "texture", "storage-texture"],
+  },
+  RESOURCE_KIND: {
+    $type: "enum",
+    $value: ["buffer", "sampler", "texture-view"],
+  },
+  BUFFER_USAGE: {
+    $type: "u32",
+    $description: "GPUBufferUsage, its bits as WebGPU numbers them.",
+    MAP_READ: { $value: 1 },
+    MAP_WRITE: { $value: 2 },
+    COPY_SRC: { $value: 4 },
+    COPY_DST: { $value: 8 },
+    INDEX: { $value: 16 },
+    VERTEX: { $value: 32 },
+    UNIFORM: { $value: 64 },
+    STORAGE: { $value: 128 },
+    INDIRECT: { $value: 256 },
+    QUERY_RESOLVE: { $value: 512 },
+  },
+  TEXTURE_USAGE: {
+    $type: "u32",
+    $description: "GPUTextureUsage, its bits as WebGPU numbers them.",
+    COPY_SRC: { $value: 1 },
+    COPY_DST: { $value: 2 },
+    TEXTURE_BINDING: { $value: 4 },
+    STORAGE_BINDING: { $value: 8 },
+    RENDER_ATTACHMENT: { $value: 16 },
+  },
+  SHADER_STAGE: {
+    $type: "u32",
+    $description: "GPUShaderStage, its bits as WebGPU numbers them.",
+    VERTEX: { $value: 1 },
+    FRAGMENT: { $value: 2 },
+    COMPUTE: { $value: 4 },
+  },
+  COLOR_WRITE: {
+    $type: "u32",
+    $description: "GPUColorWrite, its bits as WebGPU numbers them.",
+    RED: { $value: 1 },
+    GREEN: { $value: 2 },
+    BLUE: { $value: 4 },
+    ALPHA: { $value: 8 },
+    ALL: { $value: 15 },
+  },
+  OPS: {
+    $type: "u32",
+    $description: "Each address the records of an op name in the guest's memory: the op, and the place\nof the address's low word, counted back from the record's end (`from_end`), as the op's\nwords list them: WRITE_BUFFER_AT's bytes, WRITE_TEXTURE_AT's, COPY_EXTERNAL_IMAGE's\nimage and fence, MAP_ASYNC's address and fence, and the fence of QUEUE_DONE and of the\nasync pipelines, each followed by a count or a ticket. A reader that moves records to\nanother block finds their addresses here.",
+    $extensions: { xpute: { row: "op_addr" } },
+    $value: [
+      { op: "{op.WRITE_BUFFER_AT}", from_end: 3 },
+      { op: "{op.WRITE_TEXTURE_AT}", from_end: 3 },
+      { op: "{op.COPY_EXTERNAL_IMAGE}", from_end: 6 },
+      { op: "{op.COPY_EXTERNAL_IMAGE}", from_end: 3 },
+      { op: "{op.MAP_ASYNC}", from_end: 5 },
+      { op: "{op.MAP_ASYNC}", from_end: 3 },
+      { op: "{op.QUEUE_DONE}", from_end: 3 },
+      { op: "{op.RENDER_PIPELINE_ASYNC}", from_end: 3 },
+      { op: "{op.COMPUTE_PIPELINE_ASYNC}", from_end: 3 },
+    ],
+  },
+  DEVICE: {
+    $description: "The words of the device block, which the guest lends the host to write (spec/gpu/wit/gpu.wit\n`device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its\nfeatures (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32\nbits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are\nnanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the\nformat SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then\nthe frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames\nmay be unfinished at once, at least one), then the count of uncaptured errors, then the\ncount of unfinished frames, then STATUS, the last, which the host stores with release\nafter the rest. The uncaptured errors are the errors the device raised that no error\nscope caught. The unfinished frames are the frames the\nguest has drawn whose work the queue has not yet done. Only the host writes the two\ncounts: first before STATUS, as it writes the rest of the block, and afterwards with\nrelease each time a count changes. The guest loads them with acquire once STATUS reads\nREADY, and draws a frame only while the unfinished frames are below the block's frame\nlatency; both hosts hold a frame to that rule (pxl-gpu-link `admits`).",
+    $extensions: { xpute: { packed: true } },
+    LIMITS_AT: { $value: ["LIMIT_NAME"] },
+    FEATS_AT: { $value: ["FEATURE_NAME", "bit"] },
+    PERIOD_AT: { $value: 1 },
+    FORMAT_AT: { $value: 1 },
+    LATENCY_AT: { $value: 1 },
+    ERRORS_AT: { $value: 1 },
+    UNFINISHED_AT: { $value: 1 },
+    STATUS_AT: { $value: 1 },
+  },
+  STATUS: {
+    $type: "u32",
+    $description: "The last word of the DEVICE block: what the host knows of the device. Only the\nhost writes it, and it stores it with release after the rest of the block. The guest\nloads it with acquire before it reads the block.",
+    READY: { $value: 1 },
+    LOST: { $value: 2 },
+  },
+  RESULT: {
+    $type: "u32",
+    $description: "How a completion is answered. A completion (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE,\nRENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC) names a fence word and a ticket. Only the\nguest picks tickets: for each fence word it advances a sequence, which wraps, and it\nkeeps one request out on that word at a time. Only the host writes the fence. Once\nwhat the request guards is written, and after the result in the next word where the\nrequest can fail (COPY_EXTERNAL_IMAGE, MAP_ASYNC), the host stores the ticket it\nfinished into the fence with release. The guest loads the fence with acquire and holds\nthe request done when the fence equals the ticket the guest asked with, a test for\nequality that the sequence's wrap does not break. Only then does the guest read the\nresult and what the request guards. A late answer to a request that was dropped or\nsuperseded carries an older ticket and never equals the current one. A lost device\nanswers none of its requests.",
+    OK: { $value: 1 },
+    REFUSED: { $value: 2 },
+  },
+}

@@ -1,4 +1,4 @@
-// @pxl/app/modules/platform/android/src/main/java/me/plei/pixelet/platform/KeyboardDock.kt
+// @pxl/client/modules/platform/android/src/main/java/me/plei/pixelet/platform/KeyboardDock.kt
 
 package me.plei.pixelet.platform
 

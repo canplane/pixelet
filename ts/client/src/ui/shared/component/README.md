@@ -1,17 +1,19 @@
 # Where the platforms part in the UI's pieces
 
-A piece the platforms draw differently is one file and its overrides beside it,
-as React Native names them: `segmented.tsx` is the page's and Android's,
-`segmented.ios.tsx` an iPhone's; `motion/motion.native.tsx` both devices'. Metro
-takes the file of the platform it builds for, the page the default
-(`ts/client/metro.config.ts` `own_platform`), and every import names the default.
-An override re-exports the default and replaces only what it draws itself, and
-`ts/client/src/conform.ts` holds each to its default's exports.
+A piece the platforms draw differently is a pair of files, or one file and its
+overrides beside it, as React Native names them: `motion/motion.web.tsx` is the
+page's and `motion/motion.native.tsx` both devices'; `segmented.tsx` is the
+page's and Android's, `segmented.ios.tsx` an iPhone's. Metro takes the file of
+the platform it builds for (`ts/build/path.ts` `platform_file`), and every
+import names the plain file (`motion.tsx`, `segmented.tsx`). An override
+re-exports the default and replaces only what it draws itself, and
+`ts/client/src/conform.ts` holds each device's file to the page's exports and
+each override to its default's.
 What only the place gives — the core's memory, the GPU, storage, text, the
 network, the sensors, the surfaces — is not here but in the client's services
 (`ts/client/src/service/platform/`), a page's file beside a device's: the
 world's surface, for one, is a canvas on the page
-(`service/platform/surface.tsx`) and a native view on a device
+(`service/platform/surface.web.tsx`) and a native view on a device
 (`service/platform/surface.native.tsx`). This page says each piece's
 implementation side by side, so where the platforms part shows in one place, as
 the colors that part do in `theme.ts`.

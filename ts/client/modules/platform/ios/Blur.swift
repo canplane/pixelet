@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/ios/Blur.swift
+// @pxl/client/modules/platform/ios/Blur.swift
 
 import ExpoModulesCore
 import UIKit

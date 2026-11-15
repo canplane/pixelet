@@ -42,8 +42,8 @@ make install && (cd ts/client && pnpm exec expo prebuild --platform ios --no-ins
 (cd ts/client/ios && pod install)
 ```
 
-Run both again after a file is added under `modules/platform/` or
-`xpute/native/runtime/expo/ios/` or `xpute/gpu/native/runtime/expo/ios/` (only `pod install` adds a new Swift file to the pod),
+Run both again after a file is added under `modules/platform/`,
+`xpute/expo/ios/` or `ts/gpu/expo/ios/` (only `pod install` adds a new Swift file to the pod),
 after `app.config.ts` or a plugin changes, or after a dependency is added.
 
 ### Build, install, launch
@@ -91,13 +91,8 @@ xcrun simctl location booted set 37.2741,127.0437
   Android SDK Command-line Tools; **SDK Platforms** — the platform and an **ARM
   64 v8a** system image (the 16 KB page size one) for an emulator.
 - An AVD from that image (Device Manager), or a phone with USB debugging on.
-- **JDK 17.** A newer one (Android Studio ships 25) fails the native build of
-  expo-modules-core with "A restricted method in java.lang.System has been
-  called". `ts/client/.java-version` pins 17 for jenv: run
-  `jenv add <JDK 17 home>` once, then run Gradle as `jenv exec ./gradlew …`.
-  Opening the project in Android Studio rewrites
-  `android/gradle/gradle-daemon-jvm.properties` for its Java 25, which overrides
-  `JAVA_HOME`; prebuild again to undo it.
+- A JDK from 17 up as `JAVA_HOME`, Android Studio's bundled one
+  (`/Applications/Android Studio.app/Contents/jbr/Contents/Home`) included.
 - The Rust target `aarch64-linux-android`, which `rust/rust-toolchain.toml`
   installs.
 
@@ -115,14 +110,14 @@ From `ts/client/android`, with `ANDROID_HOME=~/Library/Android/sdk` and the
 platform tools' `adb`:
 
 ```bash
-jenv exec ./gradlew :app:assembleRelease
+./gradlew :app:assembleRelease
 ../../../script/perf/android.py adb install -r app/build/outputs/apk/release/app-release.apk
 ../../../script/perf/android.py adb shell am start -S -n me.plei.pixelet/.MainActivity
 ```
 
 On an emulator, which draws on the Mac's GPU, the two run under
 script/perf/mac.py in place of android.py.
-`jenv exec ./gradlew :app:installRelease` builds and installs in one step, under the same
+`./gradlew :app:installRelease` builds and installs in one step, under the same
 module. The core's last
 messages and panics go to logcat under the tag `pxl`:
 `adb logcat -d | grep -E "FATAL| pxl |ReactNativeJS"`.

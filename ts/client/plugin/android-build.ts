@@ -2,31 +2,19 @@
 
 /**
  * Writes what an Android build of this app needs into the files `expo
- * prebuild` generates: the Gradle properties, the app's build script and the
- * Gradle daemon's criteria. android/ is generated and not kept, so the
- * choices are made here.
+ * prebuild` generates: the Gradle properties and the app's build script.
+ * android/ is generated and not kept, so the choices are made here.
  *
  * - One ABI, arm64-v8a. The core is built for aarch64-linux-android alone
  *   (script/core-build.py), and an app that packs another ABI
  *   without the core dies loading its library on the phones that take that
  *   ABI.
  * - The SDK floor is set by the Vulkan that this build needs for wgpu.
- * - Gradle's daemon runs on Java 17, whatever launches it, because the NDK
- *   build of expo-modules-core fails under a newer Java ("A restricted method
- *   in java.lang.System has been called"). Android Studio's sync writes the
- *   daemon's criteria for its own bundled Java 25, and the criteria outrank
- *   `JAVA_HOME`, so this plugin writes them.
  * - A build's JavaScript is bundled again when `PXL_PERF_DRIVE` changes, so a
  *   build made for measuring and a normal one share no bundle.
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-import {
-  withAppBuildGradle,
-  withDangerousMod,
-  withGradleProperties,
-} from "expo/config-plugins";
+import { withAppBuildGradle, withGradleProperties } from "expo/config-plugins";
 import type { ConfigPlugin } from "expo/config-plugins";
 
 const PROPERTIES = {
@@ -36,7 +24,6 @@ const PROPERTIES = {
   "android.enableShrinkResourcesInReleaseBuilds": "true",
 };
 
-const DAEMON_JAVA = "17";
 const BUNDLE_INPUT_MARK =
   "// pxl: the bundle's input (plugin/android-build.ts)";
 const BUNDLE_INPUT = `
@@ -63,21 +50,6 @@ const plugin: ConfigPlugin = (cfg) => {
     cfg.modResults = items;
     return cfg;
   });
-  cfg = withDangerousMod(cfg, [
-    "android",
-    (cfg) => {
-      const file = path.join(
-        cfg.modRequest.platformProjectRoot,
-        "gradle",
-        "gradle-daemon-jvm.properties",
-      );
-      fs.writeFileSync(
-        file,
-        `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`,
-      );
-      return cfg;
-    },
-  ]);
   return withAppBuildGradle(cfg, (cfg) => {
     const gradle = cfg.modResults.contents;
     if (!gradle.includes(BUNDLE_INPUT_MARK)) {

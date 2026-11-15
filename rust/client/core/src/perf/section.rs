@@ -5,8 +5,8 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::perf::frame::{FrameSample, RaySample, EFFECT_CNT, GPU_SPAN_CNT};
-use crate::perf::word::{words, zeroed, AsWords};
+use crate::perf::frame::{EFFECT_CNT, FrameSample, GPU_SPAN_CNT, RaySample};
+use crate::perf::word::{AsWords, words, zeroed};
 use crate::spec::demand::{StreamName, TaskPhaseName};
 use crate::spec::perf::{frame, limit, now, percentile, stat, step_stat, stream_stat};
 use crate::spec::phase::Phase;

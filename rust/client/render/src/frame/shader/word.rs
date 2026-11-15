@@ -122,7 +122,7 @@ uniform! {
 }
 
 uniform! {
-    /// The location indicator's uniform (location.wgsl, location.slot.wgsl,
+    /// The location indicator's uniform (location.uniform.wgsl, location.slot.wgsl,
     /// gpu/draw.rs `draw_beacon`): the beacon's spin about Z and whether it takes its
     /// night look.
     location {

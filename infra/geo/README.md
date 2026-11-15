@@ -51,9 +51,10 @@ make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 Each reads `infra/local/.env`; no source needs a key. Every tool they run, GDAL,
 PostGIS's raster loader, psql and Overture's CLI, comes from the image in
 `tool/`, which `tool/run` builds before each call, so the host needs only
-Docker, cargo and `jq`. The image's PostgreSQL 16 and PostGIS 3.4 are db-geo's
-own major versions. Never `down -v`: the volume is the only copy, and filling
-it again takes hours.
+Docker, cargo and `jq`. The image's PostgreSQL 18 is db-geo's own major, and
+its PostGIS 3.6 is one release behind db-geo's 3.7, since no Ubuntu release
+ships 3.7. Never `down -v`: the volume is the only copy, and filling it again
+takes hours.
 
 **Overture.** A run takes the types it names, or all of them, and the shards it
 names, or the coverage's. It writes each type into its table in place: a

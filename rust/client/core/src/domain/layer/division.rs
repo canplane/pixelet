@@ -6,17 +6,17 @@
 //! pivot is in. Nothing of this layer is drawn; the names go straight into
 //! the UI snapshot.
 //!
-//! Each tile's slot is a room in the division's fixed range, and the tile's cells
+//! Each tile's slot lies in the division's fixed range, and the tile's cells
 //! are decoded into it straight from the packet. The tile's divisions, a
 //! handful, live on the heap.
 
 use pxl_global::Global;
-use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELL_CNT};
 use pxl_spec::bake::tile::Tile;
+use pxl_spec::bake::tile::division::{self, CELL_CNT, Division, DivisionTile};
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
-use pxl_spec::space::layer::lattice::{Grid, GROUND};
+use pxl_spec::space::layer::lattice::{GROUND, Grid};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::tile_cache::TileCache;
@@ -24,20 +24,19 @@ use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
-use crate::sys::range::{arr_bytes, OwnedRange};
+use crate::sys::range::{OwnedRange, arr_sz};
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
 /// The division's range in `.fixed` (sys/range.rs), which the boot hands in.
 pub(crate) static RANGE: OwnedRange = OwnedRange::new();
 
-/// The bytes of one slot's room: a word for each cell, rounded up to whole cache
-/// lines.
-const ROOM_BYTES: u32 = arr_bytes(CELL_CNT, 4);
+/// One slot's bytes: a word for each cell, rounded up to whole cache lines.
+const SLOT_SZ: u32 = arr_sz(CELL_CNT, 4);
 
-/// The size of the division's range: one room for each slot of the tile
-/// cache, end to end.
-pub(crate) const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOT_CNT * ROOM_BYTES;
+/// The size of the division's range: each slot of the tile cache, end to
+/// end.
+pub(crate) const DIVISION_SZ: u32 = TileCache::<DivisionTile>::SLOT_CNT * SLOT_SZ;
 
 impl Base for DivisionTile {
     const ASK_SCOPE: AskScope = AskScope::Line;
@@ -53,8 +52,8 @@ impl Base for DivisionTile {
         _phases: &mut PhaseList,
     ) -> Result<DivisionTile, Exit> {
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe { RANGE.arr::<u32>(slot * ROOM_BYTES, CELL_CNT) };
-        Ok(division::decode_into(&pkt, room)?)
+        let cells = unsafe { RANGE.arr::<u32>(slot * SLOT_SZ, CELL_CNT) };
+        Ok(division::decode_into(&pkt, cells)?)
     }
 }
 

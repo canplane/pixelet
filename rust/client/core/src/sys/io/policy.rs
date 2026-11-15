@@ -27,10 +27,10 @@
 use crate::sys::io::demand::{Class, Order, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::param;
-use crate::sys::load::{of_id, LoadKind};
+use crate::sys::load::{LoadKind, of_id};
 use core::cmp::Ordering;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
+use xpute_kit::math::rng::{SplitMix64, u32_to_unit};
 use xpute_kit::status::errno::Errno;
 
 /// The shells of a layer, seen and unseen, each a class of its own.

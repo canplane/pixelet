@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/ios/SegmentedControl.swift
+// @pxl/client/modules/platform/ios/SegmentedControl.swift
 
 import ExpoModulesCore
 import UIKit

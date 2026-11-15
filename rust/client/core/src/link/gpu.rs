@@ -1,13 +1,13 @@
 // pxl-core/link/gpu.rs
 
-//! The GPU's device as the core holds it (xpute gpu/wit/gpu.wit). One task
+//! The GPU's device as the core holds it (spec/gpu/wit/gpu.wit). One task
 //! lends the device's block to `device.lost`, asks the device ready, and once
 //! the device is lost asks again; a device refused, as a hidden page's may be,
 //! is asked again once the app is shown. Another task hears each completion a
 //! record asked for, and asks for a frame to take it in.
 
+use pxl_gpu_guest::abi::gpu;
 use pxl_render::gpu::api;
-use xpute_gpu_guest::abi::gpu;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::Handle;

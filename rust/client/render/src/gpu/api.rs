@@ -1,9 +1,9 @@
 // pxl-render/gpu/api.rs
 
-//! The WebGPU calls the renderer makes. They are written through xpute's encoder (xpute-gpu-guest
+//! The WebGPU calls the renderer makes. They are written through the GPU's encoder (pxl-gpu-guest
 //! `encode`) into one stream in the core's memory, and the GPU's host runs the records the core
-//! lends it each frame (xpute-gpu-guest `stream`). The page's host runs them on WebGPU
-//! (@xpute/gpu-web-host) and the device app's on wgpu (xpute-gpu-native-host), from the same
+//! lends it each frame (pxl-gpu-guest `stream`). The page's host runs them on WebGPU
+//! (@pxl/gpu/host) and the device app's on wgpu (pxl-gpu-host), from the same
 //! records. What is pixelet's own stays here: the pipeline records expanded into descriptors, the
 //! shape of a pass, and the timing of the GPU spans a frame is timed in (spec/span.spec.rs).
 //!
@@ -12,26 +12,26 @@
 //! to the host apart (`lend_block`).
 
 use pxl_global::Global;
-use xpute_gpu_guest::admit;
-use xpute_gpu_guest::device;
-use xpute_gpu_guest::encode::{self, call, Gpu as Encoder, Id};
-use xpute_gpu_guest::stream::{Stream, WORD};
-use xpute_gpu_link::enums::{
+use pxl_gpu_guest::admit;
+use pxl_gpu_guest::device;
+use pxl_gpu_guest::encode::{self, Gpu as Encoder, Id, call};
+use pxl_gpu_guest::stream::{Stream, WORD};
+use pxl_gpu_link::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
     CullMode, FeatureName, FilterMode, FrontFace, IndexFormat, LimitName, LoadOp, MipmapFilterMode,
     PrimitiveTopology, QueryType, SamplerBindingType, StencilOperation, StorageTextureAccess,
     StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType,
     TextureViewDimension, VertexFormat, VertexStepMode,
 };
-use xpute_gpu_link::spec;
+use pxl_gpu_link::spec;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::mem;
 
-pub use xpute_gpu_guest::encode::load_acquire;
-pub use xpute_gpu_guest::encode::signaled;
-pub use xpute_gpu_link::enums::TextureFormat as Format;
-pub use xpute_gpu_link::spec::result;
+pub use pxl_gpu_guest::encode::load_acquire;
+pub use pxl_gpu_guest::encode::signaled;
+pub use pxl_gpu_link::enums::TextureFormat as Format;
+pub use pxl_gpu_link::spec::result;
 
 use crate::frame::shader::access::{self, END};
 use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
@@ -41,7 +41,7 @@ use crate::gpu::split::Split;
 use crate::spec::api::{record, stream};
 use crate::spec::span::GpuSpanName;
 
-pub use xpute_gpu_link::spec::{buffer_usage, texture_usage};
+pub use pxl_gpu_link::spec::{buffer_usage, texture_usage};
 
 /// The most objects the renderer holds at once: the size of the encoder's handle table.
 pub const OBJECT_CAP: usize = 1 << 15;
@@ -395,7 +395,7 @@ impl Layout {
 
     /// The buffers among `entries` that the group binds as writable storage, each with its
     /// binding.
-    fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = (u32, Id)> + 'e {
+    fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = (u32, Id)> + use<'e> {
         let words = self.entries.as_chunks::<3>().0;
         entries.iter().filter_map(move |e| match e.resource {
             encode::Resource::Buffer { buffer, .. }
@@ -446,7 +446,7 @@ impl Layout {
     }
 }
 
-pub use xpute_gpu_guest::encode::BindGroupEntry as Entry;
+pub use pxl_gpu_guest::encode::BindGroupEntry as Entry;
 
 pub const fn buf_entry(binding: u32, buf: Id) -> Entry {
     Entry {
@@ -485,7 +485,7 @@ pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
 }
 
 /// Whether two entries bind the same resource at the same binding. Comparing handles is
-/// enough: a handle is generational (xpute-gpu-guest handle.rs), so a resource let go and made
+/// enough: a handle is generational (pxl-gpu-guest handle.rs), so a resource let go and made
 /// again gets a new handle, never its old one.
 fn same_entry(a: &Entry, b: &Entry) -> bool {
     use encode::Resource::{Buffer, Sampler, View};
@@ -576,8 +576,8 @@ pub fn frame_entries(
             _ => buf_range_entry(
                 b.binding,
                 buf(b.buf),
-                word_bytes(b.at as usize),
-                word_bytes(b.words as usize),
+                word_sz(b.at as usize),
+                word_sz(b.words as usize),
             ),
         })
         .collect();
@@ -599,13 +599,13 @@ pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
     unsafe { core::slice::from_raw_parts(lane.as_ptr().cast::<u8>(), size_of_val(lane)) }
 }
 
-pub const fn word_bytes(words: usize) -> u32 {
+pub const fn word_sz(words: usize) -> u32 {
     (words * 4) as u32
 }
 
 struct State {
     stream: Stream,
-    /// The encoder, never moved: all-zero bytes are an encoder that has made nothing (xpute-gpu-guest
+    /// The encoder, never moved: all-zero bytes are an encoder that has made nothing (pxl-gpu-guest
     /// encode).
     encoder: &'static mut Encoder<OBJECT_CAP>,
     /// The words the records name for the host to answer into (`HDR`).
@@ -692,7 +692,7 @@ fn state() -> &'static mut State {
 /// encoder and its head beside it.
 pub fn install(bytes: u32) {
     xpute_kit::ensure!(bytes as usize > stream::RESERVE as usize, EINVAL, bytes);
-    // SAFETY: all-zero bytes are an encoder that has made nothing (xpute-gpu-guest encode).
+    // SAFETY: all-zero bytes are an encoder that has made nothing (pxl-gpu-guest encode).
     let encoder = unsafe { Box::<Encoder<OBJECT_CAP>>::new_zeroed().assume_init() };
     STATE.set(Some(State::over(
         Stream::new(bytes as usize / WORD),
@@ -756,7 +756,7 @@ pub fn gpu() -> Option<&'static Gpu> {
     device().filter(|_| stream_free()).map(|_| &GPU)
 }
 
-/// Whether the host has answered the last run of the stream (xpute-gpu-guest stream.rs). Until it
+/// Whether the host has answered the last run of the stream (pxl-gpu-guest stream.rs). Until it
 /// has, the core records nothing and the frame waits.
 pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
@@ -804,9 +804,9 @@ pub fn device() -> Option<Device> {
     s.device
 }
 
-/// A device block for the core to lend the host (xpute gpu/wit/gpu.wit `device.lost`):
+/// A device block for the core to lend the host (spec/gpu/wit/gpu.wit `device.lost`):
 /// `block`, or a new one, kept in place while it is lent, which admission keeps for `device`
-/// and itself to read (xpute-gpu-guest `admit::ask`).
+/// and itself to read (pxl-gpu-guest `admit::ask`).
 pub fn lend_block(block: Option<Vec<u32>>) -> Vec<u32> {
     let block = block.unwrap_or_else(|| vec![0; spec::device::WORDS]);
     admit::ask(&block);
@@ -839,7 +839,7 @@ pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
-/// The device's block as the host last wrote it (xpute spec DEVICE), each word 0 before
+/// The device's block as the host last wrote it (spec/gpu/api.json5 DEVICE), each word 0 before
 /// the block is written.
 #[derive(Clone, Copy, Default)]
 pub struct DeviceBlock {
@@ -970,7 +970,7 @@ pub fn gpu_flush() {
 }
 
 /// Whether `vals` overlaps memory that a `WRITE_BUFFER_AT` record names, among the records not
-/// yet flushed or in the hand-off the host has not given back (xpute-gpu-guest
+/// yet flushed or in the hand-off the host has not given back (pxl-gpu-guest
 /// stream.rs). While it does, the host is still to read that memory, so the values' writer leaves
 /// them unchanged and in place.
 pub fn in_flight<T>(vals: &[T]) -> bool {
@@ -1031,19 +1031,19 @@ pub fn frame_commit() -> bool {
     committed
 }
 
-use pxl_spec::asset;
 /// The stream bytes a write takes, as its writer measures them. A caller sums them over the
 /// writes it makes together and asks `room` before making them.
-pub use xpute_gpu_guest::encode::call::{write_buffer_sz, write_texture_sz};
+pub use pxl_gpu_guest::encode::call::{write_buffer_sz, write_texture_sz};
+use pxl_spec::asset;
 
 /// The stream bytes a shader module of `code` takes (`Gpu::shader`). Its maker asks `room`
 /// for them before making it.
-pub fn shader_bytes(code: &str) -> usize {
+pub fn shader_sz(code: &str) -> usize {
     Encoder::<OBJECT_CAP>::shader_module_sz(code)
 }
 
 /// Whether records of `bytes` in all (`write_buffer_sz`, `write_texture_sz`,
-/// `shader_bytes`) fit the stream while leaving `stream::RESERVE` for records that cannot
+/// `shader_sz`) fit the stream while leaving `stream::RESERVE` for records that cannot
 /// wait.
 pub fn room(bytes: usize) -> bool {
     STATE
@@ -1068,14 +1068,14 @@ fn handle_of(id: Option<Id>) -> Id {
 /// Lets an object go. The host destroys it, and its handle is free to name another. An `id`
 /// of 0 names nothing.
 pub fn release(id: Id) {
-    if id != 0 {
-        if let Some(s) = STATE.get(|| None).as_mut() {
-            s.split.let_go(id);
-            if writable(s) {
-                s.encoder.destroy(&mut s.stream, id);
-            } else {
-                s.frees.push(id);
-            }
+    if id != 0
+        && let Some(s) = STATE.get(|| None).as_mut()
+    {
+        s.split.let_go(id);
+        if writable(s) {
+            s.encoder.destroy(&mut s.stream, id);
+        } else {
+            s.frees.push(id);
         }
     }
 }
@@ -1566,7 +1566,7 @@ impl Gpu {
 
     /// Writes `bytes` into buffer `id` in one record however large. The host reads the
     /// bytes where they lie when it runs the frame. They are the host's from the frame's
-    /// flush until it hands the stream back (xpute-gpu-guest stream.rs), so their owner
+    /// flush until it hands the stream back (pxl-gpu-guest stream.rs), so their owner
     /// asks `in_flight` before it writes them again.
     pub fn upload_buf(&self, id: Id, off: u32, bytes: &[u8]) {
         let s = self.s();
@@ -1972,7 +1972,7 @@ impl Gpu {
         let at = core::ptr::addr_of_mut!(s.head[read_at(r)]);
         // SAFETY: the head's read, `READ_WORDS` in place: its fence and result, then its ticks
         // as bytes, the host's to write while the mapping is out, and the core's to read only
-        // by the fence (xpute-gpu-guest stream.rs).
+        // by the fence (pxl-gpu-guest stream.rs).
         let (fence, ticks) = unsafe {
             (
                 &*at.cast::<[u32; 2]>(),

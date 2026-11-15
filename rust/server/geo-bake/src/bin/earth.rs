@@ -21,16 +21,16 @@
 //!
 //!   make bake-earth
 
-use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
+use pxl_spec::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use image::ImageFormat;
 
 use pxl_geo_bake::cli;
-use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
+use pxl_geo_bake::pyramid::{MANIFEST, TileSet};
 use pxl_geo_bake::tile::walk::{self, Outcome};
-use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
+use pxl_geo_bake::util::{Level, git_sha, pack, write_atomic, write_manifest};
 use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::color;
@@ -168,7 +168,7 @@ fn lon_lat(x: f64, y: f64) -> [f64; 2] {
 
 fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
     let tile = Quadrant::new(EARTH_ZOOM, [px, py]);
-    let mut rgba = vec![0u8; earth::EARTH_BYTES];
+    let mut rgba = vec![0u8; earth::EARTH_SZ];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
             let idx = GROUND.cell_idx(tx, ty);

@@ -2,11 +2,11 @@
 
 /** This state is kept for the UI to show, as the GPU's host reports it: a
  * page's worker (runtime/worker.ts) or a device's module (boot.native.ts).
- * The core hears of the device itself on the link (@xpute/gpu-web-host
- * web.ts, xpute-gpu-native-host native.rs). */
+ * The core hears of the device itself on the link (@pxl/gpu/host
+ * web.ts, pxl-gpu-host native.rs). */
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import type { GpuState } from "@xpute/gpu-link";
+import type { GpuState } from "@pxl/gpu/link";
 
 /**
  * What the client has of a GPU. The core cannot say this itself, because a

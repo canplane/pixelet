@@ -5,8 +5,8 @@
 //! ground generates its own instances; a placed object's instance comes from
 //! its placement.
 
-use pxl_spec::asset::decor::DecorMeta;
 use pxl_spec::asset::AssetId;
+use pxl_spec::asset::decor::DecorMeta;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::cube;

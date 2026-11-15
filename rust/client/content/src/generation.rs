@@ -5,26 +5,26 @@
 //! holds it (`placement`, over `DecorQuery`); what placed decor claims (`overlaps_placed`);
 //! and how the GPU lays out, lists and draws what it generates in a clip level's bricks.
 
+use pxl_engine::WORKGROUP_CAP;
+use pxl_engine::ZOOM_BITS;
 use pxl_engine::answer::{self, val};
 use pxl_engine::clipmap;
 use pxl_engine::clipmap::{ENTRY_CNT, EYE_CLIP_LEVEL_CNT, FIRST_CELL_ZOOM};
 use pxl_engine::object;
 use pxl_engine::seed::node_seed;
-use pxl_engine::world::{placed_in, PlacedCursor};
-use pxl_engine::WORKGROUP_CAP;
-use pxl_engine::ZOOM_BITS;
+use pxl_engine::world::{PlacedCursor, placed_in};
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick;
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, LEAF_CELL_ZOOM, UNIT_ZOOM, Zoom};
 use pxl_spec::value;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::scatter::{brick_cap, draw_variant, stands_at, Candidate};
-use pxl_spec::asset::decor::{Decor, Orientation, Row, ROWS};
+use crate::scatter::{Candidate, brick_cap, draw_variant, stands_at};
+use pxl_spec::asset::decor::{Decor, Orientation, ROWS, Row};
 
 /// The lanes of a decor pass's workgroup.
 pub const LANE_CNT: u32 = 64;
@@ -310,14 +310,14 @@ pub mod drawing {
     pub const ARGS_WORDS: u32 = 5;
     /// The strip an impostor's instance is drawn by, its corners.
     pub const IMPOSTOR_CORNER_CNT: u32 = 4;
-    /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, the dynamic offset
+    /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_SZ`, the dynamic offset
     /// alignment every device meets), holding its index list's first slot (pxl-render word.rs
     /// `instance::IDX`): the columns' base, to which the arguments pass adds the region's first
     /// slot once the regions are laid out.
-    pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
+    pub const UNIFORM_WORDS: u32 = OFF_SZ / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
-    const OFF_BYTES: u32 = 256;
+    const OFF_SZ: u32 = 256;
     /// The drawing words, by which a frame's decor is drawn: the model's and the impostor's
     /// floors, each an angle around the eye in radians; the anchor the columns' positions are
     /// counted from (in unit cells, X wrapping); the left-out decor's corner and whether there is
@@ -559,11 +559,7 @@ pub fn ray_zoom(w: &impl clipmap::BrickSource, at: Zoom, c: [i32; 2]) -> Zoom {
     let s = LEAF_CELL_ZOOM - z;
     let g = [wrap_idx(z, c[0] >> s), c[1] >> s];
     let (f, _) = clipmap::step(w, clipmap::Lookup::NONE, z, g);
-    if at < f.from() {
-        at
-    } else {
-        f.from()
-    }
+    if at < f.from() { at } else { f.from() }
 }
 
 /// Placed decor's tag (`node_seed`).

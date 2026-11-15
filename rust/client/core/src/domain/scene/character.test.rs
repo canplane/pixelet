@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::scene::model::registry::test::swaying;
 use crate::sys::host::set_clock;
-use pxl_render::gpu::draw::{lists_bytes, set_lists};
+use pxl_render::gpu::draw::{lists_sz, set_lists};
 
 /// How many display pixels one unit spans at one unit from the eye.
 const PX_PER_UNIT: f64 = 1000.0;
@@ -13,7 +13,7 @@ const PX_PER_UNIT: f64 = 1000.0;
 /// asked for a frame and whether the clip stepped.
 fn idle(dist: f64) -> Vec<(bool, bool)> {
     const LIVE: usize = 16;
-    set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
+    set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
     let mut draw = DrawList::default();
     let mut models = ModelTable::default();
     let model = models.add(&mut draw, swaying());
@@ -113,8 +113,8 @@ fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     use crate::domain::layer::object::store::Store;
     use crate::domain::query::change::Memo;
     use crate::domain::query::test::{flat_at_five, placed, write};
-    use crate::domain::scene::character::companion::{drawn_at, Camera};
-    use pxl_spec::asset::{cube, AssetId};
+    use crate::domain::scene::character::companion::{Camera, drawn_at};
+    use pxl_spec::asset::{AssetId, cube};
     use pxl_spec::bake::constant::OBJECT_COARSEST;
     use pxl_spec::space::coord::world;
     let [x, y] = flat_at_five();

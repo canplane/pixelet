@@ -1,6 +1,6 @@
 // pxl-core/link/export/surface.rs
 
-//! The surfaces the UI lends the GPU (xpute gpu/wit/surface.wit), each an
+//! The surfaces the UI lends the GPU (spec/gpu/wit/surface.wit), each an
 //! object the core serves under the handle the link issued it: opened by the
 //! UI, resized by it, and closed as the UI drops it.
 
@@ -10,10 +10,10 @@ use super::refuse_unless;
 use crate::domain::scene::resolution;
 use crate::domain::view::frame::pose::view_resize;
 use crate::sys::sched::invalidate;
+use pxl_gpu_guest::abi::surface as wit;
+use pxl_gpu_link::spec::SURFACE_URI;
 use pxl_render::gpu::surface;
 use pxl_render::spec::api::surface_role;
-use xpute_gpu_guest::abi::surface as wit;
-use xpute_gpu_link::spec::SURFACE_URI;
 use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
 use xpute_link::Handle;

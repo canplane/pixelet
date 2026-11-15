@@ -72,5 +72,5 @@ pub fn log(level: Level, context: &str, message: &str) -> Result<(), _rt::Errno>
 mod _rt {
     pub(super) use crate::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method};
+    pub(super) use xpute_link::{Handle, Lower, Method, answer};
 }

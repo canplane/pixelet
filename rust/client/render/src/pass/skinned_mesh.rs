@@ -10,13 +10,13 @@
 
 use crate::frame::shader::record::PIPELINE_SKINNED;
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
-use crate::gpu::draw::{DrawStat, DrawTable, DRAW_WORDS};
+use crate::gpu::draw::{DRAW_WORDS, DrawStat, DrawTable};
 
-use crate::gpu::api::{buf_entry, release, Format, Gpu, Image, Layout, Stencil, TrackedRenderPass};
+use crate::gpu::api::{Format, Gpu, Image, Layout, Stencil, TrackedRenderPass, buf_entry, release};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
-use crate::pass::mark::{put_whole, MarkPass};
-use crate::pass::model::{bind_mesh, draw_model, skin_group, skin_made, Stage};
+use crate::pass::mark::{MarkPass, put_whole};
+use crate::pass::model::{Stage, bind_mesh, draw_model, skin_group, skin_made};
 
 pub struct SkinnedPass {
     lit: Pipeline,

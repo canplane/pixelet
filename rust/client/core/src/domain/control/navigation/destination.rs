@@ -8,10 +8,10 @@
 
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
-use pxl_spec::space::layer::lattice::{Grid, GROUND};
+use pxl_spec::space::layer::lattice::{GROUND, Grid};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-use crate::domain::control::camera::controller::{put_pivot, Motion};
+use crate::domain::control::camera::controller::{Motion, put_pivot};
 use crate::domain::control::support::{exact, nearest};
 use crate::domain::query::is_unknown;
 use crate::sys::sched;

@@ -62,13 +62,13 @@ interface overlay {
     area-progress: f64,
   }
 
-  show: func(snapshot: snapshot);
+  show: async func(snapshot: snapshot);
   // The text of a marker's draft, told as the draft opens and to a UI that
   // attaches while one is open, before the snapshot that shows it open; the
   // UI owns the text from then on and sends each change (pxl:core edit
   // `marker-text`).
-  draft: func(text: string);
+  draft: async func(text: string);
   // The view's azimuth, and the meters a logical pixel spans at the pivot, 0
   // where the camera stands there.
-  view: func(azimuth: f64, m-per-px: f64);
+  view: async func(azimuth: f64, m-per-px: f64);
 }

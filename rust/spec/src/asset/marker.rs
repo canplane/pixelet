@@ -9,7 +9,7 @@
 pub mod spec;
 pub use spec::{CHAT_TEXT_CHARS, MARKER_SCALE_STEP, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
 
-use crate::asset::id::{asset_id, AssetId, Kind};
+use crate::asset::id::{AssetId, Kind, asset_id};
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::tree::ancestor_of;
 use crate::space::layer::octant::Octant;

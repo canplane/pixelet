@@ -12,7 +12,7 @@ use xpute_kit::collection::list::List;
 
 use super::RayPass;
 use crate::frame::shader::floor;
-use crate::gpu::api::{buffer_usage, bytes, release, room, write_buffer_sz, Gpu};
+use crate::gpu::api::{Gpu, buffer_usage, bytes, release, room, write_buffer_sz};
 
 /// What a frame hands of the terrain: `upload` offers the writer each brick
 /// the core filled, and `pool` is how many words the ways' pool must hold
@@ -45,11 +45,11 @@ pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
 /// The bytes `words` words take in the ways' pool, which is also where the
 /// next one starts (pxl-core domain/layer/terrain/pool.rs).
-const fn pool_bytes(words: u32) -> u32 {
+const fn pool_sz(words: u32) -> u32 {
     words * 4
 }
 const _: () = assert!(
-    floor::fits(pool_bytes(WAYS_POOL_WORDS) as u64, true),
+    floor::fits(pool_sz(WAYS_POOL_WORDS) as u64, true),
     "the ways' pool at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
@@ -57,16 +57,16 @@ const _: () = assert!(
 /// buffer that replaces it.
 fn pool_buf(g: &Gpu, words: u32) -> u32 {
     g.buf(
-        pool_bytes(words),
+        pool_sz(words),
         buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
     )
 }
 
 /// The terrain's bricks on the GPU.
 pub(super) struct GroundBuffer {
-    /// Every slot's brick words (`GROUND_BYTES`).
+    /// Every slot's brick words (`GROUND_SZ`).
     pub(super) ground: u32,
-    /// Every slot's folds (`FOLDS_BYTES`).
+    /// Every slot's folds (`FOLDS_SZ`).
     pub(super) folds: u32,
     /// The ways' pool, and the words it has room for.
     pub(super) pool: u32,
@@ -97,33 +97,33 @@ impl GroundBuffer {
         }
         let pool = pool_buf(g, words);
         let e = g.encoder();
-        g.copy_buf(e, (self.pool, 0), (pool, 0), pool_bytes(self.word_cnt));
+        g.copy_buf(e, (self.pool, 0), (pool, 0), pool_sz(self.word_cnt));
         g.submit(e);
         release(self.pool);
         (self.pool, self.word_cnt) = (pool, words);
     }
 }
 
-const BRICK_BYTES: u32 = BRICK_WORDS * 4;
+const BRICK_SZ: u32 = BRICK_WORDS * 4;
 
 /// Every slot's brick in one storage buffer, which the cast's group binds
 /// whole.
-const GROUND_BYTES: u64 = SLOT_CNT as u64 * BRICK_BYTES as u64;
+const GROUND_SZ: u64 = SLOT_CNT as u64 * BRICK_SZ as u64;
 const _: () = assert!(
-    floor::fits(GROUND_BYTES, true),
-    "GROUND_BYTES: the clip levels' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    floor::fits(GROUND_SZ, true),
+    "GROUND_SZ: the clip levels' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
 /// A brick's folds: a word for each cell, which packs its four.
-const FOLDS_BRICK_BYTES: u32 = BRICK_CELL_CNT * 4;
+const FOLDS_BRICK_SZ: u32 = BRICK_CELL_CNT * 4;
 
 /// Every slot's folds in slot order, which the cast reads at a hit
 /// (fold.wgsl). They take a buffer of their own, as the bricks' buffer
 /// would bind past WebGPU's floor with them.
-const FOLDS_BYTES: u64 = SLOT_CNT as u64 * FOLDS_BRICK_BYTES as u64;
+const FOLDS_SZ: u64 = SLOT_CNT as u64 * FOLDS_BRICK_SZ as u64;
 const _: () = assert!(
-    floor::fits(FOLDS_BYTES, true),
-    "FOLDS_BYTES: the bricks' folds bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    floor::fits(FOLDS_SZ, true),
+    "FOLDS_SZ: the bricks' folds bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
 impl RayPass {
@@ -137,8 +137,8 @@ impl RayPass {
         let gb = self.ground.get_or_insert_with(|| {
             let word_cnt = ground.pool.next_power_of_two().min(WAYS_POOL_WORDS);
             GroundBuffer {
-                ground: g.buf(GROUND_BYTES as u32, storage),
-                folds: g.buf(FOLDS_BYTES as u32, storage),
+                ground: g.buf(GROUND_SZ as u32, storage),
+                folds: g.buf(FOLDS_SZ as u32, storage),
                 pool: pool_buf(g, word_cnt),
                 word_cnt,
                 bricks: List::new(),
@@ -151,10 +151,10 @@ impl RayPass {
             if gb.bricks.len() == FRAME_BRICK_CAP as usize || !room(recs * write_buffer_sz(&[])) {
                 return false;
             }
-            g.upload_buf(gb.ground, q.slot * BRICK_BYTES, bytes(q.words));
-            g.upload_buf(gb.folds, q.slot * FOLDS_BRICK_BYTES, bytes(q.folds));
+            g.upload_buf(gb.ground, q.slot * BRICK_SZ, bytes(q.words));
+            g.upload_buf(gb.folds, q.slot * FOLDS_BRICK_SZ, bytes(q.folds));
             for &(first, words) in q.run {
-                g.upload_buf(gb.pool, pool_bytes(first), bytes(words));
+                g.upload_buf(gb.pool, pool_sz(first), bytes(words));
             }
             gb.bricks.push((q.cell_zoom, q.brick));
             true

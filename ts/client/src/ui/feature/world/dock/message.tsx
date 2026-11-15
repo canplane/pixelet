@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, type TextInput, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  type TextInputInstance,
+  View,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
@@ -38,7 +43,7 @@ export function useMessage(mode: DockMode) {
   const drafting = useCore((s) => s.drafting);
   const [message_text, set_message_text] = useState("");
   const [is_sending, set_is_sending] = useState(false);
-  const input_ref = useRef<TextInput | null>(null);
+  const input_ref = useRef<TextInputInstance | null>(null);
 
   // The keyboard is up exactly while the dock is in message mode. A marker's
   // draft exists only in message mode, so leaving the mode cancels it.

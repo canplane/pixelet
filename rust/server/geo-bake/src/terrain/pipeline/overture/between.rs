@@ -4,7 +4,7 @@
 //! segment, or the whole of it.
 
 use crate::terrain::CELL_U;
-use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{G3857, merc_from_u};
 use serde_json::Value;
 
 pub(crate) type Range = [f64; 2];
@@ -164,7 +164,7 @@ impl<'a> Line<'a> {
             self.points
                 .iter()
                 .zip(&self.cum)
-                .filter(|(_, &c)| c > from && c < to)
+                .filter(|&(_, &c)| c > from && c < to)
                 .map(|(p, _)| *p),
         );
         out.push(self.at(to));

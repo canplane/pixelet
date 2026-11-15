@@ -1,6 +1,6 @@
 // @pxl/client/service/core/overlay.ts
 
-import type { Remote } from "@xpute/link";
+import type { Serving } from "@xpute/link";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
 
@@ -71,14 +71,14 @@ export function cur_draft(): string {
   return draft;
 }
 
-/** Serves `overlay` on `remote`, the core's snapshot and view, before the
- * core boots. */
-export function serve_overlay(remote: Remote): void {
-  mount(remote, {
-    show: set_snapshot,
-    draft: (text) => {
+/** Serves `overlay` on `ui`, the UI's end, before the core boots: the
+ * core's snapshot and view, each answered once it is taken. */
+export function serve_overlay(ui: Serving): void {
+  mount(ui, {
+    show: async (snapshot) => set_snapshot(snapshot),
+    draft: async (text) => {
       draft = text;
     },
-    view: (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
+    view: async (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
   });
 }

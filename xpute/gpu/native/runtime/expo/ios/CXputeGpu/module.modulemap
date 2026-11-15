@@ -1,4 +1,0 @@
-module CXputeGpu {
-  header "xpute_gpu.h"
-  export *
-}

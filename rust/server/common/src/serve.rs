@@ -2,9 +2,9 @@
 
 use std::process::ExitCode;
 
+use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
-use axum::Router;
 use deadpool_postgres::Pool;
 use tower_http::compression::CompressionLayer;
 

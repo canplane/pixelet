@@ -16,11 +16,11 @@ use gpu::Gpu;
 use pxl_content::generation::{self, drawing};
 use pxl_engine::light;
 use pxl_render::frame::shader::record::{
-    compute, src, COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS,
+    COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS, compute, src,
 };
-use pxl_render::frame::shader::word::frame::EYE;
 use pxl_render::frame::shader::word::FRAME_FLOATS;
 use pxl_render::frame::shader::word::SHADOW_SIZE;
+use pxl_render::frame::shader::word::frame::EYE;
 use pxl_render::frame::shader::word::{instance, screen};
 
 const CAP: u32 = 4096;

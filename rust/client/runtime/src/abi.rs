@@ -23,14 +23,21 @@ pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
     ("xpute:clocks/monotonic-clock", 0x73f703),
     ("xpute:clocks/system-clock", 0x7dfa61),
     ("xpute:fs/file", 0x5b6743),
-    ("xpute:gpu/gpu", 0x79d455),
-    ("xpute:gpu/vsync", 0x42eda6),
+    ("pxl:gpu/gpu", 0x54bd98),
+    ("pxl:gpu/vsync", 0x51cb2a),
     ("pxl:core/object", 0x4edab0),
     ("pxl:core/overlay", 0x7b1393),
     ("pxl:core/text", 0x61d944),
 ];
 
-/// The methods of the package's own named interfaces its world imports
-/// that answer later, each `(handle, method)`, as WIT's `async func`
-/// marks them.
-pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] = &[(object::HANDLE, object::APPLY)];
+/// The methods of the interfaces the world imports that answer at once,
+/// each `(handle, method)`, a function without WIT's `async`, which a
+/// runtime refuses to carry to a UI on another thread.
+pub const CALLS: &[(xpute_link::Handle, xpute_link::Method)] = &[
+    (0x4eccaa, 0),
+    (0x73f703, 0),
+    (0x7dfa61, 0),
+    (0x54bd98, 1),
+    (0x61d944, 0),
+    (0x61d944, 1),
+];

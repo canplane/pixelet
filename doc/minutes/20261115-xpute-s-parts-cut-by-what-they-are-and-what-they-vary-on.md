@@ -58,6 +58,28 @@ What the user reproved in the agents' work, to be kept clear of:
   the runtime; messages declared none, then nothing printed at all.
 - Searching again for what was already established in the session.
 
+- **A first launch on the S23 refused the tile source** (the agents,
+  investigating). On Android a device's `fetch` is Expo's, and when the
+  connection drops while a body comes in it marks the error and then marks the
+  body complete (`expo/android/.../fetch/NativeResponse.kt`, the pump's catch
+  and `onResponse`), so `text()` resolves with a short or empty body; the
+  source service then failed to parse it and refused the source for good
+  instead of asking again. The service now takes a body that is not JSON as a
+  failed ask, asked again, as it must for a captive portal's page too; a
+  refusal is left to a declaration of the wrong shape or one the core refuses.
+  Not reproduced on the phone, which was not attached. Reporting it to Expo is
+  open. On Android Expo's fetch decodes zstd in its transport, off the
+  JavaScript thread, as a browser's does, which is what the 2026-10-16 decision
+  (`f6a5b3b7a0`) asks of a device's transport; `origin.native.ts`'s own decode
+  serves where a transport passes zstd through, as iOS's did then.
+- **Gaps noted beside the Figma comparison, not pursued** (the agents). The
+  comparison found our boundary already in Figma's shape. Unmeasured, and our
+  own rather than Figma's: a yield (`wait_for(0)`) is a timer's round trip,
+  which the browser clamps once nested; an entry's budget is a flat 8 ms
+  whatever the time to the next vsync, and the vsync's timestamp is dropped;
+  each answer runs the core's whole `end`; a skipped or refused frame still
+  costs an entry each vsync.
+
 ## What was decided
 
 - **The entities** (**the user**). xpute's parts are the kit, the link, the
@@ -164,13 +186,16 @@ What the user reproved in the agents' work, to be kept clear of:
   | `host/{rust,ts}` | `xpute-host`, `@xpute/host` |
   | `runtime/web`, `runtime/native` | `@xpute/runtime-web`, `xpute-runtime-native` |
   | `expo` | `@xpute/expo` |
-  | `gpu/link/{rust,ts}`, `gpu/guest/rust` | `xpute-gpu-link`, `@xpute/gpu-link`, `xpute-gpu-guest` |
-  | `gpu/host/{rust,ts}`, `gpu/expo` | `xpute-gpu-host`, `@xpute/gpu-host`, `@xpute/gpu-expo` |
   | `gen`, `tool`, `golden/{rust,ts}` | `xpute-gen`, `xpute-tool`, `xpute-golden`, `@xpute/golden` |
-  | `rust/client/host` | `pxl-host` |
 
-  `xpute-gpu-native-runtime`, `xpute-gen-targets` and `xpute-gpu-gen-targets`
-  go. The C++ stays one tree under `cpp/`, one library built by one Makefile.
+  The GPU, pixelet's, takes pixelet's prefix: `rust/gpu/{link,guest,host}` is
+  `pxl-gpu-link`, `pxl-gpu-guest`, `pxl-gpu-host`, and `ts/gpu` one package,
+  `@pxl/gpu`, its folders `link`, `host` and `expo` kept as its subpaths
+  (`@pxl/gpu/link`, `@pxl/gpu/host`, `@pxl/gpu/expo`), their order held by
+  `rule.rs`.
+
+  `xpute-gpu-native-runtime` goes; `xpute-gen-targets` stays beside the part
+  whose specs it lists. The C++ stays one tree under `cpp/`, one library built by one Makefile.
 
 ## Next
 

@@ -5,14 +5,14 @@
 // once, its cells as a fill leaves them.
 
 use super::*;
-use crate::domain::layer::terrain::pool::{exhaust, set_way_pool, WayPool};
+use crate::domain::layer::terrain::pool::{WayPool, exhaust, set_way_pool};
 use pxl_engine::fill;
 use pxl_engine::way::way_cell;
 use pxl_spec::bake::separation::{self, Separation};
 use pxl_spec::bake::tile::terrain;
 use pxl_spec::brick;
-use pxl_spec::ground::word;
 use pxl_spec::ground::GroundId;
+use pxl_spec::ground::word;
 use pxl_spec::value::TRANSPORT;
 use pxl_spec::way::BRIDGE;
 
@@ -36,8 +36,8 @@ type Over = ([f64; 2], Vec<TileData>);
 /// Each set is built once, and every later `hold` of it takes a copy.
 static BUILT: std::sync::Mutex<Vec<(Over, Snapshot)>> = std::sync::Mutex::new(Vec::new());
 
-const CELLS_WORDS: usize = (SLOT_CNT * CELLS_ARR_BYTES / 4) as usize;
-const FOLDS_WORDS: usize = (SLOT_CNT * FOLDS_ARR_BYTES / 4) as usize;
+const CELLS_WORDS: usize = (SLOT_CNT * CELLS_ARR_SZ / 4) as usize;
+const FOLDS_WORDS: usize = (SLOT_CNT * FOLDS_ARR_SZ / 4) as usize;
 
 /// The test's own planes, made once in a run and written over by each hold
 /// and fresh start, so the heap holds one set of them.
@@ -196,7 +196,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             back[ROOT_AT as usize] = run[0];
             w.slots[b as usize].run = run;
         }
-        let at = (b * CELLS_ARR_BYTES / 4) as usize;
+        let at = (b * CELLS_ARR_SZ / 4) as usize;
         planes().cells[at..at + BRICK_WORDS as usize].copy_from_slice(&back);
         w.slots[b as usize].present = true;
     }

@@ -2,11 +2,11 @@
 
 use super::*;
 use fnv::FnvHashMap;
-use pxl_spec::bake::tile::earth::EARTH_BYTES;
+use pxl_spec::bake::tile::earth::EARTH_SZ;
 
 fn packet() -> Body {
     Body::Heap(
-        earth::encode(&vec![0; EARTH_BYTES])
+        earth::encode(&vec![0; EARTH_SZ])
             .unwrap()
             .into_boxed_slice(),
     )

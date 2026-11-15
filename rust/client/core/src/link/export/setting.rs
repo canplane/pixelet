@@ -4,9 +4,9 @@
 
 use super::{applied, or_refuse, refuse_unless};
 use crate::abi::types::ErrorCode;
+use crate::domain::setting::SettingKey;
 use crate::domain::setting::are_settings_loaded;
 use crate::domain::setting::settings_mut;
-use crate::domain::setting::SettingKey;
 use crate::perf::window::perf_follow;
 use xpute_kit::status::errno::Errno;
 

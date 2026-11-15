@@ -59,9 +59,30 @@ export class Table<T> {
     return s !== undefined && s.generation === h >>> SLOT_BITS ? s : undefined;
   }
 
+  /** Puts `v` under `h`: a handle this table issued, or one the other end
+   * issued, as a UI's end holds what the runtime opens on it under the
+   * guest's end's handles. The slot `h` names is then issued at `h`'s
+   * generation, taken out of the queue if it was free, it and the slots
+   * before it made free where there were none; one issued at another
+   * generation is a bug. */
   put(h: Handle, v: T): void {
-    const s = this._slot(h);
-    if (s === undefined) bug(ERRNO_EBADF);
+    const k = h & SLOT_MASK;
+    if (k === 0) bug(ERRNO_EBADF);
+    while (this._slots.length < k) {
+      this._slots.push({ generation: 0, val: undefined, next: ISSUED });
+      this.remove(this._slots.length);
+    }
+    const s = this._slots[k - 1]!;
+    if (s.next !== ISSUED) {
+      let prev = 0;
+      for (let c = this._head; c !== k; c = this._slots[c - 1]!.next) prev = c;
+      if (prev === 0) this._head = s.next;
+      else this._slots[prev - 1]!.next = s.next;
+      if (this._tail === k) this._tail = prev;
+      s.next = ISSUED;
+      s.generation = h >>> SLOT_BITS;
+    }
+    if (s.generation !== h >>> SLOT_BITS) bug(ERRNO_EBADF);
     s.val = v;
   }
 

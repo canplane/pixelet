@@ -2,7 +2,7 @@
 
 use super::*;
 use pxl_render::frame::shelf::Paint;
-use pxl_render::gpu::draw::{lists_bytes, set_lists};
+use pxl_render::gpu::draw::{lists_sz, set_lists};
 
 /// A marker's instance holds its stand's Q3 position bit for bit, including
 /// an X across the i32's seam and words whose bits read as a NaN, and it holds
@@ -35,7 +35,7 @@ fn a_marker_is_where_it_stands() {
         assert_eq!(was[at..at + 3], s.map(|v| v as u32));
     }
     const LIVE: usize = 4;
-    set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
+    set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
     let mut list = DrawList::default();
     let mut set = Set::default();
     set.write(&mut list, &was);

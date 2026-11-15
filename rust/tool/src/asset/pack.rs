@@ -7,8 +7,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use image::imageops;
 use image::RgbaImage;
+use image::imageops;
 use serde::Deserialize;
 
 use crate::color::{linear, srgb};

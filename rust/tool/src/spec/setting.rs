@@ -7,10 +7,10 @@
 //! the `dev` settings so the bundler drops them.
 //! A setting whose `stored` is false the core's store neither keeps nor reads.
 
-use xpute_gen::spec::data::{table_outputs, ts_literal, DataSpec};
+use xpute_gen::spec::data::{DataSpec, table_outputs, ts_literal};
 
 use super::{
-    description, file, js_num, marks, pascal, read, rs_field, rs_member, u32_of, Node, Output,
+    Node, Output, description, file, js_num, marks, pascal, read, rs_field, rs_member, u32_of,
 };
 use crate::root;
 

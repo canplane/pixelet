@@ -9,7 +9,7 @@ use std::process::ExitCode;
 
 use pxl_server::config::Env;
 use pxl_server::db::Probe;
-use pxl_server::serve::{serve, Server};
+use pxl_server::serve::{Server, serve};
 use pxl_spec::route::GEO_INTERNAL;
 
 #[tokio::main]

@@ -10,10 +10,9 @@ pub(crate) mod source;
 use crate::pyramid::Base;
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
-use pxl_spec::bake::tile::Tile;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{neighborhood, Quadrant};
+use pxl_spec::space::layer::quadrant::{Quadrant, neighborhood};
 
 /// The ground cell's side: what the raster, the separation's lines and an elevation count in.
 pub(crate) const CELL_U: f64 = units(GROUND.leaf_cell_zoom());
@@ -21,15 +20,8 @@ pub(crate) const CELL_U: f64 = units(GROUND.leaf_cell_zoom());
 impl Base for TerrainTile {
     const PRUNED: bool = false;
 
-    /// The packet, refused past the limit a client holds one to
-    /// (pxl-spec `BaseKind::row`).
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
-        let pkt = terrain::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))?;
-        let cap = Self::KIND.row().pkt_cap;
-        if pkt.len() > cap {
-            return Err(format!("tile {} size {} > {cap}", at.key(), pkt.len()));
-        }
-        Ok(pkt)
+        terrain::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {

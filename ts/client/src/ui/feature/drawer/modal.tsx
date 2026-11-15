@@ -110,13 +110,13 @@ function GlyphItem({
   );
 }
 
-function Sections<S extends string, T>({
+function Sections<T>({
   kind,
   sections,
   item,
 }: {
   kind: "cube" | "decor";
-  sections: Map<S, T[]>;
+  sections: Map<string, T[]>;
   item: (it: T, cell: f64) => ReactNode;
 }) {
   const { t } = useTranslation();

@@ -17,8 +17,8 @@ pub mod setting;
 /// What xpute's generator writes and reads with, shared: the generated file,
 /// the JSON's tree, and the text helpers.
 pub use xpute_gen::spec::{
-    align_star, description, file, js_num, json_str, line_comments, mark, marks, pascal, plural,
-    rs_const, rs_doc, rs_field, rs_member, ts_doc, Node, Output,
+    Node, Output, align_star, description, file, js_num, json_str, line_comments, mark, marks,
+    pascal, plural, rs_const, rs_doc, rs_field, rs_member, ts_doc,
 };
 
 /// The u32 a token holds, or none. A value with a `$type`, its own or its

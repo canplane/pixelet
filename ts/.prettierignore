@@ -6,6 +6,7 @@ dist/
 client/ios/
 client/android/
 client/modules/platform/android/build/
+gpu/expo/android/build/
 client/public/brand/
 client/public/index.html
 *.md

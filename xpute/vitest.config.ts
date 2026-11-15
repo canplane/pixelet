@@ -10,9 +10,8 @@ export default defineConfig({
     include: [
       "kit/ts/src/**/*.test.ts",
       "link/ts/src/**/*.test.ts",
-      "web/host/src/**/*.test.ts",
-      "gpu/web/host/src/web.test.ts",
-      "gpu/native/runtime/expo/src/**/*.test.ts",
+      "host/ts/src/**/*.test.ts",
+      "runtime/web/src/**/*.test.ts",
     ],
     testTimeout: 0,
     setupFiles: ["vitest.setup.ts"],

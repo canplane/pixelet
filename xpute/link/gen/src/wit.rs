@@ -11,7 +11,8 @@
 //! reading of the WIT here: Rust for either side (rs.rs), TypeScript for a
 //! host alone (ts.rs) and C++ for the guest alone (cpp.rs). A program's
 //! package is read over xpute's own (`TARGETS`), which it may take, and
-//! whose WIT the generator carries (`FILES`).
+//! whose WIT the generator carries (`FILES`), and over the program's own
+//! packages it takes, which the program names.
 //!
 //! A packet lays its values out as the Component Model's Canonical ABI does
 //! (xpute-link cabi.rs): a call's params as one tuple, an answer's value
@@ -30,8 +31,8 @@ use wit_parser::{
 };
 
 use xpute_gen::spec::{
-    int_of, is_float, mark, package, package_path, pascal, read_str, rs_crate, rs_ident, rs_module,
-    screaming, snake, ts_module, Member, Output,
+    Member, Output, Packages, int_of, is_float, mark, package, package_path, pascal, read_str,
+    rs_crate, rs_ident, rs_module, screaming, snake, ts_module,
 };
 
 mod cpp;
@@ -82,7 +83,7 @@ impl Side {
     fn dir(self) -> &'static str {
         match self {
             Side::Guest => "guest/rust",
-            Side::Host => "native/host",
+            Side::Host => "host/rust",
         }
     }
 }
@@ -98,15 +99,12 @@ const FRAME: &str = "link/spec/frame.json5";
 
 /// xpute's packages that bindings reach, each its directory from xpute's
 /// root and its name, as a program depends on it.
-const PACKAGES: [(&str, &str); 8] = [
+const PACKAGES: [(&str, &str); 5] = [
     ("link/rust", "xpute-link"),
     ("link/ts", "@xpute/link"),
     ("guest/rust", "xpute-guest"),
-    ("native/host", "xpute-native-host"),
-    ("web/host", "@xpute/web-host"),
-    ("gpu/link/ts", "@xpute/gpu-link"),
-    ("gpu/guest/rust", "xpute-gpu-guest"),
-    ("gpu/native/host", "xpute-gpu-native-host"),
+    ("host/rust", "xpute-host"),
+    ("host/ts", "@xpute/host"),
 ];
 
 /// The text of xpute's file `path`, among `FILES`.
@@ -141,8 +139,7 @@ fn xpute_package(path: &str) -> Result<(String, PathBuf), String> {
         .ok_or(format!("{path}: in no package of xpute's"))
 }
 
-// xpute's packages by name, among the link's and the GPU's, as `TARGETS`
-// orders them.
+// xpute's packages by name, after the link's, as `TARGETS` orders them.
 macro_rules! targets {
     ($($p:ident),*) => {
         &[
@@ -162,39 +159,22 @@ macro_rules! targets {
             },)*
             $(WitTarget {
                 wit: concat!("wit/", stringify!($p)),
-                rs: Some(concat!("native/host/src/abi/", stringify!($p), ".rs")),
-                ts: Some(concat!("web/host/src/abi/", stringify!($p))),
+                rs: Some(concat!("host/rust/src/abi/", stringify!($p), ".rs")),
+                ts: Some(concat!("host/ts/src/abi/", stringify!($p))),
                 cpp: None,
                 side: Some(Side::Host),
             },)*
-            WitTarget {
-                wit: "gpu/wit",
-                rs: Some("gpu/guest/rust/src/abi.rs"),
-                ts: None,
-                cpp: Some("cpp/xpute/gpu/guest/abi"),
-                side: Some(Side::Guest),
-            },
-            WitTarget {
-                wit: "gpu/wit",
-                rs: Some("gpu/native/host/src/abi.rs"),
-                ts: Some("gpu/link/ts/src/abi"),
-                cpp: None,
-                side: Some(Side::Host),
-            },
         ]
     };
 }
 
 /// The bindings of xpute's packages, each path from xpute's root, in the
 /// order they are read: xpute:link's own types first, which every side reads,
-/// then xpute's packages, each `xpute:<name>` in `wit/<name>`, then the GPU
-/// plugin's, each before those that take its types. A program's package is
-/// read after all of its side's. On the guest's side the Rust is in the
-/// guest's crate and the C++ in the C++ guest's `abi/`, and the GPU's beside
-/// its calls; on a host's the Rust is in the native host, and the GPU's in
-/// its native host, and the TypeScript of xpute's packages in the web host,
-/// on no platform's head, and the GPU's in its link's package, which both its
-/// UI ends and its web host take.
+/// then xpute's packages, each `xpute:<name>` in `wit/<name>`, each before
+/// those that take its types. A program's package is read after all of its
+/// side's. On the guest's side the Rust is in the guest's crate and the C++
+/// in the C++ guest's `abi/`; on a host's the Rust is in the Rust host,
+/// and the TypeScript in the TypeScript host, on no platform's head.
 pub const TARGETS: &[WitTarget<'static>] = targets!(clocks, fs, life, log, stop);
 
 /// What a binding's header names as its writer.
@@ -247,7 +227,7 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<O
                 return Err(format!(
                     "{at}.{}: the link carries no constructor, static, getter or setter",
                     f.name
-                ))
+                ));
             }
         }
     }
@@ -325,7 +305,7 @@ fn serving(o: &Obj, side: &str) -> String {
 const RS_GIVEN: [&str; 33] = [
     "HANDLE",
     "IMPORTS",
-    "LATER",
+    "CALLS",
     "mount",
     "task_return",
     "Guest",
@@ -378,7 +358,7 @@ const TS_GIVEN: [&str; 33] = [
     "Method",
     "Ref",
     "Sender",
-    "Side",
+    "Serving",
     "XputeError",
     "refusal_of",
     "AbortController",
@@ -400,9 +380,9 @@ const TS_GIVEN: [&str; 33] = [
 
 /// The modules the TypeScript bindings give beside interfaces' modules in a
 /// package with a world: its tables of the interfaces it imports
-/// (imports.ts) and of methods answered later (later.ts). An interface's
+/// (imports.ts) and of methods answered at once (calls.ts). An interface's
 /// module that meets one takes `_`, as a name in `TS_GIVEN` does.
-const TS_GIVEN_MODULES: [&str; 2] = ["imports", "later"];
+const TS_GIVEN_MODULES: [&str; 2] = ["imports", "calls"];
 
 /// An interface's TypeScript module, escaped where its package has a world
 /// (`TS_GIVEN_MODULES`).
@@ -451,11 +431,7 @@ fn type_name(r: &Resolve, t: TypeId, given: fn(&str) -> bool) -> String {
 
 /// `n`, a name made of a WIT name, with `_` where the bindings give it.
 fn escaped(n: String, given: fn(&str) -> bool) -> String {
-    if given(&n) {
-        n + "_"
-    } else {
-        n
-    }
+    if given(&n) { n + "_" } else { n }
 }
 
 /// A WIT name as a Rust identifier.
@@ -622,7 +598,7 @@ pub(crate) fn kind(r: &Resolve, ty: &Type, at: &str) -> Result<Kind, String> {
         // TypeScript's absent is one null, which an option inside it would share.
         TypeDefKind::Option(e) => match kind(r, e, at)? {
             Kind::Option(_) => {
-                return Err(format!("{at}: the link carries no option of an option"))
+                return Err(format!("{at}: the link carries no option of an option"));
             }
             k => Kind::Option(Box::new(k)),
         },
@@ -790,19 +766,6 @@ fn owner(
         },
         ts: format!("{ts}/{ts_alias}"),
     }
-}
-
-/// The TypeScript imports of the interfaces' modules a table names, each
-/// module as its own name, one line a module; no two of the modules share a
-/// name, as LATER's are the package's own interfaces.
-fn ts_namespaces<'a>(reaches: impl Iterator<Item = &'a (String, String, String)>) -> String {
-    let modules: BTreeMap<_, _> = reaches
-        .map(|(_, ts, m)| (m.as_str(), ts.as_str()))
-        .collect();
-    modules
-        .iter()
-        .map(|(m, ts)| format!("import * as {m} from \"{ts}.ts\";\n"))
-        .collect()
 }
 
 fn package_name(r: &Resolve, i: InterfaceId) -> String {
@@ -1030,23 +993,23 @@ fn frame_val(name: &str) -> Result<u32, String> {
 }
 
 /// The bindings of `t`'s package, its paths from `root`. Its peers are the
-/// packages of `TARGETS` on its side that are read before it, from `FILES`:
-/// their WIT is read before its own, and each package its types take is
-/// reached where its peer writes it. A package that is one of `TARGETS` is
-/// xpute's own, and `root` is then xpute's tree, where its peers lie.
-pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
-    let own = UnresolvedPackageGroup::parse_dir(root.join(t.wit))
+/// packages of `TARGETS` on its side that are read before it, from `FILES`,
+/// then those of `own` on its side, the program's own packages it takes,
+/// from `root`, each named by the manifest above its files: their WIT is
+/// read before its own, and each package its types take is reached where
+/// its peer writes it. A package that is one of `TARGETS` is xpute's own,
+/// and `root` is then xpute's tree, where its peers lie.
+pub fn wit_outputs(root: &Path, t: &WitTarget, own: &[WitTarget]) -> Result<Vec<Output>, String> {
+    let main = UnresolvedPackageGroup::parse_dir(root.join(t.wit))
         .map_err(|e| format!("{}: {e:?}", t.wit))?;
+    let on_side = |p: &&WitTarget| p.side.is_none() || p.side == t.side;
     let mut r = Resolve::default();
     let mut ids = Vec::new();
     let mut peers = Vec::new();
     let mut inside = None;
-    for p in TARGETS
-        .iter()
-        .filter(|p| p.side.is_none() || p.side == t.side)
-    {
+    for p in TARGETS.iter().filter(on_side) {
         let group = xpute_wit(p.wit)?;
-        if group.main.name == own.main.name {
+        if group.main.name == main.main.name {
             inside = Some(root);
             break;
         }
@@ -1056,7 +1019,19 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
         );
         peers.push(p);
     }
-    let pkg = r.push_group(own).map_err(|e| format!("{}: {e:?}", t.wit))?;
+    let mut own_ids = Vec::new();
+    for p in own.iter().filter(on_side) {
+        let group = UnresolvedPackageGroup::parse_dir(root.join(p.wit))
+            .map_err(|e| format!("{}: {e:?}", p.wit))?;
+        own_ids.push((
+            r.push_group(group)
+                .map_err(|e| format!("{}: {e:?}", p.wit))?,
+            p,
+        ));
+    }
+    let pkg = r
+        .push_group(main)
+        .map_err(|e| format!("{}: {e:?}", t.wit))?;
     let p = &r.packages[pkg];
     let pname = format!("{}:{}", p.name.namespace, p.name.name);
     // xpute:link, which every side reads first.
@@ -1073,15 +1048,29 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
         (Some(_), Some(x)) => cpp::Library::Inside(cpp::externs(&r, &ids, x, &peers)?),
         _ => cpp::Library::Over,
     };
+    // Each peer with the root its paths are from where the package lies in
+    // that tree, and how a path there maps to its package: xpute's by
+    // `PACKAGES`, the program's by its manifests.
+    let tree = |path: &str| package(root, path);
+    let xpute: Packages = &xpute_package;
+    let reached = ids
+        .iter()
+        .zip(&peers)
+        .map(|(&id, &p)| (id, p, inside, xpute))
+        .chain(
+            own_ids
+                .iter()
+                .map(|&(id, p)| (id, p, Some(root), &tree as Packages)),
+        );
     let mut externs = Vec::new();
-    for (&id, p) in ids.iter().zip(&peers) {
+    for (id, p, from, pkg) in reached {
         let name = &r.packages[id].name;
         let rs = match (&crate_dir, p.rs) {
-            (Some(here), Some(rs)) => rs_module(here, inside, &xpute_package, rs)?,
+            (Some(here), Some(rs)) => rs_module(here, from, pkg, rs)?,
             _ => String::new(),
         };
         let ts = match (&ts_dir, p.ts) {
-            (Some(here), Some(ts)) => ts_module(here, inside, &xpute_package, ts)?,
+            (Some(here), Some(ts)) => ts_module(here, from, pkg, ts)?,
             _ => String::new(),
         };
         externs.push((format!("{}:{}", name.namespace, name.name), rs, ts));
@@ -1160,23 +1149,11 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     let package_rs =
         t.rs.and_then(|path| Path::new(path).file_stem()?.to_str())
             .unwrap_or_default();
-    // The methods of the package's own named interfaces its world imports
-    // that answer later, from WIT's `async func`, each its interface's reach
-    // (`reach`) and its method's Rust and TypeScript constants.
-    let mut later = Vec::new();
-    // Where the package's module, or a module beside it, reaches the
-    // interface `i`: its Rust module's prefix, none where `i` is folded into
-    // the package's module, and its TypeScript module and that module's name.
-    let reach = |i: InterfaceId| {
-        let o = owner(&r, &externs, &pname, "", i);
-        let own_folded = package_name(&r, i) == pname && folded(&r, i, package_rs);
-        let rs = if own_folded {
-            String::new()
-        } else {
-            format!("{}::", o.rs)
-        };
-        (rs, o.ts, interface_ts_module(&r, i))
-    };
+    // The methods of the interfaces its world imports that answer at once, a
+    // function without WIT's `async`, xpute's and a plugin's as well as the
+    // package's own, each its interface's named handle and its method's
+    // number, as IMPORTS holds the handles.
+    let mut calls: Vec<(u32, usize)> = Vec::new();
     for (iname, &i) in &p.interfaces {
         let at = format!("{pname}/{iname}");
         let objs = objs(&r, i, &at, drop)?;
@@ -1204,17 +1181,6 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
         };
         let role = |serves: bool| if serves { Role::Serve } else { Role::Call };
         let m = rs_name(iname);
-        if guest_serves == Some(false) {
-            for o in objs.iter().filter(|o| !o.resource) {
-                for f in o.methods.iter().filter(|f| is_async(f)) {
-                    later.push((
-                        reach(i),
-                        method_const(o, f, rs_given),
-                        method_const(o, f, ts_given),
-                    ));
-                }
-            }
-        }
         if let Some(dir) = rs_dir {
             let rs_role = match (guest_serves, &side) {
                 (None, _) => None,
@@ -1244,7 +1210,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
                 (None, _) => None,
                 (Some(g), Some(Side::Host)) => Some(role(!g)),
                 (Some(_), _) => {
-                    return Err(format!("{at}: TypeScript is written for a host alone"))
+                    return Err(format!("{at}: TypeScript is written for a host alone"));
                 }
             };
             let (body, enums) = g.ts_interface(&objs, ts_role)?;
@@ -1295,10 +1261,18 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
             continue;
         };
         let name = format!("{}/{n}", package_name(&r, id));
-        if objs(&r, id, &name, drop)?.is_empty() {
+        let objs = objs(&r, id, &name, drop)?;
+        if objs.is_empty() {
             continue;
         }
         let handle = named(&name, named_bit);
+        for o in &objs {
+            for (k, f) in o.methods.iter().enumerate() {
+                if !is_async(f) {
+                    calls.push((handle, k));
+                }
+            }
+        }
         imports.push((name, handle));
     }
     if let (Some((_, false)), Some(_)) = (&side, world) {
@@ -1311,13 +1285,13 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
             "\n/// The interfaces the world imports, each `(name, handle)`, which are\n/// mounted before the guest boots: one with functions of its own under its\n/// handle, one of resources alone by an opener at a prefix.\npub const IMPORTS: &[(&str, {link_rs}::Handle)] = &[{}];",
             pairs.join(", ")
         );
-        let pairs: Vec<_> = later
+        let pairs: Vec<_> = calls
             .iter()
-            .map(|((rs, ..), c, _)| format!("({rs}HANDLE, {rs}{c})"))
+            .map(|(h, k)| format!("({h:#x}, {k})"))
             .collect();
         let _ = writeln!(
             rs,
-            "\n/// The methods of the package's own named interfaces its world imports\n/// that answer later, each `(handle, method)`, as WIT's `async func`\n/// marks them.\npub const LATER: &[({link_rs}::Handle, {link_rs}::Method)] = &[{}];",
+            "\n/// The methods of the interfaces the world imports that answer at once,\n/// each `(handle, method)`, a function without WIT's `async`, which a\n/// runtime refuses to carry to a UI on another thread.\npub const CALLS: &[({link_rs}::Handle, {link_rs}::Method)] = &[{}];",
             pairs.join(", ")
         );
     }
@@ -1334,14 +1308,13 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
             pairs.join(", ")
         );
         outs.push(Output::new(&path, text));
-        let uses = ts_namespaces(later.iter().map(|(reach, ..)| reach));
-        let pairs: Vec<_> = later
+        let pairs: Vec<_> = calls
             .iter()
-            .map(|((_, _, m), _, c)| format!("[{m}.HANDLE, {m}.{c}]"))
+            .map(|(h, k)| format!("[{h:#x}, {k}]"))
             .collect();
-        let path = format!("{dir}/later.ts");
+        let path = format!("{dir}/calls.ts");
         let text = format!(
-            "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{uses}\n/** The methods of the package's own named interfaces its world imports\n * that answer later, each `[handle, method]`, as WIT's `async func`\n * marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
+            "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n\n/** The methods of the interfaces the world imports that answer at once,\n * each `[handle, method]`, a function without WIT's `async`, which a\n * runtime refuses to carry to a UI on another thread. */\nexport const CALLS: readonly (readonly [Handle, Method])[] = [{}];\n",
             package_path(&|p| package(root, p), &path)?,
             mark(src, TOOL),
             pairs.join(", ")

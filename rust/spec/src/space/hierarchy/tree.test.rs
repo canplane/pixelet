@@ -7,11 +7,15 @@ use super::*;
 fn child_parent_slot() {
     for at in [[5i32, -3], [-1, -1], [0, 8]] {
         assert_eq!(child_of(parent_of(at), child_idx(at)), at);
-        assert!((0..4).all(|k| parent_of(child_of(at, k)) == at && child_idx(child_of(at, k)) == k));
+        assert!(
+            (0..4).all(|k| parent_of(child_of(at, k)) == at && child_idx(child_of(at, k)) == k)
+        );
     }
     for at in [[5i32, -3, 2], [-1, -1, -1], [0, 8, 7]] {
         assert_eq!(child_of(parent_of(at), child_idx(at)), at);
-        assert!((0..8).all(|k| parent_of(child_of(at, k)) == at && child_idx(child_of(at, k)) == k));
+        assert!(
+            (0..8).all(|k| parent_of(child_of(at, k)) == at && child_idx(child_of(at, k)) == k)
+        );
     }
 }
 

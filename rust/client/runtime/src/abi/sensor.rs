@@ -128,5 +128,5 @@ pub fn location(side_: &_rt::Side, status: LocationStatus) -> Result<(), _rt::Er
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method, Packet, Side};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

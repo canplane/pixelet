@@ -23,11 +23,11 @@ use xpute_kit::status::errno::Errno;
 use crate::spec::file::CATALOG;
 use crate::spec::manifest::mem;
 use crate::sys::io::demand::Order;
-use crate::sys::io::failure::{exit_of, Exit, Failure};
+use crate::sys::io::failure::{Exit, Failure, exit_of};
 use crate::sys::io::file;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
-use crate::sys::load::{id_of, of_id, Load, LoadKind, LOAD_FILE_CAP};
+use crate::sys::load::{LOAD_FILE_CAP, Load, LoadKind, id_of, of_id};
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate};
 

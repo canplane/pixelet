@@ -10,11 +10,11 @@ use crate::domain::setting::settings;
 use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::read;
 use crate::perf::record;
-use crate::perf::record::{perf_frames, perf_strtab, perf_tasks, perf_worst, STRTAB_CAP};
+use crate::perf::record::{STRTAB_CAP, perf_frames, perf_strtab, perf_tasks, perf_worst};
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
-use crate::spec::perf::{limit, now, stat, TABLE_NAMES};
+use crate::spec::perf::{TABLE_NAMES, limit, now, stat};
 use pxl_global::Global;
 
 use xpute_guest::clock::now;
@@ -52,8 +52,8 @@ const TABLES: [Table; TABLE_NAMES.len()] = [
 ];
 
 // The string table and the statistics are read whole, each in one page.
-const _: () = assert!(STRTAB_CAP <= limit::PAGE_BYTES as usize);
-const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_BYTES as usize);
+const _: () = assert!(STRTAB_CAP <= limit::PAGE_SZ as usize);
+const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_SZ as usize);
 
 /// The table being read, by its number, as it stood at its first page, so that
 /// the records landing between pages move none of its pages. It goes with its
@@ -61,7 +61,7 @@ const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_BYTES as usi
 static READING: Global<Option<(u32, Vec<u8>)>> = Global::new();
 
 /// Answers the records of table `table` from its record `from`, as many as a
-/// page holds (`limit::PAGE_BYTES`), as the table stood at its first page, the
+/// page holds (`limit::PAGE_SZ`), as the table stood at its first page, the
 /// one from record 0.
 pub(super) fn table(table: u32, from: u32) -> Result<Vec<u8>, Errno> {
     let &(read, record) = TABLES.get(table as usize).ok_or(Errno::EINVAL)?;
@@ -72,7 +72,7 @@ pub(super) fn table(table: u32, from: u32) -> Result<Vec<u8>, Errno> {
     let Some((_, b)) = reading.as_ref().filter(|(t, _)| *t == table) else {
         return Err(Errno::EINVAL);
     };
-    let page = limit::PAGE_BYTES as usize / record;
+    let page = limit::PAGE_SZ as usize / record;
     let n = b.len() / record;
     let from = (from as usize).min(n);
     let to = from + page.min(n - from);

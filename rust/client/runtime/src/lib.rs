@@ -6,11 +6,11 @@
 //! what the host serves, the stop, the clocks, the text and the GPU, and the
 //! runtime mounts them, then what the UI serves, enters the core once every
 //! import of its world is served, and runs the loop for the core's life
-//! (xpute-native-runtime native.rs `Boot`). The text is pixelet's own, served
+//! (xpute-runtime-native native.rs `Boot`). The text is pixelet's own, served
 //! on the host's side as ts/client/src/service serves it on a page (text.rs);
-//! the UI serves the files, the settings among them, and the objects over the
-//! remote, as the page's worker does. Beside them is the decoder the app's
-//! fetch calls (unpack.rs).
+//! the UI serves the files, the settings among them, and the objects, which
+//! a page's worker serves. Beside them is the decoder the app's fetch calls
+//! (unpack.rs).
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -24,22 +24,25 @@ use std::path::PathBuf;
 
 use pxl_core::spec::manifest::stack;
 use pxl_core::sys::heap::Heap;
+use pxl_gpu_host::{Ask, native};
+use pxl_gpu_link::{GpuAsk, GpuConfig};
 use pxl_render::spec::api::device;
-use xpute_gpu_link::{GpuAsk, GpuConfig};
-use xpute_gpu_native_host::{native, Ask};
-use xpute_native_host::{clock, stop};
-use xpute_native_runtime::native::Boot;
+use xpute_host::{clock, stop};
+use xpute_runtime_native::native::Boot;
 
-// The GPU's host under xpute's names, which the platform's GPU module calls
-// (xpute_gpu.h, and on Android the Kotlin class `xpute.Gpu`, through the
+// The GPU's host under its C names, which the GPU's module calls (pxl_gpu.h,
+// and on Android the Kotlin class `me.plei.pixelet.gpu.Gpu`, through the
 // runtime's JNI helpers).
-xpute_gpu_native_host::native_abi!(::xpute_native_runtime::jni);
+pxl_gpu_host::native_abi!(::xpute_runtime_native::jni);
 
 // The runtime under xpute's names over `start`, which xpute's module calls
 // (xpute.h, and on Android the Kotlin class `xpute.Runtime`).
-xpute_native_runtime::native_abi!(start);
+xpute_runtime_native::native_abi!(start);
 
-// The core's heap, the library's global allocator (pxl-core sys/heap.rs).
+// The core's heap, the library's global allocator (pxl-core sys/heap.rs):
+// pixelet's memory policy, not xpute's. It takes this whole library's
+// allocations, not the core's alone as on a page (pxl-core sys/README.md
+// "The memory, laid out once").
 #[global_allocator]
 static HEAP: Heap = Heap;
 
@@ -47,7 +50,7 @@ static HEAP: Heap = Heap;
 /// spec/client/render/api.json5 `device` sets it.
 const GPU: GpuConfig = GpuConfig {
     frame_latency: device::FRAME_LATENCY,
-    upload_chunk_sz: device::UPLOAD_CHUNK_BYTES,
+    upload_chunk_sz: device::UPLOAD_CHUNK_SZ,
 };
 
 /// What the runtime starts the core with: `cache_dir` is the directory the
@@ -69,6 +72,6 @@ fn start(cache_dir: PathBuf) -> Boot {
             }),
         ],
         imports: abi::IMPORTS,
-        later: abi::LATER,
+        calls: abi::CALLS,
     }
 }

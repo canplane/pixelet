@@ -12,13 +12,13 @@ use pxl_spec::brick;
 use pxl_spec::share::EIGHTH_CNT;
 use std::collections::{BTreeMap, BTreeSet};
 
-use pxl_content::generation::{self, drawing, DecorQuery, BRICK_REC_CAP, REC_WORDS};
+use pxl_content::generation::{self, BRICK_REC_CAP, DecorQuery, REC_WORDS, drawing};
 use pxl_content::{halve, scatter};
 use pxl_engine::answer::{self, In};
 use pxl_engine::cast::Line;
 use pxl_engine::cast::{Detail, End, Query, Spacing};
 use pxl_engine::clipmap as clip;
-use pxl_engine::clipmap::{Lookup, ENTRY_CNT, FIRST_CELL_ZOOM};
+use pxl_engine::clipmap::{ENTRY_CNT, FIRST_CELL_ZOOM, Lookup};
 use pxl_engine::ground::Resident;
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::{self, Cut};
@@ -27,23 +27,23 @@ use pxl_engine::support;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
 use pxl_engine::{beam, eye, ray};
 use pxl_render::frame::shader::record::{
-    src, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT,
+    COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT,
     COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN,
-    SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MARK_DRAWS_OPEN,
+    SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MARK_DRAWS_OPEN, src,
 };
-use pxl_render::frame::shader::word::{instance, ROW_LANE_CNT, SQUARE_SIDE};
+use pxl_render::frame::shader::word::{ROW_LANE_CNT, SQUARE_SIDE, instance};
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::asset::decor::{Decor, Orientation, DECORS, ROWS};
+use pxl_spec::asset::decor::{DECORS, Decor, Orientation, ROWS};
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::ancestor_at;
 use pxl_spec::space::layer::area;
 use pxl_spec::value;
 use wgpu::util::DeviceExt;
 
-use real_world::{mix, Built, World};
+use real_world::{Built, World, mix};
 
 /// How many answers fell into each kind, by the kind's name.
 #[derive(Default)]
@@ -471,13 +471,12 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                                 scatter::variant_of(decor, c.seed),
                                 cell_zoom,
                             );
-                            if let Some(p) = pairs.get_mut(&(s, j as u32)) {
-                                if stands
-                                    && (p.leaves.len() as u32) < generation::cap(decor)
-                                    && !p.leaves.contains(&leaf)
-                                {
-                                    p.leaves.push(leaf);
-                                }
+                            if let Some(p) = pairs.get_mut(&(s, j as u32))
+                                && stands
+                                && (p.leaves.len() as u32) < generation::cap(decor)
+                                && !p.leaves.contains(&leaf)
+                            {
+                                p.leaves.push(leaf);
                             }
                         }
                     }
@@ -588,7 +587,7 @@ fn pipeline(
 /// Compute pipeline `id` as the renderer makes it, over its group as record.rs states it
 /// (`compute_layout`) and not one derived from the module.
 fn hand_pipeline(device: &wgpu::Device, id: u32) -> wgpu::ComputePipeline {
-    use pxl_render::frame::shader::record::{compute, compute_layout, COMPUTE};
+    use pxl_render::frame::shader::record::{COMPUTE, compute, compute_layout};
     use pxl_render::spec::api::record::{STORAGE, STORAGE_RW, UNIFORM};
     let (shader, entry, _) = compute(id);
     let entries: Vec<_> = compute_layout(id)
@@ -1375,15 +1374,12 @@ fn run_world(
     let mut stood = Vec::new();
     let mut words = Vec::new();
     for (&(s, j), p) in &laid {
-        for i in 0..p
-            .leaves
-            .len()
-            .min(generation::cap(&ROWS[j as usize]) as usize)
-        {
+        let cap = generation::cap(&ROWS[j as usize]) as usize;
+        for (i, &leaf) in p.leaves.iter().take(cap).enumerate() {
             let r = word_of(s, j, i as u32);
             if hand[r] != generation::UNGENERATED {
-                stood.push((s, j, p.leaves[i], hand[r + 3] as i32));
-                words.push((s, j, p.leaves[i], hand[r + 3] as i32, hand[r]));
+                stood.push((s, j, leaf, hand[r + 3] as i32));
+                words.push((s, j, leaf, hand[r + 3] as i32, hand[r]));
             }
         }
     }
@@ -1429,9 +1425,10 @@ fn hand_decor_answers_as_placement() {
     // A decor stands no coarser than two zooms over the leaves. There the ground's top, the
     // ways and the caves under a face keep an even share of a cube, so the walk meets no odd
     // share.
-    assert!(ROWS
-        .iter()
-        .all(|d| scatter::first_cell_zoom(d) >= LEAF_CELL_ZOOM - 2));
+    assert!(
+        ROWS.iter()
+            .all(|d| scatter::first_cell_zoom(d) >= LEAF_CELL_ZOOM - 2)
+    );
     assert_eq!(tally.0["walk: met an odd part of its cube"], 0);
     let zero: Vec<_> = tally
         .0

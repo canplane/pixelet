@@ -22,7 +22,7 @@ use pxl_engine::{beam, eye, light, node_cache, raster, record};
 
 use crate::frame::shader::group::{
     BEAMS, FACES_BINDS, HIT_FACES_OF_BINDS, LIGHT_ARGS, LIGHT_LIST, LIGHT_RASTER_ARGS,
-    LIGHT_RECEIVER_TILES, LIGHT_REC_BINDS, LIGHT_REC_HITS_BINDS, NODE_CACHE, RASTER_ARGS,
+    LIGHT_REC_BINDS, LIGHT_REC_HITS_BINDS, LIGHT_RECEIVER_TILES, NODE_CACHE, RASTER_ARGS,
     REC_BINDS, REC_HITS_OF_BINDS, SAMPLE_HIT_BINDS,
 };
 use crate::frame::shader::record::{
@@ -33,8 +33,8 @@ use crate::frame::shader::record::{
 use crate::frame::shader::word::{BOX_VERTEX_CNT, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, frame_entries, pass_desc, release, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, RenderContext,
+    Entry, Format, Gpu, Load, RenderContext, buf_entry, buffer_usage, bytes, frame_entries,
+    pass_desc, release, texture_usage, view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::spec::span::GpuSpanName;
@@ -187,22 +187,19 @@ impl Raster {
             draw_pipeline: pipelines.build(g, PIPELINE_RASTER, Format::R32uint),
             mask: pipelines.build(g, PIPELINE_RASTER_MASK, Format::R32uint),
             args: g.buf(
-                word_bytes(raster::WORDS as usize),
+                word_sz(raster::WORDS as usize),
                 buffer_usage::STORAGE
                     | buffer_usage::COPY_DST
                     | buffer_usage::INDIRECT
                     | buffer_usage::COPY_SRC,
             ),
-            hits: g.buf(
-                word_bytes(3),
-                buffer_usage::COPY_DST | buffer_usage::INDIRECT,
-            ),
+            hits: g.buf(word_sz(3), buffer_usage::COPY_DST | buffer_usage::INDIRECT),
             draws: g.buf(
-                word_bytes(record::EYE_DRAW_CAP as usize),
+                word_sz(record::EYE_DRAW_CAP as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             ),
             uniform: g.buf(
-                word_bytes(RASTER_FLOATS),
+                word_sz(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             targets: Targets::default(),
@@ -225,7 +222,17 @@ impl Raster {
         size: [u32; 2],
         grid: &beam::Grid,
         samples_cast: bool,
-        [eye, beams, node_cache, clipmap, ground, shards, objects, pool, rays]: [u32; 9],
+        [
+            eye,
+            beams,
+            node_cache,
+            clipmap,
+            ground,
+            shards,
+            objects,
+            pool,
+            rays,
+        ]: [u32; 9],
     ) {
         if size != self.size {
             self.targets.release();
@@ -353,7 +360,7 @@ impl Raster {
             encoder,
             (node_cache, sequence::REC_HITS_DISPATCH.from_at()),
             (self.hits, sequence::REC_HITS_DISPATCH.to_at()),
-            word_bytes(3),
+            word_sz(3),
         );
         let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
         g.set_pipeline(pass, self.rec_hit.id);
@@ -484,17 +491,14 @@ impl Raster {
         let s = &mut self.light;
         if s.uniform == 0 {
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            s.draws = g.buf(word_bytes(record::LIGHT_DRAW_CAP as usize), storage);
+            s.draws = g.buf(word_sz(record::LIGHT_DRAW_CAP as usize), storage);
             s.args = g.buf(
-                word_bytes(raster::WORDS as usize),
+                word_sz(raster::WORDS as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
-            s.hits = g.buf(
-                word_bytes(3),
-                buffer_usage::COPY_DST | buffer_usage::INDIRECT,
-            );
+            s.hits = g.buf(word_sz(3), buffer_usage::COPY_DST | buffer_usage::INDIRECT);
             s.uniform = g.buf(
-                word_bytes(RASTER_FLOATS),
+                word_sz(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             s.targets = Targets::new(g, [size; 2]);
@@ -634,7 +638,7 @@ impl Raster {
             encoder,
             (node_cache, sequence::LIGHT_REC_HITS_DISPATCH.from_at()),
             (s.hits, sequence::LIGHT_REC_HITS_DISPATCH.to_at()),
-            word_bytes(3),
+            word_sz(3),
         );
         let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
         g.set_bind_group(pass, 0, s.rec_hits_group.id(), &[]);

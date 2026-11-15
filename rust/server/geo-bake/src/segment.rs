@@ -8,7 +8,7 @@
 
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{cell_of, Line, RuleSet};
+use crate::terrain::pipeline::overture::between::{Line, RuleSet, cell_of};
 use crate::terrain::pipeline::overture::role::Role;
 use crate::wkb::wkb_to_geometries;
 

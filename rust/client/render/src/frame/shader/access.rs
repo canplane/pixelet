@@ -35,7 +35,7 @@
 //!    write it, or, where a rule owns the range, a call that applies the rule but not through
 //!    atomics.
 
-use crate::frame::shader::record::{compute, lays_out_writable, ACCESS, NONE, STORAGE_RW};
+use crate::frame::shader::record::{ACCESS, NONE, STORAGE_RW, compute, lays_out_writable};
 use crate::frame::shader::word::SHADOW_SIZE;
 use pxl_engine::{light, node_cache, raster, ray};
 
@@ -623,11 +623,7 @@ const fn touch_of(compute: u32, binding: u32) -> Option<&'static Touch> {
 }
 
 const fn end(r: Range) -> u32 {
-    if r.words == END {
-        END
-    } else {
-        r.at + r.words
-    }
+    if r.words == END { END } else { r.at + r.words }
 }
 
 pub const fn overlap(a: Range, b: Range) -> bool {
@@ -898,10 +894,10 @@ const fn is_bound_writable(f: &Frame, k: usize) -> bool {
     let binds = s.group.binds;
     let mut b = 0;
     while b < binds.len() {
-        if binds[b].buf == s.indirect.buf {
-            if let Some(STORAGE_RW) = kind_in(compute(s.pipeline).2, binds[b].binding) {
-                return true;
-            }
+        if binds[b].buf == s.indirect.buf
+            && let Some(STORAGE_RW) = kind_in(compute(s.pipeline).2, binds[b].binding)
+        {
+            return true;
         }
         b += 1;
     }

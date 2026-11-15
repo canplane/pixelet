@@ -30,20 +30,16 @@ const SNAPSHOT: usize = {
     Snapshot::SZ + draft + settings + surfaces
 };
 
-/// A perf read's return data: one page (perf.json5 LIMIT.PAGE_BYTES), a list of
+/// A perf read's return data: one page (perf.json5 LIMIT.PAGE_SZ), a list of
 /// bytes.
-const PERF_PAGE: usize = 8 + list(limit::PAGE_BYTES as usize, 1);
+const PERF_PAGE: usize = 8 + list(limit::PAGE_SZ as usize, 1);
 
 /// scene.chat's args, which the core takes: one string (wit/scene.wit), a
 /// line at its cap.
 const CHAT: usize = 8 + list(4 * CHAT_TEXT_CHARS as usize, 1);
 
 const fn max(a: usize, b: usize) -> usize {
-    if a > b {
-        a
-    } else {
-        b
-    }
+    if a > b { a } else { b }
 }
 
 /// The largest packet the core lays or takes, a multiple of 8.

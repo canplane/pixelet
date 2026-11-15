@@ -364,7 +364,7 @@ pub const PIPELINE_CNT: u32 = 44;
 // its entry count and a (binding, visibility, kind) for each entry.
 pub use crate::spec::api::record::*;
 /// A binding's stages are xpute's own bits (`SHADER_STAGE`), and `NONE` is no stage.
-pub use xpute_gpu_link::spec::shader_stage::{COMPUTE, FRAGMENT, VERTEX};
+pub use pxl_gpu_link::spec::shader_stage::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
 
 use crate::frame::shader::floor;
@@ -560,19 +560,14 @@ const LOCATION_BEACON_BUFS: [VertexBufferLayout; 2] =
 /// The bytes of a debug line's vertex, which holds its place and its color, and of a debug
 /// face's vertex, which holds its place alone. A segment's two line vertices are read as one
 /// instance.
-pub const DEBUG_VERTEX_BYTES: u32 = 28;
-pub const DEBUG_FACE_VERTEX_BYTES: u32 = 12;
+pub const DEBUG_VERTEX_SZ: u32 = 28;
+pub const DEBUG_FACE_VERTEX_SZ: u32 = 12;
 const DEBUG_BUFS: [VertexBufferLayout; 1] = [VertexBufferLayout {
-    stride: 2 * DEBUG_VERTEX_BYTES,
+    stride: 2 * DEBUG_VERTEX_SZ,
     step: PER_INSTANCE,
-    attributes: &[
-        [0, 0, F32X3],
-        [1, 12, F32X4],
-        [2, DEBUG_VERTEX_BYTES, F32X3],
-    ],
+    attributes: &[[0, 0, F32X3], [1, 12, F32X4], [2, DEBUG_VERTEX_SZ, F32X3]],
 }];
-const DEBUG_FACE_BUFS: [VertexBufferLayout; 1] =
-    [vertex(DEBUG_FACE_VERTEX_BYTES, &[[0, 0, F32X3]])];
+const DEBUG_FACE_BUFS: [VertexBufferLayout; 1] = [vertex(DEBUG_FACE_VERTEX_SZ, &[[0, 0, F32X3]])];
 
 /// The entries of `a` followed by those of `b`, for a group laid out as another with more.
 const fn and<const N: usize, const M: usize, const R: usize>(

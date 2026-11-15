@@ -9,7 +9,7 @@
 //! `check` refuses the hazards among the calls as the crate is built.
 
 use crate::frame::shader::access::{
-    check, light_mark, Bound, Frame, Persistent, Range, Step, END, NO_RANGE,
+    Bound, END, Frame, NO_RANGE, Persistent, Range, Step, check, light_mark,
 };
 use crate::frame::shader::group::*;
 use crate::frame::shader::record::*;

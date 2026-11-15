@@ -12,10 +12,10 @@
 
 use core::hash::Hasher;
 
-use super::{surface, Brick, Instance, Key, MarkerHit};
+use super::{Brick, Instance, Key, MarkerHit, surface};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Draft;
-use crate::domain::query::{cell_zoom_at, World};
+use crate::domain::query::{World, cell_zoom_at};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
@@ -23,7 +23,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{cube, point};
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 

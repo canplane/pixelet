@@ -14,8 +14,8 @@ use resvg::usvg::Node;
 use resvg::usvg::Tree;
 use std::path::Path;
 
-use xpute_gen::spec::data::{table_outputs, DataSpec};
-use xpute_gen::spec::{description, Node as SpecNode, Output};
+use xpute_gen::spec::data::{DataSpec, table_outputs};
+use xpute_gen::spec::{Node as SpecNode, Output, description};
 
 /// What the symbols are read from, and the files written from them, which
 /// `spec` leaves to the asset tool.
@@ -163,12 +163,26 @@ pub fn outputs(root: &Path, symbols: &[Symbol]) -> Result<Vec<Output>, String> {
                 "shape's path data and whether it fills even-odd.",
             ]),
         ),
-        ("SYMBOL_PX".into(), entry(&["A mask's side, in device pixels."], "u32", SYMBOL_PX as usize)),
+        (
+            "SYMBOL_PX".into(),
+            entry(
+                &["A mask's side, in device pixels."],
+                "u32",
+                SYMBOL_PX as usize,
+            ),
+        ),
         (
             "SYMBOL_RATIO".into(),
-            entry(&["The device pixels a pixel the masks are rasterized at."], "u32", SYMBOL_RATIO as usize),
+            entry(
+                &["The device pixels a pixel the masks are rasterized at."],
+                "u32",
+                SYMBOL_RATIO as usize,
+            ),
         ),
-        ("SYMBOL_CNT".into(), entry(&["How many symbols there are."], "usize", symbols.len())),
+        (
+            "SYMBOL_CNT".into(),
+            entry(&["How many symbols there are."], "usize", symbols.len()),
+        ),
     ]);
     let d = DataSpec {
         json: SOURCE,

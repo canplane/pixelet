@@ -80,5 +80,5 @@ mod _rt {
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{answer, mem, Handle, Lift, Lower, Method};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer, mem};
 }

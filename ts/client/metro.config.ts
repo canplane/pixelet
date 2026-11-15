@@ -2,17 +2,18 @@
 
 /**
  * Metro bundles the client, ts/client/src, for a device and for the page. A
- * device's own file sits beside a default and is named by React Native's
- * suffixes (pill.ios.tsx beside pill.tsx); the page takes the default. Every
- * alias is tsconfig.json's, and every workspace package resolves to its source
- * (ts/build/path.ts), so that Metro reads the client exactly as the
- * type-check reads it.
+ * platform's own file is named by React Native's suffixes: the page's
+ * motion.web.tsx beside a device's motion.native.tsx, and an override beside
+ * its default (pill.ios.tsx beside pill.tsx). Which file each takes, every
+ * alias, which is tsconfig.json's, and every workspace package, which
+ * resolves to its source, are ts/build/path.ts's, so that Metro reads the
+ * client exactly as the type-check reads it.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
-import { REPO, tree_file, WORKSPACE } from "@pxl/build/path.ts";
+import { platform_file, REPO, WORKSPACE } from "@pxl/build/path.ts";
 import { CONSOLE_PATH, console_handler } from "@pxl/build/console.ts";
 import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
@@ -52,31 +53,6 @@ function build_stamp(): string {
   return file;
 }
 const BUILD_STAMP = build_stamp();
-
-/** The file that the platform being built takes for `file`: `pill.ios.tsx`,
- * or else `motion.native.tsx`, beside the default it names, or the default
- * when neither exists. Every import names the default with its extension,
- * which Metro's own platform lookup does not handle, so the lookup is done
- * here. A variant's import of its own default gets the default, which the
- * variant extends. Metro caches the answer for a relative name by folder, and
- * for an alias across the whole bundle. So a variant must name its default by
- * `./`, and nothing else in its folder may: otherwise the variant is handed
- * the other file's cached answer, which is the variant itself. */
-function own_platform(
-  file: string,
-  platform: string | null,
-  from: string,
-): string {
-  if (!platform) return file;
-  const ext = path.extname(file);
-  const stem = file.slice(0, -ext.length);
-  if (from.startsWith(`${stem}.`)) return file;
-  for (const which of platform === "web" ? ["web"] : [platform, "native"]) {
-    const own = `${stem}.${which}${ext}`;
-    if (fs.existsSync(own)) return own;
-  }
-  return file;
-}
 
 // A release build drops what is imported and not used, as a bundler of ES
 // modules does. Expo reads the switches from the environment.
@@ -134,20 +110,8 @@ const resolve_request: NonNullable<typeof BASE.resolver.resolveRequest> = (
   if (name === "virtual:pxl-build") {
     return { type: "sourceFile", filePath: BUILD_STAMP };
   }
-  const from = ctx.originModulePath;
-  const file = name.startsWith(".")
-    ? path.extname(name) !== ""
-      ? path.resolve(path.dirname(from), name)
-      : null
-    : tree_file(from, name);
-  if (file) {
-    return ctx.resolveRequest(
-      ctx,
-      own_platform(file, platform, from),
-      platform,
-    );
-  }
-  return ctx.resolveRequest(ctx, name, platform);
+  const file = platform_file(ctx.originModulePath, name, platform);
+  return ctx.resolveRequest(ctx, file ?? name, platform);
 };
 
 const dev_console = console_handler(path.join(APP, ".dev-console.log"));

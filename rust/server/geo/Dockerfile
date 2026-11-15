@@ -5,7 +5,7 @@
 
 # Must equal rust/rust-toolchain.toml; the build runs under the image's own
 # toolchain (RUSTUP_TOOLCHAIN), so rustup fetches none of the file's targets.
-FROM rust:1.98.1-slim-trixie AS build
+FROM rust:1.100.0-slim-trixie AS build
 WORKDIR /src
 ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
 
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
  && cp target/server/pxl-geo /usr/local/bin/pxl-geo
 
 # No CA bundle or shell: the only connection is db-geo on the internal network, without TLS.
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian13
 COPY --from=build /usr/local/bin/pxl-geo /usr/local/bin/pxl-geo
 
 EXPOSE 3000

@@ -1,0 +1,11 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PxlGpuModule"],
+    "podspecPath": "expo/ios/PxlGpu.podspec"
+  },
+  "android": {
+    "modules": ["me.plei.pixelet.gpu.PxlGpuModule"],
+    "path": "expo/android"
+  }
+}

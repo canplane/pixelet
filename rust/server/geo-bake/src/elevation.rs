@@ -11,11 +11,11 @@ use std::sync::{Arc, Mutex};
 
 use crate::coverage::Coverage;
 use postgres::Client;
-use pxl_spec::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use pxl_spec::ground::{ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, ele_idx};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857;
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, BBox3857};
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM};
+use pxl_spec::space::coord::adapter::epsg3857::{BBox3857, get_tile_bbox};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, Zoom};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::math::scalar::round;
 
@@ -490,11 +490,7 @@ impl Source<'_> {
             } else {
                 d.abs()
             };
-            if t <= 1.0 {
-                1.0 - t
-            } else {
-                0.0
-            }
+            if t <= 1.0 { 1.0 - t } else { 0.0 }
         };
         let (j0, j1) = ((-y.radius).max(-iy), y.radius.min(y.size - iy - 1));
         let (i0, i1) = ((-x.radius).max(-ix), x.radius.min(x.size - ix - 1));

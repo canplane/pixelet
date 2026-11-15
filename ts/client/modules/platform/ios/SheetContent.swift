@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/ios/SheetContent.swift
+// @pxl/client/modules/platform/ios/SheetContent.swift
 
 import ExpoUI
 import SwiftUI

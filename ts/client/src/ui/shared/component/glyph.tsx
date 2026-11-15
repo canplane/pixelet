@@ -23,7 +23,7 @@ export function Glyph({
       <Icon {...props} />
       {struck && (
         <Svg
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill]}
           width={icon.size}
           height={icon.size}
           viewBox="0 0 24 24"

@@ -12,6 +12,7 @@ import type { Ref } from "react";
 import {
   StyleSheet,
   TextInput,
+  type TextInputInstance,
   type TextInputProps,
   type TextStyle,
 } from "react-native";
@@ -28,7 +29,7 @@ import {
 export const SYSTEM_CLEAR: boolean = false;
 
 type TextFieldProps = Omit<TextInputProps, "onSubmitEditing"> & {
-  ref?: Ref<TextInput>;
+  ref?: Ref<TextInputInstance>;
   /** Called on Enter, except the Enter that ends an IME composition. */
   onSubmit?: () => void;
 };

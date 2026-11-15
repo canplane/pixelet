@@ -44,10 +44,31 @@ template <class T> class Table {
         return k | slots_[k - 1].generation << frame::SLOT_BITS;
     }
 
+    // Puts `v` under `h`: a handle this table issued, or one the other end
+    // issued, as a UI's end holds what the runtime opens on it under the
+    // guest's end's handles. The slot `h` names is then issued at `h`'s
+    // generation, taken out of the queue if it was free, it and the slots
+    // before it made free where there were none; one issued at another
+    // generation is a bug.
     void put(Handle h, T v) noexcept {
-        Slot *s = slot(h);
-        ensure(s != nullptr, Errno::ebadf, h);
-        s->val = std::move(v);
+        std::uint32_t k = h & SLOT_MASK;
+        ensure(k != 0, Errno::ebadf, h);
+        while (slots_.size() < k) {
+            slots_.push_back(Slot{0, std::nullopt, ISSUED});
+            remove(static_cast<std::uint32_t>(slots_.size()));
+        }
+        Slot &s = slots_[k - 1];
+        if (s.next != ISSUED) {
+            std::uint32_t prev = 0;
+            for (std::uint32_t c = head_; c != k; c = slots_[c - 1].next) prev = c;
+            if (prev == 0) head_ = s.next;
+            else slots_[prev - 1].next = s.next;
+            if (tail_ == k) tail_ = prev;
+            s.next = ISSUED;
+            s.generation = h >> frame::SLOT_BITS;
+        }
+        ensure(s.generation == h >> frame::SLOT_BITS, Errno::ebadf, h);
+        s.val = std::move(v);
     }
 
     // Puts `v` at a handle issued for it, and answers the handle.

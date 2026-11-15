@@ -21,7 +21,7 @@ use xpute_kit::status::bug::OrBug;
 #[cfg(target_os = "android")]
 use xpute_kit::status::errno::Errno;
 #[cfg(target_os = "android")]
-use xpute_native_runtime::jni;
+use xpute_runtime_native::jni;
 use zstd::stream;
 
 /// Decodes every frame of `body`, skipping skippable frames. Returns None
@@ -43,7 +43,7 @@ fn decode(body: &[u8]) -> Option<Vec<u8>> {
 /// # Safety
 /// `src` must point at `len` readable bytes, and `out` and `out_len` at
 /// writable words.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn pxl_unpack(
     src: *const u8,
     len: usize,
@@ -65,7 +65,7 @@ unsafe extern "C" fn pxl_unpack(
 /// # Safety
 /// `out` and `len` must be what one `pxl_unpack` call wrote, and those bytes
 /// are freed only once.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn pxl_unpacked_free(out: *mut u8, len: usize) {
     // SAFETY: the boxed slice `pxl_unpack` made, as it made it.
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(out, len)) });
@@ -111,7 +111,7 @@ unsafe fn with_bytes<R>(
 /// # Safety
 /// Called by JNI.
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     e: *mut jni::sys::JNIEnv,
     _class: jni::sys::jclass,

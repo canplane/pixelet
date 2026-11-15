@@ -7,11 +7,11 @@ make it hold, in the order they depend on each other, across xpute's three
 parts: the guest, the host and the link between them, which WIT draws; the
 runtime, the platform's environment that runs them; and the kit beneath both.
 The **link** carries every call as a frame. The **sides** run the link alike on
-every platform, each end over a medium its runtime plugs in, a UI's too. A failure is its call's to
+every platform, each end over a transport its runtime plugs in, and a runtime
+carries a UI on another thread to the guest's end. A failure is its call's to
 judge, and a bug ends in a stop, after which the link answers what was owed, so
-that no side waits on an answer that will not come. The GPU is the one device
-whose work holds the guest's memory past an answer, so it is the one device the
-host serves. And the three languages hold the same facts: a spec or WIT owns
+that no side waits on an answer that will not come. And the three languages
+hold the same facts: a spec or WIT owns
 each one and a generator writes it into each, and frozen records hold the rest
 of their code to each other. The document ends with
 what xpute does not know, what it took from earlier work and a map of the code.
@@ -58,7 +58,10 @@ what it armed; when it runs is the program's.
 An end of the link is a **`Side`**, the same machine in Rust, TypeScript and
 C++: it lays frames in its own box, crosses by its own function, serves what
 is mounted on it and hears the answers to what it sent. The guest holds one
-over its outbox, and the host one over the guest's inbox.
+over its outbox, and the host one over the guest's inbox. TypeScript names
+apart the part every end runs alike, `End`: the handle table, the requests
+pending by tag, the dispatch to an object by its handle, the later answers,
+the cancels and the drops; a `Side` is an `End` over the guest's boxes.
 
 What runs beside the guest is split the same way everywhere, and every
 dependency points down: a part declares the interface it needs, and a part
@@ -70,34 +73,53 @@ worker or a device's guest thread. It instantiates or links the guest, makes
 the host's `Side`, injects into the host what the host needs of it (the way
 back to the guest's thread, where a report goes, the log) and runs the loop
 that enters the guest. Nothing names a runtime but its own UI end and the
-program's assembly. A plugin stands beside the runtime, as its own guest's end
-and host, and neither names the other. The program starts its guest with a `Boot`, which lists
+program's assembly. A program may bring plugins of its own, a GPU for one,
+each beside the runtime as its own guest's end and host, and neither names the
+other. The program starts its guest with a `Boot`, which lists
 its servers, the host's among them, each a `Server` that mounts some of the
 guest's imports, and its runtime runs the steps in their order, on both
-platforms alike: it mounts each server, serves the UI's side, enters the guest
+platforms alike: it mounts each server, stands in for the UI, enters the guest
 only once every interface the guest's world imports is mounted, and on a
 device runs the loop.
 
 An end of the link is one machine whatever carries its frames, as a link
 layer knows its two ends and not the wire. What carries them is the
-**medium**, which the runtime plugs in: the guest's boxes and the crossing into
-it, or a port to a UI on another thread (a page's MessagePort, a device's C
-ABI). A call that waits for its answer needs a medium that can wait, so an end
-over a port has none. The runtime bridges an end over a port to the guest's
-end, as a bridge joins two links. A method the UI serves that WIT marks
-`async func`, which the bindings list as `LATER`, it answers later by its tag;
-any other is told to it and answered at once.
+**transport**, which the runtime plugs in: the guest's boxes and the crossing
+into it, in the guest's memory, which both ends share.
 
-The UI is one party on the link, over a port, and its connection is an object like
-any other: it attaches by opening a handle, everything it sends and takes names
-that handle, and it leaves when the handle is dropped, which drops what it
-opened and answers ECANCELED what it owed, by the link's own drop. The guest is
-told only that a remote attached (`xpute:life` `attached`); the WIT between it
-and the UI does not change. A device's runtime outlives its UI, so a reload
-opens a new handle on the same runtime and drops the old one, and the runtime
-keeps the guest's end, its last stop and its trap, which a new UI reads as it
-begins to hear them. A page's worker dies with its page, so a reloaded page
-meets a new runtime.
+The UI calls the guest's exports and serves the imports it serves by the same
+WIT and the same generated bindings as any end, which call by a `Sender` and
+serve by a `Serving`, and never know which thread they run on. A UI on another
+thread than the guest's, a page's main thread to the guest's worker or a
+device's JavaScript thread to the guest's thread, is across a second boundary,
+copied, which the runtime alone carries, by its shell's convention: messages
+over a page's MessagePort, the module's functions and events over a device's C
+ABI. The runtime holds both halves of that crossing. On the guest's thread it
+stands in for the UI on the guest's end: a stand-in under each named handle the
+UI serves and an opener at each prefix it serves, each method sent across and
+answered later by its tag. On the UI's thread, its UI end is an `End` over
+the runtime's own transport, a page's port or a device's module, so the
+bindings call and serve there as on any end. One thread cannot wait on the
+other, so every method the UI serves is an `async func`, and the runtime
+refuses to start the guest where a function without `async` (the bindings'
+`CALLS`) is one the UI serves, as it refuses an import no server mounts. The
+guest's open of an object the UI serves is answered at once on the guest's end,
+pipelined, so that end issues its handle, and the runtime tells the UI end the
+handle and the prefix that matched, whose opener the UI end runs. The guest's
+cancel of a method and its drop of an object cross as the runtime's own
+messages. Handing an object beside a call, a canvas, is a property of a
+crossing that can move one, a page's port.
+
+The UI's connection is the runtime's, and an object like any other: a device's
+runtime attaches a UI under a handle of its own, everything the UI sends and
+takes names that handle, and the UI leaves when the handle is dropped, which
+drops on the guest's end what it opened and answers ECANCELED what it owed. The
+guest is told only that a UI attached (`xpute:life` `attached`); the WIT
+between it and the UI does not change. A device's runtime outlives its UI, so a
+reload opens a new handle on the same runtime and drops the old one, and the
+runtime keeps the guest's end, its last stop and its trap, which a new UI reads
+as it begins to hear them. A page's worker dies with its page, so a reloaded
+page meets a new runtime.
 
 ## How a failure ends
 
@@ -128,31 +150,6 @@ more, and a frame to it answers EPIPE, a request already pending on it too,
 once. The app hears the trap with what stopped it, alike on both platforms,
 the imports no server mounts among them where the runtime refused to start
 the guest.
-
-## The device that lends the memory
-
-A frame is complete in itself: once its answer is in, the caller may write
-over everything it lent. Some work reaches into the guest's memory long after
-it was asked for: a buffer the GPU uploads from, a word the GPU writes when a
-request finishes. Such work needs a rule that says who owns which bytes and
-when they come back. So the host implements exactly the device whose work
-lends the guest's memory in this way, the GPU, and the program implements
-everything else over the link.
-
-The GPU is a plugin, declared in WIT as xpute's own packages are
-(`gpu/wit/`), and a program that never draws links none of it. A renderer
-makes thousands of calls a frame, and none needs a reply. For those the guest
-writes a **stream** of records (`gpu/link/spec/api.json5`) in WebGPU's own
-vocabulary and lends it to the host's `gpu.run`; until the answer, the records
-and the memory they name are the host's. The host runs them on WebGPU on a
-page and on wgpu on a device. The device is answered by `get-device`, and a
-completion the stream asked for lands as a **fence**, a word only the host
-writes, set to the guest's **ticket** with release, so a late answer to a
-dropped request never matches. Both hosts admit a frame by one rule: a guest
-draws only while fewer of its frames are unfinished than its frame latency,
-which the program sets in its host's config and the host writes beside its
-count in the device's block, so taking a surface's texture never blocks. What a surface shows is lent by the
-UI, beside the link, under the handle of a surface the guest serves.
 
 ## The languages, held to each other
 
@@ -198,13 +195,14 @@ word; and a rule the GPU alone decides is one function every pass calls.
   and a native guest's is its process's. A span the guest lends is named by
   its address (`lent`), a u64 on every platform: an offset into the module's
   memory in a module, a pointer natively, which a host in the same process
-  reads in place and a device's UI through a buffer over that span alone. The
-  GPU's stream carries its addresses so too, each in two words. Whether the memory is fixed, what lies where in it and
-  which allocator each allocation takes are the program's, in either language.
+  reads in place and a device's UI through a buffer over that span alone.
+  Whether the memory is fixed, what lies where in it and which allocator each
+  allocation takes are the program's, in either language.
 - **The policy is the program's.** When the guest runs and how much I/O is out
   are decided outside xpute; it has no turn, no budget and no backpressure.
 - **The host serves only what every guest shares**: the clocks, the stop and
-  the GPU. Any other I/O is the program's, over its own interfaces.
+  the log. Any other I/O is the program's, over its own interfaces or a
+  plugin it brings.
 - **xpute does not isolate.** The contract describes one host and one guest;
   a guest that does not return is not stopped.
 
@@ -216,7 +214,6 @@ word; and a rule the GPU alone decides is one function every pass calls.
 | The component model's Canonical ABI and handle table | The packet's layout, `lent` from a borrow, `drop`, a later answer as `task.return`, and handles reused with a generation |
 | Binder's handle 0, 9P's walk and open | The root: one fixed `open` that turns a URI into a handle |
 | WASI's `wasi:clocks` | The clocks, as a subset |
-| A GPU's command buffer, as WebGPU's encoder records one | The GPU stream |
 | gRPC's and Abseil's status codes | An errno's kind |
 | Linux's uAPI, which carries a user pointer in an ioctl's struct as a `__u64`; Vulkan's `VkDeviceAddress`; WebGPU's `GPUSize64` | An address the link carries, a u64 whatever the platform's pointer, so one layout and one golden record serve every platform |
 | [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `kit`'s buddy allocator, ported line for line |
@@ -225,28 +222,25 @@ word; and a rule the GPU alone decides is one function every pass calls.
 
 ## Codemap
 
-- `link/spec/`, `gpu/link/spec/` and `kit/spec/` hold the frame, the GPU
-  stream and the errno table, each with golden records, the link's of its
-  frames and packets; `link/wit/`, `wit/` and `gpu/wit/` the interfaces.
+- `link/spec/` and `kit/spec/` hold the frame and the errno table, each with
+  golden records, the link's of its frames and packets; `link/wit/` and
+  `wit/` the interfaces.
 - `gen` (`xpute-gen`) and `link/gen` (`xpute-link-gen`) are the generators,
-  the second with the command a program writes its bindings with; each
-  part's `gen-targets` is the data specs `xpute-gen` writes of it, and
-  `dev/tool` the `cargo spec` that checks and writes xpute's own.
+  the second with the command a program writes its bindings with;
+  `gen-targets` is the data specs `xpute-gen` writes of xpute's parts, and
+  `tool` the `cargo spec` that checks and writes xpute's own.
 - `kit/rust`, `kit/ts` (`@xpute/kit`) and `cpp/xpute/kit` are the kit.
 - `link/rust` (`xpute-link`), `link/ts` (`@xpute/link`) and `cpp/xpute/link`
   are the link; `guest/rust` (`xpute-guest`) and `cpp/xpute/guest` the
   guest's end.
-- `web/runtime` (`@xpute/web-runtime`) and `web/host` (`@xpute/web-host`)
-  are a page's runtime and host; `native/runtime/rust`
-  (`xpute-native-runtime`) and `native/host` (`xpute-native-host`) a
-  device's, and `native/runtime/expo` (`@xpute/native-runtime`) the Expo
-  module the UI reaches them by.
-- `gpu/link` and `cpp/xpute/gpu/link` are the GPU's link, and `gpu/guest/rust`
-  and `cpp/xpute/gpu/guest` its encoder; `gpu/web/host` and `gpu/native/host`
-  its hosts on WebGPU and wgpu, the device's with its bindings, served on the
-  side `xpute-native-runtime` makes, and `gpu/native/runtime/expo` a
-  device's surface view.
-- `dev/golden` and `cpp/dev/test/` are what the tests take,
+- `host/rust` (`xpute-host`) and `host/ts` (`@xpute/host`) are the host,
+  one in each language; `runtime/web` (`@xpute/runtime-web`) is a page's
+  runtime and `runtime/native` (`xpute-runtime-native`) a device's; and
+  `expo` (`@xpute/expo`) is the Expo module the UI reaches them by, with the
+  runtime's C header (`ios/CXpute/xpute.h`) and its JNI class
+  (`android/.../xpute/Runtime.kt`).
+- `golden/rust` (`xpute-golden`), `golden/ts` (`@xpute/golden`) and
+  `cpp/dev/test/` are what the tests take,
   `cpp/amalgamation.awk` makes the C++ library's two files, and
   `cpp/dev/guest.cpp` is the smallest guest, which the build links over them
   as a module.

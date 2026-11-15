@@ -3,8 +3,8 @@
 use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::indicator::ghost::GhostDraw;
-use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};
-use pxl_render::gpu::draw::{lists_bytes, set_lists, DrawList, DRAW_PIPELINES};
+use crate::domain::view::frame::pose::{ObserverPose, view, view_compose};
+use pxl_render::gpu::draw::{DRAW_PIPELINES, DrawList, lists_sz, set_lists};
 use pxl_spec::space::coord::mat4;
 
 /// When only the eye moves, every draw keeps its uniforms and its receiver box
@@ -16,7 +16,7 @@ use pxl_spec::space::coord::mat4;
 #[test]
 fn an_eye_moved_changes_no_draw() {
     const LIVE: usize = 16;
-    set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
+    set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
     let mut list = DrawList::default();
     let (mut ghost, mut debug, mut coverage) = (
         GhostDraw::default(),

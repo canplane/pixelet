@@ -37,5 +37,5 @@ pub fn stopped(
 mod _rt {
     pub(super) use crate::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method};
+    pub(super) use xpute_link::{Handle, Lower, Method, answer};
 }

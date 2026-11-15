@@ -3,7 +3,7 @@
 //! The db-geo table names, Overture meanings and reverse geocoding statements
 //! that `pxl-geo` and `pxl-geo-bake` must agree on.
 
-use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};
 
 pub mod overture;
 pub mod table;

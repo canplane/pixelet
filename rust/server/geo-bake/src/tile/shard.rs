@@ -21,13 +21,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::cli::Argv;
-use crate::coverage::{src_of, Coverage, Node};
-use crate::pyramid::{fold, orphan_tiles, write_manifest, Absent, Base, Staged, TileSet, MANIFEST};
+use crate::coverage::{Coverage, Node, src_of};
+use crate::pyramid::{Absent, Base, MANIFEST, Staged, TileSet, fold, orphan_tiles, write_manifest};
 use crate::source;
 use crate::util;
 use crate::util::git_sha;
 use pxl_spec::bake::publication::FORMAT;
-use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{SHARD_ZOOM, Zoom};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The fold's unit in the stage, and the same once its commit has begun; no

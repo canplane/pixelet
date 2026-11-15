@@ -6,14 +6,6 @@
     "moduleSuffixes": [".native", ""],
     "jsx": "react-jsx"
   },
-  "include": [
-    "kit/ts",
-    "link/ts",
-    "web",
-    "native/runtime/expo",
-    "gpu/link/ts",
-    "gpu/web",
-    "gpu/native/runtime/expo"
-  ],
+  "include": ["kit/ts", "link/ts", "host/ts", "runtime/web", "expo"],
   "exclude": ["**/node_modules", "target", "**/*.native.ts", "**/*.test.ts"]
 }

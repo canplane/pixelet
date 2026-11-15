@@ -8,7 +8,7 @@
 
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, type ViewInstance } from "react-native";
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
@@ -83,7 +83,7 @@ function scale_at(at: Popover, x: f64, y: f64): i32 | null {
   return SCALES[row];
 }
 
-export function usePopover(bar: React.RefObject<View | null>): {
+export function usePopover(bar: React.RefObject<ViewInstance | null>): {
   popover: Popover | null;
   gesture: Omit<SizeGesture, "press">;
 } {

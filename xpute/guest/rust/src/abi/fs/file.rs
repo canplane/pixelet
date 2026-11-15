@@ -18,7 +18,7 @@ pub const FILE_CLOSE: _rt::Method = 4;
 
 pub fn file_size(
     file_: _rt::Handle,
-) -> impl _rt::Future<Output = Result<Result<u32, super::types::ErrorCode>, _rt::Errno>> {
+) -> impl Future<Output = Result<Result<u32, super::types::ErrorCode>, _rt::Errno>> + use<> {
     let sent = _rt::wait::wait(file_, FILE_SIZE, None, ());
     async move {
         let (r, data, _) = sent.await;
@@ -40,7 +40,7 @@ pub fn file_size(
 pub fn file_read<L: _rt::Lend>(
     file_: _rt::Handle,
     buf: L,
-) -> impl _rt::Future<Output = (L, Result<Result<u32, super::types::ErrorCode>, _rt::Errno>)> {
+) -> impl Future<Output = (L, Result<Result<u32, super::types::ErrorCode>, _rt::Errno>)> + use<L> {
     let mut buf = buf;
     let (buf_at_, buf_len_) = _rt::Lend::span(&mut buf);
     let sent = _rt::wait::wait(
@@ -78,7 +78,7 @@ pub fn file_read<L: _rt::Lend>(
 pub fn file_write<L: _rt::Lend>(
     file_: _rt::Handle,
     buf: L,
-) -> impl _rt::Future<Output = (L, Result<(), _rt::Errno>)> {
+) -> impl Future<Output = (L, Result<(), _rt::Errno>)> + use<L> {
     let mut buf = buf;
     let (buf_at_, buf_len_) = _rt::Lend::span(&mut buf);
     let sent = _rt::wait::wait(
@@ -101,7 +101,7 @@ pub fn file_write<L: _rt::Lend>(
 
 pub fn file_set_aside(
     file_: _rt::Handle,
-) -> impl _rt::Future<Output = Result<Result<(), super::types::ErrorCode>, _rt::Errno>> {
+) -> impl Future<Output = Result<Result<(), super::types::ErrorCode>, _rt::Errno>> + use<> {
     let sent = _rt::wait::wait(file_, FILE_SET_ASIDE, None, ());
     async move {
         let (r, data, _) = sent.await;
@@ -122,7 +122,7 @@ pub fn file_set_aside(
 
 pub fn file_close(
     file_: _rt::Handle,
-) -> impl _rt::Future<Output = Result<Result<(), super::types::ErrorCode>, _rt::Errno>> {
+) -> impl Future<Output = Result<Result<(), super::types::ErrorCode>, _rt::Errno>> + use<> {
     let sent = _rt::wait::wait(file_, FILE_CLOSE, None, ());
     async move {
         let (r, data, _) = sent.await;
@@ -143,8 +143,7 @@ pub fn file_close(
 
 mod _rt {
     pub(super) use crate::wait;
-    pub(super) use core::future::Future;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
+    pub(super) use xpute_link::{Handle, Lend, Lift, Lower, Method, answer};
 }

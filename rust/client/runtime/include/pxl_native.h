@@ -1,7 +1,7 @@
 // pxl-runtime/include/pxl_native.h
 
 // What the device app calls in the library linked into it besides xpute's own
-// (xpute.h, xpute_gpu.h), declared for its Swift: the module map beside this
+// (xpute.h) and the GPU's (pxl_gpu.h), declared for its Swift: the module map beside this
 // makes it `import PxlNative`.
 
 #pragma once

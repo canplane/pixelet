@@ -138,7 +138,7 @@ finish      the world's color encoded onto the canvas once
 over        markers → debug lines → camera grid → character surfaces
 ```
 
-The calls are written through xpute's encoder into one stream (`gpu/api.rs`),
+The calls are written through the GPU's encoder into one stream (`gpu/api.rs`),
 which the page runs on WebGPU and the device on wgpu. A frame where only the
 draws the core bounds moved is drawn again in the screen's tiles alone
 (`gpu/tile.rs`): what moved marks the tiles it covered and covers, the light's
@@ -164,7 +164,7 @@ loses comes back through `on_gpu_lost`, which makes everything again.
 The renderer is made before its first frame, so that making it never holds the
 GPU process's main thread, which every frame the browser presents waits on
 (`gpu/pipeline.rs` `PipelineCache`). Shader modules are made a few a frame, within
-`MODULE_BYTES` of the stream; then every pipeline is asked for by WebGPU's async
+`MODULE_SZ` of the stream; then every pipeline is asked for by WebGPU's async
 call, which compiles off that thread and reports through a ticket's word; and no
 frame is drawn until every word says its pipeline is made. The snapshot carries
 how far it has come (`renderer_progress`), which the UI's bar shows. A pipeline

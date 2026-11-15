@@ -88,8 +88,8 @@ const BLOCKS: [u32; 5] = [
 
 /// The heap the profiler holds while its setting is on. The buddy allocator
 /// gives each table a power-of-two block, so each table counts at its size
-/// rounded up (link/layout.rs `HEAP_FLOWS_BYTES`).
-pub(crate) const PERF_BYTES: u64 = {
+/// rounded up (link/layout.rs `HEAP_FLOWS_SZ`).
+pub(crate) const PERF_SZ: u64 = {
     let mut sum = 0;
     let mut k = 0;
     while k < BLOCKS.len() {

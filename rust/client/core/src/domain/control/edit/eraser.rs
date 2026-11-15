@@ -9,9 +9,9 @@
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
+use crate::domain::control::edit::Hover;
 use crate::domain::control::edit::ghost::{at_corner, carved_cube, decor_of, ghost_of};
 use crate::domain::control::edit::write::{place_air, remove};
-use crate::domain::control::edit::Hover;
 use crate::domain::preview::{Ghost, RenderEdit};
 
 pub(super) fn tap(hover: &Hover) {

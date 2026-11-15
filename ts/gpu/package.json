@@ -1,0 +1,31 @@
+{
+  "name": "@pxl/gpu",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./link": "./link/src/mod.ts",
+    "./link/*": "./link/src/*",
+    "./host": "./host/src/mod.ts",
+    "./host/*": "./host/src/*",
+    "./expo": "./expo/src/mod.ts"
+  },
+  "dependencies": {
+    "@xpute/host": "workspace:*",
+    "@xpute/kit": "workspace:*",
+    "@xpute/link": "workspace:*"
+  },
+  "peerDependencies": {
+    "@xpute/expo": "workspace:*",
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@xpute/expo": "workspace:*",
+    "@xpute/golden": "workspace:*",
+    "@types/react": "^19.3.0",
+    "expo": "58.0.25",
+    "react": "19.3.0",
+    "react-native": "0.88.1"
+  }
+}

@@ -45,11 +45,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::{
-    align_star, cpp_enum, cpp_member, file, int_of, is_float, is_packed, is_ts_ident, js_num,
-    json_str, line_comments, mark, marks, package, package_path, parse, pascal, plural, read,
-    rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, rs_module, screaming, snake,
-    ts_const, ts_doc, ts_enum, ts_module, ts_number, typed, Includes, Int, Member, Node, Output,
-    MARKS, PACKED_TYPE,
+    Includes, Int, MARKS, Member, Node, Output, PACKED_TYPE, align_star, cpp_enum, cpp_member,
+    file, int_of, is_float, is_packed, is_ts_ident, js_num, json_str, line_comments, mark, marks,
+    package, package_path, parse, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field,
+    rs_ident, rs_member, rs_module, screaming, snake, ts_const, ts_doc, ts_enum, ts_module,
+    ts_number, typed,
 };
 
 pub struct DataSpec {
@@ -220,13 +220,12 @@ fn ts_value(
             let mut lines = vec!["{".to_string()];
             for (k, v) in n.named() {
                 if let Some(doc) = v.is_obj().then(|| v.doc()).flatten() {
-                    lines.extend(ts_doc(&doc, &inner).into_iter().enumerate().map(|(i, l)| {
-                        if i == 0 {
-                            l
-                        } else {
-                            align_star(l, &inner)
-                        }
-                    }));
+                    lines.extend(
+                        ts_doc(&doc, &inner)
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, l)| if i == 0 { l } else { align_star(l, &inner) }),
+                    );
                 }
                 let key = if is_ts_ident(k) {
                     k.to_string()
@@ -324,32 +323,31 @@ fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
             }
             repr_of(n).map_err(|e| format!("{at}: {e}"))?;
         }
-        if let Some(r) = n.mark("row") {
-            if r.str().is_none()
+        if let Some(r) = n.mark("row")
+            && (r.str().is_none()
                 || n.val()
                     .arr()
                     .and_then(|a| fields(a).ok().flatten())
-                    .is_none()
-            {
-                return Err(format!("{at}: `row` names the row of a list of records"));
-            }
+                    .is_none())
+        {
+            return Err(format!("{at}: `row` names the row of a list of records"));
         }
-        if let Some(o) = n.mark("names") {
-            if n.str_at("$type") != Some("enum") || !is_names(n) || *o != Node::Bool(true) {
-                return Err(format!(
-                    "{at}: `names` is true, beside `$type` enum on a list of names"
-                ));
-            }
+        if let Some(o) = n.mark("names")
+            && (n.str_at("$type") != Some("enum") || !is_names(n) || *o != Node::Bool(true))
+        {
+            return Err(format!(
+                "{at}: `names` is true, beside `$type` enum on a list of names"
+            ));
         }
-        if let Some(f) = n.mark("distinct") {
-            if f.str().is_none() || !n.is_obj() || n.is_wrapper() {
-                return Err(format!("{at}: `distinct` names a field, on a table"));
-            }
+        if let Some(f) = n.mark("distinct")
+            && (f.str().is_none() || !n.is_obj() || n.is_wrapper())
+        {
+            return Err(format!("{at}: `distinct` names a field, on a table"));
         }
-        if let Some(o) = n.mark("outside") {
-            if n.str_at("$type") != Some("enum") || *o != Node::Bool(true) {
-                return Err(format!("{at}: `outside` is true, beside `$type` enum"));
-            }
+        if let Some(o) = n.mark("outside")
+            && (n.str_at("$type") != Some("enum") || *o != Node::Bool(true))
+        {
+            return Err(format!("{at}: `outside` is true, beside `$type` enum"));
         }
         if let (Some("enum"), Node::Arr(a)) = (n.str_at("$type"), n.val()) {
             let r = repr_of(n).map_err(|e| format!("{at}: {e}"))?;
@@ -650,11 +648,7 @@ fn rs_recs(
             } else {
                 base(f)
             };
-            if f.option {
-                format!("Option<{t}>")
-            } else {
-                t
-            }
+            if f.option { format!("Option<{t}>") } else { t }
         })
         .collect();
     let lit = |v: &Node, f: &Field| -> Result<String, String> {
@@ -1267,7 +1261,7 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
                 (true, true) => {}
                 (true, false) => return Err(format!("{k}.{f}: not a table")),
                 (false, true) if !f.starts_with('$') => {
-                    return Err(format!("{k}.{f}: names no member of {e}"))
+                    return Err(format!("{k}.{f}: names no member of {e}"));
                 }
                 (false, _) => own.push(field),
             }
@@ -1532,13 +1526,12 @@ fn ts_outputs(
     for (name, n) in spec.named() {
         body.push(String::new());
         if let Some(doc) = n.is_obj().then(|| n.doc()).flatten() {
-            body.extend(ts_doc(&doc, "").into_iter().enumerate().map(|(i, l)| {
-                if i == 0 {
-                    l
-                } else {
-                    align_star(l, "")
-                }
-            }));
+            body.extend(
+                ts_doc(&doc, "")
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, l)| if i == 0 { l } else { align_star(l, "") }),
+            );
         }
         // A value is written as a constant, a table or a list as one too,
         // `as const`. An enum table whose members carry nothing past their

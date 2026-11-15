@@ -5,12 +5,11 @@
 //! where clippy does not see it; any CommonJS file; and any name, in the layers' orders, of
 //! what stands above the naming file: across a crate's folders and the client's, and inside
 //! the client's UI and services, the core's heads, pxl-render's, the camera's and the view's,
-//! and across xpute's parts. It
+//! the GPU's TypeScript folders, and across xpute's parts. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
 //! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
-//! a crate's module tree, that no host of xpute's names its runtime's entries, that the two
-//! workspaces patch crates.io alike, and that the modules' and files' dependencies form no
-//! cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
+//! a crate's module tree, that no device's host names its runtime's entries, and that the
+//! modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
 //! xpute/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
@@ -58,7 +57,8 @@ const HALF_FLOORED: [&str; 2] = [
 
 /// One order of dependency over a folder's modules: a module names only what is at or below
 /// it, and no head names another's, a head being the modules of one side, its top and what
-/// stands over it there; a module beside the order names anything, and only the order's top
+/// stands over it there, and two modules that each stand on a head and share none being
+/// apart; a module beside the order names anything, and only the order's top
 /// names it. `root` is where the folder's files are, and `path` is what a
 /// Rust file names its modules by, a `domain::` step past it, and the `layer::` before the
 /// query that is its child in the module tree and above it in the order, being passed over (a
@@ -564,8 +564,8 @@ const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 /// runtime's: every function its C ABI declares (`RUNTIME_ABI`), and the Kotlin class
 /// `xpute.Runtime`'s JNI names (`RUNTIME_JNI`), is refused under a device's hosts, xpute's and
 /// the GPU's (`HOSTS`).
-const HOSTS: [&str; 2] = ["xpute/native/host/", "xpute/gpu/native/host/"];
-const RUNTIME_ABI: &str = "xpute/native/runtime/expo/ios/CXpute/xpute.h";
+const HOSTS: [&str; 2] = ["xpute/host/rust/", "rust/gpu/host/"];
+const RUNTIME_ABI: &str = "xpute/expo/ios/CXpute/xpute.h";
 const RUNTIME_JNI: &str = r"\bJava_xpute_Runtime_\w+";
 
 /// The functions `header` declares, a line's first name followed by its parenthesis.
@@ -580,62 +580,75 @@ fn declared(header: &str) -> Vec<String> {
 
 /// xpute's order, over its parts rather than a folder's modules: a part is a crate (`XPUTE_CARGO`)
 /// or a package (`XPUTE_WORKSPACE`), or one of each, by its name past `xpute-` or `@xpute/`. The
-/// kit names nothing, and the link stands on it. The guest and each platform's host stand over the
-/// link; the guest and each platform are heads, none naming another. The TypeScript host
-/// (`web-host`) varies by language, not platform, so it is on no head: a page's runtime and a
-/// device's UI end both take it. The GPU is a plugin, which none of xpute's own parts (the kit, the
-/// link, the guest and the hosts) names, and which may name them: its link stands over them, and
-/// each of its other parts over that, in its counterpart's head, a host over xpute's host. Each
-/// platform's runtime stands over its host and the GPU's: it may name its host, and no host,
-/// xpute's or the GPU's, names a runtime; the runtime gives its host what the host needs of it. The
-/// GPU's UI end on a device (its Expo module) stands with the runtime's, which shares the runtime's
-/// name. Over every part, what develops xpute and generates its code is a head of its own, which no
-/// part names and which names only the kit and the links. A part is held by what it ships: its
-/// manifest's dependencies, a dev-dependency left out, and the names its sources write, its tests
-/// left out, which may take the golden records' reader.
-const XPUTE_ORDER: [(&str, u8); 18] = [
+/// kit names nothing, and the link stands on it. The guest and the host stand over the link,
+/// apart: the guest is a head, and the host stands on each platform's, so neither names the
+/// other. Each platform's runtime stands over the host, and its UI end (`expo`, React Native's)
+/// over the runtime, a head with it and the host, none naming another platform's: a runtime may
+/// name the host, and no host names a runtime; the runtime injects into the host what the host
+/// needs of it. Over every part, what develops xpute and generates its code is a head of its own, which
+/// no part names and which names only the kit and the links. A part is held by what it ships:
+/// its manifest's dependencies, a dev-dependency left out, and the names its sources write, its
+/// tests left out, which may take the golden records' reader.
+const XPUTE_ORDER: [(&str, u8); 12] = [
     ("kit", 0),
     ("link", 1),
     ("guest", 2),
-    ("web-host", 2),
-    ("native-host", 2),
-    ("gpu-link", 3),
-    ("gpu-guest", 4),
-    ("gpu-web-host", 4),
-    ("gpu-native-host", 4),
-    ("web-runtime", 5),
-    ("native-runtime", 5),
-    ("gpu-native-runtime", 5),
-    ("golden", 6),
-    ("gen", 6),
-    ("link-gen", 6),
-    ("gen-targets", 6),
-    ("gpu-gen-targets", 6),
-    ("tool", 6),
+    ("host", 2),
+    ("runtime-web", 3),
+    ("runtime-native", 3),
+    ("expo", 4),
+    ("golden", 5),
+    ("gen", 5),
+    ("link-gen", 5),
+    ("gen-targets", 5),
+    ("tool", 5),
 ];
 const XPUTE_HEADS: [&[&str]; 4] = [
-    &["guest", "gpu-guest"],
-    &["web-runtime", "gpu-web-host"],
-    &[
-        "native-runtime",
-        "native-host",
-        "gpu-native-host",
-        "gpu-native-runtime",
-    ],
-    &[
-        "golden",
-        "gen",
-        "link-gen",
-        "gen-targets",
-        "gpu-gen-targets",
-        "tool",
-    ],
+    &["guest"],
+    &["host", "runtime-web"],
+    &["host", "runtime-native", "expo"],
+    &["golden", "gen", "link-gen", "gen-targets", "tool"],
 ];
 const XPUTE_LAYERS: Order = Order {
     root: XPUTE,
     path: "",
     levels: &XPUTE_ORDER,
     heads: &XPUTE_HEADS,
+    beside: &[],
+    own: None,
+};
+
+/// The GPU, pixelet's plugin of xpute: its Rust crates (rust/gpu) and its TypeScript package's
+/// folders (ts/gpu), each part by its folder.
+const PXL_GPU: [&str; 2] = ["rust/gpu/", "ts/gpu/"];
+
+/// The GPU's order, over its parts in both languages, as xpute's is over its own: its link at
+/// the bottom, and over it the guest's encoder, the host and a device's module (`expo`), heads
+/// none naming another. xpute's runtimes and their UI end stand at the GPU's layer, a head of
+/// their own, so no part of the GPU names them; the program's assembly hands the GPU's host what
+/// it takes of the runtime (`native_abi!`'s argument). A part is held by what it ships: a
+/// crate's manifest's dependencies, a dev-dependency left out, and the names its sources write,
+/// its tests left out.
+const PXL_GPU_ORDER: [(&str, u8); 7] = [
+    ("link", 0),
+    ("guest", 1),
+    ("host", 1),
+    ("expo", 1),
+    ("xpute-runtime-web", 1),
+    ("xpute-runtime-native", 1),
+    ("xpute-expo", 1),
+];
+const PXL_GPU_HEADS: [&[&str]; 4] = [
+    &["guest"],
+    &["host"],
+    &["expo"],
+    &["xpute-runtime-web", "xpute-runtime-native", "xpute-expo"],
+];
+const PXL_GPU_LAYERS: Order = Order {
+    root: "",
+    path: "",
+    levels: &PXL_GPU_ORDER,
+    heads: &PXL_GPU_HEADS,
     beside: &[],
     own: None,
 };
@@ -814,7 +827,11 @@ fn folder_uses(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order)
 /// new one is placed before it is checked.
 fn out_of_order(o: &Order, uses: Vec<Uses>) -> Vec<String> {
     let level = |m: &str| o.levels.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
-    let head = |m: &str| o.heads.iter().position(|h| h.contains(&m));
+    let heads = |m: &str| -> Vec<usize> {
+        (0..o.heads.len())
+            .filter(|&k| o.heads[k].contains(&m))
+            .collect()
+    };
     let top = o.levels.iter().map(|&(_, l)| l).max().unwrap_or(0);
     let mut problems = Vec::new();
     let mut unplaced = std::collections::BTreeMap::new();
@@ -840,7 +857,8 @@ fn out_of_order(o: &Order, uses: Vec<Uses>) -> Vec<String> {
             let Some(theirs) = level(&them).or(o.own) else {
                 continue;
             };
-            let apart = head(&me).zip(head(&them)).is_some_and(|(a, b)| a != b);
+            let (a, b) = (heads(&me), heads(&them));
+            let apart = !a.is_empty() && !b.is_empty() && !a.iter().any(|k| b.contains(k));
             if theirs > mine || apart {
                 let them = if level(&them).is_some() {
                     format!("`{them}`")
@@ -1020,26 +1038,6 @@ fn package_aliases(packages: &[(String, String)]) -> Vec<(String, String)> {
 /// The Cargo workspace that lists xpute's crates.
 const XPUTE_CARGO: &str = "xpute/Cargo.toml";
 
-/// pixelet's workspace, which builds xpute's crates by path. It patches crates.io in its own
-/// root, as `[patch]` holds only there, with xpute's table (`patches_agree`, xpute/wgpu-fork.md).
-const RUST_CARGO: &str = "rust/Cargo.toml";
-
-/// The entries of `manifest`'s `[patch.crates-io]` table, its comment lines and blank lines
-/// left out; none where it has no such table.
-fn patch_table(manifest: &str) -> Option<Vec<&str>> {
-    let mut lines = manifest
-        .lines()
-        .skip_while(|l| l.trim() != "[patch.crates-io]");
-    lines.next()?;
-    Some(
-        lines
-            .take_while(|l| !l.trim_start().starts_with('['))
-            .map(str::trim)
-            .filter(|l| !l.is_empty() && !l.starts_with('#'))
-            .collect(),
-    )
-}
-
 /// xpute's crates, each a directory `XPUTE_CARGO`'s `members` lists, by the name its manifest
 /// gives and its sources' folder; or why one cannot be read so.
 fn xpute_crates(read: &dyn Fn(&str) -> Option<String>) -> Result<Vec<(String, String)>, String> {
@@ -1172,6 +1170,81 @@ fn xpute_uses(
     uses
 }
 
+/// What each of the GPU's manifests and sources names of its parts and of xpute's runtimes
+/// (`PXL_GPU_ORDER`), as `out_of_order` reads it: a crate's manifest's dependencies but its
+/// dev-dependencies; in a Rust source, a crate's name; in a TypeScript source, an import of
+/// another part's file or of xpute's package (`packages`), xpute's part as `xpute-` and its
+/// name. A test is left out.
+fn pxl_gpu_uses(
+    files: &[&str],
+    read: &dyn Fn(&str) -> Option<String>,
+    packages: &[(String, String)],
+) -> Vec<Uses> {
+    let mut aliases = ts_aliases(read);
+    aliases.extend(package_aliases(packages));
+    let part = |p: &str| -> Option<String> {
+        match PXL_GPU.iter().find_map(|g| p.strip_prefix(g)) {
+            Some(rest) => rest.split_once('/').map(|(d, _)| d.to_string()),
+            None => packages
+                .iter()
+                .find(|(_, src)| format!("{p}/").starts_with(src.as_str()))
+                .map(|(n, _)| n.replace("@xpute/", "xpute-")),
+        }
+    };
+    let krate = Regex::new(r"\b(?:pxl[-_]gpu[-_](link|guest|host)|(xpute[-_]runtime[-_]native))\b")
+        .expect("a GPU crate's pattern");
+    let table = Regex::new(r"^\[(?:target\..+\.)?(?:build-)?dependencies\]$")
+        .expect("a dependency table's pattern");
+    let named = |l: &str| -> Option<String> {
+        let c = krate.captures(l)?;
+        c.get(1)
+            .map(|m| m.as_str().to_string())
+            .or(c.get(2).map(|_| "xpute-runtime-native".to_string()))
+    };
+    let mut uses = Vec::new();
+    for f in files
+        .iter()
+        .filter(|f| PXL_GPU.iter().any(|g| f.starts_with(g)) && !f.contains(".test."))
+    {
+        let Some(me) = part(f) else { continue };
+        let text = read(f).unwrap_or_default();
+        let names: Vec<(usize, String)> = if f.ends_with("/Cargo.toml") {
+            let mut on = false;
+            let mut names = Vec::new();
+            for (n, l) in text.lines().enumerate() {
+                let l = l.split('#').next().unwrap_or("").trim();
+                if l.starts_with('[') {
+                    on = table.is_match(l);
+                } else if on && krate.find(l).is_some_and(|m| m.start() == 0) {
+                    names.extend(named(l).map(|p| (n + 1, p)));
+                }
+            }
+            names
+        } else if f.ends_with(".rs") {
+            text.lines()
+                .enumerate()
+                .flat_map(|(n, l)| {
+                    let code = l.split("//").next().unwrap_or("");
+                    krate
+                        .find_iter(code)
+                        .filter_map(|m| named(m.as_str()))
+                        .map(move |p| (n + 1, p))
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        } else if f.ends_with(".ts") || f.ends_with(".tsx") {
+            imported(&text, f, &aliases)
+                .into_iter()
+                .filter_map(|(line, p)| Some((line, part(&p)?)))
+                .collect()
+        } else {
+            continue;
+        };
+        uses.push((f.to_string(), me, names));
+    }
+    uses
+}
+
 /// Whether pixelet's workspace lists xpute's packages as xpute's own does, in its order.
 fn workspaces_agree(read: &dyn Fn(&str) -> Option<String>) -> Result<(), String> {
     let xpute = workspace_dirs(read, XPUTE_WORKSPACE)?;
@@ -1182,18 +1255,6 @@ fn workspaces_agree(read: &dyn Fn(&str) -> Option<String>) -> Result<(), String>
     if listed != xpute {
         return Err(format!(
             "{TS_WORKSPACE}: its ../xpute/ entries are not {XPUTE_WORKSPACE}'s list"
-        ));
-    }
-    Ok(())
-}
-
-/// Whether pixelet's workspace patches crates.io as xpute's does: one table in both, or none
-/// in either.
-fn patches_agree(read: &dyn Fn(&str) -> Option<String>) -> Result<(), String> {
-    let (rust, xpute) = (read(RUST_CARGO), read(XPUTE_CARGO));
-    if rust.as_deref().and_then(patch_table) != xpute.as_deref().and_then(patch_table) {
-        return Err(format!(
-            "{RUST_CARGO}: its [patch.crates-io] table is not {XPUTE_CARGO}'s"
         ));
     }
     Ok(())
@@ -1263,8 +1324,8 @@ fn strong_parts(
 }
 
 /// Each crate's module graph, by its `crate::`, `super::` and `self::` paths, and the
-/// TypeScript files' graph, by their imports, as a page resolves them and as iOS and Android
-/// do (`.ios` or `.android`, then `.native`, before the page's own file). A test's file, a
+/// TypeScript files' graph, by their imports, as a page resolves them (`.web` before the plain
+/// file) and as iOS and Android do (`.ios` or `.android`, then `.native`). A test's file, a
 /// generated spec and the crate's root, which declares every module, are no node of it. Each
 /// cycle not in `CYCLES_KNOWN`.
 fn cycles(
@@ -1374,18 +1435,18 @@ fn cycles(
         .iter()
         .copied()
         .filter(|f| {
-            (f.starts_with("ts/client/src/") || f.starts_with("xpute/"))
+            (f.starts_with("ts/client/src/") || f.starts_with("ts/gpu/") || f.starts_with("xpute/"))
                 && (f.ends_with(".ts") || f.ends_with(".tsx"))
                 && !f.contains(".test.")
                 && f.contains("/src/")
         })
         .collect();
     let have: BTreeSet<&str> = ts.iter().copied().collect();
-    // The page's own files, then each device's, its overrides found first.
+    // The page's own files, then each device's, its own files found first.
     let platforms: [(&[&str], &[&str]); 3] = [
-        (&[], &[".native.", ".ios.", ".android."]),
-        (&[".ios", ".native"], &[".android."]),
-        (&[".android", ".native"], &[".ios."]),
+        (&[".web"], &[".native.", ".ios.", ".android."]),
+        (&[".ios", ".native"], &[".android.", ".web."]),
+        (&[".android", ".native"], &[".ios.", ".web."]),
     ];
     for (over, apart) in platforms {
         let resolve = |p: &str| -> Option<String> {
@@ -1609,9 +1670,6 @@ fn run() -> Result<Vec<String>, String> {
     if let Err(e) = workspaces_agree(&read) {
         problems.push(e);
     }
-    if let Err(e) = patches_agree(&read) {
-        problems.push(e);
-    }
     match xpute_packages(&read) {
         Ok(packages) => {
             problems.extend(cycles(&files, &read, &packages));
@@ -1622,6 +1680,10 @@ fn run() -> Result<Vec<String>, String> {
                 )),
                 Err(e) => problems.push(e),
             }
+            problems.extend(out_of_order(
+                &PXL_GPU_LAYERS,
+                pxl_gpu_uses(&files, &read, &packages),
+            ));
         }
         Err(e) => problems.push(e),
     }
@@ -1631,7 +1693,9 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's addresses, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold");
+            println!(
+                "check-rules: the memory's addresses, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold"
+            );
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -1886,38 +1950,79 @@ mod spec;"
         assert_eq!(at(&parts), ["ts/c/src/service/platform/db.ts:1"]);
     }
 
+    /// xpute's guest and host stand apart, as the GPU's parts do from each other and from
+    /// xpute's runtimes and their UI end, while a runtime names its host, a UI end its runtime
+    /// and every part its link.
+    #[test]
+    fn part_orders_refuse_an_edge_apart_or_up() {
+        let refused = |o: &Order, edges: &[(&str, &str)]| -> Vec<String> {
+            let uses = edges
+                .iter()
+                .map(|&(me, them)| {
+                    (
+                        format!("{me}>{them}"),
+                        me.to_string(),
+                        vec![(1, them.to_string())],
+                    )
+                })
+                .collect();
+            out_of_order(o, uses)
+                .iter()
+                .map(|p| p.split(':').next().unwrap_or("").to_string())
+                .collect()
+        };
+        let xpute = [
+            ("guest", "host"),
+            ("host", "guest"),
+            ("host", "runtime-web"),
+            ("runtime-native", "expo"),
+            ("runtime-web", "runtime-native"),
+            ("runtime-web", "host"),
+            ("runtime-native", "host"),
+            ("expo", "runtime-native"),
+            ("guest", "link"),
+        ];
+        assert_eq!(
+            refused(&XPUTE_LAYERS, &xpute),
+            [
+                "guest>host",
+                "host>guest",
+                "host>runtime-web",
+                "runtime-native>expo",
+                "runtime-web>runtime-native"
+            ]
+        );
+        let gpu = [
+            ("guest", "host"),
+            ("host", "guest"),
+            ("host", "expo"),
+            ("host", "xpute-runtime-native"),
+            ("host", "xpute-runtime-web"),
+            ("expo", "xpute-expo"),
+            ("link", "host"),
+            ("guest", "link"),
+            ("expo", "link"),
+        ];
+        assert_eq!(
+            refused(&PXL_GPU_LAYERS, &gpu),
+            [
+                "guest>host",
+                "host>guest",
+                "host>expo",
+                "host>xpute-runtime-native",
+                "host>xpute-runtime-web",
+                "expo>xpute-expo",
+                "link>host"
+            ]
+        );
+    }
+
     /// The entries a device's host may not name are the functions its runtime's C header
     /// declares, a declaration's first name whatever its lines, and no name a comment gives.
     #[test]
     fn runtime_entries_are_its_header_declarations() {
         let header = "// Starts it (`xpute_take`).\nuint32_t xpute_start(const uint32_t *named,\n    size_t named_len);\nvoid xpute_notify_on(void (*notify)(void));\n";
         assert_eq!(declared(header), ["xpute_start", "xpute_notify_on"]);
-    }
-
-    /// The two workspaces agree on one `[patch.crates-io]` table entry for entry, its comments,
-    /// its blank lines and what follows it aside, or on none.
-    #[test]
-    fn patch_tables_agree_entry_for_entry() {
-        let table = |rev: &str| {
-            Some(format!(
-                "[workspace]\n\n[patch.crates-io]\n# The fork.\nwgpu = {{ rev = \"{rev}\" }}\n\nnaga = {{ rev = \"{rev}\" }}\n\n[profile.dev]\nopt-level = 1\n"
-            ))
-        };
-        let none = || Some("[workspace]\n".to_string());
-        let agree = |rust: Option<String>, xpute: Option<String>| {
-            patches_agree(&|f| match f {
-                RUST_CARGO => rust.clone(),
-                XPUTE_CARGO => xpute.clone(),
-                _ => None,
-            })
-            .is_ok()
-        };
-        let bare = table("a").map(|t| t.replace("# The fork.\n", "").replace("\n\nnaga", "\nnaga"));
-        assert!(agree(table("a"), bare));
-        assert!(agree(none(), none()));
-        assert!(!agree(table("a"), table("b")));
-        assert!(!agree(table("a"), none()));
-        assert!(!agree(none(), table("a")));
     }
 
     #[test]
@@ -1932,11 +2037,20 @@ mod spec;"
     fn screen_reach_any_name() {
         for (text, at) in [
             ("use crate::domain::view::frame::screen::size;", vec![1]),
-            ("use crate::domain::view::frame::{\n    pose::view,\n    screen::units_per_px_at,\n};", vec![1]),
+            (
+                "use crate::domain::view::frame::{\n    pose::view,\n    screen::units_per_px_at,\n};",
+                vec![1],
+            ),
             ("use crate::domain::view::frame::{pose, screen};", vec![1]),
-            ("use crate::domain::view::frame::*;\nfn f() { size(); }", vec![1]),
+            (
+                "use crate::domain::view::frame::*;\nfn f() { size(); }",
+                vec![1],
+            ),
             ("use crate::domain::view::frame as f;", vec![1]),
-            ("pub use crate::domain::view::frame::screen::size as px;", vec![1]),
+            (
+                "pub use crate::domain::view::frame::screen::size as px;",
+                vec![1],
+            ),
             ("let w = f::screen::size()[0];", vec![1]),
         ] {
             assert_eq!(screen_reached(text), at, "{text}");

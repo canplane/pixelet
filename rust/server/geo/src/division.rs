@@ -36,8 +36,8 @@ WHERE NOT EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'
 use fnv::FnvHashMap;
 
 use deadpool_postgres::Pool;
-use pxl_geo_spec::overture::division::{self, steps, Children, Division, LINEAGE_SQL};
 use pxl_geo_spec::BAKE_READ_DIST;
+use pxl_geo_spec::overture::division::{self, Children, Division, LINEAGE_SQL, steps};
 use pxl_spec::division::DivisionPart;
 use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use tokio_postgres::Client;

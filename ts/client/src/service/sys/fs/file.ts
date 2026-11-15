@@ -18,9 +18,9 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Side } from "@xpute/link";
-import * as file from "@xpute/web-host/abi/fs/file.ts";
-import { ERROR_CODE_IO } from "@xpute/web-host/abi/fs/types.enum.ts";
+import { ComponentError, type Memory, type Serving } from "@xpute/link";
+import * as file from "@xpute/host/abi/fs/file.ts";
+import { ERROR_CODE_IO } from "@xpute/host/abi/fs/types.enum.ts";
 
 import { path } from "@/abi/file.spec.ts";
 import { binding, type Path } from "@/service/sys/fs/binding.ts";
@@ -42,8 +42,8 @@ function aborted(signal: AbortSignal): Promise<never> {
   });
 }
 
-/** The file at `p`, over the core's memory `link` lends. */
-function open(link: Pick<Side, "bytes">, p: Path): file.HostFile {
+/** The file at `p`, over the core's memory `mem`, where it lends. */
+function open(mem: Memory, p: Path): file.HostFile {
   const b = binding();
   const abort = new AbortController();
   const opened = Promise.resolve().then(() => b.open(p, abort.signal));
@@ -71,12 +71,12 @@ function open(link: Pick<Side, "bytes">, p: Path): file.HostFile {
       // A read its caller cancels writes nothing into `buf`.
       const all = await Promise.race([bytes(), aborted(signal)]);
       const n = Math.min(buf.len, all.length - read);
-      link.bytes(buf.at, n).set(all.subarray(read, read + n));
+      mem.bytes(buf.at, n).set(all.subarray(read, read + n));
       read += n;
       return n;
     },
     async write(buf) {
-      written.push(link.bytes(buf.at, buf.len).slice());
+      written.push(mem.bytes(buf.at, buf.len).slice());
     },
     async set_aside() {
       try {
@@ -103,10 +103,9 @@ function open(link: Pick<Side, "bytes">, p: Path): file.HostFile {
   };
 }
 
-/** Mounts an opener at each node atop file.json5's `path` tree. */
-export function serve_files(
-  link: Pick<Side, "bytes" | "mount" | "task_return" | "on_cancel">,
-): void {
+/** Mounts an opener on `link` at each node atop file.json5's `path` tree,
+ * over the core's memory `mem`. */
+export function serve_files(link: Serving, mem: Memory): void {
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;
     if (id === undefined) continue;
@@ -114,7 +113,7 @@ export function serve_files(
       file.file(
         link,
         open(
-          link,
+          mem,
           uri.map((t) => t.val),
         ),
       ),

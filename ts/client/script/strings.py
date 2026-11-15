@@ -25,7 +25,7 @@ from itertools import accumulate
 from pathlib import Path
 
 # A shorter piece is a word any text holds.
-LEAST_BYTES = 4
+LEAST_SZ = 4
 # A Rust file's comments, its string literals, raw or not, and its char
 # literals, which may hold a quote: what of it is not code.
 NOT_CODE = re.compile(rb'//[^\n]*|/\*.*?\*/|b?r(#*)"(.*?)"\1|b?"((?:[^"\\]|\\.)*)"|\'(?:[^\'\\\n]|\\[^\n]{1,10}?)\'', re.S)
@@ -43,7 +43,7 @@ ENTRY = re.compile(rb"@(?:compute|vertex|fragment)\b[^{]*?\bfn (\w+)", re.S)
 # A package's directories that are not built into its library.
 OUTSIDE_LIBRARY = {"target", "tests", "examples", "benches", "build"}
 # How far before a literal its declaration is read.
-DECL_BYTES = 200
+DECL_SZ = 200
 # A `&str` constant's declaration, up to its value.
 STR_CONST = re.compile(rb"const \w+: &(?:'static )?str =\s*$")
 # A URI constant's declaration, up to one of its words.
@@ -60,9 +60,9 @@ ALLOWED = {
     # The images' magic numbers.
     "rust/spec/src/asset.rs": lambda text, src, off, byte: byte,
     # The line-break sets.
-    "rust/client/core/src/sys/io/text.rs": lambda text, src, off, byte: STR_CONST.search(src, max(0, off - DECL_BYTES), off),
+    "rust/client/core/src/sys/io/text.rs": lambda text, src, off, byte: STR_CONST.search(src, max(0, off - DECL_SZ), off),
     # The URIs the guest opens its GPU device by and serves its surface under.
-    "xpute/gpu/link/rust/src/api.spec.rs": lambda text, src, off, byte: URI_CONST.search(src, max(0, off - DECL_BYTES), off),
+    "rust/gpu/link/src/api.spec.rs": lambda text, src, off, byte: URI_CONST.search(src, max(0, off - DECL_SZ), off),
 }
 
 
@@ -90,12 +90,12 @@ def literals(src):
 
 
 def pieces(text):
-    """A literal's pieces of `LEAST_BYTES` bytes or more, cut at its format
+    """A literal's pieces of `LEAST_SZ` bytes or more, cut at its format
     arguments and at what is not text, as the core's file holds them."""
     for piece in ARGUMENT.split(text):
         piece = piece.replace(b"{{", b"{").replace(b"}}", b"}")
         for m in TEXT.finditer(piece):
-            if len(m.group()) >= LEAST_BYTES:
+            if len(m.group()) >= LEAST_SZ:
                 yield m.group()
 
 
@@ -106,7 +106,7 @@ def texts(files):
 
 def names(files):
     """The names of the code of `files`, out of its comments and literals."""
-    return {m.group() for f in files for m in NAME.finditer(NOT_CODE.sub(b" ", f.read_bytes())) if len(m.group()) >= LEAST_BYTES}
+    return {m.group() for f in files for m in NAME.finditer(NOT_CODE.sub(b" ", f.read_bytes())) if len(m.group()) >= LEAST_SZ}
 
 
 def packages(workspace, repo, target):
@@ -164,8 +164,8 @@ def holding(texts, pieces):
     """The texts that hold one of `pieces`."""
     by_head = {}
     for p in pieces:
-        by_head.setdefault(p[:LEAST_BYTES], []).append(p)
-    return {t for t in texts if any(t.startswith(p, i) for i in range(len(t) - LEAST_BYTES + 1) for p in by_head.get(t[i : i + LEAST_BYTES], ()))}
+        by_head.setdefault(p[:LEAST_SZ], []).append(p)
+    return {t for t in texts if any(t.startswith(p, i) for i in range(len(t) - LEAST_SZ + 1) for p in by_head.get(t[i : i + LEAST_SZ], ()))}
 
 
 def main():
@@ -178,7 +178,7 @@ def main():
     for text in wgsl:
         for at in found_at(file, text):
             module[at : at + len(text)] = bytes(len(text))
-    module = b"\0".join(m.group() for m in TEXT.finditer(module) if len(m.group()) >= LEAST_BYTES)
+    module = b"\0".join(m.group() for m in TEXT.finditer(module) if len(m.group()) >= LEAST_SZ)
     entry = entries(wgsl)
     ours, others = packages(workspace, repo, target)
     theirs = [*sources(library(workspace)), *sources(others)]
@@ -209,8 +209,8 @@ def main():
     reach = list(accumulate((b for _, b in spans), max))
     heads, tails = {}, {}
     for t in held:
-        heads.setdefault(t[:LEAST_BYTES], []).append(t)
-        tails.setdefault(t[-LEAST_BYTES:], []).append(t)
+        heads.setdefault(t[:LEAST_SZ], []).append(t)
+        tails.setdefault(t[-LEAST_SZ:], []).append(t)
 
     def covered(a, b):
         """Whether places that may be held cover `a` to `b`, each reaching
@@ -218,11 +218,11 @@ def main():
         k = bisect_left(starts, a)
         end = max(reach[k - 1], a) if k else a
         for e in range(a + 1, b):
-            for t in tails.get(module[e - LEAST_BYTES : e], ()):
+            for t in tails.get(module[e - LEAST_SZ : e], ()):
                 if len(t) > e - a and module.startswith(t, e - len(t)):
                     end = max(end, e)
         firsts = [s for s, e in spans[k : bisect_left(starts, b)] if e > b]
-        firsts += [s for s in range(a + 1, b) for t in heads.get(module[s : s + LEAST_BYTES], ()) if s + len(t) > b and module.startswith(t, s)]
+        firsts += [s for s in range(a + 1, b) for t in heads.get(module[s : s + LEAST_SZ], ()) if s + len(t) > b and module.startswith(t, s)]
         return end >= b or any(s <= end for s in firsts)
 
     bad = [p for p, ats in sorted(found.items()) if not all(covered(at, at + len(p)) for at in ats)]

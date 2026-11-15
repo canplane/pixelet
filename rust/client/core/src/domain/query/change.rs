@@ -7,14 +7,14 @@
 //! report (`ReadRect`). A change so reaches only the readers of the ground
 //! it touches.
 
-use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
+use crate::domain::layer::object::store;
 use pxl_global::Global;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::world::{BOUNDS, nearest, nearest_box};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
@@ -182,11 +182,11 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     /// as read here too, so a memo kept inside another memo's ask lets that
     /// one go with it.
     pub(crate) fn of(&mut self, of: K, ask: impl FnOnce() -> A) -> A {
-        if let Some((k, columns, a)) = &self.0 {
-            if *k == of {
-                join(*columns);
-                return *a;
-            }
+        if let Some((k, columns, a)) = &self.0
+            && *k == of
+        {
+            join(*columns);
+            return *a;
         }
         let outer = core::mem::take(read_rect());
         let a = ask();

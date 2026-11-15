@@ -196,11 +196,7 @@ pub fn perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64) -> &mut Mat
 }
 
 fn or_one(l: f64) -> f64 {
-    if l == 0.0 || l.is_nan() {
-        1.0
-    } else {
-        l
-    }
+    if l == 0.0 || l.is_nan() { 1.0 } else { l }
 }
 
 /// The view matrix of an eye at `eye` looking at `target` with `up` up:

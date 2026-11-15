@@ -23,10 +23,10 @@ pub(crate) mod surface;
 
 use pxl_render::frame::shader::record::PIPELINE_SKINNED;
 use pxl_render::gpu::api::Image;
-use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, ReceiverBox};
+use pxl_render::gpu::draw::{Draw, DrawId, DrawList, Position, ReceiverBox, scaled_draw};
 use pxl_spec::asset::catalog::Slot;
-use pxl_spec::asset::character::group::{person, pet};
 pub(crate) use pxl_spec::asset::character::Group;
+use pxl_spec::asset::character::group::{person, pet};
 use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
@@ -36,10 +36,10 @@ use xpute_link::mem;
 use crate::domain::scene::animation;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
-use crate::domain::scene::model::registry::{blend, ModelTable};
+use crate::domain::scene::model::registry::{ModelTable, blend};
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
-use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, StepClock};
+use crate::domain::view::lens::{StepClock, cell_there, decor_impostor_angle, decor_model_angle};
 use crate::sys::heap;
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::invalidate_at;
@@ -144,8 +144,8 @@ impl Character {
                 palette[j * 16 + d * 5] = 1.0;
             }
         }
-        let (palette_at, palette_bytes) = mem::span(&palette[..]);
-        let palette_handle = draw.upload(palette_at, palette_bytes, 0, 0);
+        let (palette_at, palette_sz) = mem::span(&palette[..]);
+        let palette_handle = draw.upload(palette_at, palette_sz, 0, 0);
         Some(Character {
             group,
             number,
@@ -352,8 +352,8 @@ impl Character {
             &mut self.global,
             &mut self.palette[..joint_cnt * 16],
         );
-        let (palette_at, palette_bytes) = mem::span(&self.palette[..]);
-        draw.rewrite(self.palette_handle, palette_at, palette_bytes);
+        let (palette_at, palette_sz) = mem::span(&self.palette[..]);
+        draw.rewrite(self.palette_handle, palette_at, palette_sz);
         asks
     }
 

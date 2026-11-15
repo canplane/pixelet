@@ -3,8 +3,8 @@
 //! A bake's walk over its tiles, a band of them to a worker at a time, with
 //! a running count.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use crate::util::{fmt_bytes, fmt_dur};

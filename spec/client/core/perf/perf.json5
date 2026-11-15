@@ -28,7 +28,7 @@
       $value: 60000,
       $description: "How far back the tables keep, the core's frames and tasks and the UI's long frames alike: the last minute.",
     },
-    PAGE_BYTES: {
+    PAGE_SZ: {
       $value: 8192,
       $description: "The most bytes one read of a table hands over (perf.wit `table`): a table is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page.",
     },
@@ -151,7 +151,7 @@
     heap: { $value: ["heap_used_bytes"] },
   },
   TASK: {
-    $description: "One settled task (perf/task.rs TaskRecord). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAME, OUTCOME_NAME and TASK_PHASE_NAME. `at_file` is the offset of the file name, `at_file_bytes` long, of the line a failure was made at, in the string table perf.wit `strtab` hands over, or 0 where the table had no room for the name, whose `at_line` is kept; every site word is 0 where the failure was the host's.",
+    $description: "One settled task (perf/task.rs TaskRecord). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAME, OUTCOME_NAME and TASK_PHASE_NAME. `at_file` is the offset of the file name, `at_file_sz` long, of the line a failure was made at, in the string table perf.wit `strtab` hands over, or 0 where the table had no room for the name, whose `at_line` is kept; every site word is 0 where the failure was the host's.",
     $extensions: { xpute: { packed: true } },
     stream: { $value: 1 },
     path: { $value: 3 },
@@ -163,7 +163,7 @@
     fail: { $value: 1 },
     detail: { $value: 1 },
     at_file: { $value: 1 },
-    at_file_bytes: { $value: 1 },
+    at_file_sz: { $value: 1 },
     at_line: { $value: 1 },
     phase_cnt: { $value: 1 },
     phase_ids: { $value: ["TASK_PHASE_CAP"] },
@@ -267,7 +267,7 @@
       worst_cnt: { $value: 1 },
     },
     draw: {
-      $description: "Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frame_cnt` the frames the renderer encoded (pxl-render renderer.rs `drawn_frame_cnt`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (xpute-gpu-guest `admit::frame`) or the host still held the stream (xpute-gpu-guest stream.rs) (frame.rs `frame_task`).\nThen the device, as the host wrote its block (xpute spec DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `err_cnt` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.",
+      $description: "Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frame_cnt` the frames the renderer encoded (pxl-render renderer.rs `drawn_frame_cnt`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (pxl-gpu-guest `admit::frame`) or the host still held the stream (pxl-gpu-guest stream.rs) (frame.rs `frame_task`).\nThen the device, as the host wrote its block (spec/gpu/api.json5 DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `err_cnt` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.",
       frame_cnt: { $value: 1 },
       refused_admit: { $value: 1 },
       refused_stream: { $value: 1 },

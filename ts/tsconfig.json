@@ -1,7 +1,8 @@
 // tsc checks and emits nothing; Metro transforms and bundles. Every alias is
 // defined here, and vitest and Metro read the aliases from here
-// (build/path.ts). This is the page's view of the client; the device's view
-// is client/tsconfig.native.json.
+// (build/path.ts). This is the page's view of the client: x.web.ts where an
+// import names x.ts, as Metro takes it for the page. The device's view is
+// client/tsconfig.native.json.
 {
   "compilerOptions": {
     "target": "esnext",
@@ -18,6 +19,7 @@
     "noImplicitOverride": true,
     "skipLibCheck": true,
     "types": ["node", "@webgpu/types"],
+    "moduleSuffixes": [".web", ""],
 
     "paths": {
       "@/*": ["./client/src/*"],
@@ -25,13 +27,21 @@
       "@pxl/build/*": ["./build/*"]
     }
   },
-  "include": ["client", "xr", "build", "tool/shader", "vitest.config.ts"],
+  "include": [
+    "client",
+    "xr",
+    "build",
+    "tool/shader",
+    "gpu",
+    "vitest.config.ts"
+  ],
   "exclude": [
     "**/node_modules",
     "**/dist",
     "client/ios",
     "client/android",
     "**/*.native.ts",
-    "**/*.native.tsx"
+    "**/*.native.tsx",
+    "client/src/conform.ts"
   ]
 }

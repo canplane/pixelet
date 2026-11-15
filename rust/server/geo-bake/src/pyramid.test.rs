@@ -1,7 +1,7 @@
 // pxl-geo-bake/pyramid.test.rs
 
 use super::*;
-use crate::util::{pack, Level};
+use crate::util::{Level, pack};
 use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::directory;

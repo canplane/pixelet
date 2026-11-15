@@ -9,18 +9,18 @@
 mod gpu;
 mod real_world;
 
-use gpu::{list_every, margins, Gpu};
-use pxl_engine::cast::{Detail, Keep, Line, Node, Query, Ray, Trace, Until, DEPTH};
+use gpu::{Gpu, list_every, margins};
+use pxl_engine::cast::{DEPTH, Detail, Keep, Line, Node, Query, Ray, Trace, Until};
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, cast};
 use pxl_engine::{eye, node_cache};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT_CELL};
+use pxl_render::frame::shader::record::{SHADER_LIGHT_CELL, src};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::Zoom;
 
-use real_world::{q8, store_of, Asking, World, WorldBuffer, FINEST};
+use real_world::{Asking, FINEST, World, WorldBuffer, q8, store_of};
 
 /// The eye stands east of X = 0, 300 units short of X's seam, where the world goes round.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];

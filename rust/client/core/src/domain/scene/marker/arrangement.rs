@@ -13,7 +13,7 @@
 //! where a tap on it goes.
 
 use super::selection::select_visible;
-use super::{line, pin, place, Brick, Instance, Key, MarkerHit};
+use super::{Brick, Instance, Key, MarkerHit, line, pin, place};
 
 use crate::domain::preview::Draft;
 use crate::domain::scene::marker::candidate::CandidateTable;
@@ -241,7 +241,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         now.bricks
             .iter()
             .zip(&kept_bricks)
-            .filter(|(_, &st)| !st)
+            .filter(|&(_, &st)| !st)
             .map(|(&s, _)| {
                 let r = columns(s);
                 let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];

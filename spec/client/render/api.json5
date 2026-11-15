@@ -1,5 +1,5 @@
 {
-  $description: "pixelet's conventions over xpute's GPU calls (xpute/gpu/link/spec/api.json5), which\nthe renderer writes through xpute's encoder (gpu/api.rs): the stream it writes\nthem into, its pipeline records' codes, and what a surface shows.",
+  $description: "pixelet's conventions over the GPU's calls (spec/gpu/api.json5), which\nthe renderer writes through the GPU's encoder (gpu/api.rs): the stream it writes\nthem into, its pipeline records' codes, and what a surface shows.",
   surface_role: {
     $type: "u32",
     $description: "What a canvas the UI hands over shows (gpu/surface.rs): the world, a character alone, or\nnothing yet, as a canvas opens before the UI says what it draws.",
@@ -9,34 +9,34 @@
   },
   stream: {
     $type: "u32",
-    $description: "The one place the renderer's calls cross (gpu/api.rs): a stream\n(xpute-gpu-guest stream.rs) in the front of the core's memory, which the\ncore writes its calls into during an entry and the host runs once the entry\nhas returned. Its size is `BYTES`.\n\nIts head, past the stream's own words, is what the host writes for the\ncore: the device's block (xpute DEVICE) and the timed spans' reads, three\nof them (gpu/api.rs `READ_CAP`), each its word, then each span's begin and end\nticks. gpu/api.rs lays them out, and the stream says the head's length itself.",
-    BYTES: {
+    $description: "The one place the renderer's calls cross (gpu/api.rs): a stream\n(pxl-gpu-guest stream.rs) in the front of the core's memory, which the\ncore writes its calls into during an entry and the host runs once the entry\nhas returned. Its size is `SZ`.\n\nIts head, past the stream's own words, is what the host writes for the\ncore: the device's block (spec/gpu/api.json5 DEVICE) and the timed spans' reads, three\nof them (gpu/api.rs `READ_CAP`), each its word, then each span's begin and end\nticks. gpu/api.rs lays them out, and the stream says the head's length itself.",
+    SZ: {
       $value: 4194304,
       $description: "The stream's room: what one entry may send the device, then at its end the\nencoder's handle table, a product number said rather than derived. The\nstream says its own head.",
     },
     RESERVE: {
       $value: 1048576,
-      $description: "What an upload leaves of the range. The records a frame cannot put off — a\nframe's passes and draws, the renderer's pipelines — are never refused, so\nan upload, or a shader module made before the renderer (`MODULE_BYTES`),\nwhich can wait a frame, is taken only while this much is left after it.",
+      $description: "What an upload leaves of the range. The records a frame cannot put off — a\nframe's passes and draws, the renderer's pipelines — are never refused, so\nan upload, or a shader module made before the renderer (`MODULE_SZ`),\nwhich can wait a frame, is taken only while this much is left after it.",
     },
-    MODULE_BYTES: {
+    MODULE_SZ: {
       $value: 131072,
       $description: "The WGSL a frame hands the device as shader modules before the renderer is\nmade (gpu/pipeline.rs `PipelineCache::make_modules`): one module a frame, then\nmore while their sources stay within this and `RESERVE` is left. A page\nmakes a module on its main thread, so this bounds the task that makes\nthem, a module larger than it alone in its frame.",
     },
   },
   device: {
     $type: "u32",
-    $description: "What the GPU's host runs the renderer's stream by (xpute-gpu-link and @xpute/gpu-link\n`GpuConfig`), the same on a device, where the runtime hands it (pxl-runtime lib.rs `GPU`),\nand on a page, where the page's worker hands it (ts/client runtime/worker.ts).",
+    $description: "What the GPU's host runs the renderer's stream by (pxl-gpu-link and @pxl/gpu/link\n`GpuConfig`), the same on a device, where the runtime hands it (pxl-runtime lib.rs `GPU`),\nand on a page, where the page's worker hands it (ts/client runtime/worker.ts).",
     FRAME_LATENCY: {
       $value: 2,
-      $description: "The frames drawn and not yet finished on the GPU at once: a frame draws only\nwhile fewer are (xpute-gpu-guest `admit::frame`), and a surface queues as\nmany. Two, as wgpu configures a surface by default\n(`Surface::get_default_config`): one frame's lag behind the input, with the\nGPU kept busy while the next is drawn.",
+      $description: "The frames drawn and not yet finished on the GPU at once: a frame draws only\nwhile fewer are (pxl-gpu-guest `admit::frame`), and a surface queues as\nmany. Two, as wgpu configures a surface by default\n(`Surface::get_default_config`): one frame's lag behind the input, with the\nGPU kept busy while the next is drawn.",
     },
-    UPLOAD_CHUNK_BYTES: {
+    UPLOAD_CHUNK_SZ: {
       $value: 1048576,
       $description: "The chunk the host stages buffer writes in, each mapped once and reused: a\nmesh, the largest write a frame makes, is about a MiB, and a larger write\ntakes a chunk of its own.",
     },
     POWER: {
       $value: "high-performance",
-      $description: "WebGPU's power preference, which the device is asked with (xpute-gpu-link and\n@xpute/gpu-link `GpuAsk`, xpute-gpu-native-host `Ask::of`).",
+      $description: "WebGPU's power preference, which the device is asked with (pxl-gpu-link and\n@pxl/gpu/link `GpuAsk`, pxl-gpu-host `Ask::of`).",
     },
     REQUIRED_FEATURES: {
       $value: ["depth32float-stencil8"],

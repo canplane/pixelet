@@ -9,7 +9,6 @@
 //! alive until the answer, which still comes and owns it
 //! (`link/wit/types.wit` `lent`).
 
-use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 use std::cell::Cell;

@@ -13,12 +13,12 @@ use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, DRIFT_Q, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, DRIFT_Q, EYE, JITTER, SCREEN, SHADOW_STRENGTH, VIEW_PROJ, VIEWPORT, VIGNETTE,
 };
 use crate::frame::shader::word::{DRAW_FLOATS, FRAME_FLOATS};
 use crate::gpu::api::{
-    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Group, Image, Load,
-    RenderContext, TrackedRenderPass,
+    Entry, Gpu, Group, Image, Load, RenderContext, TrackedRenderPass, buffer_usage, bytes,
+    pass_desc, release, word_sz,
 };
 use crate::gpu::draw::{Draw, Position};
 use crate::gpu::pipeline::PipelineCache;
@@ -29,7 +29,7 @@ use crate::gpu::upload::uploads;
 use crate::look::color::linear_rgb;
 use crate::pass::atmosphere::AIR_ENTRY_CNT;
 use crate::pass::finish::Finish;
-use crate::pass::model::{frame_entries, frame_layout, Stage};
+use crate::pass::model::{Stage, frame_entries, frame_layout};
 use crate::pass::shadow::Shadow;
 use crate::pass::skinned_mesh::SkinnedPass;
 use crate::spec::span::GpuSpanName;
@@ -75,11 +75,11 @@ impl CharacterPass {
         align: u32,
     ) -> CharacterPass {
         let frame_buf = g.buf(
-            word_bytes(FRAME_FLOATS),
+            word_sz(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let draw_buf = g.buf(
-            word_bytes(DRAW_FLOATS),
+            word_sz(DRAW_FLOATS),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         let layout = frame_layout(g, pipelines);

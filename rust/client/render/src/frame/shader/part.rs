@@ -271,7 +271,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "frame",
         "encode",
         "finish",
-        "location",
+        "location.uniform",
         "location_zone_place",
         "location_zone",
     ],
@@ -742,7 +742,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     &[
         "frame",
         "place",
-        "skinned_draw.mark",
+        "skinned_draw.uniform",
         "skinned_place",
         "tile_mark",
     ],
@@ -762,12 +762,17 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_IMPOSTOR_MARK
     &["frame", "instance", "impostor_place", "tile_mark"],
     // SHADER_LOCATION_ZONE_MARK
-    &["frame", "location", "location_zone_place", "tile_mark"],
+    &[
+        "frame",
+        "location.uniform",
+        "location_zone_place",
+        "tile_mark",
+    ],
     // SHADER_LOCATION_BEACON_MARK
     &[
         "frame",
         "place",
-        "location",
+        "location.uniform",
         "location_beacon_place",
         "tile_mark",
     ],

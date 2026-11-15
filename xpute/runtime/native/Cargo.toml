@@ -1,0 +1,64 @@
+[package]
+name = "xpute-runtime-native"
+description = "xpute's runtime on a native device: the guest's thread and its loop, its link to the guest, and the UI's channel to it"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+exclude = ["src/**/*.test.rs"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-kit.workspace = true
+# The contract's pure types, shared rather than copied: a frame's words, a
+# URI's tokens and the guest's memory (remote.rs, native.rs).
+xpute-link.workspace = true
+# The host the runtime runs: its end of the link, the bindings served there,
+# and what it needs of the runtime, which the runtime gives it (native.rs
+# `run`).
+xpute-host.workspace = true
+
+# An Android app's native side reaches the runtime through JNI (src/jni.rs),
+# and a line is told to the NDK's log (src/log.rs). These are JNI's and the
+# NDK's own headers as bindings; over JNI's, a class whose static methods a
+# thread calls, and the Kotlin class `xpute.Runtime`'s exports over Java's
+# arrays, strings and a direct buffer (src/jni.rs).
+[target.'cfg(target_os = "android")'.dependencies]
+# 0.3, the version ndk-sys 0.6 requires.
+jni-sys = "0.3"
+ndk-sys = "0.6"
+
+[dev-dependencies]
+# Each process test links a guest beside the runtime, as an app does
+# (src/app.test.rs).
+xpute-guest.workspace = true
+
+# Each process test is a binary of its own, since a process starts one runtime
+# and links one guest.
+[[test]]
+name = "remote"
+path = "src/remote.test.rs"
+
+[[test]]
+name = "native"
+path = "src/native.test.rs"
+
+[[test]]
+name = "native-boot"
+path = "src/native.boot.test.rs"
+
+[[test]]
+name = "link"
+path = "src/link.test.rs"
+
+[[test]]
+name = "link-init"
+path = "src/link.init.test.rs"
+
+[[test]]
+name = "link-calls"
+path = "src/link.calls.test.rs"

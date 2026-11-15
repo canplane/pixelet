@@ -8,14 +8,14 @@ use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::zoom::{of_side, units, Zoom};
+use pxl_spec::space::coord::zoom::{Zoom, of_side, units};
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::collision::object_aabb;
 use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query;
-use crate::domain::query::{finest, Hit, HitKind, Ray, World};
+use crate::domain::query::{Hit, HitKind, Ray, World, finest};
 use crate::domain::setting::settings;
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::{eye, ray_of};
@@ -138,10 +138,6 @@ impl Pick {
     /// The corner of the cell of `zoom` struck, for the eraser's dig into
     /// terrain. It follows `adjacent_corner` but stays inside the struck box
     /// on the normal's axis.
-    #[expect(
-        clippy::needless_range_loop,
-        reason = "an axis indexes the hit's normal, its box and the corner at once"
-    )]
     pub(super) fn struck_corner(&self, zoom: Zoom) -> Q3 {
         let hit = &self.hit;
         let size = units(zoom);

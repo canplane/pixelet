@@ -7,8 +7,8 @@
 //! only records that work is queued, because embassy forbids calling poll from
 //! it, and `pending` reports that record.
 
-use embassy_executor::raw::Executor as Raw;
 use embassy_executor::Spawner;
+use embassy_executor::raw::Executor as Raw;
 use pxl_global::Global;
 
 struct OneThread;

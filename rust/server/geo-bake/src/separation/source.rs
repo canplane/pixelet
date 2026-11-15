@@ -16,7 +16,7 @@ use pxl_spec::bake::separation::Form;
 use crate::segment::Part;
 use crate::separation::piece::piece_of;
 use crate::terrain::repository::TerrainRepository;
-use crate::util::{pack, unpack, write_atomic, Level};
+use crate::util::{Level, pack, unpack, write_atomic};
 
 /// A road tunnel's end: where a portal may open, and the tunnel's level, which
 /// sets how far its approaches can sink (`portals_in`).

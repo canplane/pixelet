@@ -9,7 +9,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::{key_of, key_of_name};
 use xpute_golden::Golden;
 use xpute_link::abi::types::Lent;
-use xpute_link::{mem, Lift, Method, Object, Reply, Tag};
+use xpute_link::{Lift, Method, Object, Reply, Tag, mem};
 
 use super::*;
 use crate::sys::host::{answer, mount, set_clock};

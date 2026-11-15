@@ -1,11 +1,11 @@
 // @pxl/client/service/sys/abort.ts
 
 /** The core's report as it stops, which xpute's runtime writes
- * (@xpute/web-runtime worker.ts `tell_stop`), kept short as a stop code for
+ * (@xpute/runtime-web worker.ts `tell_stop`), kept short as a stop code for
  * the UI's panic screen. */
 
 import { strerror } from "@xpute/kit/status/error.ts";
-import type { UiStop } from "@xpute/web-host";
+import type { UiStop } from "@xpute/host";
 import { BUILD_NUMBER } from "@/build.ts";
 
 let code: string | null = null;

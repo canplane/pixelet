@@ -2,17 +2,16 @@
 
 xpute is a foreign function interface for the compiled part of a program. The
 program's **guest**, its compiled code, and xpute's **host**, which runs it,
-meet in four things: a calling convention of one host function and three guest
+meet in three things: a calling convention of one host function and three guest
 exports, which pass frames laid in the guest's memory; bindings that a generator
 writes for both ends from the program's interfaces in WIT, as WIT's tools do;
-the entry, the only time the guest runs, when its host enters it; and the GPU
-stream, a command buffer the guest records and the host runs, which moves large
-data while that memory stays fixed. The guest owns nothing but its memory. xpute
-declares the few interfaces every guest shares with its host, its clocks, its
-files, its stop, its log and its app's life, and the host implements the clocks,
-the stop, the log and the one device that lends that memory, the GPU. Everything else belongs to
-the **program**, and it travels over the same link, whose frames xpute delivers
-and does not interpret.
+and the entry, the only time the guest runs, when its host enters it. The guest
+owns nothing but its memory. xpute declares the few interfaces every guest
+shares with its host, its clocks, its files, its stop, its log and its app's
+life, and the host implements the clocks, the stop and the log. Everything else
+belongs to the **program**, and it travels over the same link, whose frames
+xpute delivers and does not interpret. A program may bring plugins of its own
+beside the runtime, a GPU for one.
 
 The same guest runs as a WebAssembly module in a web page and as a library
 linked into an iOS or Android app, while the program does the I/O and its
@@ -52,8 +51,8 @@ method came to: its result, or `EINPROGRESS` for a method that answers later,
 in a frame of its own. Each method is declared in WIT and its bindings are
 generated, so no binding is written by hand for any one piece of work.
 
-The host gives the guest only its memory, its entries, the clocks, the stop, the
-log and the device that lends the memory, and the guest decides everything else.
+The host gives the guest only its memory, its entries, the clocks, the stop and
+the log, and the guest decides everything else.
 Because that is all the host gives, the same guest runs unchanged in a page, on
 a phone and in a test.
 
@@ -64,16 +63,16 @@ A program built on xpute has three parts.
 - The **guest** is the program's compiled code, linked with xpute's guest
   library into one image. It runs only inside an entry, and everything it says
   to the world it writes into its memory.
-- The **host** serves the guest the clocks and the stop, `@xpute/web-host` on a
-  page and `xpute-native-host` on a device, and the GPU, which is a plugin. It
-  runs in a runtime, the platform's environment that runs the guest and enters
-  it: `@xpute/web-runtime` in a page's worker, and on a device
-  `xpute-native-runtime`, on a thread of its own, which the Expo module
-  `@xpute/native-runtime` starts.
+- The **host** serves the guest the clocks and the stop, `@xpute/host` in
+  TypeScript and `xpute-host` in Rust, and a plugin the program brings
+  serves beside it. It runs in a runtime, the platform's environment that runs the guest and enters
+  it: `@xpute/runtime-web` in a page's worker, and on a device
+  `xpute-runtime-native`, on a thread of its own, which the Expo module
+  `@xpute/expo` starts.
 - The **program** is everything else the app decides: its interfaces and what
-  their methods do, and its UI, which reaches the guest's link from another
-  thread: over a port on a page (`Remote`), and through the native module on a
-  device.
+  their methods do, and its UI, which calls and serves the guest by the same
+  bindings from another thread, carried to the guest's end by the runtime: over
+  a page's MessagePort, and the native module on a device.
 
 ```text
   ┌────────────────────────────────────────────────────────────────┐
@@ -90,8 +89,9 @@ A program built on xpute has three parts.
   └───────────┬─────────────────────────────────┬──────────────────┘
               │ the host's own                  │ the program's
     the clocks, the stop,                   its objects, its files
-    the GPU                                 among them, and its UI's,
-                                            which xpute does not read
+    the log                                 among them, its plugins'
+                                            and its UI's, which xpute
+                                            does not read
 ```
 
 Each frame is four words, its tag, its command, its result and its packet's
@@ -106,13 +106,15 @@ it says.
 ### The guest
 
 A program declares its interfaces in WIT, as xpute declares its own under
-`wit/` and `gpu/wit/`, and its guest's world says which the guest serves, its
+`wit/`, and its guest's world says which the guest serves, its
 exports, and which it calls, its imports. `xpute-link-gen`, one command a
 side ([link/gen](./link/gen/README.md)), writes their bindings in Rust,
 TypeScript and C++, and for the host two lists from the world: `IMPORTS`, the
-interfaces the guest calls, and `LATER`, the methods of the program's own
-named interfaces among them that answer later, which tells the runtime which
-of the UI's methods answer later. A Rust guest
+interfaces the guest calls, and `CALLS`, the methods they hold that answer at
+once, xpute's and a plugin's among them, a function without `async`. A
+method the UI serves from another thread is answered later, so it is an
+`async func`, and the runtime refuses to start the guest where one of `CALLS`
+is mounted on the UI's end. A Rust guest
 defines its three exports with one macro, `link!`, given four things. The
 first is a frame's cap in bytes, a multiple of 8 that holds a frame's words
 (`HDR_SZ`) and the largest packet the program lays or takes. The second is
@@ -140,14 +142,10 @@ impl life::Guest for Program {
 xpute_guest::link!(4096, || life::mount(Rc::new(Program)), || {}, || false);
 ```
 
-The GPU is a plugin, declared in WIT as xpute's own packages are: the guest
-imports `gpu`, which runs the records it lends and gives it a device, and
-`vsync`, which answers at the display's next frame, and serves `surface`, which
-the UI opens to draw on. `xpute-gpu-guest` writes WebGPU's calls as records of
-a stream, and draws a frame only while fewer of its frames are unfinished on
-the GPU than its frame latency (`xpute_gpu_guest::admit::frame`), which the
-program sets in its host's `GpuConfig`, so taking a surface's texture never
-blocks.
+A plugin is a package of the program's own in WIT, whose bindings are written
+as the program's are, over xpute's, and which the program's package may take
+types of and its world import or export. Its guest's end, its hosts and its UI
+ends are the program's, under the plugin's name.
 
 A C++ guest takes xpute's library as two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with no exceptions,
@@ -171,8 +169,8 @@ nothing. A native guest's memory is its process's. A span the guest lends is
 named by its address, a u64 on every platform: an offset into the module's
 memory, or a native pointer, which the host and the UI read in place. A Rust
 guest's global allocator is the one its program declares, as any Rust
-program's is. A C++ guest takes what it lays and lends, the link's boxes and a
-GPU stream's records, from its default memory resource
+program's is. A C++ guest takes what it lays and lends, the link's boxes among
+it, from its default memory resource
 (`std::pmr::get_default_resource`), which its program sets, and its global
 `operator new` is the program's as well.
 
@@ -191,70 +189,70 @@ page, the device's library on a device. The C++ kit has the same heap as a
 
 The program builds its host as a list, and the runtime starts the guest from
 it, here as on a device: the program's servers, each of which mounts on the
-link what it serves, with `IMPORTS` and `LATER`. The servers come in no order,
+link what it serves, with `IMPORTS` and `CALLS`. The servers come in no order,
 since none depends on another, and the steps are the runtime's: it mounts each
 server, then the stand-ins of what the UI serves, and enters the guest only
 once every interface in `IMPORTS` is served, under its handle where it has
 functions of its own and by an opener at some prefix where the guest opens its
 resources by URI; which prefixes those are stays the program's. One that no
-server mounts traps the link before the guest's first entry, naming each.
+server mounts, or one of `CALLS` the UI serves, traps the link before the
+guest's first entry, naming each.
 
 The worker instantiates the guest's module and runs it, and the runtime tells
 the guest the UI attached. A module that does not load traps the guest before
-its first entry, as a device's runtime traps on its own failure. The GPU's server takes what the
-guest asks of the device (`GpuAsk`, WebGPU's power preference and features)
-and the program's settings for its host (`GpuConfig`), and the canvas the UI
-gives beside the link under a surface's handle goes to it:
+its first entry, as a device's runtime traps on its own failure. A plugin's
+server is one of the list, and a thing the UI gives beside its calls under a
+handle, a canvas for one, which a page's port can move, goes to the
+program's `taker`, here a plugin's:
 
 ```ts
 // The worker, given the page's `Instantiate`, m.
 const link = await instantiate(m.module, m.init);
 if (link === null) return;
-const gpu = new WebGpu(link, ASK, CFG);
+const view = new View(link.side); // a plugin of the program's
 run(link, {
   servers: [
     serve_stop,
     serve_clock,
-    serve_vsync,
-    () => gpu.serve(),
+    () => view.serve(),
   ],
   imports: IMPORTS,
-  later: LATER,
+  calls: CALLS,
   taker: {
-    give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
-    take: (h) => gpu.unbind(h),
+    give: (h, canvas) => view.bind(h, canvas as OffscreenCanvas),
+    take: (h) => view.unbind(h),
   },
 }, m);
 ```
 
-The UI meets the runtime as a device's does (`open_remote`, `stopped_on`,
+The UI meets the runtime as a device's does (`open_ui`, `stopped_on`,
 `trap_on`, `start`), with two differences of the platform. It names the
-worker's module as it opens its end of the link, and the guest's module, how
+worker's module as it opens its end, and the guest's module, how
 to fetch it and any fields of the program's own its worker reads beside them
 as it starts the guest. And the start tells the guest the page's lifecycle
 from the document's visibility, which a worker cannot see, as a device's
 module tells its runtime the app's from the platform. What the worker posts
-the page is a message by its kind, the runtime's, the GPU's server's and the
-program's alike, which the UI hears by its kind as it comes (`message_on`),
-the GPU's state among them (`GpuReport`, from `@xpute/gpu-web-host`). Nothing
+the page is a message by its kind, the runtime's, a plugin's and the
+program's alike, which the UI hears by its kind as it comes (`message_on`).
+Nothing
 is kept for a late hearer, since the worker dies with its page and no UI comes
 late to it; a device's runtime outlives its UI and keeps the guest's stop and
 its trap:
 
 ```ts
-const remote = open_remote(WORKER_URL);
+const ui = open_ui(WORKER_URL);
 stopped_on((stop) => { /* show it */ });
 trap_on((err) => { /* show it */ });
-message_on<GpuReport>("gpu", (m) => { /* show m.state */ });
-// Mount on `remote` what the UI serves, before `start`.
-start(remote, MODULE_URL, undefined);
-const surface = await open(remote, uri("xpute:gpu", "surface"));
-remote.give(surface, canvas.transferControlToOffscreen());
+message_on<ViewReport>("view", (m) => { /* show it */ });
+// Mount on `ui` what the UI serves, before `start`.
+start(MODULE_URL, undefined);
+const view = await open(sender(ui), uri("app:view", "view"));
+give(view, canvas.transferControlToOffscreen());
 ```
 
 ### On a device
 
-A native app installs `@xpute/native-runtime`, the React Native module, which
+A native app installs `@xpute/expo`, the React Native module, which
 Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
 crate a device links: its guest, and the function that gives the runtime its
 list, which the crate exports the runtime over. It starts the guest on a
@@ -268,35 +266,32 @@ fn start(cache_dir: PathBuf) -> Boot {
         servers: vec![
             Box::new(stop::serve),
             Box::new(clock::serve),
-            Box::new(move || {
-                native::serve(Ask::of(ASK), native::config(CFG), Some(cache_dir));
-            }),
+            Box::new(move || view::serve(Some(cache_dir))), // a plugin's
         ],
         imports: abi::IMPORTS,
-        later: abi::LATER,
+        calls: abi::CALLS,
     }
 }
 
-xpute_native_runtime::native_abi!(start);
-xpute_gpu_native_host::native_abi!();
+xpute_runtime_native::native_abi!(start);
 ```
 
-The UI opens its end of the runtime's link (`open_remote`), mounts on it what
+The UI opens its end of the runtime (`open_ui`), mounts on it what
 it serves, and then starts the runtime (`start`). The first start of a
-process starts the guest and serves it what is mounted on the remote by then,
-its named handles and prefixes; each start after it is a new UI on the same
-runtime, as a reload's, served as the first was, and each start tells the
-guest a UI attached. The UI hears the guest's stop and its trap
+process starts the guest and serves it what is mounted on the UI's end by
+then, its named handles and prefixes; each start attaches the UI under a new
+handle, and one after the first drops the last UI's, as a reload's, the new
+UI served as the first was, and each start tells the guest a UI attached. The UI hears the guest's stop and its trap
 (`stopped_on`, `trap_on`), and each, as the UI begins to hear it, tells at
 once the last the runtime keeps, so a UI that starts after the guest's end
 hears it too:
 
 ```ts
-const remote = open_remote();
+const ui = open_ui();
 stopped_on((stop) => { /* show it */ });
 trap_on((err) => { /* show it */ });
-// Mount on `remote` what the UI serves, before the first `start`.
-start(remote);
+// Mount on `ui` what the UI serves, before the first `start`.
+start();
 ```
 
 The app builds that crate for the device as it builds, and the module links
@@ -326,29 +321,21 @@ fn main() {
 }
 ```
 
-The app's bundler takes each `x.native.ts` in place of `x.ts`.
-`xpute-gpu-native-host` opens the device when the guest asks, with the
-program's `GpuConfig`, its frame latency among it, and keeps its compiled
-pipelines in `cache_dir`; `@xpute/gpu-native-runtime`'s module gives the view
-a guest's surface draws into (`SurfaceView`), drives the display's frames, and
-tells the UI what the host has of a GPU as that changes, the state now first
-to a UI that starts later (`state_on`). The host draws with a fork of wgpu,
-which a program's workspace patches in as xpute's does
-([wgpu-fork.md](wgpu-fork.md)).
+Where an import names `x.ts`, the app's bundler takes `x.native.ts` on a
+device and `x.web.ts` on a page. A plugin's UI end on a device is a module of
+its own beside `@xpute/expo`, which links into the crate the runtime's module
+builds.
 
 ### The packages
 
-In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/web-runtime`,
-`@xpute/web-host`, `@xpute/native-runtime`, `@xpute/gpu-link`,
-`@xpute/gpu-web-host` and `@xpute/gpu-native-runtime`, and in Rust they are the
-crates `xpute-kit`, `xpute-link`, `xpute-guest`, `xpute-native-runtime`,
-`xpute-native-host`, `xpute-gpu-link`, `xpute-gpu-guest` and
-`xpute-gpu-native-host`, with the generators
-`xpute-gen` and `xpute-link-gen`.
+In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/host`,
+`@xpute/runtime-web` and `@xpute/expo`, and in Rust they are the crates
+`xpute-kit`, `xpute-link`, `xpute-guest`, `xpute-host` and
+`xpute-runtime-native`, with the generators `xpute-gen` and `xpute-link-gen`.
 Each carries what a registry asks. A program beside this tree lists the
 packages in its pnpm workspace and depends on them as `workspace:*`, and it
-names the crates by `path`. React Native and Expo are peers of the two native
-modules alone, so a program that runs only on a page installs neither. Each
+names the crates by `path`. React Native and Expo are peers of the native
+module alone, so a program that runs only on a page installs neither. Each
 TypeScript package is its own source: its `package.json` maps a path under the
 package's name to the file under `src/`, and the files use only syntax that
 strips to JavaScript, so a bundler or Node's type stripping takes them with no
@@ -357,13 +344,11 @@ build.
 ## Where to read next
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through the
-  link, its sides, how a failure ends, the device that lends the memory and
-  the languages, and ends with xpute's boundaries, what it took from earlier
+  link, its sides, how a failure ends and the languages, and ends with xpute's boundaries, what it took from earlier
   work and a map of the code.
-- Each part's `spec/` is the contract itself: the link's frame (`link/spec/`),
-  the GPU stream's records (`gpu/link/spec/`) and the errno table
-  (`kit/spec/`), from which every language's numbers are generated. The
-  interfaces are WIT, under `link/wit/`, `wit/` and `gpu/wit/`.
+- Each part's `spec/` is the contract itself: the link's frame (`link/spec/`)
+  and the errno table (`kit/spec/`), from which every language's numbers are
+  generated. The interfaces are WIT, under `link/wit/` and `wit/`.
 - [XTP's README](./kit/ts/src/wire/xtp/README.md) describes XTP, the tree
   format of the data a program stores and serves, and of the native
   runtime's batches to a UI on the JavaScript thread.

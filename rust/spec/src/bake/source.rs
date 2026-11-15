@@ -8,7 +8,7 @@ use crate::bake::publication::BaseKind;
 use crate::space::coord::zoom::SHARD_ZOOM;
 use crate::space::layer::quadrant::Quadrant;
 
-use crate::bake::publication::{VERSION_BYTES, VERSION_CHARS};
+use crate::bake::publication::{VERSION_CHARS, VERSION_SZ};
 
 /// A key of its shards: a shard, or a node over shards.
 pub fn key(name: &str) -> Option<Quadrant> {
@@ -20,7 +20,7 @@ pub fn key(name: &str) -> Option<Quadrant> {
 /// (spec/golden/bake/version.tsv).
 pub fn is_version(version: &str) -> bool {
     !version.is_empty()
-        && version.len() <= VERSION_BYTES
+        && version.len() <= VERSION_SZ
         && version
             .bytes()
             .all(|b| VERSION_CHARS.as_bytes().contains(&b))

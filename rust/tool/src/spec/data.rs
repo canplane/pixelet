@@ -8,15 +8,27 @@
 //! a person reads. A `file` is a reference to an asset: the tool numbers each
 //! and hands the generator plain numbers (`with_numbers`).
 
-use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::data::{DataSpec, table_outputs};
 
 use super::bake::PUBLICATION;
-use super::catalog::{run_of, FILE};
+use super::catalog::{FILE, run_of};
 use super::ingest::files;
-use super::{read, Node, Output};
+use super::{Node, Output, read};
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 18] = [
+const DATA_SPECS: [DataSpec; 20] = [
+    DataSpec {
+        json: "spec/gpu/api.json5",
+        ts: Some("ts/gpu/link/src/api.spec.ts"),
+        rs: Some("rust/gpu/link/src/api.spec.rs"),
+        ..DataSpec::DEFAULT
+    },
+    DataSpec {
+        json: "spec/gpu/enum.json5",
+        ts: Some("ts/gpu/link/src/enum.spec.ts"),
+        rs: Some("rust/gpu/link/src/enum.spec.rs"),
+        ..DataSpec::DEFAULT
+    },
     DataSpec {
         json: "spec/client/core/sys/manifest.json5",
         rs: Some("rust/client/core/src/spec/manifest.spec.rs"),

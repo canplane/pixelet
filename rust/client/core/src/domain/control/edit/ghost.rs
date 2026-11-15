@@ -8,8 +8,8 @@
 //! scene decides how the ghost looks: its color, its texture and what stands
 //! in for a decor not yet loaded (domain/scene/indicator/ghost.rs).
 
-use pxl_spec::asset::decor::{Decor, DecorMeta};
 use pxl_spec::asset::AssetId;
+use pxl_spec::asset::decor::{Decor, DecorMeta};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;

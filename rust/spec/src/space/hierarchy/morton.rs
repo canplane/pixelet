@@ -8,7 +8,7 @@
 //! coarser key's digits prefix a finer one's over the same ground, in any number of axes.
 
 use super::tree::Node;
-use crate::space::coord::zoom::{Zoom, EXTENT, UNIT_ZOOM};
+use crate::space::coord::zoom::{EXTENT, UNIT_ZOOM, Zoom};
 use core::fmt;
 
 const LANES: [u32; 3] = EXTENT;

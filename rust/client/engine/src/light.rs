@@ -27,7 +27,7 @@ use core::f32::consts::SQRT_2;
 use pxl_spec::brick;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3::FRAC_W;
-use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, LEAF_CELL_ZOOM, UNIT_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::child_of;
 
 /// The light's cast as the eye's words hold it (`eye::LIGHT`): a frame's constants, worked
@@ -68,11 +68,7 @@ pub const DEPTH_ONE: u32 = (1 << 24) - 1;
 /// A slot's word for depth `d` (`depth`), a share of the box's.
 pub fn word(d: f32) -> u32 {
     let q = (d * DEPTH_ONE as f32 + 0.5) as u32;
-    if q < DEPTH_ONE {
-        q
-    } else {
-        DEPTH_ONE
-    }
+    if q < DEPTH_ONE { q } else { DEPTH_ONE }
 }
 
 fn length(v: [f32; 3]) -> f32 {
@@ -1120,11 +1116,7 @@ const fn parked_items_cap(size: u32) -> u32 {
         beam_across(size) * beam_across(size),
         (size / SAMPLE) * (size / SAMPLE),
     );
-    if corners > samples {
-        corners
-    } else {
-        samples
-    }
+    if corners > samples { corners } else { samples }
 }
 
 /// Past the parked items, two words kept from cast to cast. `SLIDE_RAN` is the number of
@@ -1249,11 +1241,7 @@ pub fn depth<A>(s: &Light, trace: &Trace<A>) -> f32 {
         return 1.0;
     }
     let d = trace.hit.t * s.t_max_inverse() + axis(s.bias, trace.hit.axis);
-    if d < 1.0 {
-        d
-    } else {
-        1.0
-    }
+    if d < 1.0 { d } else { 1.0 }
 }
 
 #[cfg(test)]
@@ -1702,12 +1690,14 @@ mod tests {
             s.box_tiles(64, [12.0, 12.0, 12.0], [13.0, 13.0, 13.0], true),
             None
         );
-        assert!(s
-            .box_tiles(64, [16.5, -1.0, -1.0], [19.0, 1.0, 1.0], false)
-            .is_some());
-        assert!(s
-            .box_tiles(64, [-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], false)
-            .is_some());
+        assert!(
+            s.box_tiles(64, [16.5, -1.0, -1.0], [19.0, 1.0, 1.0], false)
+                .is_some()
+        );
+        assert!(
+            s.box_tiles(64, [-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], false)
+                .is_some()
+        );
     }
 
     /// Every point of a box within the reach stands on a tile its range holds, as every pixel

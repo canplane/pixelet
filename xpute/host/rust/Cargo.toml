@@ -1,0 +1,33 @@
+[package]
+name = "xpute-host"
+description = "xpute's host in Rust: its end of the link, the bindings served there, and what it serves the guest"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+exclude = ["src/**/*.test.rs"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-kit.workspace = true
+# The contract's pure types, shared rather than copied: the link machine its
+# runtime makes and gives it, which its bindings serve on, and an answer given
+# later (clock.rs).
+xpute-link.workspace = true
+
+[dev-dependencies]
+# The clock's test links a guest and the runtime it runs in, as an app does
+# (src/clock.test.rs).
+xpute-guest.workspace = true
+xpute-runtime-native.workspace = true
+
+# A process starts one runtime and links one guest, so the test is a binary of
+# its own, on the runtime's process tests' app (xpute-runtime-native
+# src/app.test.rs).
+[[test]]
+name = "clock"
+path = "src/clock.test.rs"

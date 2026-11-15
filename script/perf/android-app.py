@@ -14,7 +14,7 @@ from measure import measure, stream
 
 APP = "me.plei.pixelet"
 METRO_PORT = os.environ.get("METRO_PORT", "8081")
-# The log tag @xpute/native-runtime `log` writes under.
+# The log tag @xpute/expo `log` writes under.
 TAG = "xpute"
 
 

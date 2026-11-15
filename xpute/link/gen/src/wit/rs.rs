@@ -15,9 +15,9 @@ use wit_parser::{Function, Type, TypeDefKind, TypeOwner};
 use xpute_gen::spec::{pascal, rs_enum};
 
 use super::{
-    cases, discriminant, is_async, is_lent, kind, members, method_const, method_name,
-    object_method, params, plus, rec_layout, rs_given, rs_name, serving, type_name, variant_layout,
-    Gen, Kind, Obj, Role,
+    Gen, Kind, Obj, Role, cases, discriminant, is_async, is_lent, kind, members, method_const,
+    method_name, object_method, params, plus, rec_layout, rs_given, rs_name, serving, type_name,
+    variant_layout,
 };
 
 /// The Rust modules the bindings take items from, beside the link's crate.
@@ -38,7 +38,9 @@ fn object_struct(o: &Obj) -> String {
 /// writes it where each argument is its own (wit-bindgen likewise).
 fn many_args(n: usize, indent: &str) -> String {
     if n > 7 {
-        format!("{indent}#[expect(clippy::too_many_arguments, reason = \"the WIT function's parameters, each its own\")]\n")
+        format!(
+            "{indent}#[expect(clippy::too_many_arguments, reason = \"the WIT function's parameters, each its own\")]\n"
+        )
     } else {
         String::new()
     }
@@ -386,26 +388,54 @@ impl Gen<'_> {
                     self.rs_use(self.link_rs, "Return"),
                     self.rs_reply(&rk)?,
                 );
-                let _ = writeln!(out, "                    {bind}{imp}.{name}({names}{done});\n                    {reply}::from({errno}::EINPROGRESS as i32)\n                }}");
+                let _ = writeln!(
+                    out,
+                    "                    {bind}{imp}.{name}({names}{done});\n                    {reply}::from({errno}::EINPROGRESS as i32)\n                }}"
+                );
             } else {
-                let _ = writeln!(out, "                    match {imp}.{name}({}) {{\n                        Ok({v}) => {},\n                        Err(e) => {reply}::from(e as i32),\n                    }}\n                }}", names.trim_end_matches(", "), self.rs_reply(&rk)?);
+                let _ = writeln!(
+                    out,
+                    "                    match {imp}.{name}({}) {{\n                        Ok({v}) => {},\n                        Err(e) => {reply}::from(e as i32),\n                    }}\n                }}",
+                    names.trim_end_matches(", "),
+                    self.rs_reply(&rk)?
+                );
             }
         }
-        let _ = writeln!(out, "                _ => {reply}::from({errno}::ENOSYS as i32),\n            }})\n        }};\n        run().unwrap_or_else(|e| {reply}::from(e as i32))\n    }}\n}}\n");
+        let _ = writeln!(
+            out,
+            "                _ => {reply}::from({errno}::ENOSYS as i32),\n            }})\n        }};\n        run().unwrap_or_else(|e| {reply}::from(e as i32))\n    }}\n}}\n"
+        );
         let object = self.rs_use(self.link_rs, "Object");
         match (o.resource, side) {
             (true, Some(_)) => {
-                let _ = writeln!(out, "/// The object over `implementation`, for an opener or a function to answer.\npub fn {}(implementation: {rc}<dyn {t}>) -> {rc}<dyn {object}> {{\n    {rc}::new({obj}(implementation))\n}}\n", rs_name(&o.name));
+                let _ = writeln!(
+                    out,
+                    "/// The object over `implementation`, for an opener or a function to answer.\npub fn {}(implementation: {rc}<dyn {t}>) -> {rc}<dyn {object}> {{\n    {rc}::new({obj}(implementation))\n}}\n",
+                    rs_name(&o.name)
+                );
             }
             (true, None) => {
                 let side_ = if holds { "side_" } else { "_" };
-                let _ = writeln!(out, "/// The object over `implementation` on `side_`, for an opener or a function to answer.\npub fn {}({side_}: &'static {}, implementation: {rc}<dyn {t}>) -> {rc}<dyn {object}> {{\n    {rc}::new({obj}({made}))\n}}\n", rs_name(&o.name), self.rs_use(self.link_rs, "Side"));
+                let _ = writeln!(
+                    out,
+                    "/// The object over `implementation` on `side_`, for an opener or a function to answer.\npub fn {}({side_}: &'static {}, implementation: {rc}<dyn {t}>) -> {rc}<dyn {object}> {{\n    {rc}::new({obj}({made}))\n}}\n",
+                    rs_name(&o.name),
+                    self.rs_use(self.link_rs, "Side")
+                );
             }
             (false, Some(c)) => {
-                let _ = writeln!(out, "/// Serves `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n", self.rs_use(c, "link"));
+                let _ = writeln!(
+                    out,
+                    "/// Serves `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n",
+                    self.rs_use(c, "link")
+                );
             }
             (false, None) => {
-                let _ = writeln!(out, "/// Serves `implementation` under the interface's handle on `side_`.\npub fn mount(side_: &'static {}, implementation: {rc}<dyn {t}>) {{\n    side_.mount_named(HANDLE, {rc}::new({obj}({made})));\n}}\n", self.rs_use(self.link_rs, "Side"));
+                let _ = writeln!(
+                    out,
+                    "/// Serves `implementation` under the interface's handle on `side_`.\npub fn mount(side_: &'static {}, implementation: {rc}<dyn {t}>) {{\n    side_.mount_named(HANDLE, {rc}::new({obj}({made})));\n}}\n",
+                    self.rs_use(self.link_rs, "Side")
+                );
             }
         }
         Ok(())
@@ -514,14 +544,24 @@ impl Gen<'_> {
                 // The call is sent here, and the future answers it.
                 let args = self.rs_args(&ps, &lents)?;
                 let sent = match side {
-                    Some(s) => format!("{}::wait({h}, {c}, {args}, {kept})", self.rs_use(s, "wait")),
+                    Some(s) => {
+                        format!("{}::wait({h}, {c}, {args}, {kept})", self.rs_use(s, "wait"))
+                    }
                     None => format!(
                         "{}(move |h_, m_, a_, w_| side_.send(h_, m_, {}::Args(a_), w_), Box::new(move |t_| side_.cancel(t_)), {h}, {c}, {args}, {kept})",
                         self.rs_use(&format!("{}::wait", self.link_rs), "wait_by"),
                         self.rs_use(self.link_rs, "Packet")
                     ),
                 };
-                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> impl {}<Output = {output}> {{\n    {lend}\n    let sent = {sent};\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n", many_args(sig.len(), ""), sig.join(", "), self.rs_use("core::future", "Future"), if rk.is_some() { "data" } else { "_" }, if lent.is_some() { "lent" } else { "_" });
+                let _ = writeln!(
+                    out,
+                    "{}pub fn {name}{generic}({}) -> impl Future<Output = {output}> + use<{}> {{\n    {lend}\n    let sent = {sent};\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n",
+                    many_args(sig.len(), ""),
+                    sig.join(", "),
+                    if lents.is_empty() { "" } else { "L" },
+                    if rk.is_some() { "data" } else { "_" },
+                    if lent.is_some() { "lent" } else { "_" }
+                );
             } else {
                 let args = self.rs_args(&ps, &lents)?;
                 let call = match side {
@@ -531,7 +571,14 @@ impl Gen<'_> {
                         self.rs_use(self.link_rs, "Packet")
                     ),
                 };
-                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> Result<{ret}, {errno}> {{\n    {lend}let (r, {}) = {call};\n    {}\n}}\n", many_args(sig.len(), ""), sig.join(", "), if rk.is_some() { "data" } else { "_" }, self.rs_answer(&rk, "data")?);
+                let _ = writeln!(
+                    out,
+                    "{}pub fn {name}{generic}({}) -> Result<{ret}, {errno}> {{\n    {lend}let (r, {}) = {call};\n    {}\n}}\n",
+                    many_args(sig.len(), ""),
+                    sig.join(", "),
+                    if rk.is_some() { "data" } else { "_" },
+                    self.rs_answer(&rk, "data")?
+                );
             }
         }
         Ok(())
@@ -546,7 +593,13 @@ impl Gen<'_> {
     ) -> Result<String, String> {
         let mut items = String::new();
         if !objs.is_empty() {
-            let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json5 `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
+            let _ = writeln!(
+                items,
+                "/// The interface's handle, named by `{}` (frame.json5 `NAMED`).\npub const HANDLE: {} = {:#x};\n",
+                self.at(),
+                self.rs_use(self.link_rs, "Handle"),
+                self.handle()
+            );
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
@@ -648,7 +701,11 @@ impl Gen<'_> {
                     for (f, k) in &fields {
                         let _ = writeln!(out, "    pub {}: {},", rs_name(f), self.rs_ty(k, true));
                     }
-                    let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{", lower());
+                    let _ = writeln!(
+                        out,
+                        "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{",
+                        lower()
+                    );
                     for ((f, k), &off) in fields.iter().zip(&offs) {
                         let _ = writeln!(
                             out,
@@ -661,7 +718,12 @@ impl Gen<'_> {
                             )?
                         );
                     }
-                    let _ = writeln!(out, "    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        Ok({n} {{", lift(), errno());
+                    let _ = writeln!(
+                        out,
+                        "    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        Ok({n} {{",
+                        lift(),
+                        errno()
+                    );
                     for ((f, k), &off) in fields.iter().zip(&offs) {
                         let _ = writeln!(
                             out,
@@ -688,7 +750,11 @@ impl Gen<'_> {
                             }
                         }
                     }
-                    let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{\n        match self {{", lower());
+                    let _ = writeln!(
+                        out,
+                        "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{\n        match self {{",
+                        lower()
+                    );
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         match kd {
                             Some(kd) => {
@@ -708,7 +774,13 @@ impl Gen<'_> {
                             }
                         }
                     }
-                    let _ = writeln!(out, "        }}\n    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        match r.case(at, {})? {{", lift(), errno(), cases.len());
+                    let _ = writeln!(
+                        out,
+                        "        }}\n    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        match r.case(at, {})? {{",
+                        lift(),
+                        errno(),
+                        cases.len()
+                    );
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         match kd {
                             Some(kd) => {

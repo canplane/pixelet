@@ -4,9 +4,9 @@
 //! texture pack, the cloud sheets' tile, an image and the marker atlas all use it.
 
 use crate::frame::shader::record::PIPELINE_MIP;
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{pass_desc, release, sampler_entry, view_entry, Format, Gpu, Layout, Load};
+use crate::gpu::api::{Format, Gpu, Layout, Load, pass_desc, release, sampler_entry, view_entry};
 use crate::gpu::pipeline::PipelineCache;
 
 pub fn mip_cnt(width: u32, height: u32) -> u32 {

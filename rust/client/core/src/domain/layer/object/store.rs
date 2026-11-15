@@ -22,7 +22,7 @@
 
 use pxl_global::Global;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::space::coord::zoom::{units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{CUBE_ZOOM, SHARD_ZOOM, Zoom, units};
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
@@ -31,16 +31,16 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{base_of, cube, node_near, wrap_cell};
 use pxl_spec::space::hierarchy::morton::node_of;
-use pxl_spec::space::hierarchy::tree::{ancestor_at, child_at, child_idx, region, Node};
+use pxl_spec::space::hierarchy::tree::{Node, ancestor_at, child_at, child_idx, region};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::layer::object::ext::{Ext, Pool, NONE};
+use crate::domain::layer::object::ext::{Ext, NONE, Pool};
 use crate::domain::layer::object::sparse_tree::SparseTree;
 use crate::domain::layer::object::volume::fold;
 use crate::sys::sched::invalidate;
-use pxl_engine::object::{self, path, NodeSlot};
+use pxl_engine::object::{self, NodeSlot, path};
 use pxl_render::gpu::api;
 use pxl_render::ray::ObjectTable;
 use pxl_spec::object::class_of;

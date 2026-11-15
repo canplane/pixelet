@@ -1,4 +1,4 @@
-// @pxl/app/modules/platform/android/src/main/java/me/plei/pixelet/platform/PlatformModule.kt
+// @pxl/client/modules/platform/android/src/main/java/me/plei/pixelet/platform/PlatformModule.kt
 
 package me.plei.pixelet.platform
 
@@ -18,7 +18,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * The device's half of the client's services on Android (the .native files in
  * ts/client/src/service/platform/). It answers what the UI asks of the system,
  * under the same names as the iPhone's PlatformModule.swift. The core is in
- * xpute's own module (@xpute/native-runtime), and the view it draws into in @xpute/gpu-native-runtime's.
+ * xpute's own module (@xpute/expo), and the view it draws into in @pxl/gpu/expo's.
  */
 class PlatformModule : Module() {
   private val context: Context

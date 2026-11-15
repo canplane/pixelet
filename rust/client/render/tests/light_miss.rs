@@ -17,23 +17,23 @@ mod real_world;
 use pxl_spec::brick;
 use std::collections::BTreeMap;
 
-use gpu::{array_view, read_texture, texture, Gpu};
+use gpu::{Gpu, array_view, read_texture, texture};
 
 use pxl_engine::answer;
 use pxl_engine::cast::{self, Detail, End, Ray, Until};
-use pxl_engine::clipmap::{self, Entry, ENTRY_CNT, FIRST_CELL_ZOOM};
+use pxl_engine::clipmap::{self, ENTRY_CNT, Entry, FIRST_CELL_ZOOM};
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::node_cache::{self, CHANGED_WORDS};
 use pxl_engine::object::Cut;
 use pxl_engine::{beam, eye, object, ray};
-use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
+use pxl_render::frame::shader::record::{SHADER_FORGET, SHADER_LIGHT_CELL, src};
 use pxl_render::frame::shader::word::ROW_LANE_CNT;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::q3::FRAC_W;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 use pxl_spec::value;
 
-use real_world::{q8, store_of, truth, Asking, Built, World, WorldBuffer, FINEST, NOTCH};
+use real_world::{Asking, Built, FINEST, NOTCH, World, WorldBuffer, q8, store_of, truth};
 
 /// The leaf cell the eye stands in: 300 cells west of X's seam, on the east side of X = 0,
 /// and 30 cells north of the service area's south edge.

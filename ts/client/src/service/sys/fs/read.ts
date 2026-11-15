@@ -10,7 +10,7 @@ import {
   ERROR_CODE_NO_ENTRY,
   ERROR_CODE_NO_OBJECT,
   ERROR_CODE_REMOTE_UNREACHABLE,
-} from "@xpute/web-host/abi/fs/types.enum.ts";
+} from "@xpute/host/abi/fs/types.enum.ts";
 import { online } from "@/service/origin/online.ts";
 import * as origin from "@/service/origin/route.ts";
 

@@ -74,5 +74,5 @@ pub fn goto(side_: &_rt::Side, lon: f64, lat: f64) -> Result<(), _rt::Errno> {
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method, Packet, Side};
+    pub(super) use xpute_link::{Handle, Lower, Method, Packet, Side, answer};
 }

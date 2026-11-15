@@ -124,7 +124,7 @@
 //! take, the walk keeps nothing, and its pixels walk again.
 
 use crate::cast::{self, Detail, Node, Spacing};
-use crate::light::{Light, BEAM, TILE};
+use crate::light::{BEAM, Light, TILE};
 use crate::node_cache::{self, ENTRY_CNT};
 use crate::ray::QUEUE_RECS_CAP;
 use pxl_spec::space::camera::grid;
@@ -189,11 +189,7 @@ pub const fn entries_for(cells: u32) -> u32 {
 
 const fn ceil(v: f32) -> u32 {
     let n = v as u32;
-    if (n as f32) < v {
-        n + 1
-    } else {
-        n
-    }
+    if (n as f32) < v { n + 1 } else { n }
 }
 /// The most boxes an observer's draw writes, one word for each drawable entry
 /// (`raster::draw_word`): `CELL_NODE_CAP` for each of its cells (`EYE_CELLS_CAP`,
@@ -331,11 +327,7 @@ pub fn in_view(
     let reaches = |n: [f32; 3]| -> f32 {
         let m = |a: usize| {
             let (x, y) = (n[a] * lo[a], n[a] * hi[a]);
-            if x > y {
-                x
-            } else {
-                y
-            }
+            if x > y { x } else { y }
         };
         m(0) + m(1) + m(2)
     };

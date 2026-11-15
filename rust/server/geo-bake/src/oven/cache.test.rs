@@ -63,16 +63,20 @@ async fn concurrent_publish_once() {
     cache.publish("empty", None).unwrap();
     assert_eq!(cache.read("empty").await.unwrap(), None);
     assert!(cache.read("missing").await.is_err());
-    assert!(cache
-        .once("broken".into(), true, |_deadline| async {
-            Err(Failure::Bake("source failed".into()))
-        })
-        .await
-        .is_err());
-    assert!(cache
-        .once("broken".into(), true, |_deadline| async { Ok(()) })
-        .await
-        .is_err());
+    assert!(
+        cache
+            .once("broken".into(), true, |_deadline| async {
+                Err(Failure::Bake("source failed".into()))
+            })
+            .await
+            .is_err()
+    );
+    assert!(
+        cache
+            .once("broken".into(), true, |_deadline| async { Ok(()) })
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]

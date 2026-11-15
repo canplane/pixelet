@@ -22,11 +22,11 @@ libm.workspace = true
 xpute-link.workspace = true
 xpute-guest.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
-# Whether the GPU's host takes a frame now (xpute_gpu_guest::admit::frame), which
+# Whether the GPU's host takes a frame now (pxl_gpu_guest::admit::frame), which
 # the renderer is told each frame (domain/scene/stage.rs).
-xpute-gpu-guest.workspace = true
+pxl-gpu-guest.workspace = true
 # The GPU's words both sides take: a program's settings and the stream's enums.
-xpute-gpu-link.workspace = true
+pxl-gpu-link.workspace = true
 pxl-spec.workspace = true
 pxl-engine.workspace = true
 pxl-content.workspace = true

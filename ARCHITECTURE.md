@@ -501,6 +501,7 @@ thing runs:
 
 ```text
   rust/spec/            pxl-spec, the model every crate shares
+  rust/gpu/             the GPU: pxl-gpu-link, -guest and -host
   rust/client/engine/   pxl-engine, what the CPU and the GPU both compute
   rust/client/content/  pxl-content, the content: decor, caves, clouds
   rust/client/global/   pxl-global, the global the core's state lives in
@@ -510,6 +511,7 @@ thing runs:
   rust/server/          the servers and the bakes, one crate a folder
   rust/tool/            pxl-tool, the generator and the checks
   ts/client/            the app: the UI, its services and its runtime
+  ts/gpu/               @pxl/gpu, the GPU's link, page host and device module
   ts/server/edge/       the Cloudflare Worker in front of everything
   spec/                 the specs and WIT both languages' code is
                         generated from

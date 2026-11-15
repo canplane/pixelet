@@ -19,7 +19,7 @@ use crate::frame::shader::record::{COMPUTE_DAMAGE_RECT, COMPUTE_RECT_ARGS, COMPU
 pub use crate::frame::shader::word::screen::TILE as SIDE;
 use crate::frame::shader::word::screen::{self, TILES_WORDS};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, Group, PassDesc, RenderContext,
+    Gpu, Group, PassDesc, RenderContext, buf_entry, buffer_usage, bytes, release, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::spec::span::GpuSpanName;
@@ -129,19 +129,13 @@ impl TileGrid {
         damage_frame_cnt: u32,
         span: GpuSpanName,
     ) -> TileGrid {
-        let new_damage_rect = g.buf(
-            word_bytes(4),
-            buffer_usage::STORAGE | buffer_usage::COPY_DST,
-        );
+        let new_damage_rect = g.buf(word_sz(4), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         let uniform = g.buf(
-            word_bytes(TILES_WORDS),
+            word_sz(TILES_WORDS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let rect_args = (damage_frame_cnt == 1).then(|| {
-            let args = g.buf(
-                word_bytes(4),
-                buffer_usage::STORAGE | buffer_usage::INDIRECT,
-            );
+            let args = g.buf(word_sz(4), buffer_usage::STORAGE | buffer_usage::INDIRECT);
             let pass = pipelines.build_compute(g, COMPUTE_RECT_ARGS);
             let group = g.frame_group(
                 pass.layouts[0],
@@ -161,19 +155,13 @@ impl TileGrid {
             now: 0,
             asked_at: 0,
             damage_pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_MARK),
-            damage_uniform: g.buf(
-                word_bytes(8),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
+            damage_uniform: g.buf(word_sz(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
             damage_cnt: 0,
             damage_group: Group::default(),
             new_damage_rect,
             rect_args,
             mask_number: 0,
-            damage_rect: g.buf(
-                word_bytes(4),
-                buffer_usage::STORAGE | buffer_usage::COPY_DST,
-            ),
+            damage_rect: g.buf(word_sz(4), buffer_usage::STORAGE | buffer_usage::COPY_DST),
             damage_rect_pipeline: pipelines.build_compute(g, COMPUTE_DAMAGE_RECT),
         }
     }
@@ -188,7 +176,7 @@ impl TileGrid {
         self.size = size;
         let [across, down] = self.square_cnt();
         release(self.changed_at);
-        self.changed_at = g.buf(word_bytes((across * down) as usize), buffer_usage::STORAGE);
+        self.changed_at = g.buf(word_sz((across * down) as usize), buffer_usage::STORAGE);
         let entries = [
             buf_entry(0, self.damage_uniform),
             buf_entry(1, self.changed_at),

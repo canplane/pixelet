@@ -28,8 +28,8 @@ infra/
 
 | Service     | Port (ext:int) | Holds                        | Image          |
 | :---------- | :------------- | :--------------------------- | :------------- |
-| **db-main** | 5432:5432      | nothing yet                  | PostgreSQL 16  |
-| **db-geo**  | 5433:5432      | three sources, for the bakes | PostGIS 16-3.4 |
+| **db-main** | 5432:5432      | nothing yet                  | PostgreSQL 18  |
+| **db-geo**  | 5433:5432      | three sources, for the bakes | PostGIS 18-3.7 |
 
 pxl-api owns db-main and probes it at boot, but no route reads it yet. pxl-geo
 reads db-geo through `DB_GEO_URL`. All spatial data is in EPSG:3857. Locally the
@@ -37,7 +37,9 @@ passwords come from `infra/local/.env` and `ADMIN_TOKEN` from `rust/server/commo
 production keeps its own in `infra/prod/.env`.
 
 db-geo's volume is the only copy of hours of ingest, so it is never removed
-with `down -v` ([geo/README.md](./geo/README.md)).
+with `down -v` ([geo/README.md](./geo/README.md)). Moving the image's
+PostgreSQL major means a new volume, filled again by the ingests, since the
+project carries no data across.
 
 ## 2. Filling db-geo
 
@@ -106,7 +108,7 @@ it goes out in the same step: stop `api` (`docker compose stop api`), restore,
 then deploy the server.
 
 Dump with the local container's own `pg_dump`, since a newer one on the host
-writes a format that production's PostgreSQL 16 cannot restore:
+writes a format that production's PostgreSQL 18 cannot restore:
 
 ```sh
 set -a; . ./infra/local/.env; set +a

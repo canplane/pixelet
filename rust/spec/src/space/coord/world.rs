@@ -5,9 +5,9 @@
 //! wraps around where the world does not.
 
 use super::aabb::Aabb;
-use super::q3::{from_real, FRAC_W, ONE, Q3};
+use super::q3::{FRAC_W, ONE, Q3, from_real};
 use super::v3::V3;
-use super::zoom::{shamt, starts, units, Zoom, EXTENT, UNIT_ZOOM};
+use super::zoom::{EXTENT, UNIT_ZOOM, Zoom, shamt, starts, units};
 
 /// Sea level, in leaf cells: the elevation elevations are counted from, where the water stands and
 /// under which the Earth past the service area is rock.

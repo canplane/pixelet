@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/ios/KeyboardDock.swift
+// @pxl/client/modules/platform/ios/KeyboardDock.swift
 
 import ExpoModulesCore
 import UIKit

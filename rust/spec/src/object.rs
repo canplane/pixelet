@@ -21,7 +21,7 @@ impl Class {
     pub const ALL: [Class; 1] = [Class::MarkerText];
 }
 
-use crate::asset::id::{kind_of, AssetId, Kind};
+use crate::asset::id::{AssetId, Kind, kind_of};
 
 /// None for an id that carries nothing beyond itself.
 pub fn class_of(id: AssetId) -> Option<Class> {

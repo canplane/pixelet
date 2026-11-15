@@ -12,11 +12,11 @@ pub mod way;
 
 use postgres::Client;
 use pxl_spec::bake::separation::Form;
-use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{G3857, merc_from_u};
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, MIN_ZOOM};
 
-use crate::terrain::repository::TerrainRepository;
 use crate::terrain::CELL_U;
+use crate::terrain::repository::TerrainRepository;
 use source::Store;
 
 pub use solve::solve_tile;

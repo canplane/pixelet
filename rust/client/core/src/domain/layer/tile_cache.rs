@@ -583,10 +583,9 @@ impl<L: Base> TileCache<L> {
             .get_mut(&p)
             .and_then(|e| e.resident.as_mut())
             .filter(|h| h.slot.is_some())
+            && !core::mem::replace(&mut h.refetch, true)
         {
-            if !core::mem::replace(&mut h.refetch, true) {
-                self.changed.push(p);
-            }
+            self.changed.push(p);
         }
     }
 
@@ -599,7 +598,7 @@ impl<L: Base> TileCache<L> {
     pub(crate) fn asked_again(&self, counts: impl Fn(Quadrant) -> bool) -> u32 {
         self.tiles
             .iter()
-            .filter(|(&p, e)| {
+            .filter(|&(&p, e)| {
                 e.asked && e.resident.as_ref().is_some_and(|h| h.refetch) && counts(p)
             })
             .count() as u32

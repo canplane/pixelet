@@ -32,12 +32,12 @@ use std::path::Path;
 
 use wit_parser::{Function, InterfaceId, PackageId, Resolve, Type, TypeDefKind, TypeId, TypeOwner};
 
-use xpute_gen::spec::{cpp_enum, cpp_ident, cpp_member, mark, pascal, snake, Includes, Member};
+use xpute_gen::spec::{Includes, Member, cpp_enum, cpp_ident, cpp_member, mark, pascal, snake};
 
 use super::{
-    cases, discriminant, escaped, folded, is_async, is_lent, is_serving, kind, members,
-    method_const, method_name, object_method, package_name, params, plus, rec_layout, rs_name,
-    serving, type_name, variant_layout, Gen, Kind, Obj, Role, WitTarget, TOOL,
+    Gen, Kind, Obj, Role, TOOL, WitTarget, cases, discriminant, escaped, folded, is_async, is_lent,
+    is_serving, kind, members, method_const, method_name, object_method, package_name, params,
+    plus, rec_layout, rs_name, serving, type_name, variant_layout,
 };
 
 /// Where a name the bindings take from the library is declared: its
@@ -428,7 +428,9 @@ impl Header<'_> {
     fn cabi(&self, n: &str, sz: usize, align: usize, store: &str) -> String {
         self.include("cstddef");
         let (lower, lift) = (self.rt_use(CABI, "Lower"), self.rt_use(CABI, "Lift"));
-        format!("    static constexpr std::size_t SZ = {sz};\n    static constexpr std::size_t ALIGN = {align};\n\n    void store({lower} &w, std::size_t at) const noexcept {{\n{store}    }}\n\n    static {n} load({lift} &r, std::size_t at) noexcept {{\n")
+        format!(
+            "    static constexpr std::size_t SZ = {sz};\n    static constexpr std::size_t ALIGN = {align};\n\n    void store({lower} &w, std::size_t at) const noexcept {{\n{store}    }}\n\n    static {n} load({lift} &r, std::size_t at) noexcept {{\n"
+        )
     }
 
     /// The interface's handle and its methods' numbers, its types, and the
@@ -438,7 +440,13 @@ impl Header<'_> {
         let g = self.g;
         let mut out = String::new();
         if !objs.is_empty() {
-            let _ = writeln!(out, "// The interface's handle, named by `{}` (frame.json5 `NAMED`).\ninline constexpr {} HANDLE = {:#x};\n", g.at(), self.rt_use(LINK, "Handle"), g.handle());
+            let _ = writeln!(
+                out,
+                "// The interface's handle, named by `{}` (frame.json5 `NAMED`).\ninline constexpr {} HANDLE = {:#x};\n",
+                g.at(),
+                self.rt_use(LINK, "Handle"),
+                g.handle()
+            );
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
@@ -521,11 +529,7 @@ impl Header<'_> {
                     // own struct.
                     let case = |c: &str| {
                         let p = pascal(c);
-                        if p == n {
-                            p + "_"
-                        } else {
-                            p
-                        }
+                        if p == n { p + "_" } else { p }
                     };
                     let _ = writeln!(out, "struct {n} {{");
                     for (c, k) in &cases {
@@ -808,9 +812,18 @@ impl Header<'_> {
             self.errno("enosys")
         );
         if o.resource {
-            let _ = writeln!(out, "// The object over `implementation`, for an opener or a function to answer.\ninline std::unique_ptr<{}> {}(std::unique_ptr<{t}> implementation) {{\n    return std::make_unique<{obj}>(std::move(implementation));\n}}\n", self.rt_use(LINK, "Object"), name(&o.name));
+            let _ = writeln!(
+                out,
+                "// The object over `implementation`, for an opener or a function to answer.\ninline std::unique_ptr<{}> {}(std::unique_ptr<{t}> implementation) {{\n    return std::make_unique<{obj}>(std::move(implementation));\n}}\n",
+                self.rt_use(LINK, "Object"),
+                name(&o.name)
+            );
         } else {
-            let _ = writeln!(out, "// Serves `implementation` under the interface's handle.\ninline void mount(std::unique_ptr<{t}> implementation) {{\n    {}(HANDLE, std::make_unique<{obj}>(std::move(implementation)));\n}}\n", self.rt_use(GUEST_LINK, "mount_named"));
+            let _ = writeln!(
+                out,
+                "// Serves `implementation` under the interface's handle.\ninline void mount(std::unique_ptr<{t}> implementation) {{\n    {}(HANDLE, std::make_unique<{obj}>(std::move(implementation)));\n}}\n",
+                self.rt_use(GUEST_LINK, "mount_named")
+            );
         }
         Ok(())
     }

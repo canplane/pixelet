@@ -72,10 +72,10 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 
 mod _rt {
     pub(super) use std::rc::Rc;
+    pub(super) use xpute_host::abi::fs::types::ErrorCode;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
     pub(super) use xpute_link::{
         Handle, Lift, Lower, Method, Object, Packet, Reply, Return, Side, Tag,
     };
-    pub(super) use xpute_native_host::abi::fs::types::ErrorCode;
 }

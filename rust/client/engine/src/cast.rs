@@ -21,14 +21,14 @@
 //! From a child it steps to the next child across the face it leaves by, so no frame holds
 //! its siblings.
 
-use crate::answer::{box_of, fill_eighths, fills, side, In, Kind, BOX_BITS, BOX_STEPS, EMPTY};
+use crate::answer::{BOX_BITS, BOX_STEPS, EMPTY, In, Kind, box_of, fill_eighths, fills, side};
 use crate::axis;
 use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{starts, Zoom, FINEST_ZOOM, HEIGHT_BITS, MIN_ZOOM, UNIT_ZOOM};
-use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, HEIGHT_BITS, MIN_ZOOM, UNIT_ZOOM, Zoom, starts};
+use pxl_spec::space::layer::lattice::{GROUND, draw_dist};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical axis, as a
 /// projection puts a drawn pixel's middle: its tangents are those of the screen's half-angles
@@ -181,19 +181,11 @@ impl Ray {
 /// and no number the walk compares is NaN (`Ray::new`), so the comparison is
 /// the whole rule.
 fn greater(a: f32, b: f32) -> f32 {
-    if a > b {
-        a
-    } else {
-        b
-    }
+    if a > b { a } else { b }
 }
 
 fn lesser(a: f32, b: f32) -> f32 {
-    if a < b {
-        a
-    } else {
-        b
-    }
+    if a < b { a } else { b }
 }
 
 /// A node as the walk holds it, each axis an integer: its corner in its root on the finest
@@ -390,11 +382,7 @@ fn units(p: u32, og: u32, roots: i32) -> f32 {
 /// A node's side at zoom `z`, less one, on the finest grid: the bits under its corner's,
 /// 2^32 − 1 at a root, whose side no u32 holds.
 fn under(z: Zoom) -> u32 {
-    if z >= FINEST_ZOOM {
-        0
-    } else {
-        u32::MAX >> z
-    }
+    if z >= FINEST_ZOOM { 0 } else { u32::MAX >> z }
 }
 
 /// The world's index on axis `a` of the node at zoom `z` whose corner is `c` in the root
@@ -970,11 +958,7 @@ pub fn walk_at_most<Q: Query>(
                         lesser(lesser(lesser(ray.t_max, bx.1), by.1), bz.1),
                     );
                     near = [bx.0, by.0, bz.0];
-                    if b1 > b0 {
-                        End::Hit
-                    } else {
-                        End::Miss
-                    }
+                    if b1 > b0 { End::Hit } else { End::Miss }
                 }
                 Kind::Cell
                     if stops
@@ -1006,11 +990,7 @@ pub fn walk_at_most<Q: Query>(
                     } else {
                         until == Until::Transparent || meets
                     };
-                    if meets && narrow {
-                        End::Hit
-                    } else {
-                        End::Miss
-                    }
+                    if meets && narrow { End::Hit } else { End::Miss }
                 }
             };
             if end != End::Miss {
@@ -1251,10 +1231,10 @@ pub(crate) mod tests {
         }
         assert!(checked > 500_000);
     }
-    use crate::answer::{fill_word, BOX_WHOLE};
+    use crate::answer::{BOX_WHOLE, fill_word};
     use crate::content::Sample;
     use pxl_spec::asset::cube::Sentinel;
-    use pxl_spec::share::{eighths, EIGHTH_CNT, FULL};
+    use pxl_spec::share::{EIGHTH_CNT, FULL, eighths};
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of its cube, with air
     /// around it.

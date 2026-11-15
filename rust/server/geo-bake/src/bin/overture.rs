@@ -95,8 +95,14 @@ const TYPES: &[Type] = &[
         columns: &[
             SUBTYPE,
             CLASS,
-            ("height", "DOUBLE PRECISION GENERATED ALWAYS AS ((properties->>'height')::float8) STORED"),
-            ("num_floors", "INTEGER GENERATED ALWAYS AS (trunc((properties->>'num_floors')::float8)::int) STORED"),
+            (
+                "height",
+                "DOUBLE PRECISION GENERATED ALWAYS AS ((properties->>'height')::float8) STORED",
+            ),
+            (
+                "num_floors",
+                "INTEGER GENERATED ALWAYS AS (trunc((properties->>'num_floors')::float8)::int) STORED",
+            ),
         ],
         idxs: &["class"],
     },
@@ -128,7 +134,10 @@ const TYPES: &[Type] = &[
     Type {
         overture: "place",
         table: "overture_places",
-        columns: &[("name", "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED")],
+        columns: &[(
+            "name",
+            "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED",
+        )],
         idxs: &[
             "USING GIN (properties)",
             "USING GIN (name gin_trgm_ops)",
@@ -141,13 +150,34 @@ const TYPES: &[Type] = &[
         columns: &[
             SUBTYPE,
             CLASS,
-            ("road_flags", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'road_flags', 'null')) STORED"),
-            ("rail_flags", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'rail_flags', 'null')) STORED"),
-            ("level_rules", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'level_rules', 'null')) STORED"),
-            ("width_rules", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'width_rules', 'null')) STORED"),
-            ("access_restrictions", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'access_restrictions', 'null')) STORED"),
-            ("subclass", "TEXT GENERATED ALWAYS AS (properties->>'subclass') STORED"),
-            ("subclass_rules", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'subclass_rules', 'null')) STORED"),
+            (
+                "road_flags",
+                "JSONB GENERATED ALWAYS AS (NULLIF(properties->'road_flags', 'null')) STORED",
+            ),
+            (
+                "rail_flags",
+                "JSONB GENERATED ALWAYS AS (NULLIF(properties->'rail_flags', 'null')) STORED",
+            ),
+            (
+                "level_rules",
+                "JSONB GENERATED ALWAYS AS (NULLIF(properties->'level_rules', 'null')) STORED",
+            ),
+            (
+                "width_rules",
+                "JSONB GENERATED ALWAYS AS (NULLIF(properties->'width_rules', 'null')) STORED",
+            ),
+            (
+                "access_restrictions",
+                "JSONB GENERATED ALWAYS AS (NULLIF(properties->'access_restrictions', 'null')) STORED",
+            ),
+            (
+                "subclass",
+                "TEXT GENERATED ALWAYS AS (properties->>'subclass') STORED",
+            ),
+            (
+                "subclass_rules",
+                "JSONB GENERATED ALWAYS AS (NULLIF(properties->'subclass_rules', 'null')) STORED",
+            ),
         ],
         idxs: &["(subtype, class)"],
     },
@@ -993,7 +1023,9 @@ fn items(list: &dyn Array) -> Result<Value, String> {
 /// rather than refused by the projection.
 fn projected(wkb: &str) -> String {
     let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(BOUNDS.max[1]));
-    format!("ST_Transform(ST_ClipByBox2D(ST_GeomFromWKB({wkb}, 4326), ST_MakeEnvelope(-180, -{lat:?}, 180, {lat:?}, 4326)), 3857)")
+    format!(
+        "ST_Transform(ST_ClipByBox2D(ST_GeomFromWKB({wkb}, 4326), ST_MakeEnvelope(-180, -{lat:?}, 180, {lat:?}, 4326)), 3857)"
+    )
 }
 
 const CATALOG_SQL: &str = "
@@ -1008,7 +1040,9 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
 ";
 
 fn table(ty: &Type, t: &str) -> String {
-    let mut sql = format!("CREATE TABLE IF NOT EXISTS {t} (\n  gers_id TEXT NOT NULL PRIMARY KEY,\n  properties JSONB NOT NULL,\n  release TEXT NOT NULL,\n");
+    let mut sql = format!(
+        "CREATE TABLE IF NOT EXISTS {t} (\n  gers_id TEXT NOT NULL PRIMARY KEY,\n  properties JSONB NOT NULL,\n  release TEXT NOT NULL,\n"
+    );
     for (name, def) in ty.columns {
         sql.push_str(&format!("  {name} {def},\n"));
     }

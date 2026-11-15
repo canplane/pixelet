@@ -27,12 +27,12 @@
 //! object is drawn from the tile over it, whose cells there are open water;
 //! at the source's top, such a tile is void.
 
-use crate::domain::layer::terrain::fixed::{
-    cells_off, ele_off, fill_off, folds_off, CELLS_ARR_BYTES, FOLDS_ARR_BYTES, RANGE,
-};
-use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run};
-use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
+use crate::domain::layer::terrain::fixed::{
+    CELLS_ARR_SZ, FOLDS_ARR_SZ, RANGE, cells_off, ele_off, fill_off, folds_off,
+};
+use crate::domain::layer::terrain::pool::{PoolRefusal, Run, way_pool};
+use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::Exit;
@@ -42,8 +42,8 @@ use crate::sys::io::source::ServiceArea;
 use crate::sys::sched::{self, invalidate};
 use pxl_engine::clipmap;
 use pxl_engine::clipmap::{
-    BrickSource, Entry, Lookup, BRICK_MIP_LAST, BRICK_WORDS, CLIP_LEVEL_CNT, ENTRY_CNT,
-    EYE_CLIP_LEVEL_CNT, FIRST_CELL_ZOOM, ROOT_AT, SLOT_CNT, SPANS_ACROSS, SPANS_WORDS,
+    BRICK_MIP_LAST, BRICK_WORDS, BrickSource, CLIP_LEVEL_CNT, ENTRY_CNT, EYE_CLIP_LEVEL_CNT, Entry,
+    FIRST_CELL_ZOOM, Lookup, ROOT_AT, SLOT_CNT, SPANS_ACROSS, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground;
@@ -53,13 +53,13 @@ use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, brick_pairs, cells_of, decode_into, TerrainTile, ELE_COLUMN, FOLD_COLUMN,
+    ELE_COLUMN, FOLD_COLUMN, TerrainTile, brick_lines, brick_pairs, cells_of, decode_into,
 };
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
 use pxl_spec::ground::word;
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, Zoom, units};
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -113,7 +113,7 @@ struct ClipLevel {
 
 /// Where a brick of the ground is held: its array of cells in
 /// the terrain's fixed range (`cells`) and its row of the GPU's bricks (pxl-render
-/// ray/ground.rs `GROUND_BYTES`). A brick at a zoom has one slot, however
+/// ray/ground.rs `GROUND_SZ`). A brick at a zoom has one slot, however
 /// many clip levels want it.
 ///
 /// Clip levels at one zoom want a given brick in the same entry
@@ -332,11 +332,11 @@ fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
 /// Every brick's planes on the CPU, in the terrain's fixed range (fixed.rs); a test
 /// may set its own. The bricks' spans live on the heap instead (pool.rs).
 struct BrickMemory {
-    /// Each brick's whole words (`clipmap::BRICK_WORDS`), `CELLS_ARR_BYTES`
+    /// Each brick's whole words (`clipmap::BRICK_WORDS`), `CELLS_ARR_SZ`
     /// apart.
     pub cells: &'static mut [u32],
     /// Each brick's folds, one word of four asset ids per cell in
-    /// its cells' order, `FOLDS_ARR_BYTES` apart.
+    /// its cells' order, `FOLDS_ARR_SZ` apart.
     pub folds: &'static mut [u32],
 }
 
@@ -348,8 +348,8 @@ fn planes() -> &'static mut BrickMemory {
         // at boot.
         unsafe {
             BrickMemory {
-                cells: RANGE.arr(cells_off(0), (SLOT_CNT * CELLS_ARR_BYTES / 4) as usize),
-                folds: RANGE.arr(folds_off(0), (SLOT_CNT * FOLDS_ARR_BYTES / 4) as usize),
+                cells: RANGE.arr(cells_off(0), (SLOT_CNT * CELLS_ARR_SZ / 4) as usize),
+                folds: RANGE.arr(folds_off(0), (SLOT_CNT * FOLDS_ARR_SZ / 4) as usize),
             }
         }
     })
@@ -392,19 +392,19 @@ pub(crate) fn pool_top() -> u32 {
 /// Slot `b`'s words: the brick's whole words from its first, the way
 /// pxl-engine reads a brick's words (`fill::column_of`).
 fn cells(b: u32) -> &'static [u32] {
-    let at = (b * CELLS_ARR_BYTES / 4) as usize;
+    let at = (b * CELLS_ARR_SZ / 4) as usize;
     &planes().cells[at..at + BRICK_WORDS as usize]
 }
 
 /// Only the fill that holds the slot writes these words.
 fn cells_mut(b: u32) -> &'static mut [u32] {
-    let at = (b * CELLS_ARR_BYTES / 4) as usize;
+    let at = (b * CELLS_ARR_SZ / 4) as usize;
     &mut planes().cells[at..at + BRICK_WORDS as usize]
 }
 
 /// Slot `b`'s folds, four asset ids per cell.
 fn folds(b: u32) -> &'static [u32] {
-    let at = (b * FOLDS_ARR_BYTES / 4) as usize;
+    let at = (b * FOLDS_ARR_SZ / 4) as usize;
     &planes().folds[at..at + BRICK_CELL_CNT as usize]
 }
 
@@ -830,7 +830,7 @@ const _: () = assert!(
 );
 
 /// The room a brick's fill works in, arrays in the terrain's fixed range (fixed.rs
-/// `FILL_ARRAY_BYTES`): a tile's samples and its spans; and its lines, laid out for the fill
+/// `FILL_ARRAY_SZ`): a tile's samples and its spans; and its lines, laid out for the fill
 /// alone, taken from the heap as it begins and given back when it ends (`begin`, `end`).
 struct FillScratch {
     ele: &'static mut [i16],
@@ -906,7 +906,7 @@ pub(crate) fn cut(tile: Quadrant, pkt: &[u8]) {
 /// Fills slot `b`'s folds from `four`, which gives the fold of
 /// each cell of the tile, for the brick lying at `place` in the tile.
 fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
-    let at = (b * FOLDS_ARR_BYTES / 4) as usize;
+    let at = (b * FOLDS_ARR_SZ / 4) as usize;
     let side = GROUND.tile_cells() as usize;
     let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
     let folds = &mut planes().folds[at..at + BRICK_CELL_CNT as usize];
@@ -987,11 +987,7 @@ static NO_LINES: [u32; brick::LINES_ENTRIES_AT as usize] = [0; brick::LINES_ENTR
 
 /// A brick's lines as its fill reads them, or none (`NO_LINES`).
 fn lines_read(lines: &[u32]) -> &[u32] {
-    if lines.is_empty() {
-        &NO_LINES
-    } else {
-        lines
-    }
+    if lines.is_empty() { &NO_LINES } else { lines }
 }
 
 /// Runs the next part of the fill going on, or begins the next due brick. A

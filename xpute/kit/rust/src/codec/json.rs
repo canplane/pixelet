@@ -348,11 +348,12 @@ impl Iterator for JsonCharIter<'_> {
                 let hi = hex4(rest)?;
                 rest = &rest[4..];
                 let mut unit = hi;
-                if (0xd800..0xdc00).contains(&hi) && rest.starts_with("\\u") {
-                    if let Some(lo) = hex4(&rest[2..]).filter(|lo| (0xdc00..0xe000).contains(lo)) {
-                        unit = 0x10000 + ((hi - 0xd800) << 10) + (lo - 0xdc00);
-                        rest = &rest[6..];
-                    }
+                if (0xd800..0xdc00).contains(&hi)
+                    && rest.starts_with("\\u")
+                    && let Some(lo) = hex4(&rest[2..]).filter(|lo| (0xdc00..0xe000).contains(lo))
+                {
+                    unit = 0x10000 + ((hi - 0xd800) << 10) + (lo - 0xdc00);
+                    rest = &rest[6..];
                 }
                 char::from_u32(unit).unwrap_or('\u{fffd}')
             }

@@ -32,7 +32,7 @@ use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::change;
-use crate::domain::scene::character::companion::{self, companion_step, Camera};
+use crate::domain::scene::character::companion::{self, Camera, companion_step};
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::environment_step;
@@ -51,7 +51,7 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::perf::frame::EFFECT_CNT;
 use crate::perf::record::{perf_recording, timed};
-use crate::perf::report::{perf_frame, set_renderer_frame, CpuSample};
+use crate::perf::report::{CpuSample, perf_frame, set_renderer_frame};
 use crate::perf::window::perf_follow;
 use crate::pointer;
 use crate::sys::io::demand::Stream;
@@ -61,10 +61,10 @@ use crate::sys::sched::display;
 use crate::sys::sched::tick::{TickContext, TickReport};
 use crate::sys::sched::{self, executor, invalidate};
 use pxl_global::Global;
+use pxl_gpu_guest::abi::vsync;
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_gpu_guest::abi::vsync;
 use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -323,7 +323,7 @@ async fn frame_task() {
             }
         }
         // A frame whose stream the host still holds, or that the GPU cannot
-        // take without blocking (`xpute_gpu_guest::admit::frame`), does not
+        // take without blocking (`pxl_gpu_guest::admit::frame`), does not
         // run, is counted by why, and asks for the next, so the renderer is
         // never handed a frame it would have to put off.
         let refused = REFUSED.get(Refused::default);

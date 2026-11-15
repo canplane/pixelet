@@ -5,7 +5,7 @@
 //! `u32`.
 
 use crate::terrain::CELL_U;
-use pxl_spec::asset::cube::{Ground, BASE};
+use pxl_spec::asset::cube::{BASE, Ground};
 use pxl_spec::bake::tile::terrain::GroundCells;
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::layer::lattice::{CELL_CENTER, GROUND, TILE_CELLS};

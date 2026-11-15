@@ -5,10 +5,10 @@
 //! them with the file each names, by its number after ASSET, and its extent
 //! (pxl-spec asset/catalog.rs reads the layout), as hex, which the host serves.
 
-use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::data::{DataSpec, table_outputs};
 
 use super::ingest::{file_number, files};
-use super::{description, read, Node, Output};
+use super::{Node, Output, description, read};
 use crate::root;
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in

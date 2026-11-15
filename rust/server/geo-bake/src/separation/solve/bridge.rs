@@ -614,7 +614,7 @@ fn deck_panel(
         members
             .iter()
             .zip(&about)
-            .filter(|(_, &a)| a)
+            .filter(|&(_, &a)| a)
             .map(|(m, _)| m)
     };
     // A long flat span rises to its layer.
@@ -1130,10 +1130,10 @@ fn rail_decks(
                         floor = floor.max(ground + o.headroom);
                     }
                 }
-                if let Some(&(lower, lower_layer)) = laid.get(&cell_key(c)) {
-                    if lower_layer < layer {
-                        over = lower + scale.c(f64::from(STACKED_DECK_HEADROOM_M));
-                    }
+                if let Some(&(lower, lower_layer)) = laid.get(&cell_key(c))
+                    && lower_layer < layer
+                {
+                    over = lower + scale.c(f64::from(STACKED_DECK_HEADROOM_M));
                 }
                 cells.push((absolute(r.at[j]), ground, floor, over, layer));
             }

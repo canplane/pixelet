@@ -28,23 +28,23 @@ use pxl_spec::share::EIGHTH_CNT;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
-    array_view, cross, holds_node, mix, read_texture, texture, unit, Gpu, KindCount, LightBox,
-    Tally,
+    Gpu, KindCount, LightBox, Tally, array_view, cross, holds_node, mix, read_texture, texture,
+    unit,
 };
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::Node;
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
-use pxl_engine::{eye, face, node_cache, raster, ray, record, WORKGROUP_CAP};
+use pxl_engine::{WORKGROUP_CAP, eye, face, node_cache, raster, ray, record};
 use pxl_render::frame::shader::record::{
-    compute, src, COMPUTE_FACE, COMPUTE_LIGHT_REC_HITS, COMPUTE_REC_FACES, COMPUTE_REC_HITS,
-    SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_HIT,
+    COMPUTE_FACE, COMPUTE_LIGHT_REC_HITS, COMPUTE_REC_FACES, COMPUTE_REC_HITS, SHADER_CELL,
+    SHADER_LIGHT_CELL, SHADER_SAMPLE_HIT, compute, src,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 
-use real_world::{q8, store_of, Built, WorldBuffer, FINEST};
+use real_world::{Built, FINEST, WorldBuffer, q8, store_of};
 
 /// The leaf cell the world is built about, 300 cells west of X's seam.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
@@ -619,7 +619,7 @@ fn faces_want(
 /// A word of the node cache, named for a message.
 fn cache_word(k: usize) -> String {
     use node_cache::{
-        ENTRIES_AT, ENTRY_WORDS, KEYS_AT, RECS_AT, R_DRAWN, R_FACES, R_WORDS, STATES_AT,
+        ENTRIES_AT, ENTRY_WORDS, KEYS_AT, R_DRAWN, R_FACES, R_WORDS, RECS_AT, STATES_AT,
     };
     let k = k as u32;
     if k < KEYS_AT {

@@ -14,7 +14,7 @@
 use pxl_global::Global;
 
 use crate::domain::scene::param;
-use crate::domain::setting::{settings, ResMode};
+use crate::domain::setting::{ResMode, settings};
 
 /// How a frame was paced.
 #[derive(Clone, Copy)]

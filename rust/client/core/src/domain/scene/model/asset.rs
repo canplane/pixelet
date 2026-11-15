@@ -19,14 +19,13 @@
 //! (registry.rs `Model::seal`). The model joins the registry, and the table
 //! here, only once it is whole.
 
-use core::future::Future;
 use core::ops::Range;
 use std::rc::Rc;
 
 use fnv::FnvHashMap;
 
 use pxl_global::Global;
-use pxl_render::asset::{parse_gltf, scene_nodes, world_mats, Gltf, GltfPrimitive};
+use pxl_render::asset::{Gltf, GltfPrimitive, parse_gltf, scene_nodes, world_mats};
 use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
@@ -37,7 +36,7 @@ use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate};
-use pxl_spec::asset::catalog::{Slot, SLOT_CNT};
+use pxl_spec::asset::catalog::{SLOT_CNT, Slot};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::XputeError;

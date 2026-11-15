@@ -7,7 +7,7 @@
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
 
-use crate::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
+use crate::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
 use fnv::FnvHashMap;
 use std::borrow::Cow;
 
@@ -16,7 +16,7 @@ use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
 use crate::bake::publication::BaseKind;
-use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
+use crate::bake::tile::{Occupancy, StringTable, Tile, occupancy_of};
 use crate::division::Subtype;
 use crate::ground::majority;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
@@ -28,12 +28,12 @@ use xpute_kit::wire::xtp::StrList;
 pub const DIVISION_LEAF: Zoom = 12;
 
 /// The most a packet takes, a tile past it failing its bake (`encode`).
-pub(crate) const MAX_PKT_BYTES: usize = 4 << 20;
+pub(crate) const PKT_CAP: u32 = 4 << 20;
 
 /// A cell in no division, and a division with no parent.
 pub const NONE: u32 = u32::MAX;
 
-/// A tile's cells, and so the room a client decodes them into.
+/// A tile's cells, and so the slot a client decodes them into.
 pub const CELL_CNT: usize = (TILE_CELLS * TILE_CELLS) as usize;
 
 /// The cells; the occupancy; per division its id, kind, parent, prominence
@@ -67,7 +67,7 @@ pub struct Division<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DivisionTile {
     /// Each cell's division, by `GROUND.cell_idx`; `NONE` in none. The bake owns its cells; a
-    /// client's are borrowed from the room it decoded them into.
+    /// client's are borrowed from the slot it decoded them into.
     pub cells: Cow<'static, [u32]>,
     ids: StringTable,
     kinds: Vec<Subtype>,
@@ -198,7 +198,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, XputeError> {
             &areas,
             &names,
         ),
-        MAX_PKT_BYTES as u32,
+        PKT_CAP,
     )
 }
 
@@ -270,17 +270,17 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, XputeError> {
     })
 }
 
-/// Decoded straight into its resident room, `CELL_CNT` long: its cells; its
-/// divisions, a handful, on the heap.
-pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile, XputeError> {
+/// Decoded straight into `cells`, the client's, `CELL_CNT` long: its cells;
+/// its divisions, a handful, on the heap.
+pub fn decode_into(pkt: &[u8], cells: &'static mut [u32]) -> Result<DivisionTile, XputeError> {
     let v = read_tile(pkt)?;
-    if room.len() != CELL_CNT {
+    if cells.len() != CELL_CNT {
         return Err(malformed());
     }
     let tile = tile_of(&v);
-    room.copy_from_slice(v.cells);
+    cells.copy_from_slice(v.cells);
     Ok(DivisionTile {
-        cells: Cow::Borrowed(room),
+        cells: Cow::Borrowed(cells),
         ..tile
     })
 }

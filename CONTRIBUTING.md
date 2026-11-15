@@ -9,7 +9,8 @@ Development takes a Mac: the iPhone build needs Xcode, and Safari stands in for
 the iPhone's browser.
 
 You need GNU Make, Python 3.11 or newer, [Node](https://nodejs.org/) at the
-version `ts/.tool-versions` pins with pnpm (`corepack enable`), Rust through
+version `ts/.tool-versions` pins with pnpm, which runs the version
+`ts/package.json` names in `packageManager`, Rust through
 [rustup](https://rustup.rs/) (the toolchain is pinned in
 `rust/rust-toolchain.toml`), Binaryen's `wasm-opt`, Docker for the local
 databases. `make install` brings the package the Python scripts read the specs
@@ -66,7 +67,7 @@ ui.perfetto.dev.
 The device app takes every route from the live site. Its native projects are
 generated, not kept, and the core is compiled as a step of the native build.
 
-On Android, with JDK 17 and the NDK installed:
+On Android, with a JDK from 17 up and the NDK installed:
 
 ```bash
 make install
@@ -113,9 +114,10 @@ checks and tests of what changed since `base` reaches (the working tree's
 changes by default), and `--list` names them without running them. A deploy
 adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
 `test-xpute`; and
-`test-gpu`, the renderer's passes on this machine's GPU. A change that touches a
-GPU call (`xpute/gpu/link/spec/`, xpute's `gpu` crates and packages, or how
-pxl-render encodes) also takes `(cd xpute && ../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute test:gpu:web`,
+`test-gpu`, the GPU's crates and the renderer's passes on this machine's GPU.
+A change that touches a
+GPU call (`spec/gpu/`, the GPU's crates under `rust/gpu/` and its
+package under `ts/gpu/`, or how pxl-render encodes) also takes `(cd rust && ../script/perf/mac.py cargo test-gpu-host) && script/perf/mac.py pnpm --dir ts test:gpu:web`,
 which needs a GPU and Chrome (`$CHROME`). `make fmt` formats.
 `check-ts` holds the TypeScript to knip too (`pnpm --dir ts knip`), which names the files, exports and dependencies nothing reaches.
 

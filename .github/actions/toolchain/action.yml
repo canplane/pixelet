@@ -1,9 +1,9 @@
 # What a job that builds the Rust needs before its first cargo command: the
-# toolchain, Binaryen, and the caches. One action, so the jobs that build
+# toolchain, Binaryen, and the cargo cache. One action, so the jobs that build
 # cannot drift apart in it.
 
 name: toolchain
-description: The Rust toolchain, Binaryen and the cargo and pnpm caches.
+description: The Rust toolchain, Binaryen and the cargo cache.
 
 inputs:
   cache:
@@ -48,10 +48,3 @@ runs:
       with:
         workspaces: rust -> target
         shared-key: ${{ inputs.cache }}
-
-    - uses: actions/cache@v5
-      with:
-        path: |
-          ~/.local/share/pnpm/store
-        key: pnpm-${{ runner.os }}-${{ hashFiles('ts/pnpm-lock.yaml') }}
-        restore-keys: pnpm-${{ runner.os }}-

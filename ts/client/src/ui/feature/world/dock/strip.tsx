@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type ViewInstance,
   type ViewStyle,
 } from "react-native";
 
@@ -62,17 +63,20 @@ type Gesture = typeof PENDING | typeof POPOVER | typeof DRAG;
  * and when the gesture is taken away. */
 export interface SizeGesture {
   press: () => void;
-  press_in: (swatch: View) => void;
+  press_in: (swatch: ViewInstance) => void;
   /** A key picked the cube or stepped its size. Shows the seed, or the sizes
    * when `open`, over the swatch for a moment, as a press would. */
-  flash: (swatch: View, open: boolean) => void;
+  flash: (swatch: ViewInstance, open: boolean) => void;
   long_press: () => void;
   move: (x: f64, y: f64) => void;
   release: (x: f64, y: f64) => void;
   end: () => void;
 }
 
-function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
+function useSizeGesture(
+  swatch: React.RefObject<ViewInstance | null>,
+  g: SizeGesture,
+) {
   const handlers = useRef(g);
   handlers.current = g;
   const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
@@ -136,7 +140,7 @@ function SwatchButton({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const selected = useInHand(cube);
-  const ref = useRef<View | null>(null);
+  const ref = useRef<ViewInstance | null>(null);
   const swatch_flash = useSwatchFlash();
   useEffect(() => {
     if (swatch_flash.cube === cube && ref.current) {

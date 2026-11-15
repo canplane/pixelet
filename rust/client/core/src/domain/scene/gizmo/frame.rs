@@ -8,7 +8,7 @@
 
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::World;

@@ -16,11 +16,10 @@
 //! sparse accessor, a required extension) as unsupported; none panics.
 
 use core::cell::Cell;
-use core::future::Future;
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
-use xpute_kit::codec::json::{read_json, JsonValue};
+use xpute_kit::codec::json::{JsonValue, read_json};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::XputeError;
 
@@ -384,35 +383,19 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
                 let v = match comp_type {
                     5120 => {
                         let v = view[at] as i8 as f64;
-                        if norm {
-                            (v / 127.0).max(-1.0)
-                        } else {
-                            v
-                        }
+                        if norm { (v / 127.0).max(-1.0) } else { v }
                     }
                     5121 => {
                         let v = view[at] as f64;
-                        if norm {
-                            v / 255.0
-                        } else {
-                            v
-                        }
+                        if norm { v / 255.0 } else { v }
                     }
                     5122 => {
                         let v = i16::from_le_bytes([view[at], view[at + 1]]) as f64;
-                        if norm {
-                            (v / 32767.0).max(-1.0)
-                        } else {
-                            v
-                        }
+                        if norm { (v / 32767.0).max(-1.0) } else { v }
                     }
                     5123 => {
                         let v = u16::from_le_bytes([view[at], view[at + 1]]) as f64;
-                        if norm {
-                            v / 65535.0
-                        } else {
-                            v
-                        }
+                        if norm { v / 65535.0 } else { v }
                     }
                     5125 => u32_le(view, at) as f64,
                     _ => f32::from_le_bytes([view[at], view[at + 1], view[at + 2], view[at + 3]])

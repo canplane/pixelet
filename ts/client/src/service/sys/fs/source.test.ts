@@ -24,14 +24,14 @@ function records(): Map<string, string> {
 }
 
 /** A declaration that gives every kind `version` and is valid otherwise. */
-function declaring(version: string): string {
+function declaring(version: string): unknown {
   const each = <T>(v: T) => Object.fromEntries(BASE_KINDS.map((k) => [k, v]));
-  return JSON.stringify({
+  return {
     min_zoom: 0,
     format: each(0),
     version: each(version),
     shard: {},
-  });
+  };
 }
 
 test("decl - refused where a version is no segment of a URL", () => {

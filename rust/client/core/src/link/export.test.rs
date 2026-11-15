@@ -5,7 +5,7 @@ use crate::abi::edit::Tool;
 use crate::abi::scene::SceneContent;
 use crate::abi::sensor::Position;
 use crate::abi::types::ErrorCode;
-use crate::domain::control::camera::state::{camera_state, Intent};
+use crate::domain::control::camera::state::{Intent, camera_state};
 use crate::domain::control::edit::write;
 use crate::domain::control::navigation::destination;
 use crate::domain::query::test::flat_at_five;
@@ -69,7 +69,6 @@ fn goto_keeps_the_view_and_comes_in() {
 /// Whether a frame was asked for, which this takes.
 fn take_invalid() -> bool {
     use crate::sys::sched::invalidated;
-    use core::future::Future;
     use core::task::{Context, Waker};
     let mut wait = core::pin::pin!(invalidated());
     wait.as_mut()

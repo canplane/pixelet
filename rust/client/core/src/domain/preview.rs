@@ -6,8 +6,8 @@
 //! it shows under the pointer; and a marker's draft, drawn with the text
 //! typed so far.
 
-use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::AssetId;
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::octant::Octant;

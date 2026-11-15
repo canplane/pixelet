@@ -8,14 +8,14 @@
 
 use super::change;
 use super::decor::claim;
-use super::node::{coarsest, At};
+use super::node::{At, coarsest};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
-use pxl_engine::cast::{self, Detail, End, Keep, Line, Query, Spacing, Trace, DEPTH};
+use pxl_engine::cast::{self, DEPTH, Detail, End, Keep, Line, Query, Spacing, Trace};
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::ColumnSurface;
@@ -27,7 +27,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{nearest_box, origin, wrap_cell};
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::hierarchy::tree::child_idx;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;

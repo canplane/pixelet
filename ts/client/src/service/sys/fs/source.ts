@@ -17,7 +17,7 @@ import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, when_online } from "@/service/origin/online.ts";
 import {
   BASE_KINDS,
-  VERSION_BYTES,
+  VERSION_SZ,
   VERSION_CHARS,
 } from "@/abi/publication.spec.ts";
 
@@ -56,22 +56,16 @@ export interface Declaration {
 function is_version(s: string): boolean {
   return (
     s.length >= 1 &&
-    s.length <= VERSION_BYTES &&
+    s.length <= VERSION_SZ &&
     [...s].every((c) => VERSION_CHARS.includes(c))
   );
 }
 
-/** Reads a declaration's text, or returns null when its shape is wrong. Only
- * the shape is checked here. Whether the core follows the zoom, the formats
- * and the shard names is the core's to decide, and it refuses what it does not
- * (pxl-core sys/io/source.rs). */
-export function decl(text: string): Declaration | null {
-  let d: unknown;
-  try {
-    d = JSON.parse(text);
-  } catch {
-    return null;
-  }
+/** Reads a declaration parsed from its JSON, or returns null when its shape is
+ * wrong. Only the shape is checked here. Whether the core follows the zoom, the
+ * formats and the shard names is the core's to decide, and it refuses what it
+ * does not (pxl-core sys/io/source.rs). */
+export function decl(d: unknown): Declaration | null {
   const versions = (v: unknown, every: boolean) =>
     typeof v === "object" &&
     v !== null &&
@@ -183,10 +177,15 @@ export function mirror_source(next: Source, decl: Declaration | null): void {
 const ASK_AGAIN_MS = 2_000;
 const ASK_AGAIN_MOST_MS = 60_000;
 
-async function ask_decl(): Promise<string | null> {
+/** Asks for the declaration and answers its parsed JSON, or null where the ask
+ * failed. A body that is not JSON is a failed ask, asked again, not a refusal:
+ * a connection cut while the body comes in may still end in an ok response
+ * with a short body (Expo's fetch on Android resolves `text()` so), and a
+ * captive portal answers ok with a page of its own. */
+async function ask_decl(): Promise<unknown> {
   try {
     const res = await get(TILE_SOURCE_ROUTE);
-    if (res.ok) return await res.text();
+    if (res.ok) return JSON.parse(await res.text()) as unknown;
     // The body of a refusal is not read. Canceling it lets the connection go
     // at once, rather than when the response is collected.
     await res.body?.cancel();

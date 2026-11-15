@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::frame::shader::access::{
-    found, role, Group, ARGS, ARGS_INDIRECT, COPY, DRAW, NO_BUF, STATE, WRITE_BY_RUNTIME,
+    ARGS, ARGS_INDIRECT, COPY, DRAW, Group, NO_BUF, STATE, WRITE_BY_RUNTIME, found, role,
 };
 
 /// The sources whose calls take their offsets from a step here.
