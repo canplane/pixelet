@@ -3,7 +3,7 @@
 /** The module's native functions and events (ios/, android/). */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Stop } from "@xpute/link";
+import type { UiStop } from "@xpute/web-host";
 import { requireNativeModule } from "expo";
 
 /** The guest's stop, as its host reports it (xpute-native-runtime listener.rs
@@ -16,8 +16,8 @@ interface Report {
   n2: string;
 }
 
-/** The stop `r` reports, as the link has it (@xpute/link `Stop`). */
-function stop_of(r: Report): Stop {
+/** The stop `r` reports, as the UI hears it (@xpute/web-host `UiStop`). */
+function stop_of(r: Report): UiStop {
   return { ...r, n1: BigInt(r.n1), n2: BigInt(r.n2) };
 }
 
@@ -47,8 +47,9 @@ interface Xpute {
   answer(tag: u32, result: i32, data: Uint8Array | null): void;
   /** Hands over the batch the UI has not taken (xpute.h `xpute_take`). */
   take(): ArrayBuffer;
-  /** The guest's memory, where it lends the UI its buffers. */
-  mem(): ArrayBuffer;
+  /** The `len` bytes the guest lent at the address whose low and high words
+   * are `lo` and `hi`, a buffer over them, the UI's until the lend's answer. */
+  bytes(lo: u32, hi: u32, len: u32): ArrayBuffer;
   /** Writes a line to the process's output (`log`). */
   log(line: string): void;
   /** The guest's last stop, or null before the guest stopped (xpute.h
@@ -66,7 +67,7 @@ export const XPUTE: Xpute = requireNativeModule<Xpute>("Xpute");
  * the stop the runtime keeps, which a UI started after the stop has not
  * heard, as @xpute/gpu-native-runtime `state_on` tells the GPU's state. A
  * stop told between the two is the kept one, and is heard again. */
-export function stopped_on(hear: (stop: Stop) => void): { remove(): void } {
+export function stopped_on(hear: (stop: UiStop) => void): { remove(): void } {
   const sub = XPUTE.addListener("onStopped", (r) => hear(stop_of(r)));
   const r = XPUTE.stop();
   if (r !== null) hear(stop_of(r));

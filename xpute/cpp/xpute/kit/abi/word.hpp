@@ -3,15 +3,28 @@
 // These are bit fields in 32- and 64-bit words. A field is `nbit` bits wide and
 // starts at bit `shamt`; the caller keeps it inside the word. `field_mask` also
 // takes a field as wide as the whole word, which a plain shift cannot express.
+// A 64-bit word is also two 32-bit ones, its low word first (`split64`,
+// `join64`), as a stream of 32-bit words carries it.
 
 #pragma once
 
+#include <array>
 #include <concepts>
 #include <cstdint>
 #include <limits>
 #include <type_traits>
 
 namespace xpute {
+
+// The two 32-bit words of `v`, its low word first.
+constexpr std::array<std::uint32_t, 2> split64(std::uint64_t v) noexcept {
+    return {static_cast<std::uint32_t>(v), static_cast<std::uint32_t>(v >> 32)};
+}
+
+// The 64-bit word whose low and high 32-bit words are `lo` and `hi`.
+constexpr std::uint64_t join64(std::uint32_t lo, std::uint32_t hi) noexcept {
+    return std::uint64_t{hi} << 32 | lo;
+}
 
 template <class W>
 concept Word = std::same_as<W, std::uint32_t> || std::same_as<W, std::uint64_t>;

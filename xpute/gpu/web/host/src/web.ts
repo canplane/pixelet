@@ -10,15 +10,15 @@
  * WebGPU no other way. What the page has of a GPU this server tells the page
  * itself as that changes, posted from the worker (`GpuReport`), as a device's
  * GPU host tells its app through its own module (xpute-gpu-native-host
- * native.rs `state_on`) and as the page's runtime posts its own
- * (@xpute/web-runtime worker.ts `tell`); the UI hears it (`state_on`).
+ * native.rs `state_on`); the program's assembly hears it on the page.
  */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { u32, u64 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
-import { message_on } from "@xpute/web-runtime";
+import { log } from "@xpute/web-host";
+import { LEVEL_WARN } from "@xpute/web-host/abi/log/log.enum.ts";
 import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "@xpute/gpu-link/abi/gpu.enum.ts";
 import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
@@ -31,22 +31,6 @@ export interface GpuReport {
   state: GpuState;
 }
 
-/** What the host has of a GPU, as the page was told it last, or null before,
- * as a device's GPU host keeps it (@xpute/gpu-native-runtime `state_on`). */
-let state: GpuState | null = null;
-message_on<GpuReport>("gpu", (m) => {
-  state = m.state;
-});
-
-/** Adds `hear` to what the UI is told of what the host has of a GPU, as it
- * changes (`GpuReport`), and tells it the state now, as
- * @xpute/gpu-native-runtime `state_on` tells a device's UI. */
-export function state_on(hear: (state: GpuState) => void): { remove(): void } {
-  const sub = message_on<GpuReport>("gpu", (m) => hear(m.state));
-  if (state !== null) hear(state);
-  return sub;
-}
-
 export class WebGpu {
   private host: GpuHost | null = null;
   /** The canvases given, by their surface's handle. */
@@ -55,27 +39,29 @@ export class WebGpu {
   private settled: (() => void)[] = [];
   private lost: (() => void)[] = [];
   /** Where the guest lent the device's block, while it is lent. */
-  private block: u32 | null = null;
-  private readonly link: Side;
+  private block: u64 | null = null;
+  private readonly side: Side;
   private readonly ask: GpuAsk;
   private readonly cfg: GpuConfig;
 
-  constructor(link: Side, ask: GpuAsk, cfg: GpuConfig) {
-    this.link = link;
+  constructor(side: Side, ask: GpuAsk, cfg: GpuConfig) {
+    this.side = side;
     this.ask = ask;
     this.cfg = cfg;
   }
 
-  /** Mounts `gpu` on the link, whose `get_device` serves the device under
-   * a handle the link issues. */
+  /** Mounts `gpu` on the side, whose `get_device` serves the device under
+   * a handle the side issues. */
   serve(): void {
-    gpu.mount(this.link, {
+    gpu.mount(this.side, {
       run: async (recs) => {
-        this.host?.run(new Uint32Array(this.link.mem, recs.at, recs.len / 4));
+        this.host?.run(
+          new Uint32Array(this.side.mem, Number(recs.at), recs.len / 4),
+        );
       },
       get_device: () =>
-        this.link.add(
-          gpu.device(this.link, {
+        this.side.add(
+          gpu.device(this.side, {
             lost: (block, signal) => {
               this.block = block.at;
               this.host?.attach(block.at);
@@ -116,7 +102,6 @@ export class WebGpu {
     if (this.host !== null) return;
     if (!("gpu" in navigator)) {
       const why = isSecureContext ? "unsupported" : "insecure";
-      console.warn(`[gpu] cannot draw here: ${why}`);
       this.report(why);
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
@@ -124,14 +109,9 @@ export class WebGpu {
       powerPreference: this.ask.power as GPUPowerPreference,
     });
     if (!adapter) {
-      console.warn("[gpu] cannot draw here: no adapter answered");
       this.report("missing");
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
-    const { vendor, architecture, device, description } = adapter.info;
-    console.info(
-      `[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`,
-    );
     let d: GPUDevice;
     try {
       d = await adapter.requestDevice({
@@ -142,24 +122,21 @@ export class WebGpu {
           ),
         ],
       });
-    } catch (e) {
+    } catch {
       // A feature the guest requires is missing, or the adapter refused.
-      console.warn(
-        `[gpu] no device: ${e instanceof Error ? e.message : String(e)}`,
-      );
       this.report("missing");
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
     const r = new GpuHost(
       d,
-      () => this.link.mem,
+      () => this.side.mem,
       () => this.tell(this.settled),
       this.cfg,
     );
     d.lost.then((info) => {
       // Nothing here destroys the device, so every loss is the browser's;
       // the host has written LOST into the block.
-      console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
+      log(LEVEL_WARN, "gpu", `device lost (${info.reason}): ${info.message}`);
       if (this.host !== r) return;
       this.host = null;
       this.block = null;

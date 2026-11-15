@@ -1744,6 +1744,61 @@ fn cpp_items(
             items.len(),
             items.join(", ")
         ));
+    } else if let Some(fields) = n.val().arr().map(|a| fields(a)).transpose()?.flatten() {
+        // A list of records: a struct of its fields, each a scalar, and an
+        // array of its rows.
+        let list = n.val().arr().unwrap_or_default();
+        let marks = Marks::of(n)?;
+        let r = marks.row.map_or(format!("{}Record", pascal(name)), pascal);
+        let t = type_of(n, ty);
+        let mut tys = Vec::with_capacity(fields.len());
+        for (k, f) in &fields {
+            if f.list || f.option {
+                return Err(format!("{name}.{k}: a C++ record holds one value a field"));
+            }
+            tys.push(match f.kind {
+                0 => {
+                    inc.insert("string_view");
+                    "std::string_view"
+                }
+                1 => "bool",
+                _ => cpp_number(name, f.ty.unwrap_or(t), inc)?.0,
+            });
+        }
+        let mut rows = Vec::with_capacity(list.len());
+        for e in list {
+            let vals = e
+                .named()
+                .zip(&fields)
+                .map(|((_, v), (_, f))| {
+                    Ok(match v.val() {
+                        Node::Str(s) => json_str(s),
+                        Node::Bool(b) => b.to_string(),
+                        Node::Num(x) => format!(
+                            "{}{}",
+                            js_num(*x),
+                            cpp_number(name, f.ty.unwrap_or(t), inc)?.1
+                        ),
+                        _ => return Err(format!("{name}: a C++ record holds scalars")),
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            rows.push(format!("{{{}}}", vals.join(", ")));
+        }
+        inc.insert("array");
+        lines.push(format!("struct {r} {{"));
+        lines.extend(
+            fields
+                .iter()
+                .zip(&tys)
+                .map(|((k, _), t)| format!("    {t} {};", rs_field(k))),
+        );
+        lines.extend(["};".to_string(), String::new()]);
+        lines.push(format!(
+            "inline constexpr std::array<{r}, {}> {name}{{{{{}}}}};",
+            list.len(),
+            rows.join(", ")
+        ));
     } else if let Node::Arr(list) = n.val() {
         let names = list
             .iter()

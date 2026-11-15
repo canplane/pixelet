@@ -9,14 +9,14 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 
-import * as monotonic_clock from "@xpute/link/abi/clocks/monotonic_clock.ts";
-import * as system_clock from "@xpute/link/abi/clocks/system_clock.ts";
+import * as monotonic_clock from "./abi/clocks/monotonic_clock.ts";
+import * as system_clock from "./abi/clocks/system_clock.ts";
 import type { Side } from "@xpute/link";
 
 const NS_PER_MS = 1e6;
 
-export function serve_clock(link: Side): void {
-  monotonic_clock.mount(link, {
+export function serve_clock(side: Side): void {
+  monotonic_clock.mount(side, {
     now: () => BigInt(round(performance.now() * NS_PER_MS)),
     // A wait its caller cancels stops its timer and answers ECANCELED.
     wait_for: (how_long, signal) =>
@@ -28,7 +28,7 @@ export function serve_clock(link: Side): void {
         });
       }),
   });
-  system_clock.mount(link, {
+  system_clock.mount(side, {
     now() {
       const ms = Date.now();
       return {

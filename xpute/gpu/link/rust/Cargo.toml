@@ -10,3 +10,7 @@ readme.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+# A 64-bit address as two words (addr.rs).
+xpute-kit.workspace = true

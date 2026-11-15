@@ -18,7 +18,6 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { timed } from "./timed.ts";
 
 /** The chunk is mapped, and holds nothing. */
 const FREE = 0;
@@ -55,16 +54,13 @@ export class Belt {
 
   private readonly device: GPUDevice;
   private readonly chunk_sz: u32;
-  /** A remap's landing slower than this is logged (timed.ts). */
-  private readonly slow_ms: u32 | null;
 
-  constructor(device: GPUDevice, chunk_sz: u32, slow_ms: u32 | null) {
+  constructor(device: GPUDevice, chunk_sz: u32) {
     if (chunk_sz <= 0 || chunk_sz % MAP_ALIGNMENT !== 0) {
       throw new Error(`[gpu] an upload chunk of ${chunk_sz} bytes`);
     }
     this.device = device;
     this.chunk_sz = chunk_sz;
-    this.slow_ms = slow_ms;
   }
 
   /** This answers the room for the next `want` bytes of a write, or for as
@@ -106,11 +102,7 @@ export class Belt {
       c.state = BACK;
       c.buffer.mapAsync(GPUMapMode.WRITE).then(
         () => {
-          c.bytes = timed(
-            this.slow_ms,
-            "remap",
-            () => new Uint8Array(c.buffer.getMappedRange()),
-          );
+          c.bytes = new Uint8Array(c.buffer.getMappedRange());
           c.state = FREE;
         },
         () => {},

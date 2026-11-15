@@ -4,24 +4,15 @@
 //! Wayland client's listener hears its events: a batch waiting for the UI
 //! (`notify_on`), the guest's stop (`stopped_on`) and its trap (`trap_on`),
 //! the last of each kept for a UI that starts after it (`stop`, `trap`). It
-//! names nothing else of the runtime: the link tells it a trap (link.rs
-//! `trap`), the host the guest's stop (xpute-native-host stop.rs) and the
-//! runtime's hook a failure of the host's (native.rs `hook`), as a page's
-//! runtime posts its own (@xpute/web-runtime worker.ts `tell`).
+//! names nothing else of the runtime: the runtime's link tells it a trap
+//! (link.rs `trap`), the host hands the runtime the guest's stop (native.rs
+//! `stopped`), and the runtime's hook a failure of the host's (native.rs
+//! `hook`), each written and told here, as a page's runtime posts its own (@xpute/web-runtime
+//! worker.ts `tell`).
 
 use std::sync::{Mutex, MutexGuard};
 
-/// The report of a broken invariant before the guest stops: the guest's
-/// (wit/stop/stop.wit), which the host that serves the stop hands the runtime
-/// (xpute-native-host stop.rs), or the host's own failure (native.rs `hook`),
-/// which the runtime tells the app (`tell_stop`).
-pub struct Stop {
-    pub errnum: i32,
-    pub file: String,
-    pub line: u32,
-    pub n1: u64,
-    pub n2: u64,
-}
+use xpute_native_host::runtime::Stop;
 
 /// What tells the app a batch waits.
 pub type Tell = extern "C" fn();
@@ -105,10 +96,11 @@ fn call_trapped(err: &str) {
 
 /// Tells the app the guest stopped, with the report of the broken
 /// invariant: the guest's, which the host that serves the stop hands it
-/// (xpute-native-host stop.rs), or the host's own failure (native.rs
-/// `hook`), as @xpute/web-runtime worker.ts `tell_stop` tells a page. It is
-/// kept before it is told (`stop`), so a UI that reads none hears it.
-pub fn tell_stop(s: Stop) {
+/// (native.rs `stopped`), or the host's own failure
+/// (native.rs `hook`), as @xpute/web-runtime worker.ts `tell_stop` tells a
+/// page. It is kept before it is told (`stop`), so a UI that reads none
+/// hears it.
+pub(crate) fn tell_stop(s: Stop) {
     let s: &'static Stop = Box::leak(Box::new(s));
     end().stop = Some(s);
     call_stopped(s);

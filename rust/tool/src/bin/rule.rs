@@ -1,7 +1,7 @@
 // pxl-tool/bin/rule.rs
 
 //! Holds the tree to what the code must keep but a reader cannot see. It refuses raw pointer
-//! casts in the crates that address memory by offset; any rounding other than half to even
+//! casts in the crates that address memory by the link's address; any rounding other than half to even
 //! where clippy does not see it; any CommonJS file; and any name, in the layers' orders, of
 //! what stands above the naming file: across a crate's folders and the client's, and inside
 //! the client's UI and services, the core's heads, pxl-render's, the camera's and the view's,
@@ -20,9 +20,9 @@ use std::process::{Command, ExitCode};
 use pxl_tool::root;
 use regex::Regex;
 
-/// The crates that address the core's memory by offset, in which an offset becomes a pointer
-/// only through `xpute_link::mem`.
-const OFF_CRATES: [&str; 5] = [
+/// The crates that address the core's memory by the link's address, a u64, in which an address
+/// becomes a pointer only through `xpute_link::mem`.
+const ADDR_CRATES: [&str; 5] = [
     "xpute/link/rust/src/",
     "xpute/guest/rust/src/",
     "rust/client/core/src/",
@@ -578,42 +578,44 @@ fn declared(header: &str) -> Vec<String> {
         .collect()
 }
 
-/// xpute's order, over its parts rather than a folder's modules: a part is a crate
-/// (`XPUTE_CARGO`) or a package (`XPUTE_WORKSPACE`), or one of each, by its name past `xpute-` or
-/// `@xpute/`. The kit names nothing, and the link stands on it. The guest and each platform's
-/// runtime stand over the link, and each platform's host over its runtime, as a host runs in
-/// the environment its runtime is; the guest and each platform are heads, none naming
-/// another. The GPU is a plugin, which none of xpute's own parts (the kit, the link and the
-/// heads) names, and which may name them: its link stands over the heads, and each of its
-/// other parts over that, in its counterpart's head, a device's host over its runtime as
-/// xpute's own. Over every part, what develops xpute and
-/// generates its code is a head of its own, which no part names and which names only the kit
-/// and the links. A part is held by what it ships: its manifest's dependencies, a
-/// dev-dependency left out, and the names its sources write, its tests left out, which may
-/// take the golden records' reader.
+/// xpute's order, over its parts rather than a folder's modules: a part is a crate (`XPUTE_CARGO`)
+/// or a package (`XPUTE_WORKSPACE`), or one of each, by its name past `xpute-` or `@xpute/`. The
+/// kit names nothing, and the link stands on it. The guest and each platform's host stand over the
+/// link; the guest and each platform are heads, none naming another. The TypeScript host
+/// (`web-host`) varies by language, not platform, so it is on no head: a page's runtime and a
+/// device's UI end both take it. The GPU is a plugin, which none of xpute's own parts (the kit, the
+/// link, the guest and the hosts) names, and which may name them: its link stands over them, and
+/// each of its other parts over that, in its counterpart's head, a host over xpute's host. Each
+/// platform's runtime stands over its host and the GPU's: it may name its host, and no host,
+/// xpute's or the GPU's, names a runtime; the runtime gives its host what the host needs of it. The
+/// GPU's UI end on a device (its Expo module) stands with the runtime's, which shares the runtime's
+/// name. Over every part, what develops xpute and generates its code is a head of its own, which no
+/// part names and which names only the kit and the links. A part is held by what it ships: its
+/// manifest's dependencies, a dev-dependency left out, and the names its sources write, its tests
+/// left out, which may take the golden records' reader.
 const XPUTE_ORDER: [(&str, u8); 18] = [
     ("kit", 0),
     ("link", 1),
     ("guest", 2),
-    ("web-runtime", 2),
-    ("native-runtime", 2),
-    ("web-host", 3),
-    ("native-host", 3),
-    ("gpu-link", 4),
-    ("gpu-guest", 5),
-    ("gpu-web-host", 5),
+    ("web-host", 2),
+    ("native-host", 2),
+    ("gpu-link", 3),
+    ("gpu-guest", 4),
+    ("gpu-web-host", 4),
+    ("gpu-native-host", 4),
+    ("web-runtime", 5),
+    ("native-runtime", 5),
     ("gpu-native-runtime", 5),
-    ("gpu-native-host", 6),
-    ("golden", 7),
-    ("gen", 7),
-    ("link-gen", 7),
-    ("gen-targets", 7),
-    ("gpu-gen-targets", 7),
-    ("tool", 7),
+    ("golden", 6),
+    ("gen", 6),
+    ("link-gen", 6),
+    ("gen-targets", 6),
+    ("gpu-gen-targets", 6),
+    ("tool", 6),
 ];
 const XPUTE_HEADS: [&[&str]; 4] = [
     &["guest", "gpu-guest"],
-    &["web-runtime", "web-host", "gpu-web-host"],
+    &["web-runtime", "gpu-web-host"],
     &[
         "native-runtime",
         "native-host",
@@ -1487,12 +1489,12 @@ fn run() -> Result<Vec<String>, String> {
     let comment = Regex::new(r"^\s*//").expect("the comment's pattern");
     for f in files
         .iter()
-        .filter(|f| f.ends_with(".rs") && OFF_CRATES.iter().any(|c| f.starts_with(c)))
+        .filter(|f| f.ends_with(".rs") && ADDR_CRATES.iter().any(|c| f.starts_with(c)))
     {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
             if !comment.is_match(line) && cast.is_match(line) {
                 problems.push(format!(
-                    "{f}:{}: casts to a pointer where an offset goes through xpute_link::mem: {}",
+                    "{f}:{}: casts to a pointer where an address goes through xpute_link::mem: {}",
                     n + 1,
                     line.trim()
                 ));
@@ -1629,7 +1631,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold");
+            println!("check-rules: the memory's addresses, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {

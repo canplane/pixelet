@@ -24,8 +24,6 @@ import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
 import { LATER } from "@/abi/later.ts";
-import { mem } from "@/abi/manifest.spec.ts";
-import { LIMIT } from "@/abi/perf.spec.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { serve_files } from "@/service/sys/fs/file.ts";
 import { serve_objects } from "@/service/sys/fs/object.ts";
@@ -87,13 +85,12 @@ function keep(entries: [string, string][]): void {
 
 async function boot(m: Instantiate): Promise<void> {
   online.watch(set_online);
-  const link = await instantiate(m.module, m.init, mem.sz, mem.fixed_sz);
-  if (link === null) return;
+  const side = await instantiate(m.module, m.init);
+  if (side === null) return;
   // The page's host runs by the config a device's does
-  // (spec/client/render/api.json5 `device`), and in a build made for
-  // measuring says what runs slower than `perf.json5`'s `LIMIT.SLOW_MS`.
+  // (spec/client/render/api.json5 `device`).
   const gpu = new WebGpu(
-    link,
+    side,
     {
       power: device.POWER,
       required_feats: device.REQUIRED_FEATURES,
@@ -102,11 +99,10 @@ async function boot(m: Instantiate): Promise<void> {
     {
       frame_latency: device.FRAME_LATENCY,
       upload_chunk_sz: device.UPLOAD_CHUNK_BYTES,
-      slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null,
     },
   );
   run(
-    link,
+    side,
     {
       servers: [
         serve_stop,
@@ -126,13 +122,13 @@ async function boot(m: Instantiate): Promise<void> {
     },
     m,
   );
-  await declare(link);
+  await declare(side);
 }
 
 /** Declares the tile source to the core, and tells the page its state. */
-async function declare(link: Side): Promise<void> {
+async function declare(side: Side): Promise<void> {
   watch_source(() =>
     tell({ kind: "source", state: source_state(), decl: source_decl() }),
   );
-  await declare_source(sender(link));
+  await declare_source(sender(side));
 }

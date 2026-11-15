@@ -8,7 +8,7 @@
  * The guest's answer is its own (`take_answer`). */
 
 import { XputeError } from "@xpute/kit/status/error.ts";
-import * as life from "@xpute/link/abi/life/life.ts";
+import * as life from "@xpute/web-host/abi/life/life.ts";
 import { type Side, type Sender, sender } from "@xpute/link";
 
 /** Takes the guest's answer as its own, an error it answers too, ENOENT where
@@ -30,9 +30,9 @@ export function tell_life(link: Sender): void {
   });
 }
 
-/** Tells the guest on `link` the UI attached, once the UI's port is served
+/** Tells the guest on `side` the UI attached, once the UI's port is served
  * and the guest has booted, as a device's runtime tells it at each start
  * (xpute-native-runtime remote.rs `accept`). */
-export function tell_attached(link: Side): void {
-  take_answer(life.attached(sender(link)));
+export function tell_attached(side: Side): void {
+  take_answer(life.attached(sender(side)));
 }

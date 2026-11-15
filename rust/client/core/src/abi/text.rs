@@ -19,7 +19,7 @@ pub fn width<T0: Copy + Unpin + 'static>(
     let (r, data) = _rt::link::call(
         HANDLE,
         WIDTH,
-        Some((24, &|w_: &mut _rt::Lower| {
+        Some((32, &|w_: &mut _rt::Lower| {
             w_.u32(0, weight);
             w_.f64(8, px);
             _rt::Lent {
@@ -54,7 +54,7 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     let (r, _) = _rt::link::call(
         HANDLE,
         RASTER,
-        Some((56, &|w_: &mut _rt::Lower| {
+        Some((72, &|w_: &mut _rt::Lower| {
             w_.u32(0, weight);
             w_.f64(8, px);
             w_.u32(16, color);
@@ -62,15 +62,15 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
                 at: image_at_,
                 len: image_len_,
             }
-            .store(w_, 20);
-            w_.u32(28, width);
-            w_.u32(32, height);
-            w_.f64(40, x);
+            .store(w_, 24);
+            w_.u32(40, width);
+            w_.u32(44, height);
+            w_.f64(48, x);
             _rt::Lent {
                 at: text_at_,
                 len: text_len_,
             }
-            .store(w_, 48);
+            .store(w_, 56);
         })),
     );
     _rt::answer(r)

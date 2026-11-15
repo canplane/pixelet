@@ -41,8 +41,8 @@ object Runtime {
    * `xpute_take`). */
   external fun take(generation: Int): ByteArray
 
-  /** The guest's memory, a direct buffer over its whole region. */
-  external fun mem(): ByteBuffer
+  /** The `len` bytes the guest lent at `at`, a direct buffer over them. */
+  external fun bytes(at: Long, len: Int): ByteBuffer
 
   /** Tells the runtime that the app was hidden or shown. */
   external fun life(shown: Boolean)

@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 use pxl_spec::color::Rgba;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Lent;
-use xpute_link::mem;
+use xpute_link::{mem, Side};
 
 use crate::abi::text;
 
@@ -106,10 +106,10 @@ impl text::Host for Device {
     }
 }
 
-/// Mounts the text on the runtime's link, on the core's thread before it
-/// boots (lib.rs `start`).
-pub(crate) fn serve() {
-    text::mount(Rc::new(Device));
+/// Mounts the text on `side`, the host's side the runtime gives, on the
+/// core's thread before it boots (lib.rs `start`).
+pub(crate) fn serve(side: &'static Side) {
+    text::mount(side, Rc::new(Device));
 }
 
 /// Says what an iPhone app's Swift answers the core's text with.

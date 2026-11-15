@@ -203,3 +203,7 @@ fn fill(w: &mut [u32], args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
         };
     }
 }
+
+#[cfg(test)]
+#[path = "program.test.rs"]
+mod program;

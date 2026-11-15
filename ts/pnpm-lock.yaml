@@ -90,9 +90,9 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../../link/ts
-      '@xpute/web-runtime':
+      '@xpute/web-host':
         specifier: workspace:*
-        version: link:../../../web/runtime
+        version: link:../../../web/host
     devDependencies:
       '@xpute/golden':
         specifier: workspace:*
@@ -118,6 +118,9 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../../link/ts
+      '@xpute/web-host':
+        specifier: workspace:*
+        version: link:../../../web/host
     devDependencies:
       '@types/react':
         specifier: ^19.2.14
@@ -140,9 +143,6 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../link/ts
-      '@xpute/web-runtime':
-        specifier: workspace:*
-        version: link:../runtime
 
   ../xpute/web/runtime:
     dependencies:
@@ -152,6 +152,9 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../link/ts
+      '@xpute/web-host':
+        specifier: workspace:*
+        version: link:../host
 
   build:
     dependencies:

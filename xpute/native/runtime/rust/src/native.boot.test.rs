@@ -26,7 +26,7 @@ xpute_guest::link!(
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![Box::new(|| panic!("the server fails"))],
+        servers: vec![Box::new(|_| panic!("the server fails"))],
         imports: &[],
         later: &[],
     }
@@ -41,7 +41,9 @@ fn failing_server_traps() {
     let told = app::ends();
     assert!(
         matches!(&told[..], [End::Stop(e, _), End::Trap(err)]
-            if *e == Errno::ENOTRECOVERABLE as i32 && err.starts_with("the host stopped at ")),
+            if *e == Errno::ENOTRECOVERABLE as i32
+                && err.starts_with("the host stopped: panicked at ")
+                && err.ends_with("the server fails")),
         "{told:?}"
     );
     assert!(

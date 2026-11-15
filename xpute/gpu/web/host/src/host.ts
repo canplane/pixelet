@@ -11,7 +11,7 @@
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import { join64, type u32, type u64 } from "@xpute/kit/abi/word.ts";
 import { bytes_of, each_rec, text_of } from "./stream.ts";
 
 import {
@@ -24,8 +24,9 @@ import {
 } from "@xpute/gpu-link/api.spec.ts";
 import { type GpuConfig } from "@xpute/gpu-link";
 import { handle_slot } from "@xpute/gpu-link/handle.ts";
+import { log } from "@xpute/web-host";
+import { LEVEL_ERROR } from "@xpute/web-host/abi/log/log.enum.ts";
 import { Belt } from "./belt.ts";
-import { timed } from "./timed.ts";
 import {
   ADDRESS_MODES,
   BLEND_FACTORS,
@@ -139,6 +140,11 @@ class WordCursor {
   flag(): boolean {
     return this.u() !== 0;
   }
+  /** This reads an address in the guest's memory, two words (spec). */
+  addr(): u64 {
+    const lo = this.u();
+    return join64(lo, this.u());
+  }
   /** Steps past `n` words that the caller reads in place. */
   skip(n: u32): void {
     this.at += n;
@@ -201,7 +207,7 @@ export class GpuHost {
   private readonly _surfaces = new Map<u32, Surface>();
   /** This says where the guest lent the device's block, and is kept to write
    * its counts and its status later. */
-  private _block: u32 | undefined;
+  private _block: u64 | undefined;
   /** This counts the uncaptured errors the device raised (spec DEVICE). */
   private _error_cnt = 0;
   /** This counts the frames drawn whose work the queue has not yet done (spec
@@ -221,7 +227,6 @@ export class GpuHost {
   private readonly _device: GPUDevice;
   private readonly _mem: () => ArrayBufferLike;
   private readonly _wake: () => void;
-  private readonly _slow_ms: u32 | null;
   private readonly _frame_latency: u32;
 
   /** `wake` tells the guest a completion landed (gpu/wit/gpu.wit
@@ -236,9 +241,8 @@ export class GpuHost {
     this._device = device;
     this._mem = mem;
     this._wake = wake;
-    this._slow_ms = cfg.slow_ms;
     this._frame_latency = cfg.frame_latency;
-    this._belt = new Belt(device, cfg.upload_chunk_sz, cfg.slow_ms);
+    this._belt = new Belt(device, cfg.upload_chunk_sz);
     // Nothing here destroys the device, so every loss is the browser's. The
     // guest is told of it in its block.
     device.lost.then(() => {
@@ -247,7 +251,7 @@ export class GpuHost {
     });
     // An error no scope caught is logged and counted.
     device.addEventListener("uncapturederror", (e) => {
-      console.warn(`[gpu] ${e.error.message}`);
+      log(LEVEL_ERROR, "gpu", e.error.message);
       this._error_cnt++;
       this._tell_counts();
     });
@@ -283,30 +287,21 @@ export class GpuHost {
     this._objects.length = 0;
     this._making.clear();
     if (this._block !== undefined) {
-      const block = new Uint32Array(this._mem(), this._block, DEVICE.WORDS);
+      const block = new Uint32Array(this._mem(), Number(this._block), DEVICE.WORDS);
       Atomics.store(block, DEVICE.STATUS_AT, STATUS.LOST);
       this._block = undefined;
     }
   }
 
-  /** Runs the records `w` the guest lent. A frame they drew counts as
+  /** Runs the records `words` the guest lent. A frame they drew counts as
    * unfinished until the queue has done the work submitted with it. */
-  run(w: U32Array): void {
-    timed(this._slow_ms, "run", () => this._run(w));
-  }
-
-  /** `run` without the run's own time: each record is timed where the
-   * program asked (timed.ts). */
-  private _run(words: U32Array): void {
+  run(words: U32Array): void {
     let r: WordCursor | undefined;
     this._drew = false;
-    const slow = this._slow_ms;
     each_rec(words, (code, w, a) => {
       r ??= new WordCursor(w);
       r.at = a;
-      const rec = r;
-      if (slow === null) return this._record(code, rec);
-      timed(slow, `op ${code}`, () => this._record(code, rec));
+      this._record(code, r);
     });
     // The run's staged writes reach the queue with the run, as
     // `writeBuffer`'s would.
@@ -365,10 +360,10 @@ export class GpuHost {
   /** Writes the device's block (spec DEVICE) into the guest's memory at
    * `at`, which the guest lent (gpu/wit/gpu.wit `device.lost`), STATUS last,
    * READY, with release; its counts are written there from then on. */
-  attach(at: u32): void {
+  attach(at: u64): void {
     const d = this._device;
     this._block = at;
-    const out = new Uint32Array(this._mem(), at, DEVICE.WORDS);
+    const out = new Uint32Array(this._mem(), Number(at), DEVICE.WORDS);
     // A block lent again holds the last device's words. The guest reads those before
     // the counts only once STATUS is READY, and the counts and STATUS, which it loads
     // at any time, are stored atomically.
@@ -382,7 +377,7 @@ export class GpuHost {
       }
     });
     // WebGPU resolves timestamps in nanoseconds, so the period is 1.
-    new Float32Array(this._mem(), at, DEVICE.WORDS)[DEVICE.PERIOD_AT] = 1;
+    new Float32Array(this._mem(), Number(at), DEVICE.WORDS)[DEVICE.PERIOD_AT] = 1;
     out[DEVICE.FORMAT_AT] = (TEXTURE_FORMATS as readonly string[]).indexOf(
       navigator.gpu.getPreferredCanvasFormat(),
     );
@@ -395,7 +390,7 @@ export class GpuHost {
    * into the device's block (spec DEVICE). */
   private _tell_counts(): void {
     if (this._block === undefined) return;
-    const block = new Uint32Array(this._mem(), this._block, DEVICE.WORDS);
+    const block = new Uint32Array(this._mem(), Number(this._block), DEVICE.WORDS);
     Atomics.store(block, DEVICE.ERRORS_AT, this._error_cnt);
     Atomics.store(block, DEVICE.UNFINISHED_AT, this._unfinished_cnt);
   }
@@ -413,8 +408,8 @@ export class GpuHost {
     this._making.delete(handle_slot(id));
   }
 
-  private _bytesAt(addr: u32, size: u32): Uint8Array {
-    return new Uint8Array(this._mem(), addr, size);
+  private _bytesAt(at: u64, size: u32): Uint8Array {
+    return new Uint8Array(this._mem(), Number(at), size);
   }
 
   /** Reads an async pipeline's fence and ticket, which follow the sync op's
@@ -427,21 +422,13 @@ export class GpuHost {
     r: WordCursor,
     pipeline: Promise<P>,
     sync: () => P,
-    label: string,
   ): void {
-    const [word, ticket] = [r.u(), r.u()];
+    const [word, ticket] = [r.addr(), r.u()];
     const slot = handle_slot(id);
     this._making.set(slot, id);
     const waits = () => this._making.get(slot) === id;
     pipeline
-      .catch((e: unknown) => {
-        // Logged with its label, since the sync call's own error does not
-        // name the pipeline on every device.
-        console.warn(
-          `[gpu] pipeline ${label} refused: ${e instanceof Error ? e.message : String(e)}`,
-        );
-        return waits() ? sync() : undefined;
-      })
+      .catch(() => (waits() ? sync() : undefined))
       .then((p) => {
         if (p === undefined || !waits()) return;
         this._making.delete(slot);
@@ -454,8 +441,12 @@ export class GpuHost {
    * RESULT). Where the request has a result, it goes into the word after the
    * fence first; the ticket is then stored with release, so a guest that sees
    * the ticket sees the result. An entry is then asked for, to read it. */
-  private _signal(word: u32, ticket: u32, result?: u32): void {
-    const w = new Uint32Array(this._mem(), word, result === undefined ? 1 : 2);
+  private _signal(word: u64, ticket: u32, result?: u32): void {
+    const w = new Uint32Array(
+      this._mem(),
+      Number(word),
+      result === undefined ? 1 : 2,
+    );
     if (result !== undefined) w[1] = result;
     Atomics.store(w, 0, ticket);
     this._wake();
@@ -828,12 +819,8 @@ export class GpuHost {
         if (code === op.RENDER_PIPELINE) {
           this._put(id, d.createRenderPipeline(desc));
         } else {
-          this._make_async(
-            id,
-            r,
-            d.createRenderPipelineAsync(desc),
-            () => d.createRenderPipeline(desc),
-            desc.label ?? "",
+          this._make_async(id, r, d.createRenderPipelineAsync(desc), () =>
+            d.createRenderPipeline(desc),
           );
         }
         return;
@@ -857,12 +844,8 @@ export class GpuHost {
         if (code === op.COMPUTE_PIPELINE) {
           this._put(id, d.createComputePipeline(desc));
         } else {
-          this._make_async(
-            id,
-            r,
-            d.createComputePipelineAsync(desc),
-            () => d.createComputePipeline(desc),
-            entry_point,
+          this._make_async(id, r, d.createComputePipelineAsync(desc), () =>
+            d.createComputePipeline(desc),
           );
         }
         return;
@@ -905,7 +888,7 @@ export class GpuHost {
       case op.WRITE_BUFFER_AT: {
         const buffer = this._get<GPUBuffer>(r.u());
         const offset = r.u();
-        this._write(buffer, offset, this._mem(), r.u(), r.u());
+        this._write(buffer, offset, this._mem(), Number(r.addr()), r.u());
         return;
       }
       case op.WRITE_TEXTURE:
@@ -926,7 +909,7 @@ export class GpuHost {
           r.skip(Math.ceil(n / 4));
         } else {
           data = this._mem() as ArrayBuffer;
-          layout.offset = r.u();
+          layout.offset = Number(r.addr());
           r.skip(1);
         }
         d.queue.writeTexture(place, data, layout, size);
@@ -937,8 +920,8 @@ export class GpuHost {
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
         // The bytes are copied now, since they are the guest's again once the
         // run is answered (gpu/wit/gpu.wit `run`).
-        const image = new Blob([this._bytesAt(r.u(), r.u()).slice()]);
-        const [word, ticket] = [r.u(), r.u()];
+        const image = new Blob([this._bytesAt(r.addr(), r.u()).slice()]);
+        const [word, ticket] = [r.addr(), r.u()];
         // An image whose texture is gone, with the device or by the guest, is
         // not answered. One the browser cannot decode is answered REFUSED.
         createImageBitmap(image, {
@@ -947,12 +930,10 @@ export class GpuHost {
         }).then(
           (source) => {
             if (this._objects.includes(to.texture)) {
-              timed(this._slow_ms, "image", () =>
-                (d.queue as ExternalImageQueue).copyExternalImageToTexture(
-                  { source },
-                  to,
-                  [source.width, source.height],
-                ),
+              (d.queue as ExternalImageQueue).copyExternalImageToTexture(
+                { source },
+                to,
+                [source.width, source.height],
               );
               this._signal(word, ticket, RESULT.OK);
             }
@@ -1237,8 +1218,8 @@ export class GpuHost {
         const buffer = this._get<GPUBuffer>(id);
         const offset = r.u();
         const size = r.u();
-        const addr = r.u();
-        const word = r.u();
+        const at = r.addr();
+        const word = r.addr();
         const ticket = r.u();
         // A read whose buffer is gone since, with the device (`lost`) or by
         // the guest, lands nowhere, as the native host drops its pending
@@ -1246,12 +1227,10 @@ export class GpuHost {
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(
           () => {
             if (this._get<GPUBuffer>(id) !== buffer) return;
-            timed(this._slow_ms, "map", () => {
-              this._bytesAt(addr, size).set(
-                new Uint8Array(buffer.getMappedRange(offset, size)),
-              );
-              buffer.unmap();
-            });
+            this._bytesAt(at, size).set(
+              new Uint8Array(buffer.getMappedRange(offset, size)),
+            );
+            buffer.unmap();
             this._signal(word, ticket, RESULT.OK);
           },
           () => {
@@ -1262,7 +1241,7 @@ export class GpuHost {
         return;
       }
       case op.QUEUE_DONE: {
-        const [word, ticket] = [r.u(), r.u()];
+        const [word, ticket] = [r.addr(), r.u()];
         d.queue.onSubmittedWorkDone().then(() => this._signal(word, ticket));
         return;
       }

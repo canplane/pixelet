@@ -14,7 +14,6 @@ use super::make::Make;
 use super::name::{flags, of, BUFFER_USAGES, COLOR_WRITES, SHADER_STAGES, TEXTURE_USAGES};
 use super::object::Object;
 use super::pending::{Pending, ANSWERED, REFUSED, WAITING};
-use super::timed;
 use super::word::WordCursor;
 use super::GpuHost;
 use xpute_gpu_link::enums::{
@@ -26,17 +25,15 @@ impl GpuHost {
     /// Runs the records the guest lent, `len` bytes at `at` (gpu/wit/gpu.wit
     /// `run`), which stay lent until the run is answered. A frame they drew
     /// counts as unfinished before the guest can ask to draw another.
-    pub fn run(&mut self, at: u32, len: u32) {
-        timed(self.slow_ms, "run", || {
-            self.execute(at, len);
-            if core::mem::take(&mut self.drew) {
-                self.count_frame();
-            }
-        });
+    pub fn run(&mut self, at: u64, len: u32) {
+        self.execute(at, len);
+        if core::mem::take(&mut self.drew) {
+            self.count_frame();
+        }
     }
 
     /// Runs the records at `at`, each an op, a count n and n words.
-    fn execute(&mut self, at: u32, len: u32) {
+    fn execute(&mut self, at: u64, len: u32) {
         let words = len / 4;
         let mut k = 0;
         // SAFETY: the records the guest lent `gpu.run`, which it writes no
@@ -46,11 +43,11 @@ impl GpuHost {
             |a, n| unsafe { mem::read(a, n) },
         );
         while k + 2 <= words {
-            let code = word(at + 4 * k);
-            let n = word(at + 4 * (k + 1));
+            let code = word(at + 4 * u64::from(k));
+            let n = word(at + 4 * u64::from(k + 1));
             let mut scratch = core::mem::take(&mut self.scratch);
             scratch.clear();
-            let from = at + 4 * (k + 2);
+            let from = at + 4 * u64::from(k + 2);
             scratch.extend(
                 read(from, 4 * n)
                     .as_chunks::<4>()
@@ -58,9 +55,7 @@ impl GpuHost {
                     .iter()
                     .map(|w| u32::from_le_bytes(*w)),
             );
-            timed(self.slow_ms, format_args!("op {code}"), || {
-                self.record(code, &mut WordCursor::new(&scratch))
-            });
+            self.record(code, &mut WordCursor::new(&scratch));
             self.scratch = scratch;
             k += 2 + n;
         }
@@ -81,18 +76,18 @@ impl GpuHost {
     /// lent (gpu/wit/gpu.wit `device.lost`), `STATUS` last, `READY`, with
     /// release; its counts are written there from then on (@xpute/gpu-web-host
     /// host.ts `attach`).
-    pub fn attach(&mut self, addr: u32) {
+    pub fn attach(&mut self, addr: u64) {
         self.block = Some(addr);
         // SAFETY: the block the guest lent, whose words before `STATUS` it
         // reads only once `STATUS` is `READY`.
         let set_word = |a, v| unsafe { mem::set_word(a, v) };
         let (limits, bits) = super::open::block(&self.device);
         for (k, w) in limits.into_iter().chain(bits).enumerate() {
-            set_word(addr + 4 * k as u32, w);
+            set_word(addr + 4 * k as u64, w);
         }
         // wgpu resolves timestamps in ticks of this many nanoseconds.
         set_word(
-            addr + 4 * device::PERIOD_AT as u32,
+            addr + 4 * device::PERIOD_AT as u64,
             self.queue.get_timestamp_period().to_bits(),
         );
         let preferred = self
@@ -101,7 +96,7 @@ impl GpuHost {
             .iter()
             .position(|f| *f == Some(self.preferred_format));
         set_word(
-            addr + 4 * device::FORMAT_AT as u32,
+            addr + 4 * device::FORMAT_AT as u64,
             preferred.unwrap_or_else(|| {
                 panic!(
                     "[gpu] {:?} is no format the spec names",
@@ -109,9 +104,9 @@ impl GpuHost {
                 )
             }) as u32,
         );
-        set_word(addr + 4 * device::LATENCY_AT as u32, self.frame_latency);
+        set_word(addr + 4 * device::LATENCY_AT as u64, self.frame_latency);
         self.tell_counts();
-        mem::store_release(addr + 4 * device::STATUS_AT as u32, status::READY);
+        mem::store_release(addr + 4 * device::STATUS_AT as u64, status::READY);
     }
 
     /// Stages `bytes` through the belt, a chunk's room at a time, and copies
@@ -521,7 +516,7 @@ impl GpuHost {
                 self.write(id, offset, bytes);
             }
             op::WRITE_BUFFER_AT => {
-                let (id, offset, addr, size) = (r.u(), u64::from(r.u()), r.u(), r.u());
+                let (id, offset, addr, size) = (r.u(), u64::from(r.u()), r.addr(), r.u());
                 // SAFETY: bytes the guest lent with the records.
                 self.write(id, offset, unsafe { mem::read(addr, size) });
             }
@@ -537,7 +532,7 @@ impl GpuHost {
                     let bytes = r.bytes();
                     self.queue.write_texture(place.info(), bytes, layout, size);
                 } else {
-                    let (addr, n) = (r.u(), r.u());
+                    let (addr, n) = (r.addr(), r.u());
                     // SAFETY: bytes the guest lent with the records.
                     let bytes = unsafe { mem::read(addr, n) };
                     self.queue.write_texture(place.info(), bytes, layout, size);
@@ -546,7 +541,7 @@ impl GpuHost {
             op::COPY_EXTERNAL_IMAGE => {
                 let to = self.texture_place(r);
                 let (flip_y, premultiplied) = (r.flag(), r.flag());
-                let (addr, n, word, ticket) = (r.u(), r.u(), r.u(), r.u());
+                let (addr, n, word, ticket) = (r.addr(), r.u(), r.addr(), r.u());
                 // SAFETY: bytes the guest lent with the records.
                 let bytes = unsafe { mem::read(addr, n) };
                 self.copy_external_image(to, bytes, flip_y, premultiplied, word, ticket);
@@ -753,8 +748,8 @@ impl GpuHost {
                     r.u(),
                     u64::from(r.u()),
                     u64::from(r.u()),
-                    r.u(),
-                    r.u(),
+                    r.addr(),
+                    r.addr(),
                     r.u(),
                 );
                 let buffer = self.buffer(b).clone();
@@ -776,7 +771,7 @@ impl GpuHost {
                 });
             }
             op::QUEUE_DONE => {
-                let (word, ticket) = (r.u(), r.u());
+                let (word, ticket) = (r.addr(), r.u());
                 // Staged writes are the queue's work as much as what was
                 // submitted, so they are submitted first.
                 self.submit(core::iter::empty());

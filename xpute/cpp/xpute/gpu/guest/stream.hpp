@@ -3,8 +3,9 @@
 // A stream carries the guest's GPU calls to the host as records, as
 // `xpute-gpu-guest`'s `stream.rs` carries them: op, n, then n words; bytes go
 // as their count, then the bytes padded to a word (`gpu/link/spec/api.json5`).
-// The guest writes the records into a buffer it owns, in its heap
-// (`xpute/guest/heap.hpp`), and flushes them by lending the buffer to the
+// The guest writes the records into a buffer it owns, from the memory
+// resource the program set as its default (`std::pmr::get_default_resource`),
+// and flushes them by lending the buffer to the
 // host's `gpu.run` (`gpu/wit/gpu.wit`), which answers once they have run.
 // From the flush to the answer the records, and any memory a record names for
 // the host to read (the bytes a buffer's or an image's upload takes), are the

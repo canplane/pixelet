@@ -35,10 +35,10 @@ pub struct Frame {
 
 impl Frame {
     /// The frame laid at `at`.
-    pub fn at(at: u32) -> Frame {
+    pub fn at(at: u64) -> Frame {
         // SAFETY: a frame's words in a link's box, which only the side that
         // holds the box touches (link.rs).
-        let w = |k: u32| unsafe { word(at + 4 * k) };
+        let w = |k: u32| unsafe { word(at + 4 * u64::from(k)) };
         let cmd = w(CMD);
         Frame {
             tag: w(TAG),
@@ -51,9 +51,9 @@ impl Frame {
     }
 
     /// Lays the frame's words at `at`.
-    pub fn lay(&self, at: u32) {
+    pub fn lay(&self, at: u64) {
         // SAFETY: as in `at`.
-        let set = |k: u32, v: u32| unsafe { set_word(at + 4 * k, v) };
+        let set = |k: u32, v: u32| unsafe { set_word(at + 4 * u64::from(k), v) };
         let res = if self.res { RES } else { 0 };
         set(TAG, self.tag);
         set(CMD, res | self.handle << METHOD_BITS | self.method);
@@ -63,7 +63,7 @@ impl Frame {
 
     /// The packet of the frame of `cap` bytes laid at `at`; a packet past
     /// the cap is EBADMSG.
-    pub fn pkt(&self, at: u32, cap: u32) -> Result<Option<&'static [u8]>, Errno> {
+    pub fn pkt(&self, at: u64, cap: u32) -> Result<Option<&'static [u8]>, Errno> {
         if self.pkt_len == 0 {
             return Ok(None);
         }
@@ -71,7 +71,9 @@ impl Frame {
             return Err(Errno::EBADMSG);
         }
         // SAFETY: the frame's bytes in the guest's memory.
-        Ok(Some(unsafe { mem::bytes(at + HDR_SZ, self.pkt_len) }))
+        Ok(Some(unsafe {
+            mem::bytes(at + u64::from(HDR_SZ), self.pkt_len)
+        }))
     }
 }
 

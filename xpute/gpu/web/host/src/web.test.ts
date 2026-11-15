@@ -21,7 +21,6 @@ async function ready(nav: object): Promise<GpuReport[]> {
   vi.stubGlobal("isSecureContext", true);
   const posted: GpuReport[] = [];
   vi.stubGlobal("postMessage", (m: GpuReport) => posted.push(m));
-  vi.spyOn(console, "warn").mockImplementation(() => {});
   const named = new Map<number, LinkObject>();
   const added: LinkObject[] = [];
   const answered = Promise.withResolvers<Tag>();
@@ -35,7 +34,7 @@ async function ready(nav: object): Promise<GpuReport[]> {
   new WebGpu(
     link as unknown as Side,
     { power: "high-performance", required_feats: [], optional_feats: [] },
-    { frame_latency: 2, upload_chunk_sz: 1 << 16, slow_ms: null },
+    { frame_latency: 2, upload_chunk_sz: 1 << 16 },
   ).serve();
   const reply = named.get(HANDLE)!.call(GET_DEVICE, 0, null);
   assert.ok(typeof reply !== "number" && reply.data !== null);

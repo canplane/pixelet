@@ -162,6 +162,11 @@ Open when native resumes:
   > Since 2026-11-15 (9c1d429c43): xpute-native-host keeps the clock and the
   > stop; the disk goes (**the user**).
 
+  > Since 2026-11-15: the link's host end and the host-side bindings are the
+  > host's, which the runtime injects into and which names no runtime
+  > (**the user**,
+  > `20261115-xpute-s-parts-cut-by-what-they-are-and-what-they-vary-on.md`).
+
 - The device's platform modules, and a source for the origin's paths on a device.
 
   > Since 2026-11-14: no new platform module (**the user**). A device's origin
@@ -184,5 +189,13 @@ name already taken (**the user**).
 - Renaming core to guest and runtime to host, and splitting the runtime's
   environment from its host along WASI's line of responsibility. The user asked
   for an opinion, and it is undecided.
+
+  > Since 2026-11-13 (`73e2174df5`): the core is the guest, its server the
+  > host and the platform's environment the runtime (**the user**).
+
+  > Since 2026-11-15: the host varies by language and the runtime by platform,
+  > and the runtime injects into the host, which names no runtime
+  > (**the user**,
+  > `20261115-xpute-s-parts-cut-by-what-they-are-and-what-they-vary-on.md`).
 - The catalog's redesign, which removes the slot types and the last exempt cycle.
 - C++ catches up last.

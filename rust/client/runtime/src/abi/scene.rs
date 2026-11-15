@@ -40,15 +40,16 @@ impl SceneContent {
 }
 
 pub fn draw(
+    side_: &_rt::Side,
     surface: u32,
     content: SceneContent,
     group: Option<u8>,
     bg: Option<u32>,
 ) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, data) = side_.call(
         HANDLE,
         DRAW,
-        Some((16, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
             w_.u32(0, surface);
             w_.u8(4, content as u8);
             if let Some(v) = &group {
@@ -59,7 +60,7 @@ pub fn draw(
                 w_.u8(8, 1);
                 w_.u32(12, *v);
             }
-        })),
+        }))),
     );
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
@@ -75,13 +76,16 @@ pub fn draw(
     })
 }
 
-pub fn chat(text: &str) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
-    let (r, data) = _rt::link::call(
+pub fn chat(
+    side_: &_rt::Side,
+    text: &str,
+) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+    let (r, data) = side_.call(
         HANDLE,
         CHAT,
-        Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.str(0, text);
-        })),
+        }))),
     );
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
@@ -99,6 +103,5 @@ pub fn chat(text: &str) -> Result<Result<(), super::types::ErrorCode>, _rt::Errn
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method, Packet, Side};
 }

@@ -58,11 +58,11 @@ impl _rt::Object for _Object {
                     let weight = r_.u32(0)?;
                     let px = r_.f64(8)?;
                     let color = r_.u32(16)?;
-                    let image = _rt::Lent::load(r_, 20)?;
-                    let width = r_.u32(28)?;
-                    let height = r_.u32(32)?;
-                    let x = r_.f64(40)?;
-                    let text = _rt::Lent::load(r_, 48)?;
+                    let image = _rt::Lent::load(r_, 24)?;
+                    let width = r_.u32(40)?;
+                    let height = r_.u32(44)?;
+                    let x = r_.f64(48)?;
+                    let text = _rt::Lent::load(r_, 56)?;
                     match self
                         .0
                         .raster(weight, px, color, image, width, height, x, text)
@@ -78,15 +78,14 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `implementation` under the interface's handle.
-pub fn mount(implementation: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
+/// Serves `implementation` under the interface's handle on `side_`.
+pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
+    side_.mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Side, Tag};
 }

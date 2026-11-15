@@ -16,10 +16,9 @@ path = "src/lib.rs"
 xpute-gpu-link.workspace = true
 xpute-link.workspace = true
 xpute-kit.workspace = true
-# It serves the GPU on xpute-native-runtime's link, on the guest's thread,
-# through the GPU's bindings in its runtime.
-xpute-native-runtime.workspace = true
-xpute-gpu-native-runtime.workspace = true
+# It serves the GPU's bindings (src/abi.rs) on the host's side, on
+# the guest's thread, and hands a job's result back there (native.rs).
+xpute-native-host.workspace = true
 # wgpu runs the records, its serde names read the spec's, and an external
 # image is decoded here where the web asks its browser.
 wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl", "serde"] }
@@ -32,9 +31,18 @@ zune-jpeg = "0.5"
 # is needed.
 pollster = "1"
 
+# A view's `Surface` crosses as the native window wgpu draws through
+# (src/jni.rs `bind`, native.rs `Window`): the NDK's and JNI's own headers as
+# bindings.
+[target.'cfg(target_os = "android")'.dependencies]
+jni-sys = "0.3"
+ndk-sys = "0.6"
+
 [dev-dependencies]
 # The tests take the golden records' reader.
 xpute-golden.workspace = true
+# The tests' guest memory is the runtime's, as an app's is (src/lib.test.rs).
+xpute-native-runtime.workspace = true
 # This is a device with no GPU under it, which makes and maps buffers but runs
 # nothing. The host's CPU tests stage their writes on it
 # (src/lib.noop.test.rs).

@@ -24,7 +24,6 @@ fn host(
         configure_at: ConfigureAt::Here,
         frame_latency,
         upload_chunk_sz: CHUNK_SZ,
-        slow_ms: None,
         present_mode: wgpu::PresentMode::Fifo,
     };
     GpuHost::new(adapter, device.clone(), queue, cfg, None, || {})
@@ -143,8 +142,8 @@ fn write_lands_before_destroy() {
 fn native_tells_unfinished() {
     let (adapter, device, queue) = device();
     let mut h = host(adapter, &device, queue, 1);
-    let block = super::test::SPARE_AT;
-    let unfinished = block + 4 * xpute_gpu_link::spec::device::UNFINISHED_AT as u32;
+    let block = super::test::mem::alloc(4 * xpute_gpu_link::spec::device::WORDS as u32);
+    let unfinished = block + 4 * xpute_gpu_link::spec::device::UNFINISHED_AT as u64;
     h.block = Some(block);
     assert!(h.admit_frame());
     h.count_frame();
@@ -167,9 +166,8 @@ fn native_tells_unfinished() {
 fn lost_told_once() {
     let (adapter, device, queue) = device();
     let mut h = host(adapter, &device, queue, 1);
-    // A block of its own, past the other test's.
-    let block = super::test::SPARE_AT + 4 * xpute_gpu_link::spec::device::WORDS as u32;
-    let status = block + 4 * xpute_gpu_link::spec::device::STATUS_AT as u32;
+    let block = super::test::mem::alloc(4 * xpute_gpu_link::spec::device::WORDS as u32);
+    let status = block + 4 * xpute_gpu_link::spec::device::STATUS_AT as u64;
     h.block = Some(block);
     assert!(!h.lost());
     h.device_lost.store(true, Ordering::Release);

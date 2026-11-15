@@ -16,7 +16,7 @@ import { ComponentError } from "@xpute/link";
 import {
   ERROR_CODE_NO_ENTRY,
   ERROR_CODE_READ_ONLY,
-} from "@xpute/link/abi/fs/types.enum.ts";
+} from "@xpute/web-host/abi/fs/types.enum.ts";
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
 import { BASE_KINDS, TILE_SPHERE } from "@/abi/publication.spec.ts";

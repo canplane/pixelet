@@ -7,7 +7,7 @@ import {
   ERRNO_ECANCELED,
   ERRNO_EINPROGRESS,
 } from "@xpute/kit/status/errno.spec.ts";
-import { HANDLE, WAIT_FOR } from "@xpute/link/abi/clocks/monotonic_clock.ts";
+import { HANDLE, WAIT_FOR } from "./abi/clocks/monotonic_clock.ts";
 import type { LinkObject, Side, Tag } from "@xpute/link";
 import { serve_clock } from "./clock.ts";
 

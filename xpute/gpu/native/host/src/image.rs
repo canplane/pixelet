@@ -11,7 +11,6 @@ use std::io::Cursor;
 use super::object::Object;
 use super::pending::signal;
 use super::run::OwnedTexture;
-use super::timed;
 use super::worker::Worker;
 use super::GpuHost;
 use xpute_gpu_link::spec::result;
@@ -23,7 +22,7 @@ pub(super) struct Decoding {
     /// it was sent them.
     job: u64,
     to: OwnedTexture,
-    word: u32,
+    word: u64,
     ticket: u32,
 }
 
@@ -55,7 +54,7 @@ impl GpuHost {
         bytes: &[u8],
         flip_y: bool,
         premultiplied: bool,
-        word: u32,
+        word: u64,
         ticket: u32,
     ) {
         let job = self.decoder.next;
@@ -105,11 +104,8 @@ impl GpuHost {
                 height: image.height,
                 depth_or_array_layers: 1,
             };
-            // The landing is timed as a page's is (`timed`).
-            timed(self.slow_ms, "image", || {
-                self.queue
-                    .write_texture(d.to.info(), &image.rgba, layout, size)
-            });
+            self.queue
+                .write_texture(d.to.info(), &image.rgba, layout, size);
             signal(d.word, d.ticket, Some(result::OK));
         }
     }

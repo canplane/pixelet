@@ -2,9 +2,8 @@
 
 //! What the native runtime's process tests share. Each is a binary of its
 //! own, since a process starts one runtime and links one guest. The test is
-//! the program: the guest's memory is the runtime's (mem.test.rs), and
-//! xpute-guest's heap is the process's, in it. And the test is the app: it
-//! starts the runtime and keeps what the runtime tells it.
+//! the program, its guest's memory the process's. And the test is the app:
+//! it starts the runtime and keeps what the runtime tells it.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -15,9 +14,6 @@ use xpute_link::abi::types::Token;
 use xpute_link::{store_uri, Handle, Lower};
 use xpute_native_runtime::listener;
 use xpute_native_runtime::native::{self, Start};
-
-#[path = "mem.test.rs"]
-mod mem;
 
 /// What the runtime tells the app of the guest's end, in the order told.
 #[derive(Debug, PartialEq)]

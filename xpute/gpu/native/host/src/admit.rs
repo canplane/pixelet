@@ -54,11 +54,11 @@ impl GpuHost {
     pub(super) fn tell_counts(&self) {
         if let Some(addr) = self.block {
             mem::store_release(
-                addr + 4 * device::ERRORS_AT as u32,
+                addr + 4 * device::ERRORS_AT as u64,
                 self.error_cnt.load(Ordering::Relaxed),
             );
             mem::store_release(
-                addr + 4 * device::UNFINISHED_AT as u32,
+                addr + 4 * device::UNFINISHED_AT as u64,
                 self.unfinished_cnt.load(Ordering::Relaxed),
             );
         }

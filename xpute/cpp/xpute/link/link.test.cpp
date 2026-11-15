@@ -16,8 +16,8 @@ namespace {
 
 // A guest's side and its host's, each crossing into the other's `recv`.
 extern Side guest, host;
-Side guest([](Layout l) { return l.inbox + l.cap; }, [](std::uint32_t at) { return host.recv(at); });
-Side host([](Layout l) { return l.inbox; }, [](std::uint32_t at) { return guest.recv(at); });
+Side guest([](Layout l) { return l.inbox + l.cap; }, [](std::uint64_t at) { return host.recv(at); });
+Side host([](Layout l) { return l.inbox; }, [](std::uint64_t at) { return guest.recv(at); });
 
 constexpr std::uint32_t CAP = 64;
 
@@ -44,8 +44,8 @@ class Served : public Object {
 };
 
 // Lays the link and mounts what the host serves, once, and answers the inbox.
-std::uint32_t inbox() {
-    static std::uint32_t at = [] {
+std::uint64_t inbox() {
+    static std::uint64_t at = [] {
         Layout l{test::alloc(2 * CAP), CAP};
         guest.set_layout(l);
         host.set_layout(l);
@@ -60,7 +60,7 @@ std::uint32_t inbox() {
 // The answer a side lays in the frame its request came in is marked RES and
 // carries the request's tag, a value past the cap refused EMSGSIZE.
 XPUTE_TEST(link_recv_answers_res_with_tag) {
-    std::uint32_t outbox = inbox() + CAP;
+    std::uint64_t outbox = inbox() + CAP;
     for (auto [m, result] : {std::pair<Method, std::int32_t>{0, 0}, {2, status(Errno::emsgsize)}}) {
         Tag t = guest.send(SERVED, m, std::nullopt, nullptr);
         Frame f = Frame::at(outbox);
@@ -71,7 +71,7 @@ XPUTE_TEST(link_recv_answers_res_with_tag) {
 // A later answer is marked RES and carries the request's tag, and its request
 // hears it, a value past the cap refused EMSGSIZE.
 XPUTE_TEST(link_task_return_answers_res_with_tag) {
-    std::uint32_t at = inbox();
+    std::uint64_t at = inbox();
     for (auto [sz, result] : {std::pair<std::size_t, std::int32_t>{4, 0}, {CAP, status(Errno::emsgsize)}}) {
         std::optional<std::pair<std::int32_t, std::optional<std::vector<std::uint8_t>>>> heard;
         Tag t = guest.send(SERVED, 1, std::nullopt, [&](std::int32_t r, std::optional<std::vector<std::uint8_t>> d) { heard.emplace(r, std::move(d)); });

@@ -36,7 +36,7 @@ WASI_CXX := $(WASI_SDK_PATH)/bin/clang++
 FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -Wno-missing-field-initializers -Werror -g
 # A guest's module, as a Rust guest's is linked: no start files and no entry,
 # so it exports only what the guest names, its memory and the link's three
-# exports, and imports only `link_out` and `xpute_mem` from `env`; its stack
+# exports, and imports only `link_out` from `env`; its stack
 # first, so that an overflow runs below address 0 and traps, of STACK_SZ
 # bytes, which the program chooses. Its first export runs its static
 # initializers (xpute/guest/link.hpp `XPUTE_LINK`).

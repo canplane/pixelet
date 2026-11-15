@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use xpute_kit::status::errno::Errno;
 use xpute_link::{uri, Handle, Method, Object, Reply, Tag, NAMED, OPEN, ROOT};
-use xpute_native_runtime::link;
 use xpute_native_runtime::native::Boot;
 
 #[path = "app.test.rs"]
@@ -44,8 +43,8 @@ fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
         servers: vec![
-            Box::new(|| link::mount_named(NAMED_ONE, Rc::new(Nothing))),
-            Box::new(|| link::mount(OPENED, uri(&["opened"]), |_, _| Err(Errno::ENOENT))),
+            Box::new(|side| side.mount_named(NAMED_ONE, Rc::new(Nothing))),
+            Box::new(|side| side.mount(OPENED, uri(&["opened"]), |_, _| Err(Errno::ENOENT))),
         ],
         imports: &[
             ("named", NAMED_ONE),

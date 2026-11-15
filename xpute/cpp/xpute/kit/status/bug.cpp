@@ -48,8 +48,8 @@ extern "C" void __cxa_pure_virtual() {
 }
 
 // So is libc++abi's `__abort_message`, which its type information's vtables
-// reach, and which a class over one of libc++'s, as `guest::heap()`'s memory
-// resource is, links in.
+// reach, and which a class over one of libc++'s, as the kit's `HeapMalloc`
+// memory resource is, links in.
 extern "C" void __abort_message(const char *, ...) {
     xpute::bug(xpute::Errno::enotrecoverable);
 }

@@ -14,5 +14,4 @@ export {
   instantiate,
   run,
   type Server,
-  tell_stop,
 } from "./worker.ts";

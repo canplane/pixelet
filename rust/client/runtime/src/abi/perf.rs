@@ -16,8 +16,8 @@ pub const TABLE: _rt::Method = 3;
 /// `strtab`
 pub const STRTAB: _rt::Method = 4;
 
-pub fn start() -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, START, None);
+pub fn start(side_: &_rt::Side) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+    let (r, data) = side_.call(HANDLE, START, _rt::Packet::Args(None));
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.case(0, 2).and_then(|d| {
@@ -32,21 +32,21 @@ pub fn start() -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
     })
 }
 
-pub fn stop() -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(HANDLE, STOP, None);
+pub fn stop(side_: &_rt::Side) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(HANDLE, STOP, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 
-pub fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno> {
-    let (r, data) = _rt::link::call(
+pub fn stats(side_: &_rt::Side, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno> {
+    let (r, data) = side_.call(
         HANDLE,
         STATS,
-        Some((16, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
             if let Some(v) = &window_ms {
                 w_.u8(0, 1);
                 w_.f64(8, *v);
             }
-        })),
+        }))),
     );
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
@@ -54,14 +54,14 @@ pub fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno> {
     })
 }
 
-pub fn table(table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno> {
-    let (r, data) = _rt::link::call(
+pub fn table(side_: &_rt::Side, table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno> {
+    let (r, data) = side_.call(
         HANDLE,
         TABLE,
-        Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.u32(0, table);
             w_.u32(4, from);
-        })),
+        }))),
     );
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
@@ -69,8 +69,8 @@ pub fn table(table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno> {
     })
 }
 
-pub fn strtab() -> Result<Vec<u8>, _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, STRTAB, None);
+pub fn strtab(side_: &_rt::Side) -> Result<Vec<u8>, _rt::Errno> {
+    let (r, data) = side_.call(HANDLE, STRTAB, _rt::Packet::Args(None));
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.arr::<u8>(0)
@@ -79,6 +79,5 @@ pub fn strtab() -> Result<Vec<u8>, _rt::Errno> {
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method, Packet, Side};
 }

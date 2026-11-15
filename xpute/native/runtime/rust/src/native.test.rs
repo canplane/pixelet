@@ -44,9 +44,7 @@ xpute_guest::link!(
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![Box::new(|| {
-            xpute_native_runtime::link::mount_named(FAIL, Rc::new(Fail))
-        })],
+        servers: vec![Box::new(|side| side.mount_named(FAIL, Rc::new(Fail)))],
         imports: &[("fail", FAIL)],
         later: &[],
     }
@@ -64,7 +62,10 @@ fn failure_stops_then_traps() {
     let told = app::ends();
     assert!(
         matches!(&told[..], [End::Stop(e, file), End::Trap(err)]
-            if *e == Errno::ENOTRECOVERABLE as i32 && file.ends_with("native.test.rs") && err.starts_with("the host stopped at ")),
+            if *e == Errno::ENOTRECOVERABLE as i32
+                && file.ends_with("native.test.rs")
+                && err.starts_with("the host stopped: panicked at ")
+                && err.ends_with("the host fails")),
         "{told:?}"
     );
 

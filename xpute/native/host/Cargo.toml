@@ -1,6 +1,6 @@
 [package]
 name = "xpute-native-host"
-description = "xpute's host on a native device: what it serves the guest, on its runtime's link"
+description = "xpute's host on a native device: its end of the link, the bindings served there, and what it serves the guest"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
@@ -14,17 +14,16 @@ path = "src/lib.rs"
 
 [dependencies]
 xpute-kit.workspace = true
-# The contract's pure types, shared rather than copied: an answer given later
-# (clock.rs).
+# The contract's pure types, shared rather than copied: the link machine its
+# runtime makes and gives it, which its bindings serve on, and an answer given
+# later (clock.rs).
 xpute-link.workspace = true
-# The environment the host runs in: the guest's thread and its loop, the
-# link it serves on, and the bindings of what it serves.
-xpute-native-runtime.workspace = true
 
 [dev-dependencies]
-# The clock's test links a guest beside the runtime, as an app does
+# The clock's test links a guest and the runtime it runs in, as an app does
 # (src/clock.test.rs).
 xpute-guest.workspace = true
+xpute-native-runtime.workspace = true
 
 # A process starts one runtime and links one guest, so the test is a binary of
 # its own, on the runtime's process tests' app (xpute-native-runtime

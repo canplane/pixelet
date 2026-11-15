@@ -116,13 +116,13 @@ public class XputeModule: Module {
         cleanup: { xpute_taken_free(at, len) })
     }
 
-    /// The region is the guest's for the app's whole life, so nothing is freed
-    /// when the buffer is.
-    Function("mem") { () throws -> NativeArrayBuffer in
-      var len: UInt32 = 0
-      let at = xpute_mem(&len, nil)
+    /// A span the guest lent, its address in two words, `lo` and `hi`: the
+    /// buffer is the UI's until the lend's answer, and nothing is freed when
+    /// the buffer is.
+    Function("bytes") { (lo: UInt32, hi: UInt32, len: Int) throws -> NativeArrayBuffer in
+      let at = UnsafeMutableRawPointer(bitPattern: UInt(hi) << 32 | UInt(lo))
       return try NativeArrayBuffer.wrap(
-        dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(len)), cleanup: {})
+        dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: len), cleanup: {})
     }
 
     /// The guest's last stop, as `onStopped` carries it, or nil before the

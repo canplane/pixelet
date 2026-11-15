@@ -656,7 +656,7 @@ impl Atmosphere {
     /// submitted. Their landing wakes the frame that reads them.
     pub fn read_back(&mut self, g: &Gpu) {
         if self.flying != 0 && !self.mapped {
-            let addr = mem::off(&*self.landed_words);
+            let addr = mem::addr(&*self.landed_words);
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.slopes.1,

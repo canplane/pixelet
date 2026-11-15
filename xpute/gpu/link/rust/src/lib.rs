@@ -1,10 +1,11 @@
 // xpute-gpu-link/lib.rs
 
 //! What both of the GPU's sides take: the stream's words, each op's and the
-//! enumerations they carry (`spec`, `enums`, from gpu/link/spec/), a
-//! handle's slot (`handle`), the one rule a frame is admitted by (`admit`),
-//! what a guest asks of its GPU (`GpuAsk`) and the settings its program
-//! chooses for the GPU's host (`GpuConfig`), as @xpute/gpu-link has them.
+//! enumerations they carry (`spec`, `enums`, from gpu/link/spec/), the
+//! addresses a stream's records hold (`addr`), a handle's slot (`handle`), the one rule
+//! a frame is admitted by (`admit`), what a guest asks of its GPU (`GpuAsk`)
+//! and the settings its program chooses for the GPU's host (`GpuConfig`), as
+//! @xpute/gpu-link has them.
 
 #[path = "api.spec.rs"]
 pub mod spec;
@@ -12,6 +13,7 @@ pub mod spec;
 #[path = "enum.spec.rs"]
 pub mod enums;
 
+pub mod addr;
 pub mod admit;
 pub mod handle;
 
@@ -40,10 +42,4 @@ pub struct GpuConfig {
     /// Choose it as large as one frame's writes; a larger write is staged
     /// across several chunks.
     pub upload_chunk_sz: u32,
-    /// What takes longer than this many milliseconds is logged, the whole
-    /// milliseconds: a record of the stream, as `[gpu] op <op> took <ms> ms`
-    /// by the op's number, the stream's run as a whole, as `[gpu] run took
-    /// <ms> ms`, a completion's landing in the poll, a read's (`map`) and an
-    /// image's (`image`). With none, nothing is timed.
-    pub slow_ms: Option<u32>,
 }

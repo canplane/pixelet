@@ -36,23 +36,23 @@ impl Token {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lent {
-    pub at: u32,
+    pub at: u64,
     pub len: u32,
 }
 
 impl Lent {
-    pub const SZ: usize = 8;
-    pub const ALIGN: usize = 4;
+    pub const SZ: usize = 16;
+    pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u32(at, self.at);
-        w.u32(at + 4, self.len);
+        w.u64(at, self.at);
+        w.u32(at + 8, self.len);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Lent, _rt::Errno> {
         Ok(Lent {
-            at: r.u32(at)?,
-            len: r.u32(at + 4)?,
+            at: r.u64(at)?,
+            len: r.u32(at + 8)?,
         })
     }
 }

@@ -87,47 +87,46 @@ impl Position {
     }
 }
 
-pub fn pos(at: Option<&Position>) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn pos(side_: &_rt::Side, at: Option<&Position>) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         POS,
-        Some((40, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((40, &|w_: &mut _rt::Lower| {
             if let Some(v) = &at {
                 w_.u8(0, 1);
                 (v).store(w_, 8);
             }
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn heading(deg: Option<f64>) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn heading(side_: &_rt::Side, deg: Option<f64>) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         HEADING,
-        Some((16, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
             if let Some(v) = &deg {
                 w_.u8(0, 1);
                 w_.f64(8, *v);
             }
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn location(status: LocationStatus) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn location(side_: &_rt::Side, status: LocationStatus) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         LOCATION,
-        Some((1, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((1, &|w_: &mut _rt::Lower| {
             w_.u8(0, status as u8);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method, Packet, Side};
 }

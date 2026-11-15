@@ -49,7 +49,7 @@ pub fn run<L: _rt::Lend>(recs: L) -> impl _rt::Future<Output = (L, Result<(), _r
     let sent = _rt::wait::wait(
         HANDLE,
         RUN,
-        Some((8, &|w_: &mut _rt::Lower| {
+        Some((16, &|w_: &mut _rt::Lower| {
             _rt::Lent {
                 at: recs_at_,
                 len: recs_len_,
@@ -81,7 +81,7 @@ pub fn device_lost<L: _rt::Lend>(
     let sent = _rt::wait::wait(
         device_,
         DEVICE_LOST,
-        Some((8, &|w_: &mut _rt::Lower| {
+        Some((16, &|w_: &mut _rt::Lower| {
             _rt::Lent {
                 at: block_at_,
                 len: block_len_,

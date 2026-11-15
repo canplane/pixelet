@@ -7,11 +7,10 @@
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/gpu/guest/abi/gpu.hpp"
-#include "xpute/guest/heap.hpp"
 
 namespace xpute::gpu {
 
-Stream::Stream(std::size_t cap) : buf_(std::pmr::vector<std::uint32_t>(&guest::heap())), cap_(cap) {
+Stream::Stream(std::size_t cap) : buf_(std::pmr::vector<std::uint32_t>()), cap_(cap) {
     std::get<0>(buf_).reserve(cap);
 }
 

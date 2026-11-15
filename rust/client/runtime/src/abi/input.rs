@@ -97,6 +97,7 @@ impl Drag {
 }
 
 pub fn pointer(
+    side_: &_rt::Side,
     phase: PointerPhase,
     touch: bool,
     id: i32,
@@ -104,56 +105,61 @@ pub fn pointer(
     x: f64,
     y: f64,
 ) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+    let (r, _) = side_.call(
         HANDLE,
         POINTER,
-        Some((32, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((32, &|w_: &mut _rt::Lower| {
             w_.u8(0, phase as u8);
             w_.bool(1, touch);
             w_.i32(4, id);
             w_.u8(8, drag as u8);
             w_.f64(16, x);
             w_.f64(24, y);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn wheel(delta_y: f64) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn wheel(side_: &_rt::Side, delta_y: f64) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         WHEEL,
-        Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.f64(0, delta_y);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn pinch(scale: f64) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn pinch(side_: &_rt::Side, scale: f64) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         PINCH,
-        Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.f64(0, scale);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn r#move(x: i32, y: i32) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn r#move(side_: &_rt::Side, x: i32, y: i32) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         MOVE,
-        Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.i32(0, x);
             w_.i32(4, y);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the WIT function's parameters, each its own"
+)]
 pub fn xr_pose(
+    side_: &_rt::Side,
     x: f64,
     y: f64,
     z: f64,
@@ -162,10 +168,10 @@ pub fn xr_pose(
     qz: f64,
     qw: f64,
 ) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+    let (r, _) = side_.call(
         HANDLE,
         XR_POSE,
-        Some((56, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((56, &|w_: &mut _rt::Lower| {
             w_.f64(0, x);
             w_.f64(8, y);
             w_.f64(16, z);
@@ -173,18 +179,17 @@ pub fn xr_pose(
             w_.f64(32, qy);
             w_.f64(40, qz);
             w_.f64(48, qw);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn xr_pose_end() -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(HANDLE, XR_POSE_END, None);
+pub fn xr_pose_end(side_: &_rt::Side) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(HANDLE, XR_POSE_END, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lower, Method, Packet, Side};
 }

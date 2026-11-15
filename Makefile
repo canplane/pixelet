@@ -58,7 +58,7 @@ check-spec:
 check-build:
 	pnpm --dir ts/client build:web
 check-xpute:
-	+cd xpute && cargo fmt --check && cargo spec && cargo clippy --workspace --all-targets -- -D warnings
+	+cd xpute && cargo fmt --check && cargo spec && cargo clippy --workspace --all-targets -- -D warnings && $(CURDIR)/script/env.sh cargo lint-android
 	pnpm --dir xpute check
 	$(MAKE) -C xpute/cpp check
 

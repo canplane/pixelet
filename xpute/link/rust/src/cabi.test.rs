@@ -1,5 +1,12 @@
 // xpute-link/cabi.test.rs
 
+//! Holds the Canonical ABI's lowering and lifting to link/spec/golden/cabi.tsv,
+//! the record every language's must match, and writes it: run with
+//! `XPUTE_GOLDEN_WRITE=1`, `lower_matches_record` writes the record from
+//! `lower` and `REFUSED` instead of comparing.
+
+use std::fmt::Write as _;
+
 use super::*;
 use crate::abi::types::{Lent, Token};
 use crate::{load_uri, store_uri};
@@ -9,7 +16,19 @@ const GOLDEN: &str = include_str!("../../spec/golden/cabi.tsv");
 
 /// The record's packet: one of each number, a string, a list of numbers, a
 /// URI and a lent span, as the Canonical ABI lays a tuple of them.
-const FIXED_SZ: usize = 80;
+const FIXED_SZ: usize = 88;
+
+/// Packets that do not hold a URI, each refused as one: a list whose
+/// pointer, count or token runs past the packet, and a token of no case or a
+/// string past its bytes.
+const REFUSED: [&str; 6] = [
+    "0c000000",
+    "0a000000000000000000",
+    "0800000002000000000000000000000000000000",
+    "0800000001000000020000000500000000000000",
+    "0800000001000000010000001400000001000000ff",
+    "080000000100000001000000140000000500000066",
+];
 
 fn uri() -> Vec<Token> {
     vec![Token::Int(5), Token::Str("f".to_owned())]
@@ -36,9 +55,12 @@ fn lower(buf: &mut [u8]) -> Result<usize, Errno> {
 }
 
 /// The packet lowers as the record holds it, and only into a buffer that holds
-/// it whole.
+/// it whole; with `XPUTE_GOLDEN_WRITE=1`, the record is written instead.
 #[test]
 fn lower_matches_record() {
+    if std::env::var_os("XPUTE_GOLDEN_WRITE").is_some() {
+        return write();
+    }
     let want = Golden::load(GOLDEN).bytes("pkt");
     let mut buf = vec![0xaa; want.len()];
     assert_eq!(lower(&mut buf), Ok(want.len()));
@@ -80,4 +102,16 @@ fn refusals_match_record() {
             "{k}"
         );
     });
+}
+
+/// Writes the record: the packet `lower` lays, and the refused packets.
+fn write() {
+    let mut buf = vec![0; 4096];
+    let n = lower(&mut buf).expect("the packet lowered");
+    let mut out = format!("pkt\t{}\n", hex::encode(&buf[..n]));
+    for (k, r) in REFUSED.iter().enumerate() {
+        let _ = writeln!(out, "refused.{k}\t{r}");
+    }
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../spec/golden/cabi.tsv");
+    std::fs::write(path, out).expect("the record written");
 }

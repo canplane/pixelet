@@ -1,9 +1,9 @@
 // xpute-native-runtime/jni.rs
 
-//! JNI's and the NDK's bindings as an Android app's native side reaches the
-//! runtime, its host and what they serve, re-exported (`sys`, `ndk`) so that a device
-//! beside the guest names them through this crate; and a Kotlin class whose
-//! static methods a thread of the runtime or a host calls (`Class`, `call`,
+//! JNI's bindings as an Android app's native side reaches the runtime, its
+//! host and what they serve, re-exported (`sys`) so that a device beside the
+//! guest names them through this crate; and a Kotlin class whose static
+//! methods a thread of the runtime or a host calls (`Class`, `call`,
 //! `Return`), a string the C ABI gives among their values (`string`). The
 //! runtime itself reaches the app through them: the C ABI's calls under the
 //! names JNI looks for, as the `external` functions of the Kotlin class
@@ -22,9 +22,8 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 pub use jni_sys as sys;
-pub use ndk_sys as ndk;
 
-use sys::{jbyteArray, jint, jintArray, jobject, jstring, jvalue, JNIEnv};
+use sys::{jbyteArray, jint, jintArray, jlong, jobject, jstring, jvalue, JNIEnv};
 
 use crate::listener::{notify_on, stopped_on, trap_on};
 
@@ -443,14 +442,18 @@ pub unsafe fn take(e: *mut JNIEnv, generation: u32) -> jbyteArray {
     }
 }
 
-/// The guest's memory as a direct `ByteBuffer`, with no copy.
+/// The `len` bytes the guest lent at `at`, its address, as a direct
+/// `ByteBuffer` over them, with no copy, the UI's until the lend's answer.
 ///
 /// # Safety
-/// `e` is what JNI called with.
-pub unsafe fn mem(e: *mut JNIEnv) -> jobject {
-    let r = xpute_link::mem::region();
-    // SAFETY: the region, the guest's for the process's life.
-    unsafe { env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(e, r.base.cast(), i64::from(r.len)) }
+/// `e` is what JNI called with, and the span is lent to the UI.
+pub unsafe fn buf(e: *mut JNIEnv, at: jlong, len: jint) -> jobject {
+    // SAFETY: the caller's.
+    let b = unsafe { xpute_link::mem::bytes(at as u64, len as u32) };
+    // SAFETY: JNI's own call over the span.
+    unsafe {
+        env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(e, b.as_mut_ptr().cast(), i64::from(len))
+    }
 }
 
 /// Exports the runtime to JNI for the Kotlin class
@@ -459,7 +462,7 @@ pub unsafe fn mem(e: *mut JNIEnv) -> jobject {
 /// which answers the UI's generation, `post(generation: Int,
 /// tag: Int, h: Int, m: Int, pkt: ByteArray?)`, `answer(generation: Int, tag:
 /// Int, result: Int, data: ByteArray?)`, `take(generation: Int): ByteArray`,
-/// `mem(): ByteBuffer`, `life(shown: Boolean)`, `stop(): Stop?` and
+/// `bytes(at: Long, len: Int): ByteBuffer`, `life(shown: Boolean)`, `stop(): Stop?` and
 /// `trap(): String?`.
 #[macro_export]
 macro_rules! jni_abi {
@@ -542,12 +545,15 @@ macro_rules! jni_abi {
         /// # Safety
         /// Only JNI calls this.
         #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Runtime_mem(
+        unsafe extern "system" fn Java_xpute_Runtime_bytes(
             env: *mut $crate::jni::sys::JNIEnv,
             _this: $crate::jni::sys::jobject,
+            at: $crate::jni::sys::jlong,
+            len: $crate::jni::sys::jint,
         ) -> $crate::jni::sys::jobject {
-            // SAFETY: the environment JNI called with.
-            unsafe { $crate::jni::mem(env) }
+            // SAFETY: the environment JNI called with, over a span the guest
+            // lent the UI.
+            unsafe { $crate::jni::buf(env, at, len) }
         }
 
         /// # Safety

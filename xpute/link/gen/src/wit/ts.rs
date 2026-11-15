@@ -19,6 +19,7 @@ use super::{
 /// The TypeScript modules the bindings take items from, beside the link's.
 const TS_ERRNO: &str = "@xpute/kit/status/errno.spec.ts";
 const TS_ERROR: &str = "@xpute/kit/status/error.ts";
+const TS_WORD: &str = "@xpute/kit/abi/word.ts";
 
 /// A WIT name as a TypeScript identifier.
 fn ts_name(n: &str) -> String {
@@ -463,6 +464,8 @@ impl Gen<'_> {
     fn ts_ty(&self, k: &Kind) -> String {
         match k {
             Kind::Bool => "boolean".into(),
+            // A 64-bit integer, a bigint, by the kit's word alias.
+            Kind::Number(n) if ts_number(n.rs) == "bigint" => self.ts_use(TS_WORD, n.rs, true),
             Kind::Number(n) => ts_number(n.rs).into(),
             Kind::Handle => "number".into(),
             Kind::Str => "string".into(),

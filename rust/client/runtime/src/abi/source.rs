@@ -8,11 +8,16 @@ pub const HANDLE: _rt::Handle = 0x6a88bf;
 /// `declare`
 pub const DECLARE: _rt::Method = 0;
 
-pub fn declare(min_zoom: u32, formats: &[u32], shards: &[String]) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn declare(
+    side_: &_rt::Side,
+    min_zoom: u32,
+    formats: &[u32],
+    shards: &[String],
+) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         DECLARE,
-        Some((20, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((20, &|w_: &mut _rt::Lower| {
             w_.u32(0, min_zoom);
             w_.arr(4, formats);
             if let Some(b) = w_.list(12, (shards).len(), 8, 4) {
@@ -20,13 +25,12 @@ pub fn declare(min_zoom: u32, formats: &[u32], shards: &[String]) -> Result<(), 
                     w_.str(b + i * 8, x);
                 }
             }
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lower, Method, Packet, Side};
 }

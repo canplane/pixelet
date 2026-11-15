@@ -63,7 +63,7 @@ constexpr std::optional<ErrorCode> of_ErrorCode(std::uint32_t val) noexcept {
 
 template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<void>>> run(L recs) noexcept {
     _rt::Lent recs_lent_ = _rt::span(recs);
-    auto sent_ = _rt::wait(HANDLE, RUN, _rt::Packet{8, [&](_rt::Lower &w_) { recs_lent_.store(w_, 0); }}, std::move(recs));
+    auto sent_ = _rt::wait(HANDLE, RUN, _rt::Packet{16, [&](_rt::Lower &w_) { recs_lent_.store(w_, 0); }}, std::move(recs));
     auto [result_, data_, lent_] = co_await std::move(sent_);
     co_return {std::move(lent_), _rt::answer(result_)};
 }
@@ -75,7 +75,7 @@ inline _rt::Result<std::uint32_t> get_device() noexcept {
 
 template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<void>>> device_lost(_rt::Handle device_, L block) noexcept {
     _rt::Lent block_lent_ = _rt::span(block);
-    auto sent_ = _rt::wait(device_, DEVICE_LOST, _rt::Packet{8, [&](_rt::Lower &w_) { block_lent_.store(w_, 0); }}, std::move(block));
+    auto sent_ = _rt::wait(device_, DEVICE_LOST, _rt::Packet{16, [&](_rt::Lower &w_) { block_lent_.store(w_, 0); }}, std::move(block));
     auto [result_, data_, lent_] = co_await std::move(sent_);
     co_return {std::move(lent_), _rt::answer(result_)};
 }

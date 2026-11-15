@@ -5,4 +5,5 @@
 pub mod clocks;
 pub mod fs;
 pub mod life;
+pub mod log;
 pub mod stop;

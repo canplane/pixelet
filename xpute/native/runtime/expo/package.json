@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@xpute/kit": "workspace:*",
-    "@xpute/link": "workspace:*"
+    "@xpute/link": "workspace:*",
+    "@xpute/web-host": "workspace:*"
   },
   "peerDependencies": {
     "expo": "*",

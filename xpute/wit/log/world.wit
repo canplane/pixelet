@@ -1,0 +1,7 @@
+package xpute:log@0.1.0;
+
+// What a guest tells, which its host hears.
+
+world imports {
+  import log;
+}

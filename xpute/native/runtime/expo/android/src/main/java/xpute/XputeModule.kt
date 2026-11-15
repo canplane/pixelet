@@ -96,9 +96,12 @@ class XputeModule : Module() {
       NativeArrayBuffer(ByteBuffer.allocateDirect(bytes.size).put(bytes).also { it.flip() })
     }
 
-    // The region is the guest's for the app's whole life, so nothing is freed
-    // when the buffer is.
-    Function("mem") { NativeArrayBuffer(Runtime.mem()) }
+    // A span the guest lent, its address in two words, `lo` and `hi`: the
+    // buffer is the UI's until the lend's answer, and nothing is freed when
+    // the buffer is.
+    Function("bytes") { lo: Long, hi: Long, len: Int ->
+      NativeArrayBuffer(Runtime.bytes((hi shl 32) or lo, len))
+    }
 
     /** The guest's last stop, as `onStopped` carries it, or null before the
      * guest stopped (`Runtime.stop()`). */

@@ -12,6 +12,10 @@
 // A transaction (xpute-gpu-guest stream.rs) that does not commit drops its records and gives back the
 // handles they took, so the host never hears of those objects. The encoder's begin and
 // commit open and close the transaction on both the stream and the handle table.
+//
+// Where a record names the guest's memory, the bytes it reads or the fence word it answers at
+// (OPS), the memory address is a u64 on every platform (link/wit/types.wit `lent`), written as
+// two words, its low word first.
 
 /** The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),
  * which its host opens. */
@@ -237,6 +241,51 @@ export const COLOR_WRITE = {
   ALL: 15 as number,
 } as const;
 
+/** Each address the records of an op name in the guest's memory: the op, and the place
+ * of the address's low word, counted back from the record's end (`from_end`), as the op's
+ * words list them: WRITE_BUFFER_AT's bytes, WRITE_TEXTURE_AT's, COPY_EXTERNAL_IMAGE's
+ * image and fence, MAP_ASYNC's address and fence, and the fence of QUEUE_DONE and of the
+ * async pipelines, each followed by a count or a ticket. A reader that moves records to
+ * another block finds their addresses here. */
+export const OPS = [
+  {
+    op: 14 as number,
+    from_end: 3 as number,
+  },
+  {
+    op: 16 as number,
+    from_end: 3 as number,
+  },
+  {
+    op: 17 as number,
+    from_end: 6 as number,
+  },
+  {
+    op: 17 as number,
+    from_end: 3 as number,
+  },
+  {
+    op: 43 as number,
+    from_end: 5 as number,
+  },
+  {
+    op: 43 as number,
+    from_end: 3 as number,
+  },
+  {
+    op: 44 as number,
+    from_end: 3 as number,
+  },
+  {
+    op: 49 as number,
+    from_end: 3 as number,
+  },
+  {
+    op: 50 as number,
+    from_end: 3 as number,
+  },
+] as const;
+
 /** The words of the device block, which the guest lends the host to write (gpu/wit/gpu.wit
  * `device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its
  * features (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32
@@ -247,7 +296,7 @@ export const COLOR_WRITE = {
  * may be unfinished at once, at least one), then the count of uncaptured errors, then the
  * count of unfinished frames, then STATUS, the last, which the host stores with release
  * after the rest. The uncaptured errors are the errors the device raised that no error
- * scope caught, each logged where the host logs. The unfinished frames are the frames the
+ * scope caught. The unfinished frames are the frames the
  * guest has drawn whose work the queue has not yet done. Only the host writes the two
  * counts: first before STATUS, as it writes the rest of the block, and afterwards with
  * release each time a count changes. The guest loads them with acquire once STATUS reads

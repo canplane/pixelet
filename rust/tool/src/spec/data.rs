@@ -19,7 +19,6 @@ use crate::root;
 const DATA_SPECS: [DataSpec; 18] = [
     DataSpec {
         json: "spec/client/core/sys/manifest.json5",
-        ts: Some("ts/client/src/abi/manifest.spec.ts"),
         rs: Some("rust/client/core/src/spec/manifest.spec.rs"),
         ..DataSpec::DEFAULT
     },

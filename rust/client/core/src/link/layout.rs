@@ -14,13 +14,12 @@ use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::perf::record;
 use crate::spec::manifest;
-use crate::sys::heap::PAGE_BYTES;
+use crate::sys::heap::{Span, PAGE_BYTES};
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
 use crate::sys::range;
 use pxl_render::gpu::upload;
-use xpute_guest::heap::Span;
 use xpute_kit::alloc::buddy_tree::Range;
 
 /// Every model the core can hold at once. No model is ever freed, so this is

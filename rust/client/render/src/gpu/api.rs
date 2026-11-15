@@ -2104,7 +2104,7 @@ impl Gpu {
         id: Id,
         off: u32,
         length: u32,
-        addr: u32,
+        addr: u64,
         fence: &[u32; 2],
         ticket: u32,
     ) {

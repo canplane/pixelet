@@ -3,7 +3,18 @@
 //! These are bit fields in 32- and 64-bit words. A field is `nbit` bits wide
 //! and starts at bit `shamt`; the caller keeps it inside the word. `field_mask`
 //! also takes a field as wide as the whole word, which a plain shift cannot
-//! express.
+//! express. A 64-bit word is also two 32-bit ones, its low word first
+//! (`split64`, `join64`), as a stream of 32-bit words carries it.
+
+/// The two 32-bit words of `v`, its low word first.
+pub const fn split64(v: u64) -> [u32; 2] {
+    [v as u32, (v >> 32) as u32]
+}
+
+/// The 64-bit word whose low and high 32-bit words are `lo` and `hi`.
+pub const fn join64(lo: u32, hi: u32) -> u64 {
+    (hi as u64) << 32 | lo as u64
+}
 
 pub const fn bit64(shamt: u32) -> u64 {
     1u64 << shamt

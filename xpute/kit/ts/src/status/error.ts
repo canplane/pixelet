@@ -20,12 +20,13 @@ export function strerror(errnum: i32): string {
 /** An errno a fault from outside the program raised: its input, its peer,
  * the network or the environment. It is caught, and what it stops is
  * isolated, degraded or dropped; a broken invariant is a `XputeBug` (`bug.ts`)
- * instead. What happened is its `kind`. */
+ * instead. What happened is its `kind`. Its message is what its maker says
+ * of it, or `strerror` of its errno; across the link it is its errno alone. */
 export class XputeError extends Error {
   readonly errnum: i32;
 
-  constructor(errnum: i32) {
-    super(strerror(errnum));
+  constructor(errnum: i32, message?: string) {
+    super(message ?? strerror(errnum));
     this.name = "XputeError";
     this.errnum = errnum;
   }

@@ -8,7 +8,7 @@ import {
   ERROR_CODE_BAD_MESSAGE,
   ERROR_CODE_IO,
   ERROR_CODE_NO_ENTRY,
-} from "@xpute/link/abi/fs/types.enum.ts";
+} from "@xpute/web-host/abi/fs/types.enum.ts";
 
 import { path } from "@/abi/file.spec.ts";
 import {

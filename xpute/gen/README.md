@@ -38,7 +38,9 @@ strings, booleans, enums, lists and tables) and no domain type: a color is a
 number the spec writes in hex, which JSON5 allows.
 
 A value goes as it is: a number keeps its value, a string its text, and a
-string a `$type` names as an enum's member is that member. A `$type` the
+string a `$type` names as an enum's member is that member. A value may be
+DTCG's reference to another token of its spec, `"{group.token}"`, and is then
+that token's value. A `$type` the
 generator does not know is refused, and so is a number with no `$type`, its
 own or its group's, or with a type no number has, or one its integer `$type`
 does not hold, not whole or past its width, a packed table's words a
