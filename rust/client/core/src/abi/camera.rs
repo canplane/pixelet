@@ -47,14 +47,7 @@ impl Tracking {
 pub trait Guest {
     fn track(&self, tracking: Tracking) -> Result<(), _rt::Errno>;
     fn north_up(&self) -> Result<(), _rt::Errno>;
-    fn goto(
-        &self,
-        lon: f64,
-        lat: f64,
-        dist: Option<f64>,
-        azimuth: Option<f64>,
-        polar: Option<f64>,
-    ) -> Result<(), _rt::Errno>;
+    fn goto(&self, lon: f64, lat: f64) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
@@ -81,28 +74,7 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let lon = r_.f64(0)?;
                     let lat = r_.f64(8)?;
-                    let dist = r_.case(16, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(24).map(Some)
-                        }
-                    })?;
-                    let azimuth = r_.case(32, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(40).map(Some)
-                        }
-                    })?;
-                    let polar = r_.case(48, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(56).map(Some)
-                        }
-                    })?;
-                    match self.0.goto(lon, lat, dist, azimuth, polar) {
+                    match self.0.goto(lon, lat) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }

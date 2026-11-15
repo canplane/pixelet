@@ -23,7 +23,7 @@ import {
   FRAME_GROUP,
   LIMIT,
   NOW,
-  RING_NAMES,
+  TABLE_NAMES,
   PERCENTILE,
   STAT,
   STEP_STAT,
@@ -375,21 +375,21 @@ async function perf_draw(): Promise<DrawSection> {
   return section((await stats_of(0)).now, NOW.draw);
 }
 
-/** The words of a record of each ring, in `RING_NAMES`' order. */
-const RING_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
+/** The words of a record of each table, in `TABLE_NAMES`' order. */
+const TABLE_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 
-/** The records of the ring `name`: the frames and the tasks oldest first,
+/** The records of the table `name`: the frames and the tasks oldest first,
  * the worst frames longest first, read a page at a time until a page comes
  * short (`perf.json5` `LIMIT.PAGE_BYTES`). */
-async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
-  const k = RING_NAMES.indexOf(name);
-  const record = 8 * RING_WORDS[k]!;
+async function table(name: (typeof TABLE_NAMES)[number]): Promise<U8Array> {
+  const k = TABLE_NAMES.indexOf(name);
+  const record = 8 * TABLE_WORDS[k]!;
   const full = Math.floor(LIMIT.PAGE_BYTES / record) * record;
   const pages: U8Array[] = [];
   let bytes = 0;
   let from = 0;
   for (;;) {
-    const page = await perf.ring(ui, k, from, 0xffff_ffff);
+    const page = await perf.table(ui, k, from);
     pages.push(page);
     bytes += page.length;
     from += page.length / record;
@@ -400,17 +400,17 @@ async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
   return out;
 }
 
-/** Every frame the ring holds, oldest first. */
+/** Every frame the table holds, oldest first. */
 async function perf_frames(): Promise<Frame[]> {
-  const w = words(await ring("frames"));
+  const w = words(await table("frames"));
   const cnt = w.length / FRAME.WORDS;
   return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
-/** The tasks the ring holds, oldest first: the last `last` of them, or all of
+/** The tasks the table holds, oldest first: the last `last` of them, or all of
  * them when `last` is null. */
 async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
-  const [tasks, strtab] = await Promise.all([ring("tasks"), perf.strtab(ui)]);
+  const [tasks, strtab] = await Promise.all([table("tasks"), perf.strtab(ui)]);
   const all = words(tasks);
   const total = all.length / TASK.WORDS;
   const from = last === null ? 0 : Math.max(0, total - last);
@@ -457,7 +457,7 @@ async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
 }
 
 async function perf_worst(): Promise<Worst[]> {
-  const w = words(await ring("worst"));
+  const w = words(await table("worst"));
   const cnt = w.length / WORST.WORDS;
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * WORST.WORDS;

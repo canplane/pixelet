@@ -6,7 +6,6 @@ import { useTranslation } from "react-i18next";
 import { message_key } from "@/ui/shared/locale/message-key.ts";
 import {
   type Message,
-  GROUND_STATUS_SUCCESS,
   MESSAGE_WORLD_READ_FAILING,
 } from "@/abi/overlay.enum.ts";
 import {
@@ -136,10 +135,8 @@ export function ToastController() {
   useNotice(SERVER, server_error(stall), SERVER_HOLD_MS);
 
   const outside = useCore((s) => s.pivot.outside);
-  const shown = useCore((s) => s.pivot.status === GROUND_STATUS_SUCCESS);
-  const companion_loading = useCore(
-    (s) => !s.companion.person_ready || !s.companion.pet_ready,
-  );
+  const shown = useCore((s) => s.pivot.ground_shown);
+  const companion_loading = useCore((s) => !s.companion_ready);
   const [greeting, set_greeting] = useState<Greeting>(UNSAID);
   // The cover hides the toasts until the app shows.
   const shows = useSyncExternalStore(watch_boot, boot_state) === BOOT_STARTED;

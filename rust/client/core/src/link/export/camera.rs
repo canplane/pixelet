@@ -6,7 +6,6 @@
 use super::{applied, on_earth, refuse_unless};
 use crate::abi::camera::Tracking;
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation;
 use crate::domain::control::navigation::follow_mode;
 use crate::sys::sched::invalidate;
@@ -27,22 +26,8 @@ pub(super) fn north_up() -> Result<(), Errno> {
     applied()
 }
 
-pub(super) fn goto(
-    lon: f64,
-    lat: f64,
-    dist: Option<f64>,
-    azimuth: Option<f64>,
-    polar: Option<f64>,
-) -> Result<(), Errno> {
+pub(super) fn goto(lon: f64, lat: f64) -> Result<(), Errno> {
     refuse_unless(on_earth(lon, lat), Errno::EINVAL)?;
-    navigation::go_to_deg(
-        lon,
-        lat,
-        IntentPatch {
-            dist,
-            azimuth,
-            polar,
-        },
-    );
+    navigation::go_to_deg(lon, lat);
     applied()
 }

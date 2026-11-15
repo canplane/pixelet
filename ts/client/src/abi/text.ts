@@ -32,7 +32,7 @@ export interface Host {
     height: number,
     x: number,
     text: Lent,
-  ): number;
+  ): void;
 }
 
 /** The object over `implementation`. */
@@ -62,7 +62,7 @@ function object(implementation: Host): LinkObject {
           case RASTER: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            const v = implementation.raster(
+            implementation.raster(
               r_.u32(0),
               r_.f64(8),
               r_.u32(16),
@@ -72,15 +72,7 @@ function object(implementation: Host): LinkObject {
               r_.f64(40),
               load_Lent(r_, 48),
             );
-            return {
-              result: 0,
-              data: [
-                4,
-                (w) => {
-                  w.u32(0, v);
-                },
-              ],
-            };
+            return 0;
           }
           default:
             return ERRNO_ENOSYS;

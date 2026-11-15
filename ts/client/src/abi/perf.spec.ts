@@ -41,9 +41,9 @@ export const LIMIT = {
   /** A reason's words: its fail, its detail and how many (STREAM_STAT.reasons). */
   REASON_WORDS: 3 as number,
   STEP_CAP: 32 as number,
-  /** How far back the rings keep, the core's frames and tasks and the UI's long frames alike: the last minute. */
+  /** How far back the tables keep, the core's frames and tasks and the UI's long frames alike: the last minute. */
   WINDOW_MS: 60000 as number,
-  /** The most bytes one read of a ring hands over (perf.wit `ring`): a ring is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page. */
+  /** The most bytes one read of a table hands over (perf.wit `table`): a table is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page. */
   PAGE_BYTES: 8192 as number,
   /** In a build made for measuring, the hosts log a record of the GPU stream, the stream's run or the core's entry slower than this, the page's and the device's alike (xpute-gpu-link `GpuConfig::slow_ms`, @xpute/gpu-link `GpuConfig`). */
   SLOW_MS: 1000 as number,
@@ -268,7 +268,7 @@ export const STAT = {
 
 /** What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */
 export const NOW = {
-  /** Whether it records, how long the recording has run, whether it lost what it had no room for (a ring's oldest records, or a failure's file name the string table could not hold), and how many records each ring holds (RING_NAMES). */
+  /** Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many records each table holds (TABLE_NAMES). */
   recording_state: {
     AT: 0 as number,
     recording: 0 as number,
@@ -328,5 +328,5 @@ export const NOW = {
   WORDS: 38 as number,
 } as const;
 
-/** The rings the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started. */
-export const RING_NAMES = ["frames", "tasks", "worst"] as const;
+/** The tables the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started. */
+export const TABLE_NAMES = ["frames", "tasks", "worst"] as const;

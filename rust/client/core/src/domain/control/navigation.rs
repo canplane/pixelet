@@ -15,7 +15,6 @@ use pxl_spec::space::coord::q3::Q3;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
-use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::query::unknown;
 
 /// Sends the pivot to the surface at the X and Y of `to`, and stops
@@ -32,12 +31,9 @@ pub(crate) fn go_to_place(to: Q3) {
     controller::come_in_to_default();
 }
 
-/// Goes to a search's place at `lon`, `lat` degrees, with the view asked
-/// with it. A view far out comes in to the default distance, and then the
-/// view is asked, so a distance asked with the search wins over the coming
-/// in.
-pub(crate) fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
+/// Goes to a search's place at `lon`, `lat` degrees. A view far out comes in
+/// to the default distance.
+pub(crate) fn go_to_deg(lon: f64, lat: f64) {
     go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
     controller::come_in_to_default();
-    controller::set_intent(view);
 }

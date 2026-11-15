@@ -35,7 +35,7 @@ import * as overlay from "@/service/core/overlay.ts";
 /** The dock holds this state, so that it is there whether or not the cards are
  * drawn yet. */
 export function useMessage(mode: DockMode) {
-  const drafting = useCore((s) => s.draft !== null);
+  const drafting = useCore((s) => s.drafting);
   const [message_text, set_message_text] = useState("");
   const [is_sending, set_is_sending] = useState(false);
   const input_ref = useRef<TextInput | null>(null);
@@ -54,7 +54,7 @@ export function useMessage(mode: DockMode) {
   // draft's text. From then on the field owns the text and sends the core each
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
-    set_message_text(drafting ? (overlay.cur().draft ?? "") : "");
+    set_message_text(drafting ? overlay.cur_draft() : "");
     if (drafting) set_dock_mode(DockMode.MESSAGE);
   }, [drafting]);
 

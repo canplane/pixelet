@@ -9,9 +9,7 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
 
-use crate::abi::overlay::{
-    CompanionState, DivisionPart, GroundStatus, LonLat, Message, PivotState, Snapshot,
-};
+use crate::abi::overlay::{DivisionPart, LonLat, Message, PivotState, Snapshot};
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
 use crate::domain::control::camera::state::camera_state;
@@ -68,13 +66,14 @@ fn division_parts(at: Option<(Quadrant, u32)>, named_to: Option<Zoom>) -> Vec<Di
 /// to decide whether a new snapshot is due. They hold what changes rarely:
 /// the division the names are read from (`division::naming`) rather than the
 /// names, and the zoom the names show down to rather than the view's scale.
-/// The marker draft's text is kept apart, in `SnapshotMemo`.
+/// The marker draft's text is told apart, as the draft opens
+/// (`SnapshotMemo::take_changed`).
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct SnapshotInput {
-    status: GroundStatus,
+    ground_shown: bool,
     is_off_center: bool,
     pivot: Option<Q3>,
-    companion: [bool; 2],
+    companion_ready: bool,
     drafting: bool,
     is_follow_mode: bool,
     camera_busy: bool,
@@ -111,16 +110,13 @@ fn snapshot_input() -> SnapshotInput {
     // view whose tiles all show, even where some show at a coarser zoom. A
     // finer tile asked for as the eye moves is not the area loading, and
     // counting it would flash the loading toast each time.
-    let status = match (pose::eye(), screen_shows_world()) {
-        (None, _) => GroundStatus::Idle,
-        (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
-        _ => GroundStatus::Loading,
-    };
+    let ground_shown =
+        pose::eye().is_some() && screen_shows_world() && TerrainTile::tile_cache().is_shown();
     SnapshotInput {
-        status,
+        ground_shown,
         is_off_center: off_center().is_off_center,
         pivot,
-        companion: companion_ready(),
+        companion_ready: companion_ready(),
         drafting: write::marker_draft().is_some(),
         is_follow_mode: following(),
         camera_busy: dragging(),
@@ -141,35 +137,37 @@ fn snapshot_input() -> SnapshotInput {
         renderer_progress: renderer_progress(),
         // The share is read from every tile, so it is computed only while
         // the area loads.
-        area_progress: match status {
-            GroundStatus::Success => 1.0,
-            _ => TerrainTile::tile_cache().shown_share(),
+        area_progress: if ground_shown {
+            1.0
+        } else {
+            TerrainTile::tile_cache().shown_share()
         },
     }
 }
 
-/// What was last sent to the UI: the snapshot's inputs with the marker
-/// draft's text, and the view's azimuth and meters per pixel. A new snapshot
-/// or view is sent only when it differs from these.
+/// What was last sent to the UI: the snapshot's inputs, and the view's
+/// azimuth and meters per pixel. A new snapshot or view is sent only when it
+/// differs from these.
 #[derive(Default)]
 pub(crate) struct SnapshotMemo {
     last_input: Option<SnapshotInput>,
-    text: String,
     last_view: Option<(f64, f64)>,
 }
 
 impl SnapshotMemo {
     /// The snapshot's inputs now, or None when they have not changed since
-    /// they were last sent. What it returns counts as sent.
-    pub(crate) fn take_changed(&mut self) -> Option<SnapshotInput> {
-        let (now, text) = (snapshot_input(), write::marker_draft().unwrap_or_default());
-        if self.last_input == Some(now) && self.text == text {
+    /// they were last sent, with the marker draft's text where the draft is
+    /// open now and was not in what was last sent: the core is the text's
+    /// source then, and the UI the rest of the time. What it returns counts
+    /// as sent.
+    pub(crate) fn take_changed(&mut self) -> Option<(SnapshotInput, Option<&'static str>)> {
+        let now = snapshot_input();
+        let last = self.last_input.replace(now);
+        if last == Some(now) {
             return None;
         }
-        self.last_input = Some(now);
-        self.text.clear();
-        self.text.push_str(text);
-        Some(now)
+        let opened = now.drafting && !last.is_some_and(|l| l.drafting);
+        Some((now, write::marker_draft().filter(|_| opened)))
     }
 
     /// The view now, its azimuth and meters per pixel, or None when neither
@@ -191,7 +189,7 @@ impl SnapshotMemo {
 pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
     Snapshot {
         pivot: PivotState {
-            status: shown.status,
+            ground_shown: shown.ground_shown,
             is_off_center: shown.is_off_center,
             lon_lat: shown.pivot.map(|c| {
                 let g = epsg4326::unproject(&c);
@@ -202,11 +200,8 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
             }),
             outside: shown.pivot.is_some_and(|c| World::now().past(&c)),
         },
-        companion: CompanionState {
-            person_ready: shown.companion[0],
-            pet_ready: shown.companion[1],
-        },
-        draft: write::marker_draft().map(str::to_owned),
+        companion_ready: shown.companion_ready,
+        drafting: shown.drafting,
         is_follow_mode: shown.is_follow_mode,
         camera_busy: shown.camera_busy,
         zooming: shown.zooming,

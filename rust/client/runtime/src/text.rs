@@ -77,7 +77,7 @@ impl text::Host for Device {
         height: u32,
         x: f64,
         text: Lent,
-    ) -> Result<u32, Errno> {
+    ) -> Result<(), Errno> {
         let system = system()?;
         let text = text_of(&text)?;
         let len = width
@@ -102,7 +102,7 @@ impl text::Host for Device {
                 out.as_mut_ptr(),
             );
         }
-        Ok(0)
+        Ok(())
     }
 }
 

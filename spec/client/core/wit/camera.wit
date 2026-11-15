@@ -5,6 +5,6 @@ interface camera {
 
   track: func(tracking: tracking);
   north-up: func();
-  // Flies to (lon, lat); an absent dist, azimuth or polar keeps the camera's.
-  goto: func(lon: f64, lat: f64, dist: option<f64>, azimuth: option<f64>, polar: option<f64>);
+  // Flies to (lon, lat), keeping the camera's dist, azimuth and polar.
+  goto: func(lon: f64, lat: f64);
 }

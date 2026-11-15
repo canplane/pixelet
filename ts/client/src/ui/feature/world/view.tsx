@@ -8,7 +8,7 @@ import { type InputDriver } from "@/service/platform/types.ts";
 import * as surface from "@/service/platform/surface.tsx";
 import { useSafeArea } from "@/service/platform/safe-area.ts";
 import { useVisualViewport } from "@/service/platform/viewport.ts";
-import { POINTER_KIND, POINTER_PHASE } from "@/service/core/input.ts";
+import { drag_of, POINTER_PHASE, TOUCH } from "@/service/core/input.ts";
 import { surface_driver } from "@/service/core/surface.ts";
 import { key_down, key_up, release_keys } from "./keyboard.ts";
 import { release_pointers, world_pointer } from "./pointer.ts";
@@ -37,7 +37,14 @@ const WORLD = surface_driver(scene.draw_world, sensor.world_closed);
 
 const INPUT: InputDriver = {
   pointer: (phase, kind, id, button, x, y) =>
-    world_pointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
+    world_pointer(
+      POINTER_PHASE[phase],
+      TOUCH[kind],
+      id,
+      drag_of(button),
+      x,
+      y,
+    ),
   wheel: input.wheel,
   pinch: input.pinch,
   key_down,

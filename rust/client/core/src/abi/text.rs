@@ -48,10 +48,10 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     height: u32,
     x: f64,
     text: &mut [T1],
-) -> Result<u32, _rt::Errno> {
+) -> Result<(), _rt::Errno> {
     let (image_at_, image_len_) = _rt::mem::span(&image[..]);
     let (text_at_, text_len_) = _rt::mem::span(&text[..]);
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         RASTER,
         Some((56, &|w_: &mut _rt::Lower| {
@@ -73,10 +73,7 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
             .store(w_, 48);
         })),
     );
-    _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.u32(0)
-    })
+    _rt::answer(r)
 }
 
 mod _rt {

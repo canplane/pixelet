@@ -43,27 +43,12 @@ export async function goto(
   link_: Sender,
   lon: number,
   lat: number,
-  dist: number | null,
-  azimuth: number | null,
-  polar: number | null,
 ): Promise<void> {
   const a_ = await link_.send(HANDLE, GOTO, [
-    64,
+    16,
     (w_) => {
       w_.f64(0, lon);
       w_.f64(8, lat);
-      if (dist !== null) {
-        w_.u8(16, 1);
-        w_.f64(24, dist);
-      }
-      if (azimuth !== null) {
-        w_.u8(32, 1);
-        w_.f64(40, azimuth);
-      }
-      if (polar !== null) {
-        w_.u8(48, 1);
-        w_.f64(56, polar);
-      }
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);

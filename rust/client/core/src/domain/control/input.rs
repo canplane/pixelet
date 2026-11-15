@@ -17,7 +17,7 @@ use crate::domain::control::param::{
     TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION,
 };
 
-use crate::abi::input::PointerType;
+use crate::abi::input::Drag;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
@@ -295,15 +295,15 @@ fn update_pinch(s: &mut Input) {
 }
 
 pub(crate) fn camera_pointer_down(
-    pointer_type: PointerType,
+    touch: bool,
     pointer_id: i32,
-    button: i32,
+    drag: Drag,
     view_x: f64,
     view_y: f64,
 ) {
     let s = input();
     let camera = camera_state();
-    if pointer_type == PointerType::Touch {
+    if touch {
         s.hovering = false;
         s.active_pointers.insert(
             pointer_id,
@@ -329,10 +329,10 @@ pub(crate) fn camera_pointer_down(
         return;
     }
 
-    s.drag_mode = match button {
-        0 => DragMode::Pan,
-        2 => DragMode::Rotate,
-        _ => return,
+    s.drag_mode = match drag {
+        Drag::Pan => DragMode::Pan,
+        Drag::Rotate => DragMode::Rotate,
+        Drag::None => return,
     };
     s.did_drag = false;
     s.last_x = view_x;
@@ -353,13 +353,13 @@ pub(crate) fn camera_pointer_down(
 }
 
 pub(crate) fn camera_pointer_move(
-    pointer_type: PointerType,
+    touch: bool,
     pointer_id: i32,
     view_x: f64,
     view_y: f64,
 ) {
     let s = input();
-    if pointer_type == PointerType::Touch {
+    if touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
             *pt = PointerPos {
                 x: view_x,
@@ -421,9 +421,9 @@ fn end_drag(s: &mut Input) {
 
 /// A pointer went up or was canceled. Returns where it tapped, if it was a
 /// tap.
-pub(crate) fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
+pub(crate) fn camera_pointer_up(touch: bool, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
-    if pointer_type == PointerType::Touch {
+    if touch {
         s.active_pointers.remove(&pointer_id);
         match s.active_pointers.len() {
             0 => {

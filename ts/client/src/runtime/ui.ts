@@ -9,7 +9,6 @@
 
 import type { Remote } from "@xpute/link";
 import { type Snapshot } from "@/abi/overlay.ts";
-import { GROUND_STATUS_SUCCESS } from "@/abi/overlay.enum.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { log } from "@/service/platform/log.ts";
 import { stop_code } from "@/service/sys/abort.ts";
@@ -47,7 +46,7 @@ import * as online from "@/service/platform/online.ts";
 function loaded(s: Snapshot): boolean {
   return (
     s.renderer_progress === 1 &&
-    (s.pivot.status === GROUND_STATUS_SUCCESS || s.pivot.outside)
+    (s.pivot.ground_shown || s.pivot.outside)
   );
 }
 

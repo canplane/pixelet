@@ -557,10 +557,9 @@ pub(crate) fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
         .filter_map(|c| Some((c.model, c.skin()?)))
 }
 
-/// Whether the person, and whether the pet, has loaded, for the loading
-/// toast.
-pub(crate) fn companion_ready() -> [bool; 2] {
-    companion().characters.each_ref().map(Option::is_some)
+/// Whether the person and the pet have both loaded, for the loading toast.
+pub(crate) fn companion_ready() -> bool {
+    companion().characters.iter().all(Option::is_some)
 }
 
 /// Advances each character and returns whether a frame must be asked for

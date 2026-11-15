@@ -4,7 +4,6 @@ package pxl:core@0.1.0;
 // whole to a UI that attaches (xpute's `life.attached`).
 interface overlay {
 
-  enum ground-status { idle, loading, success }
   // A message the core raises and the UI shows in its own words.
   enum message {
     // Reads reach the server and fail; they are tried again.
@@ -19,15 +18,12 @@ interface overlay {
   }
 
   record pivot-state {
-    status: ground-status,
+    // A frame has reached the screen over a view whose ground tiles all
+    // show, some perhaps at a coarser zoom.
+    ground-shown: bool,
     is-off-center: bool,
     lon-lat: option<lon-lat>,
     outside: bool,
-  }
-
-  record companion-state {
-    person-ready: bool,
-    pet-ready: bool,
   }
 
   record division-part {
@@ -40,9 +36,10 @@ interface overlay {
   // What the UI shows of the core, replaced whole when it changes.
   record snapshot {
     pivot: pivot-state,
-    companion: companion-state,
-    // A marker's draft, its text so far, absent where none is open.
-    draft: option<string>,
+    // The person and the pet the player chose are both loaded.
+    companion-ready: bool,
+    // A marker's draft is open, its text told apart (`draft`).
+    drafting: bool,
     is-follow-mode: bool,
     camera-busy: bool,
     // A zoom is in hand; the scale shows while it is.
@@ -66,6 +63,11 @@ interface overlay {
   }
 
   show: func(snapshot: snapshot);
+  // The text of a marker's draft, told as the draft opens and to a UI that
+  // attaches while one is open, before the snapshot that shows it open; the
+  // UI owns the text from then on and sends each change (pxl:core edit
+  // `marker-text`).
+  draft: func(text: string);
   // The view's azimuth, and the meters a logical pixel spans at the pivot, 0
   // where the camera stands there.
   view: func(azimuth: f64, m-per-px: f64);

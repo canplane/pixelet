@@ -26,11 +26,11 @@
     STEP_CAP: { $value: 32 },
     WINDOW_MS: {
       $value: 60000,
-      $description: "How far back the rings keep, the core's frames and tasks and the UI's long frames alike: the last minute.",
+      $description: "How far back the tables keep, the core's frames and tasks and the UI's long frames alike: the last minute.",
     },
     PAGE_BYTES: {
       $value: 8192,
-      $description: "The most bytes one read of a ring hands over (perf.wit `ring`): a ring is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page.",
+      $description: "The most bytes one read of a table hands over (perf.wit `table`): a table is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page.",
     },
     SLOW_MS: {
       $value: 1000,
@@ -262,7 +262,7 @@
     $description: "What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.",
     $extensions: { xpute: { packed: true } },
     recording_state: {
-      $description: "Whether it records, how long the recording has run, whether it lost what it had no room for (a ring's oldest records, or a failure's file name the string table could not hold), and how many records each ring holds (RING_NAMES).",
+      $description: "Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many records each table holds (TABLE_NAMES).",
       recording: { $value: 1 },
       elapsed_ms: { $value: 1 },
       truncated: { $value: 1 },
@@ -309,8 +309,8 @@
       blocked: { $value: 1 },
     },
   },
-  RING_NAMES: {
+  TABLE_NAMES: {
     $value: ["frames", "tasks", "worst"],
-    $description: "The rings the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started.",
+    $description: "The tables the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started.",
   },
 }

@@ -60,31 +60,13 @@ pub fn north_up() -> Result<(), _rt::Errno> {
     _rt::answer(r)
 }
 
-pub fn goto(
-    lon: f64,
-    lat: f64,
-    dist: Option<f64>,
-    azimuth: Option<f64>,
-    polar: Option<f64>,
-) -> Result<(), _rt::Errno> {
+pub fn goto(lon: f64, lat: f64) -> Result<(), _rt::Errno> {
     let (r, _) = _rt::link::call(
         HANDLE,
         GOTO,
-        Some((64, &|w_: &mut _rt::Lower| {
+        Some((16, &|w_: &mut _rt::Lower| {
             w_.f64(0, lon);
             w_.f64(8, lat);
-            if let Some(v) = &dist {
-                w_.u8(16, 1);
-                w_.f64(24, *v);
-            }
-            if let Some(v) = &azimuth {
-                w_.u8(32, 1);
-                w_.f64(40, *v);
-            }
-            if let Some(v) = &polar {
-                w_.u8(48, 1);
-                w_.f64(56, *v);
-            }
         })),
     );
     _rt::answer(r)
