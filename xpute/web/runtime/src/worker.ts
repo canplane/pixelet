@@ -1,10 +1,10 @@
 // @xpute/web-runtime/worker.ts
 
 /** The worker's end: the guest's module instantiated with a link laid over
- * it, the guest started on it from the program's servers, and what the
- * runtime tells the page, the worker's console, a failed instantiation, the
- * guest's stop and its trap, each posted to the page (`tell`), as a device's
- * runtime tells its app through the functions the app sets
+ * it, the guest run on it from the program's servers, and what the runtime
+ * tells the page, the worker's console, the guest's stop and its trap, each
+ * posted to the page (`tell`), where the UI hears them (page.ts), as a
+ * device's runtime tells its app through the functions the app sets
  * (xpute-native-runtime listener.rs). */
 
 import { XputeBug, frames } from "@xpute/kit/status/bug.ts";
@@ -16,13 +16,7 @@ import { strerror } from "@xpute/kit/status/error.ts";
 import { type Imports, set_hook, Side, type Stop } from "@xpute/link";
 import type { Later } from "@xpute/link/remote.ts";
 import { tell_attached } from "./life.ts";
-import type {
-  Instantiate,
-  InstantiateError,
-  Log,
-  Stopped,
-  Trap,
-} from "./message.ts";
+import type { Instantiate, Log, Stopped, Trap } from "./message.ts";
 import { serve, type Taker } from "./remote.ts";
 
 interface Exports {
@@ -43,7 +37,7 @@ function line(a: unknown): string {
 }
 
 /** Posts `m` to the page, whose worker this is. */
-function tell(m: InstantiateError | Trap | Stopped | Log): void {
+function tell(m: Trap | Stopped | Log): void {
   postMessage(m);
 }
 
@@ -68,8 +62,12 @@ export function forward_console(): void {
 }
 
 /** Instantiates the guest's `module` and lays a link over it: its memory
- * grown whole to `mem_sz` before its first entry, and never after. An
- * instantiation that fails tells its error and answers null. A trap out of
+ * grown whole to `mem_sz` before its first entry, and never after, of which
+ * the program keeps `share_sz` bytes for itself past the module's data, the
+ * guest's heap past them (`xpute_mem`, as a device's runtime answers it). An
+ * instantiation that fails is a failure of the host's own before the guest's
+ * first entry, told as a trap with its error, and answers null, as a device's
+ * runtime traps on its own failure before it enters the guest. A trap out of
  * any export stops the guest for good (`Side.trap`), as does a failure of the
  * host's own (`hook`), from before any server is mounted: the page hears it,
  * with the error, as a native host tells its trap. The trapped export
@@ -80,20 +78,29 @@ export async function instantiate(
   module: string,
   init: RequestInit | undefined,
   mem_sz: number,
+  share_sz: number,
 ): Promise<Side | null> {
   let link!: Side;
   let x: Exports;
+  // A module's memory begins at 0; its size and the program's share are
+  // written at the words the guest names, where it names one (xpute.h).
+  const xpute_mem = (len: number, share: number): number => {
+    const v = new DataView(x.memory.buffer);
+    if (len !== 0) v.setUint32(len >>> 0, mem_sz, true);
+    if (share !== 0) v.setUint32(share >>> 0, share_sz, true);
+    return 0;
+  };
   try {
     const { instance } = await WebAssembly.instantiateStreaming(
       fetch(module, init),
       {
-        env: Side.imports(() => link),
+        env: { ...Side.imports(() => link), xpute_mem },
       },
     );
     x = instance.exports as unknown as Exports;
     x.memory.grow(Math.ceil((mem_sz - x.memory.buffer.byteLength) / 65536));
   } catch (e) {
-    tell({ kind: "instantiate_error", err: line(e) });
+    tell({ kind: "trap", err: line(e) });
     return null;
   }
   const entry =
@@ -150,9 +157,10 @@ export type Server = (link: Side) => void;
 
 /** What a program starts its guest with: its servers, in no order, since
  * none depends on another; the interfaces its guest's world imports (the
- * bindings' `IMPORTS`); and the UI's side, the methods of
- * the UI's named interfaces that answer later (the bindings' `LATER`) and
- * what takes the things the UI gives beside the link. */
+ * bindings' `IMPORTS`); the methods of the program's own named interfaces
+ * among them that answer later (the bindings' `LATER`), which tells the
+ * runtime which of the UI's methods answer later; and what takes the things
+ * the UI gives beside the link. */
 export interface Boot {
   servers: readonly Server[];
   imports: Imports;
@@ -160,11 +168,11 @@ export interface Boot {
   taker: Taker;
 }
 
-/** Starts the guest on `link`, as xpute-native-runtime native.rs `run`
+/** Runs the guest on `link`, as xpute-native-runtime native.rs `run`
  * does on a device: mounts each server, serves the link to the UI across
  * the port `ui` names (`serve`), enters the guest, which an import no server
  * mounts refuses (`Side.init`), and tells it the UI attached. */
-export function start(
+export function run(
   link: Side,
   boot: Boot,
   ui: Pick<Instantiate, "port" | "named" | "prefixes">,

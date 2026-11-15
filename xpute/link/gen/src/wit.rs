@@ -1014,9 +1014,9 @@ pub fn wit_outputs(
     let package_rs =
         t.rs.and_then(|path| Path::new(path).file_stem()?.to_str())
             .unwrap_or_default();
-    // The methods of the named interfaces the host serves that answer later,
-    // from WIT's `async func`, each its interface's reach (`reach`) and its
-    // method's Rust and TypeScript constants.
+    // The methods of the package's own named interfaces its world imports
+    // that answer later, from WIT's `async func`, each its interface's reach
+    // (`reach`) and its method's Rust and TypeScript constants.
     let mut later = Vec::new();
     // Where the package's module, or a module beside it, reaches the
     // interface `i`: its Rust module's prefix, none where `i` is folded into
@@ -1164,7 +1164,7 @@ pub fn wit_outputs(
             .collect();
         let _ = writeln!(
             rs,
-            "\n/// The methods of the named interfaces the host serves that answer\n/// later, each `(handle, method)`, as WIT's `async func` marks them.\npub const LATER: &[({link_rs}::Handle, {link_rs}::Method)] = &[{}];",
+            "\n/// The methods of the package's own named interfaces its world imports\n/// that answer later, each `(handle, method)`, as WIT's `async func`\n/// marks them.\npub const LATER: &[({link_rs}::Handle, {link_rs}::Method)] = &[{}];",
             pairs.join(", ")
         );
     }
@@ -1188,7 +1188,7 @@ pub fn wit_outputs(
             .collect();
         let path = format!("{dir}/later.ts");
         let text = format!(
-            "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{uses}\n/** The methods of the named interfaces the host serves that answer\n * later, each `[handle, method]`, as WIT's `async func` marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
+            "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{uses}\n/** The methods of the package's own named interfaces its world imports\n * that answer later, each `[handle, method]`, as WIT's `async func`\n * marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
             package_path(root, &path)?,
             mark(src, TOOL),
             pairs.join(", ")

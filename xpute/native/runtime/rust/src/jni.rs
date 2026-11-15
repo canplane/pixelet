@@ -448,9 +448,9 @@ pub unsafe fn take(e: *mut JNIEnv, generation: u32) -> jbyteArray {
 /// # Safety
 /// `e` is what JNI called with.
 pub unsafe fn mem(e: *mut JNIEnv) -> jobject {
-    let (at, len) = crate::native::mem();
+    let r = xpute_link::mem::region();
     // SAFETY: the region, the guest's for the process's life.
-    unsafe { env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(e, at.cast(), i64::from(len)) }
+    unsafe { env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(e, r.base.cast(), i64::from(r.len)) }
 }
 
 /// Exports the runtime to JNI for the Kotlin class

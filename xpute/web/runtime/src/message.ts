@@ -5,12 +5,11 @@
 
 import type { Remote, Stop } from "@xpute/link";
 
-/** What the page sends the worker to instantiate the guest: the module, how
- * to fetch it, the UI's port, the named handles of the interfaces the UI
- * serves, and the prefixes it opens the objects under, each with its
- * interface. */
+/** What the page sends the worker to instantiate the guest (page.ts
+ * `start`): the module, how to fetch it, the UI's port, the named handles of
+ * the interfaces the UI serves, and the prefixes it opens the objects under,
+ * each with its interface. */
 export interface Instantiate {
-  kind: "instantiate";
   module: string;
   init: RequestInit | undefined;
   port: MessagePort;
@@ -24,15 +23,8 @@ export interface Log {
   text: string;
 }
 
-/** The error the guest's instantiation came to: its module did not load, or
- * its memory was refused. */
-export interface InstantiateError {
-  kind: "instantiate_error";
-  err: string;
-}
-
-/** A trap, out of an export or a failure of the host's own, which stops the
- * guest for good. */
+/** A trap, out of an export or a failure of the host's own, its module not
+ * loading or its memory refused among them, which stops the guest for good. */
 export interface Trap {
   kind: "trap";
   err: string;

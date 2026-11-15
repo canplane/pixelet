@@ -2,61 +2,75 @@
 
 //! The guest's memory, which every offset on the link names: offset `at` is
 //! the byte `at` past the memory's base. A module's memory begins at 0. A
-//! native guest's is the one region it reserves as it starts (`set`), which a
-//! host linked into the same process reads as its own.
+//! native guest's is the region its runtime reserves (`region`), which a host
+//! linked into the same process reads as its own.
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// Where a native guest's memory lies.
+// The runtime's (xpute.h `xpute_mem`): the memory's first byte, its size
+// through `len` and the program's share of it through `share_sz`. A module
+// imports it under `env` from its page's runtime.
+#[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "env"))]
+unsafe extern "C" {
+    fn xpute_mem(len: *mut u32, share_sz: *mut u32) -> *mut u8;
+}
+
+/// Where the guest's memory lies, as its runtime sized it before the
+/// guest's first crossing: its first byte, its size, and the bytes the
+/// program keeps for itself, which the guest's heap leaves before its own.
 #[derive(Clone, Copy)]
 pub struct Region {
     pub base: *mut u8,
     pub len: u32,
+    pub share_sz: u32,
 }
 
-#[cfg(target_arch = "wasm32")]
-const BASE: usize = 0;
-
-#[cfg(not(target_arch = "wasm32"))]
-static REGION: core::sync::atomic::AtomicPtr<u8> =
-    core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
-#[cfg(not(target_arch = "wasm32"))]
-static LEN: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-
-/// Sets the native guest's region, once, before anything reaches it: the
-/// guest reserves it and its allocator hands out only memory inside it, so
-/// every offset fits a u32. A second set is a bug.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn set(r: Region) {
-    use core::sync::atomic::Ordering::Relaxed;
-    xpute_kit::ensure!(!r.base.is_null(), EINVAL);
-    let first = REGION.compare_exchange(core::ptr::null_mut(), r.base, Relaxed, Relaxed);
-    xpute_kit::ensure!(first.is_ok(), EALREADY);
-    LEN.store(r.len, Relaxed);
-}
-
-/// The native guest's region.
-#[cfg(not(target_arch = "wasm32"))]
+/// The guest's memory, as its runtime answers it. A native guest's region is
+/// reserved by the first call, from any thread.
 pub fn region() -> Region {
-    use core::sync::atomic::Ordering::Relaxed;
+    let (mut len, mut share_sz) = (0, 0);
+    // SAFETY: two words to write.
+    let base = unsafe { xpute_mem(&raw mut len, &raw mut share_sz) };
     Region {
-        base: REGION.load(Relaxed),
-        len: LEN.load(Relaxed),
+        base,
+        len,
+        share_sz,
     }
 }
 
-/// The region's base; nothing reaches the memory before it is set.
-#[cfg(not(target_arch = "wasm32"))]
-fn base() -> usize {
-    let base = region().base;
-    xpute_kit::ensure!(!base.is_null(), ENOTRECOVERABLE);
-    base.expose_provenance()
-}
-
 #[cfg(target_arch = "wasm32")]
 fn base() -> usize {
-    BASE
+    0
+}
+
+/// A native guest's region's base and size, once read: the region never
+/// moves once reserved.
+#[cfg(not(target_arch = "wasm32"))]
+static BASE: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+#[cfg(not(target_arch = "wasm32"))]
+static LEN: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
+/// A native guest's region's base and size. The first call asks the runtime;
+/// two first calls at once read the same region.
+#[cfg(not(target_arch = "wasm32"))]
+fn kept() -> (usize, u32) {
+    use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
+    match BASE.load(Acquire) {
+        0 => {
+            let r = region();
+            let base = r.base.expose_provenance();
+            LEN.store(r.len, Relaxed);
+            BASE.store(base, Release);
+            (base, r.len)
+        }
+        base => (base, LEN.load(Relaxed)),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn base() -> usize {
+    kept().0
 }
 
 /// The `len` bytes at `at`. A native guest's are held to its region: a range
@@ -99,7 +113,7 @@ pub fn span<T>(s: &[T]) -> (u32, u32) {
 #[cfg(not(target_arch = "wasm32"))]
 fn held(at: u32, len: u32) {
     xpute_kit::ensure!(
-        u64::from(at) + u64::from(len) <= u64::from(region().len),
+        u64::from(at) + u64::from(len) <= u64::from(kept().1),
         EFAULT,
         at,
         len

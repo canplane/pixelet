@@ -5,21 +5,8 @@
 /// The interface's handle, named by `pxl:core/setting` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x6f63cb;
 
-/// `dev`
-pub const DEV: _rt::Method = 0;
 /// `set`
-pub const SET: _rt::Method = 1;
-
-pub fn dev(dev: bool) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
-        HANDLE,
-        DEV,
-        Some((1, &|w_: &mut _rt::Lower| {
-            w_.bool(0, dev);
-        })),
-    );
-    _rt::answer(r)
-}
+pub const SET: _rt::Method = 0;
 
 pub fn set(key: u32, val: u32) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
     let (r, data) = _rt::link::call(

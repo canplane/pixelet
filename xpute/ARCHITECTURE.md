@@ -61,24 +61,27 @@ the platform's environment, which instantiates or links the guest, holds the
 host's `Side` and runs the loop that enters it: `@xpute/web-runtime` in a page's
 worker, `xpute-native-runtime` on a device's guest thread. The **host** is what
 is served over it, the clocks and the stop: `@xpute/web-host` and
-`xpute-native-host`. The program lists its servers, the host's among them,
-and its runtime runs the steps in their order, on both platforms alike: it
-mounts each server, serves the UI's side, enters the guest only once every
-interface the guest's world imports is mounted, and on a device runs the
-loop.
+`xpute-native-host`. The program starts its guest with a `Boot`, which lists
+its servers, the host's among them, each a `Server` that mounts some of the
+guest's imports, and its runtime runs the steps in their order, on both
+platforms alike: it mounts each server, serves the UI's side, enters the guest
+only once every interface the guest's world imports is mounted, and on a
+device runs the loop.
 
 The UI lives on another thread, and reaches the link through a **remote**:
 over a port on a page, and through the Expo module `@xpute/native-runtime` on
-a device. A `Side` and a `Remote` share the part that serves, the **`Server`**
+a device. A `Side` and a `Remote` serve by one class beneath both
 (`link/ts/src/link.ts`); only how an answer crosses differs. The UI never
 waits, so it has no `call`. A method the UI serves that WIT marks `async func`,
 which the bindings list as `LATER`, it answers later by its tag; any other is
 told to it and answered at once.
 
 A device's runtime outlives its UI, so a reload is a new UI on the same runtime:
-what the old UI held goes (xpute-native-runtime's `accept`), and the new UI is
-told the guest's end as the first heard it (xpute-native-runtime's `start`).
-A page's worker dies with its page, so a reloaded page meets a new runtime.
+what the old UI held goes (xpute-native-runtime's `accept`), and the runtime
+keeps the guest's end, its last stop and its trap, which a new UI reads as it
+begins to hear them (@xpute/native-runtime's `stopped_on` and `trap_on`), as
+it reads the GPU's state. A page's worker dies with its page, so a reloaded
+page meets a new runtime.
 
 ## How a failure ends
 
@@ -161,9 +164,12 @@ word; and a rule the GPU alone decides is one function every pass calls.
   on either end.
 - **No method of the program's has a meaning in xpute.** A side delivers a
   frame by its handle and reads nothing of what it says.
-- **The guest's memory is the guest's.** It is whole before the first entry,
-  grown by a page's runtime or reserved by a native guest itself, and never
-  grown after.
+- **The guest's memory is the guest's.** Its runtime sizes it with the
+  program's two numbers, the memory's size and the program's share, before the
+  first entry: a page's grows the module's memory, and a device's reserves a
+  region and answers where it lies (`xpute_mem`), which the link and the heap
+  read. It is never grown after. The heap in it is the guest library's, past
+  the share; the program writes nothing of it in either language.
 - **The policy is the program's.** When the guest runs and how much I/O is out
   are decided outside xpute; it has no turn, no budget and no backpressure.
 - **The host serves only what every guest shares**: the clocks, the stop and

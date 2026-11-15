@@ -22,7 +22,7 @@ mod unpack;
 
 use std::path::PathBuf;
 
-use pxl_core::spec::manifest::stack;
+use pxl_core::spec::manifest::{mem, stack};
 use pxl_core::spec::perf::limit;
 use pxl_core::MEASURING;
 use pxl_render::spec::api::device;
@@ -35,9 +35,10 @@ use xpute_native_runtime::native::Boot;
 // (xpute_gpu.h, and on Android the Kotlin class `xpute.Gpu`).
 xpute_gpu_native_host::native_abi!();
 
-// The runtime under xpute's names over `start`, which xpute's module calls
-// (xpute.h, and on Android the Kotlin class `xpute.Runtime`).
-xpute_native_runtime::native_abi!(start);
+// The runtime under xpute's names over `start` and the core's memory, of
+// which `.fixed` is the core's share, which xpute's module calls (xpute.h,
+// and on Android the Kotlin class `xpute.Runtime`).
+xpute_native_runtime::native_abi!(start, mem::SZ, mem::FIXED_SZ);
 
 /// How a device's GPU host paces the renderer's stream, as
 /// spec/client/render/api.json5 `device` sets it. A build made for measuring

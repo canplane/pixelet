@@ -22,28 +22,15 @@ pub(crate) use crate::spec::schema::{
 use crate::sys::io::file::{self, StorageRead};
 use pxl_global::Global;
 
-static DEV: Global<bool> = Global::new();
-
-/// Whether this is a development build, as the UI's boot reports it
-/// (`setting.dev`). Only a development build offers the settings
-/// schema.json5 marks `dev`.
-pub(crate) fn set_dev(dev: bool) {
-    DEV.set(dev);
-}
-
-fn dev() -> bool {
-    *DEV.get(|| false)
-}
-
 /// Whether `val` may be set for `key` in this build. A dev-only setting or
-/// option is offered only in a development build, or in a release compiled
-/// for measuring (`crate::MEASURING`), whose drive sets them. Storage outlives
+/// option, which schema.json5 marks `dev`, is offered only in a development
+/// build, compiled with the feature `dev`, or in a release compiled for
+/// measuring (`crate::MEASURING`), whose drive sets them. Storage outlives
 /// the build, and a dev value with no row left in the UI to turn it off would
 /// otherwise stay in force. Loading drops such a value, and `set_setting`
 /// refuses it from the console.
 pub(crate) fn is_offered(key: SettingKey, val: u32) -> bool {
-    let compiled = cfg!(feature = "dev") || crate::MEASURING;
-    !(key.dev() || key.dev_option(val)) || (compiled && dev())
+    !(key.dev() || key.dev_option(val)) || cfg!(feature = "dev") || crate::MEASURING
 }
 
 impl Setting {

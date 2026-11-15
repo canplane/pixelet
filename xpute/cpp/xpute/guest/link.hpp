@@ -5,9 +5,10 @@
 // `link_out`, its three exports (`XPUTE_LINK`), and the entry they run each
 // call in. The machine's names are read here as the guest's callers read them.
 //
-// A module imports `link_out` alone, and so its program defines the global
-// `operator new` and `operator delete`, as a Rust guest sets its global
-// allocator: libc++abi's own report their failure through WASI's files.
+// A program says nothing of its memory here: the heap is the guest's own
+// (`heap.hpp`), the global `operator new` and `operator delete` of a module,
+// and on a native device a memory resource for what crosses the link, the
+// global `new` left to the system's. The link's layout lies in it.
 
 #pragma once
 

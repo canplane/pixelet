@@ -228,10 +228,6 @@
       "title": "The GPU couldn’t start.",
       "body": "Turn on hardware acceleration in your browser, or check your device’s settings."
     },
-    "boot": {
-      "title": "Something went wrong.",
-      "body": "Please try again in a moment."
-    },
     "source": {
       "title": "The data couldn’t be read.",
       "body": "Reload the page or update the app."

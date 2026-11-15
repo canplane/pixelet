@@ -16,20 +16,8 @@ import {
 /** The interface's handle, named by `pxl:core/setting` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x6f63cb;
 
-/** `dev` */
-export const DEV: Method = 0;
 /** `set` */
-export const SET: Method = 1;
-
-export async function dev(link_: Sender, dev: boolean): Promise<void> {
-  const a_ = await link_.send(HANDLE, DEV, [
-    1,
-    (w_) => {
-      w_.bool(0, dev);
-    },
-  ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
-}
+export const SET: Method = 0;
 
 export async function set(
   link_: Sender,

@@ -6,19 +6,13 @@ use super::*;
 
 const GOLDEN: &str = include_str!("../../../link/spec/golden/program.tsv");
 
-/// The guest's memory for this process's tests, set once (xpute-link
-/// `mem::set`): the golden records' offsets from its start, and from
-/// `SPARE_AT` on, the room the other tests lay their blocks in.
+/// The guest's memory for this process's tests, the runtime's: the golden
+/// records' offsets from its start, and from `SPARE_AT` on, the room the
+/// other tests lay their blocks in.
 pub(super) const SPARE_AT: u32 = 1 << 24;
 
-pub(super) fn region() {
-    static SET: std::sync::Once = std::sync::Once::new();
-    SET.call_once(|| {
-        let len = 2 * SPARE_AT;
-        let base = Vec::leak(vec![0u8; len as usize]).as_mut_ptr();
-        xpute_link::mem::set(xpute_link::mem::Region { base, len });
-    });
-}
+#[path = "../../../../native/runtime/rust/src/mem.test.rs"]
+mod mem;
 
 fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     let instance =
@@ -169,7 +163,6 @@ fn recs_read_back() {
         region_sz <= SPARE_AT,
         "the golden region fits before the spare room"
     );
-    region();
     // SAFETY: the test's own region, which the host touches only inside
     // `run` and `poll`.
     let write = |at, from: &[u8]| unsafe { xpute_link::mem::write(at, from) };

@@ -15,7 +15,7 @@ use crate::{event_loop, link, remote};
 use xpute_kit::status::bug::{OrBug, XputeBug};
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
-use xpute_link::{load_uri, mem, Handle, Lift, Method};
+use xpute_link::{load_uri, Handle, Lift, Method};
 
 /// What serves the guest some of its imports: it mounts them on the link,
 /// on the guest's thread.
@@ -23,9 +23,10 @@ pub type Server = Box<dyn FnOnce() + Send>;
 
 /// What a program starts its guest with: the stack its thread takes, its
 /// servers, in no order, since none depends on another; the interfaces its
-/// guest's world imports (the bindings' `IMPORTS`);
-/// and the methods of the UI's named interfaces that answer later (the
-/// bindings' `LATER`).
+/// guest's world imports (the bindings' `IMPORTS`); and the methods of the
+/// program's own named interfaces among them that answer later (the
+/// bindings' `LATER`), which tells the runtime which of the UI's methods
+/// answer later.
 pub struct Boot {
     pub stack_sz: usize,
     pub servers: Vec<Server>,
@@ -64,7 +65,7 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
 }
 
 /// Starts the guest on a thread of its own, as @xpute/web-runtime worker.ts
-/// `start` does on a page: once a failure of the host's is a trap (`hook`),
+/// `run` does on a page: once a failure of the host's is a trap (`hook`),
 /// mounts each server, then what the UI serves (`remote::serve`), enters the
 /// guest, which an import no server mounts refuses (`link::init`), and runs
 /// the loop for the guest's life. The guest is told each UI attached by
@@ -181,18 +182,64 @@ pub unsafe fn taken_free(at: *mut u8, len: usize) {
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(at, len)) });
 }
 
-/// The guest's memory: its first byte and its size.
-pub fn mem() -> (*mut u8, u32) {
-    let r = mem::region();
-    (r.base, r.len)
+/// A page, which the guest's memory begins on.
+const PAGE_SZ: usize = 4096;
+
+/// The guest's memory, which the runtime owns: `sz` bytes on a page, zeroed,
+/// as a module's memory starts, reserved by the first call from any thread
+/// and never freed. It writes `sz` through `len` and the program's share of
+/// it, `share_sz`, through `share`, either null when not wanted. It is first
+/// asked for inside the global allocator, which may not unwind, so a
+/// reservation the system refuses stops the process; of two first calls at
+/// once, the one that loses gives its own back. The system is asked a page
+/// more at its own alignment, where its zeroed memory is mapped as it is
+/// touched; at a page's, it would be written whole.
+///
+/// # Safety
+/// `len` and `share` are each null or a writable word.
+pub unsafe fn mem(sz: u32, share_sz: u32, len: *mut u32, share: *mut u32) -> *mut u8 {
+    use core::sync::atomic::{AtomicPtr, Ordering::AcqRel, Ordering::Acquire};
+    use std::alloc::{GlobalAlloc, Layout, System};
+    static BASE: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
+    let mut base = BASE.load(Acquire);
+    if base.is_null() {
+        let Ok(layout) = Layout::from_size_align(sz as usize + PAGE_SZ, 16) else {
+            std::process::abort();
+        };
+        // SAFETY: a layout of nonzero size.
+        let at = unsafe { System.alloc_zeroed(layout) };
+        if at.is_null() {
+            std::process::abort();
+        }
+        let new = at.map_addr(|a| a.next_multiple_of(PAGE_SZ));
+        base = match BASE.compare_exchange(core::ptr::null_mut(), new, AcqRel, Acquire) {
+            Ok(_) => new,
+            Err(first) => {
+                // SAFETY: what this call reserved, as it reserved it.
+                unsafe { System.dealloc(at, layout) };
+                first
+            }
+        };
+    }
+    // SAFETY: the caller's words.
+    unsafe {
+        if !len.is_null() {
+            *len = sz;
+        }
+        if !share.is_null() {
+            *share = share_sz;
+        }
+    }
+    base
 }
 
 /// Exports the runtime under xpute's names (xpute.h) for the
-/// program's `$start` ([`Start`]), and on Android under JNI's for the Kotlin
-/// class `xpute.Runtime` (`jni_abi!`).
+/// program's `$start` ([`Start`]) and its guest's memory, `$mem_sz` bytes of
+/// which the program keeps `$share_sz` for itself (`mem`), and on Android
+/// under JNI's for the Kotlin class `xpute.Runtime` (`jni_abi!`).
 #[macro_export]
 macro_rules! native_abi {
-    ($start:path) => {
+    ($start:path, $mem_sz:expr, $share_sz:expr) => {
         /// # Safety
         /// `named` is `named_len` handles, `prefixes` `prefixes_len` bytes, and
         /// `cache_dir` `cache_dir_len` bytes.
@@ -312,15 +359,11 @@ macro_rules! native_abi {
         }
 
         /// # Safety
-        /// `len` is null or a writable word.
+        /// `len` and `share` are each null or a writable word.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_mem(len: *mut u32) -> *mut u8 {
-            let (at, n) = $crate::native::mem();
-            if !len.is_null() {
-                // SAFETY: the caller's word.
-                unsafe { *len = n };
-            }
-            at
+        pub unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
+            // SAFETY: the caller's words.
+            unsafe { $crate::native::mem($mem_sz, $share_sz, len, share) }
         }
 
         #[no_mangle]

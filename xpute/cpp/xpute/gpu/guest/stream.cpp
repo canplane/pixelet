@@ -7,10 +7,11 @@
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/gpu/guest/abi/gpu.hpp"
+#include "xpute/guest/heap.hpp"
 
 namespace xpute::gpu {
 
-Stream::Stream(std::size_t cap) : buf_(std::vector<std::uint32_t>()), cap_(cap) {
+Stream::Stream(std::size_t cap) : buf_(std::pmr::vector<std::uint32_t>(&guest::heap())), cap_(cap) {
     std::get<0>(buf_).reserve(cap);
 }
 
@@ -21,7 +22,7 @@ std::size_t Stream::len() const noexcept {
 
 bool Stream::is_free() {
     if (Run *run = std::get_if<1>(&buf_); run != nullptr && run->done()) {
-        std::vector<std::uint32_t> words = std::move(run->get().first);
+        std::pmr::vector<std::uint32_t> words = std::move(run->get().first);
         words.clear();
         buf_ = std::move(words);
     }
@@ -30,7 +31,7 @@ bool Stream::is_free() {
 
 void Stream::flush() {
     if (len() == 0 || !is_free()) return;
-    std::vector<std::uint32_t> words = std::move(std::get<0>(buf_));
+    std::pmr::vector<std::uint32_t> words = std::move(std::get<0>(buf_));
     buf_.emplace<1>(abi::gpu::gpu::run(std::move(words)));
 }
 

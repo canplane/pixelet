@@ -90,6 +90,9 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../../link/ts
+      '@xpute/web-runtime':
+        specifier: workspace:*
+        version: link:../../../web/runtime
     devDependencies:
       '@xpute/golden':
         specifier: workspace:*

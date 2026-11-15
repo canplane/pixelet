@@ -6,7 +6,6 @@ import {
   MESSAGE_WORLD_UNAVAILABLE,
 } from "@/abi/overlay.enum.ts";
 import {
-  BOOT_FAILED,
   BOOT_LOADING,
   BOOT_OPENING,
   BOOT_STARTED,
@@ -117,8 +116,6 @@ export function cover_of(s: Standing): Cover | null {
   switch (s.boot) {
     case BOOT_TERMINATED:
       return panic("panic.app", s.stop_code);
-    case BOOT_FAILED:
-      return failed("failed.boot");
     case BOOT_STARTED:
       return panic_of(s);
     case BOOT_LOADING:

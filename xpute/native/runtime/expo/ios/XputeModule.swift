@@ -120,7 +120,7 @@ public class XputeModule: Module {
     /// when the buffer is.
     Function("mem") { () throws -> NativeArrayBuffer in
       var len: UInt32 = 0
-      let at = xpute_mem(&len)
+      let at = xpute_mem(&len, nil)
       return try NativeArrayBuffer.wrap(
         dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(len)), cleanup: {})
     }

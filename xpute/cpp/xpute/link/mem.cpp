@@ -7,6 +7,15 @@
 
 #include "xpute/kit/status/bug.hpp"
 
+// The runtime's: the memory's first byte, its size through `len` and the
+// program's share of it through `share_sz`. A module imports it under `env`
+// from its page's runtime.
+#ifdef __wasm__
+extern "C" __attribute__((import_module("env"), import_name("xpute_mem"))) std::uint8_t *xpute_mem(std::uint32_t *len, std::uint32_t *share_sz);
+#else
+extern "C" std::uint8_t *xpute_mem(std::uint32_t *len, std::uint32_t *share_sz);
+#endif
+
 namespace xpute::link::mem {
 
 namespace {
@@ -16,14 +25,25 @@ std::uintptr_t base() noexcept {
     return 0;
 }
 #else
-std::atomic<std::uint8_t *> region_base{nullptr};
-std::atomic<std::uint32_t> region_len{0};
+// The region's base and size, once read: the region never moves once
+// reserved.
+std::atomic<std::uintptr_t> kept_base{0};
+std::atomic<std::uint32_t> kept_len{0};
 
-// The region's base; nothing reaches the memory before it is set.
+// The region's base and size. The first call asks the runtime; two first
+// calls at once read the same region.
+std::pair<std::uintptr_t, std::uint32_t> kept() noexcept {
+    std::uintptr_t b = kept_base.load(std::memory_order_acquire);
+    if (b != 0) return {b, kept_len.load(std::memory_order_relaxed)};
+    Region r = region();
+    b = reinterpret_cast<std::uintptr_t>(r.base);
+    kept_len.store(r.len, std::memory_order_relaxed);
+    kept_base.store(b, std::memory_order_release);
+    return {b, r.len};
+}
+
 std::uintptr_t base() noexcept {
-    std::uint8_t *b = region_base.load(std::memory_order_relaxed);
-    ensure(b != nullptr, Errno::enotrecoverable);
-    return reinterpret_cast<std::uintptr_t>(b);
+    return kept().first;
 }
 #endif
 
@@ -36,22 +56,15 @@ std::atomic_ref<std::uint32_t> atomic(std::uint32_t at) noexcept {
 
 } // namespace
 
-#ifndef __wasm__
-void set(Region r) noexcept {
-    ensure(r.base != nullptr, Errno::einval);
-    std::uint8_t *none = nullptr;
-    ensure(region_base.compare_exchange_strong(none, r.base, std::memory_order_relaxed), Errno::ealready);
-    region_len.store(r.len, std::memory_order_relaxed);
-}
-
 Region region() noexcept {
-    return Region{region_base.load(std::memory_order_relaxed), region_len.load(std::memory_order_relaxed)};
+    Region r{};
+    r.base = xpute_mem(&r.len, &r.share_sz);
+    return r;
 }
-#endif
 
 std::span<std::uint8_t> bytes(std::uint32_t at, std::uint32_t len) noexcept {
 #ifndef __wasm__
-    ensure(std::uint64_t{at} + len <= region().len, Errno::efault, at, len);
+    ensure(std::uint64_t{at} + len <= kept().second, Errno::efault, at, len);
 #endif
     return {reinterpret_cast<std::uint8_t *>(base() + at), len};
 }

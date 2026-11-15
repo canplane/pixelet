@@ -61,6 +61,7 @@ mod _rt {
 /// handle, one of resources alone by an opener at a prefix.
 pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[("xpute:stop/stop", 0x4eccaa)];
 
-/// The methods of the named interfaces the host serves that answer
-/// later, each `(handle, method)`, as WIT's `async func` marks them.
+/// The methods of the package's own named interfaces its world imports
+/// that answer later, each `(handle, method)`, as WIT's `async func`
+/// marks them.
 pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] = &[];

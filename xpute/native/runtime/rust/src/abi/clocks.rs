@@ -14,7 +14,8 @@ pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
     ("xpute:clocks/system-clock", 0x7dfa61),
 ];
 
-/// The methods of the named interfaces the host serves that answer
-/// later, each `(handle, method)`, as WIT's `async func` marks them.
+/// The methods of the package's own named interfaces its world imports
+/// that answer later, each `(handle, method)`, as WIT's `async func`
+/// marks them.
 pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] =
     &[(monotonic_clock::HANDLE, monotonic_clock::WAIT_FOR)];

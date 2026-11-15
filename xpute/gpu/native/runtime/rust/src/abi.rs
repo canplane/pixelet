@@ -12,7 +12,8 @@ pub mod vsync;
 pub const IMPORTS: &[(&str, xpute_link::Handle)] =
     &[("xpute:gpu/gpu", 0x79d455), ("xpute:gpu/vsync", 0x42eda6)];
 
-/// The methods of the named interfaces the host serves that answer
-/// later, each `(handle, method)`, as WIT's `async func` marks them.
+/// The methods of the package's own named interfaces its world imports
+/// that answer later, each `(handle, method)`, as WIT's `async func`
+/// marks them.
 pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] =
     &[(gpu::HANDLE, gpu::RUN), (vsync::HANDLE, vsync::NEXT)];

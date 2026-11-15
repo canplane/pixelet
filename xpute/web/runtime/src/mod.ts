@@ -1,20 +1,18 @@
 // @xpute/web-runtime
 
-export { tell_life } from "./life.ts";
 export {
   type Instantiate,
-  type InstantiateError,
   type Log,
   type Stopped,
   type Trap,
 } from "./message.ts";
-export { open_worker } from "./page.ts";
+export { message_on, open_remote, start, stopped_on, trap_on } from "./page.ts";
 export { type Taker } from "./remote.ts";
 export {
   type Boot,
   forward_console,
   instantiate,
+  run,
   type Server,
-  start,
   tell_stop,
 } from "./worker.ts";

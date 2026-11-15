@@ -97,12 +97,18 @@ A program declares its interfaces in WIT, as xpute declares its own under
 exports, and which it calls, its imports. `xpute-link-gen` writes their
 bindings for each side in Rust, TypeScript and C++, and for the host two lists
 from the world: `IMPORTS`, the interfaces the guest calls, and `LATER`, the
-methods of the interfaces the UI serves that answer later. A Rust guest
-defines its three exports with one macro, over frames of a cap it chooses,
-and mounts what it serves as it boots; the macro makes the guest's own bug or
-panic its stop, told to the host before it stops, as a C++ guest's
-`XPUTE_LINK` makes its bug. Here it serves xpute's `life`, which is called as
-the app is hidden and shown and as a UI attaches:
+methods of the program's own named interfaces among them that answer later,
+which tells the runtime which of the UI's methods answer later. A Rust guest
+defines its three exports with one macro, `link!`, given four things. The
+first is a frame's cap in bytes, a multiple of 8 that holds a frame's words
+(`HDR_SZ`) and the largest packet the program lays or takes. The second is
+its boot, which mounts what it serves. The last two are the program's start
+and end of every entry: `enter` runs as each entry begins, and `end` as it
+ends, answering whether it left work, in which case the entry runs it again.
+The macro makes the guest's own bug or panic its stop, told to the host
+before it stops, as a C++ guest's `XPUTE_LINK` makes its bug. Here it serves
+xpute's `life`, which is called as the app is hidden and shown and as a UI
+attaches, and has no work of its own to start or end an entry with:
 
 ```rust
 use std::rc::Rc;
@@ -135,6 +141,19 @@ no RTTI and no floating-point contraction, the flags `cpp/Makefile` builds with.
 `cpp/target/amalgamation/`, and xpute's own repository carries them at
 `cpp/amalgamation/`.
 
+A Rust guest writes nothing about its memory: xpute's guest library makes the
+heap in it Rust's global allocator. A C++ guest takes what it lends its host
+from `guest::heap()`, a `std::pmr::memory_resource` over that heap
+(`xpute/guest/heap.hpp`), on a page and a device alike, so the same program
+runs on both. The two differ because Rust's global allocator reaches Rust's
+allocations alone, while C++'s global `operator new` reaches the whole process,
+and a library never replaces it in a process it shares; a module's global `new`
+is the module's own, and nothing relies on it for what crosses. The program
+tells its runtime two numbers before the guest's first entry: the memory's
+size, and its share of it, the bytes it keeps for itself outside the heap, 0
+where it keeps none. The runtime sizes the memory, the heap lies past the
+share, and nothing grows the memory after.
+
 ### On a page
 
 The program builds its host as a list, and the runtime starts the guest from
@@ -147,18 +166,21 @@ functions of its own and by an opener at some prefix where the guest opens its
 resources by URI; which prefixes those are stays the program's. One that no
 server mounts traps the link before the guest's first entry, naming each.
 
-The worker instantiates the guest's module and starts it, and the runtime
-tells the guest the UI attached. The GPU's server takes what the guest
-asks of the device (`GpuAsk`, WebGPU's power preference and features) and the
-program's settings for its host (`GpuConfig`), and the canvas the UI gives
-beside the link under a surface's handle goes to it:
+The worker instantiates the guest's module, grows its memory to the size the
+program gives, of which the program's share lies past the module's data, and
+runs it, and the runtime tells the guest the UI attached. A module that does
+not load, or a memory refused, traps the guest before its first entry, as a
+device's runtime traps on its own failure. The GPU's server takes what the
+guest asks of the device (`GpuAsk`, WebGPU's power preference and features)
+and the program's settings for its host (`GpuConfig`), and the canvas the UI
+gives beside the link under a surface's handle goes to it:
 
 ```ts
 // The worker, given the page's `Instantiate`, m.
-const link = await instantiate(m.module, m.init, MEM_SZ);
+const link = await instantiate(m.module, m.init, MEM_SZ, SHARE_SZ);
 if (link === null) return;
 const gpu = new WebGpu(link, ASK, CFG);
-start(link, {
+run(link, {
   servers: [
     serve_stop,
     serve_clock,
@@ -172,29 +194,41 @@ start(link, {
     take: (h) => gpu.unbind(h),
   },
 }, m);
+```
 
-// The page.
-const { worker, remote, port } = open_worker(WORKER_URL);
-const ask = { kind: "instantiate", module: MODULE_URL, init: undefined };
-worker.postMessage({ ...ask, port, named: remote.named, prefixes: remote.prefixes }, [port]);
-tell_life(remote);
+The UI meets the runtime as a device's does (`open_remote`, `stopped_on`,
+`trap_on`, `start`), with two differences of the platform. It names the
+worker's module as it opens its end of the link, and the guest's module, how
+to fetch it and any fields of the program's own its worker reads beside them
+as it starts the guest. And the start tells the guest the page's lifecycle
+from the document's visibility, which a worker cannot see, as a device's
+module tells its runtime the app's from the platform. What the worker posts
+the page is a message by its kind, the runtime's, the GPU's server's and the
+program's alike, which the UI hears by its kind (`message_on`), the last of
+each told at once to one who begins to hear it; the GPU's state among them
+(`state_on`, from `@xpute/gpu-web-host`) as the device's GPU module tells it:
+
+```ts
+const remote = open_remote(WORKER_URL);
+stopped_on((stop) => { /* show it */ });
+trap_on((err) => { /* show it */ });
+state_on((state) => { /* show it */ });
+// Mount on `remote` what the UI serves, before `start`.
+start(remote, MODULE_URL, undefined);
 const surface = await open(remote, uri("xpute:gpu", "surface"));
 remote.give(surface, canvas.transferControlToOffscreen());
 ```
-
-The GPU's server posts the page what it has of a GPU as that changes
-(`GpuReport`), as the device's GPU host tells its app.
 
 ### On a device
 
 A native app installs `@xpute/native-runtime`, the React Native module, which
 Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
 crate a device links: its guest, and the function that gives the runtime its
-list, which the crate exports the runtime over. The runtime starts the guest
-on a thread of its own, with the stack the list asks, and runs the loop for
-the guest's life. The UI hears the guest's stop and its trap
-(`stopped_on`, `trap_on`), those the runtime keeps told first to a UI that
-starts later, and each start of a UI tells the guest it attached:
+list, which the crate exports the runtime over with the memory's size and the
+program's share. The runtime reserves the memory once, at its first reader,
+before the guest's first entry, with the share at its front. It starts the
+guest on a thread of its own, with the stack the list asks, and runs the loop
+for the guest's life:
 
 ```rust
 fn start(cache_dir: PathBuf) -> Boot {
@@ -212,8 +246,26 @@ fn start(cache_dir: PathBuf) -> Boot {
     }
 }
 
-xpute_native_runtime::native_abi!(start);
+xpute_native_runtime::native_abi!(start, MEM_SZ, SHARE_SZ);
 xpute_gpu_native_host::native_abi!();
+```
+
+The UI opens its end of the runtime's link (`open_remote`), mounts on it what
+it serves, and then starts the runtime (`start`). The first start of a
+process starts the guest and serves it what is mounted on the remote by then,
+its named handles and prefixes; each start after it is a new UI on the same
+runtime, as a reload's, served as the first was, and each start tells the
+guest a UI attached. The UI hears the guest's stop and its trap
+(`stopped_on`, `trap_on`), and each, as the UI begins to hear it, tells at
+once the last the runtime keeps, so a UI that starts after the guest's end
+hears it too:
+
+```ts
+const remote = open_remote();
+stopped_on((stop) => { /* show it */ });
+trap_on((err) => { /* show it */ });
+// Mount on `remote` what the UI serves, before the first `start`.
+start(remote);
 ```
 
 The app builds that crate for the device as it builds, and the module links
