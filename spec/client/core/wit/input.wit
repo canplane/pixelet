@@ -10,11 +10,13 @@ interface input {
     // spent it on something of its own.
     cancel,
   }
-  // What the pointer is, as the browser's `pointerType` says.
-  enum pointer-type { mouse, touch, pen }
+  // What a press that is not a finger's drags, by the button the UI gives
+  // it.
+  enum drag { none, pan, rotate }
 
-  pointer: func(phase: pointer-phase, pointer-type: pointer-type, id: s32, button: s32, x: f64, y: f64);
-  typing: func(typing: bool);
+  // `touch`: the pointer is a finger on a screen, which pans and pinches by
+  // how many are down; any other pointer drags as its `drag` says.
+  pointer: func(phase: pointer-phase, touch: bool, id: s32, drag: drag, x: f64, y: f64);
   wheel: func(delta-y: f64);
   pinch: func(scale: f64);
   move: func(x: s32, y: s32);

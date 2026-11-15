@@ -1,79 +1,34 @@
 // pxl-core/link/export/input.rs
 
 //! The input interface's methods: the pointer, the wheel, a trackpad's pinch,
-//! the held movement keys, a tracker's pose, and whether the UI takes typed
-//! text.
+//! the held movement keys and a tracker's pose.
 
 use super::{applied, refuse_unless};
-use crate::abi::input::{PointerPhase, PointerType};
+use crate::abi::input::{Drag, PointerPhase};
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::input::{
     camera_keys, camera_pinch, camera_pointer_down, camera_pointer_move, camera_pointer_out,
-    camera_pointer_up, camera_wheel, forget, pinching,
+    camera_pointer_up, camera_wheel, pinching,
 };
 use crate::pointer::tap;
-use pxl_global::Global;
 use xpute_kit::status::errno::Errno;
-
-#[derive(Default)]
-struct Pointers {
-    /// The UI is taking typed text (`typing`).
-    typing: bool,
-    /// The pointers pressed while it was, whose lifts tap nothing.
-    spent: Vec<i32>,
-}
-
-static POINTERS: Global<Pointers> = Global::new();
-
-fn pointers() -> &'static mut Pointers {
-    POINTERS.get(Pointers::default)
-}
-
-/// A new UI starts with no pointer pressed and no text taken.
-/// Forgets what the UI that left had pressed, here and in the domain.
-pub(super) fn forget_pointers() {
-    *pointers() = Pointers::default();
-    forget();
-}
-
-pub(super) fn typing(typing: bool) -> Result<(), Errno> {
-    pointers().typing = typing;
-    Ok(())
-}
-
-/// A pointer pressed while the UI types is spent: its lift is a cancel.
-fn phase_of(phase: PointerPhase, id: i32) -> PointerPhase {
-    let t = pointers();
-    let at = t.spent.iter().position(|&spent| spent == id);
-    match (phase, at) {
-        (PointerPhase::Down, None) if t.typing => {
-            t.spent.push(id);
-            phase
-        }
-        (PointerPhase::Up | PointerPhase::Cancel, Some(at)) => {
-            t.spent.swap_remove(at);
-            PointerPhase::Cancel
-        }
-        _ => phase,
-    }
-}
 
 pub(super) fn pointer(
     phase: PointerPhase,
-    pointer_type: PointerType,
+    touch: bool,
     id: i32,
-    button: i32,
+    drag: Drag,
     x: f64,
     y: f64,
 ) -> Result<(), Errno> {
-    match phase_of(phase, id) {
+    match phase {
         PointerPhase::Down => {
-            camera_pointer_down(pointer_type, id, button, x, y);
+            camera_pointer_down(touch, id, drag, x, y);
         }
-        PointerPhase::Move => camera_pointer_move(pointer_type, id, x, y),
+        PointerPhase::Move => camera_pointer_move(touch, id, x, y),
         PointerPhase::Up => {
-            if let Some([x, y]) = camera_pointer_up(pointer_type, id) {
+            if let Some([x, y]) = camera_pointer_up(touch, id) {
                 tap(x, y);
             }
         }
@@ -82,7 +37,7 @@ pub(super) fn pointer(
             clear_hover();
         }
         PointerPhase::Cancel => {
-            camera_pointer_up(pointer_type, id);
+            camera_pointer_up(touch, id);
         }
     }
     // A pinch does not point at anything the tool could place.
@@ -129,7 +84,3 @@ pub(super) fn xr_pose_end() -> Result<(), Errno> {
     controller::tracked_end();
     applied()
 }
-
-#[cfg(test)]
-#[path = "input.test.rs"]
-mod test;

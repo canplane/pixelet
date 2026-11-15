@@ -28,5 +28,5 @@ export function north_up(): void {
 /** Moves the pivot to a search result, and keeps the rest of the view as it
  * is. */
 export function goto(lon: f64, lat: f64): void {
-  void camera.goto(ui, lon, lat, null, null, null);
+  void camera.goto(ui, lon, lat);
 }

@@ -26,7 +26,7 @@ pub trait Host {
         height: u32,
         x: f64,
         text: _rt::Lent,
-    ) -> Result<u32, _rt::Errno>;
+    ) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Host>);
@@ -67,15 +67,7 @@ impl _rt::Object for _Object {
                         .0
                         .raster(weight, px, color, image, width, height, x, text)
                     {
-                        Ok(v) => _rt::Reply {
-                            result: 0,
-                            data: Some((
-                                4,
-                                Box::new(move |w: &mut _rt::Lower| {
-                                    w.u32(0, v);
-                                }),
-                            )),
-                        },
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }

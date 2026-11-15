@@ -1,6 +1,6 @@
 // pxl-core/perf/frame.rs
 
-//! The record of one frame as the profiler's rings lay it out (perf.json5
+//! The record of one frame as the profiler's tables lay it out (perf.json5
 //! FRAME), and the record of one of the worst frames (WORST).
 
 use core::mem::{offset_of, size_of};

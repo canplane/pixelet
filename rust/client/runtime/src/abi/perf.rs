@@ -11,8 +11,8 @@ pub const START: _rt::Method = 0;
 pub const STOP: _rt::Method = 1;
 /// `stats`
 pub const STATS: _rt::Method = 2;
-/// `ring`
-pub const RING: _rt::Method = 3;
+/// `table`
+pub const TABLE: _rt::Method = 3;
 /// `strtab`
 pub const STRTAB: _rt::Method = 4;
 
@@ -54,14 +54,13 @@ pub fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno> {
     })
 }
 
-pub fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, _rt::Errno> {
+pub fn table(table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno> {
     let (r, data) = _rt::link::call(
         HANDLE,
-        RING,
-        Some((12, &|w_: &mut _rt::Lower| {
-            w_.u32(0, ring);
+        TABLE,
+        Some((8, &|w_: &mut _rt::Lower| {
+            w_.u32(0, table);
             w_.u32(4, from);
-            w_.u32(8, cnt);
         })),
     );
     _rt::answer(r).and_then(|_| {

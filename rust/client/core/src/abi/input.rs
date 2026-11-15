@@ -7,18 +7,16 @@ pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
 /// `pointer`
 pub const POINTER: _rt::Method = 0;
-/// `typing`
-pub const TYPING: _rt::Method = 1;
 /// `wheel`
-pub const WHEEL: _rt::Method = 2;
+pub const WHEEL: _rt::Method = 1;
 /// `pinch`
-pub const PINCH: _rt::Method = 3;
+pub const PINCH: _rt::Method = 2;
 /// `move`
-pub const MOVE: _rt::Method = 4;
+pub const MOVE: _rt::Method = 3;
 /// `xr-pose`
-pub const XR_POSE: _rt::Method = 5;
+pub const XR_POSE: _rt::Method = 4;
 /// `xr-pose-end`
-pub const XR_POSE_END: _rt::Method = 6;
+pub const XR_POSE_END: _rt::Method = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -68,22 +66,22 @@ impl PointerPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum PointerType {
-    Mouse = 0,
-    Touch = 1,
-    Pen = 2,
+pub enum Drag {
+    None = 0,
+    Pan = 1,
+    Rotate = 2,
 }
 
-impl PointerType {
+impl Drag {
     /// Every member, in its source's own order.
-    pub const ALL: [PointerType; 3] = [PointerType::Mouse, PointerType::Touch, PointerType::Pen];
+    pub const ALL: [Drag; 3] = [Drag::None, Drag::Pan, Drag::Rotate];
 
     /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<PointerType> {
+    pub const fn of(val: u32) -> Option<Drag> {
         match val {
-            0 => Some(PointerType::Mouse),
-            1 => Some(PointerType::Touch),
-            2 => Some(PointerType::Pen),
+            0 => Some(Drag::None),
+            1 => Some(Drag::Pan),
+            2 => Some(Drag::Rotate),
             _ => None,
         }
     }
@@ -91,9 +89,9 @@ impl PointerType {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            PointerType::Mouse => "Mouse",
-            PointerType::Touch => "Touch",
-            PointerType::Pen => "Pen",
+            Drag::None => "None",
+            Drag::Pan => "Pan",
+            Drag::Rotate => "Rotate",
         }
     }
 }
@@ -102,13 +100,12 @@ pub trait Guest {
     fn pointer(
         &self,
         phase: PointerPhase,
-        pointer_type: PointerType,
+        touch: bool,
         id: i32,
-        button: i32,
+        drag: Drag,
         x: f64,
         y: f64,
     ) -> Result<(), _rt::Errno>;
-    fn typing(&self, typing: bool) -> Result<(), _rt::Errno>;
     fn wheel(&self, delta_y: f64) -> Result<(), _rt::Errno>;
     fn pinch(&self, scale: f64) -> Result<(), _rt::Errno>;
     fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::Errno>;
@@ -140,22 +137,14 @@ impl _rt::Object for _Object {
                     let phase = r_
                         .case(0, 5)
                         .and_then(|v| PointerPhase::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let pointer_type = r_
-                        .case(1, 3)
-                        .and_then(|v| PointerType::of(v).ok_or(_rt::Errno::EBADMSG))?;
+                    let touch = r_.bool(1)?;
                     let id = r_.i32(4)?;
-                    let button = r_.i32(8)?;
+                    let drag = r_
+                        .case(8, 3)
+                        .and_then(|v| Drag::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     let x = r_.f64(16)?;
                     let y = r_.f64(24)?;
-                    match self.0.pointer(phase, pointer_type, id, button, x, y) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
-                    }
-                }
-                TYPING => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let typing = r_.bool(0)?;
-                    match self.0.typing(typing) {
+                    match self.0.pointer(phase, touch, id, drag, x, y) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }

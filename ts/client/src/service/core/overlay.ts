@@ -3,17 +3,16 @@
 import type { Remote } from "@xpute/link";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
-import { GROUND_STATUS_IDLE } from "@/abi/overlay.enum.ts";
 
 const INIT: Snapshot = {
   pivot: {
-    status: GROUND_STATUS_IDLE,
+    ground_shown: false,
     is_off_center: false,
     lon_lat: null,
     outside: false,
   },
-  companion: { person_ready: false, pet_ready: false },
-  draft: null,
+  companion_ready: false,
+  drafting: false,
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,
@@ -64,11 +63,22 @@ export function cur_view(): UiView {
   return view;
 }
 
+let draft = "";
+
+/** The text of the marker's draft as the core told it, as the draft opened
+ * or as this UI attached to it (pxl:core overlay `draft`). */
+export function cur_draft(): string {
+  return draft;
+}
+
 /** Serves `overlay` on `remote`, the core's snapshot and view, before the
  * core boots. */
 export function serve_overlay(remote: Remote): void {
   mount(remote, {
     show: set_snapshot,
+    draft: (text) => {
+      draft = text;
+    },
     view: (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
   });
 }

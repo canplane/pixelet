@@ -144,12 +144,16 @@ fn tell_all() {
 }
 
 /// Tells the other side what changed: what is drawn over the world, the view
-/// and the snapshot. A call to the UI answers at once, its args copied across.
+/// and the snapshot, the text of a draft that opened before the snapshot that
+/// shows it open. A call to the UI answers at once, its args copied across.
 fn post_ui(s: &mut State) {
     if let Some((azimuth, m_per_px)) = s.last_snapshot.take_view_changed() {
         abi::overlay::view(azimuth, m_per_px).or_bug(Errno::EPROTO);
     }
-    if let Some(shown) = s.last_snapshot.take_changed() {
+    if let Some((shown, draft)) = s.last_snapshot.take_changed() {
+        if let Some(text) = draft {
+            abi::overlay::draft(text).or_bug(Errno::EPROTO);
+        }
         abi::overlay::show(&ui::snapshot(&shown)).or_bug(Errno::EPROTO);
     }
 }

@@ -10,5 +10,5 @@ interface text {
   // How wide the text is set at `px`.
   width: func(weight: u32, px: f64, text: lent) -> f64;
   // Draws the text into `image`, `width` by `height` pixels of RGBA.
-  raster: func(weight: u32, px: f64, color: u32, image: lent, width: u32, height: u32, x: f64, text: lent) -> u32;
+  raster: func(weight: u32, px: f64, color: u32, image: lent, width: u32, height: u32, x: f64, text: lent);
 }

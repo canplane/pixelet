@@ -22,8 +22,8 @@ export const START: Method = 0;
 export const STOP: Method = 1;
 /** `stats` */
 export const STATS: Method = 2;
-/** `ring` */
-export const RING: Method = 3;
+/** `table` */
+export const TABLE: Method = 3;
 /** `strtab` */
 export const STRTAB: Method = 4;
 
@@ -64,18 +64,16 @@ export async function stats(
   return r_.arr(0, Uint8Array);
 }
 
-export async function ring(
+export async function table(
   link_: Sender,
-  ring: number,
+  table: number,
   from: number,
-  cnt: number,
 ): Promise<Uint8Array<ArrayBuffer>> {
-  const a_ = await link_.send(HANDLE, RING, [
-    12,
+  const a_ = await link_.send(HANDLE, TABLE, [
+    8,
     (w_) => {
-      w_.u32(0, ring);
+      w_.u32(0, table);
       w_.u32(4, from);
-      w_.u32(8, cnt);
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);

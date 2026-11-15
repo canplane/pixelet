@@ -17,10 +17,10 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   type PointerPhase,
+  DRAG_ROTATE,
   POINTER_PHASE_DOWN,
   POINTER_PHASE_MOVE,
   POINTER_PHASE_UP,
-  POINTER_TYPE_MOUSE,
 } from "@/abi/input.enum.ts";
 import { SETTING } from "@/abi/schema.spec.ts";
 import { perf_report_text } from "./report.ts";
@@ -48,9 +48,8 @@ const TURN_S = 4;
 const SETTLE_MS = 2000;
 /** The seconds the window lasts. */
 const DRIVE_S = 20;
-/** The pointer the drive turns the view with: a mouse's secondary button. */
+/** The pointer the drive turns the view with, a mouse's. */
 const POINTER_ID = 1;
-const BUTTON = 2;
 
 /** What the drive sets, each setting with its value, so a build made for
  * measuring can put them back (perf/measure.ts). */
@@ -73,7 +72,7 @@ export async function perf_drive(): Promise<string> {
   const tilt = TILT_SHARE * box.height;
   const [x, y] = [box.width / 2, box.height / 2];
   const pointer = (phase: PointerPhase, at: [f64, f64]) =>
-    input.pointer(phase, POINTER_TYPE_MOUSE, POINTER_ID, BUTTON, at[0], at[1]);
+    input.pointer(phase, false, POINTER_ID, DRAG_ROTATE, at[0], at[1]);
   for (let n = 0; n < RUN; n++) {
     input.wheel(WHEEL);
     await wait(STEP_MS);

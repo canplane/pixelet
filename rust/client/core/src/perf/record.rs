@@ -1,11 +1,11 @@
 // pxl-core/perf/record.rs
 
 //! Records where the core's time and work go. Each record is laid out word
-//! for word as perf.json5 says, in columns a read's reply hands over as they
-//! lie, so reading the profiler allocates nothing in the heap it measures.
-//! The columns, the failures' string table among them, live on the heap while
-//! the profiler's setting is on: they are taken whole when recording starts
-//! and given back when the setting is turned off (`perf_release`). The heap
+//! for word as perf.json5 says, in tables a read copies into its reply
+//! (link/export/perf.rs `read_timed`). The tables, the percentiles' scratch
+//! and the failures' string table are blocks held on the heap while the
+//! profiler's setting is on: they are taken whole when recording starts and
+//! given back when the setting is turned off (`perf_release`). The heap
 //! figures include them throughout, so they never show up in a frame's heap
 //! delta.
 
@@ -23,9 +23,9 @@ use crate::spec::phase::Phase;
 use crate::spec::step::StepName;
 use crate::sys::sched::tick::TickContext;
 
-/// The rings keep the last minute (perf.json5 `LIMIT.WINDOW_MS`), as the UI's
+/// The tables keep the last minute (perf.json5 `LIMIT.WINDOW_MS`), as the UI's
 /// long frames do. At 60 Hz that is 3,600 frames. A faster display or a busy
-/// minute fills a column early, and the column then drops its oldest records
+/// minute fills a table early, and the table then drops its oldest records
 /// and sets `truncated`.
 const WINDOW_MS: f64 = limit::WINDOW_MS as f64;
 const TASK_CAP: usize = 2_048;
@@ -41,44 +41,44 @@ pub(crate) const PERCENTILE_CAP: usize = if FRAME_CAP > TASK_CAP {
 
 /// Advances `head` past records older than `cutoff`. Returns how many records
 /// to drop from the front now, which stays 0 until the expired part is at
-/// least half the ring, so records are shifted rarely.
-fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
-    while *head < ring.len() && t(&ring[*head]) < cutoff {
+/// least half the table, so records are shifted rarely.
+fn trim<T>(table: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
+    while *head < table.len() && t(&table[*head]) < cutoff {
         *head += 1;
     }
-    if *head > 0 && *head * 2 >= ring.len() {
+    if *head > 0 && *head * 2 >= table.len() {
         core::mem::take(head)
     } else {
         0
     }
 }
 
-/// Appends `rec` to the column. A full column first drops its oldest
-/// quarter, so it shifts once a quarter of the column rather than once a
+/// Appends `rec` to the table. A full table first drops its oldest
+/// quarter, so it shifts once a quarter of the table rather than once a
 /// record, and the call then returns false.
-fn land_column<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
-    let full = *len == ring.len() && *head == 0;
-    if *len == ring.len() {
+fn land_row<T: Copy>(table: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
+    let full = *len == table.len() && *head == 0;
+    if *len == table.len() {
         let n = if full {
-            ring.len() / 4
+            table.len() / 4
         } else {
             core::mem::take(head)
         };
-        drop_front(ring, len, n);
+        drop_front(table, len, n);
     }
-    ring[*len] = rec;
+    table[*len] = rec;
     *len += 1;
     !full
 }
 
-pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
-    ring.copy_within(n..*len, 0);
+pub(super) fn drop_front<T: Copy>(table: &mut [T], len: &mut usize, n: usize) {
+    table.copy_within(n..*len, 0);
     *len -= n;
 }
 
-/// The byte size of each column, in order: tasks, frames, the worst frames,
+/// The byte size of each block, in order: tasks, frames, the worst frames,
 /// the read's scratch (read.rs) and the string table.
-const COLUMNS: [u32; 5] = [
+const BLOCKS: [u32; 5] = [
     (TASK_CAP * size_of::<TaskRecord>()) as u32,
     (FRAME_CAP * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
@@ -87,31 +87,31 @@ const COLUMNS: [u32; 5] = [
 ];
 
 /// The heap the profiler holds while its setting is on. The buddy allocator
-/// gives each column a power-of-two block, so each column counts at its size
+/// gives each table a power-of-two block, so each table counts at its size
 /// rounded up (link/layout.rs `HEAP_FLOWS_BYTES`).
 pub(crate) const PERF_BYTES: u64 = {
     let mut sum = 0;
     let mut k = 0;
-    while k < COLUMNS.len() {
-        sum += (COLUMNS[k] as u64).next_power_of_two();
+    while k < BLOCKS.len() {
+        sum += (BLOCKS[k] as u64).next_power_of_two();
         k += 1;
     }
     sum
 };
 
-/// A column of `n` default records, each a valid record. Returns None when
+/// A table of `n` default records, each a valid record. Returns None when
 /// the heap refuses it.
-fn heap_column<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
-    let mut column = Vec::new();
-    column.try_reserve_exact(n).ok()?;
-    column.resize(n, T::default());
-    Some(column.into_boxed_slice())
+fn heap_block<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
+    let mut table = Vec::new();
+    table.try_reserve_exact(n).ok()?;
+    table.resize(n, T::default());
+    Some(table.into_boxed_slice())
 }
 
 struct Perf {
-    task_ring: Box<[TaskRecord]>,
+    task_table: Box<[TaskRecord]>,
     task_len: usize,
-    frame_ring: Box<[FrameSample]>,
+    frame_table: Box<[FrameSample]>,
     frame_len: usize,
     task_head: usize,
     frame_head: usize,
@@ -143,9 +143,9 @@ static PERF: Global<Perf> = Global::new();
 
 fn perf() -> &'static mut Perf {
     PERF.get(|| Perf {
-        task_ring: Box::default(),
+        task_table: Box::default(),
         task_len: 0,
-        frame_ring: Box::default(),
+        frame_table: Box::default(),
         frame_len: 0,
         task_head: 0,
         frame_head: 0,
@@ -180,22 +180,22 @@ pub(crate) fn perf_recording_state() -> RecordingStateSection {
     }
 }
 
-/// Starts a recording from now, taking the columns from the heap if they are
+/// Starts a recording from now, taking the blocks from the heap if they are
 /// not held yet. Returns false, and records nothing, when the heap refuses
 /// them.
 pub(crate) fn perf_recording_start() -> bool {
     let l = perf();
-    if l.task_ring.is_empty() {
+    if l.task_table.is_empty() {
         let (Some(tasks), Some(frames), Some(worst), Some(scratch), Some(strtab)) = (
-            heap_column(TASK_CAP),
-            heap_column(FRAME_CAP),
-            heap_column(WORST_CAP),
-            heap_column(PERCENTILE_CAP),
-            heap_column(STRTAB_CAP),
+            heap_block(TASK_CAP),
+            heap_block(FRAME_CAP),
+            heap_block(WORST_CAP),
+            heap_block(PERCENTILE_CAP),
+            heap_block(STRTAB_CAP),
         ) else {
             return false;
         };
-        (l.task_ring, l.frame_ring, l.worst, l.scratch, l.strtab) =
+        (l.task_table, l.frame_table, l.worst, l.scratch, l.strtab) =
             (tasks, frames, worst, scratch, strtab);
     }
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
@@ -220,7 +220,7 @@ pub(crate) fn perf_recording_stop() {
     l.stopped_at = Some(now());
 }
 
-/// Gives the columns, and what they hold, back to the heap. It runs when the
+/// Gives the blocks, and what they hold, back to the heap. It runs when the
 /// profiler's setting goes off, after which nothing shows them.
 pub(crate) fn perf_release() {
     perf_recording_stop();
@@ -233,7 +233,7 @@ pub(crate) fn perf_release() {
         l.frame_head,
         l.strtab_len,
     ) = (0, 0, 0, 0, 0, 0);
-    (l.task_ring, l.frame_ring, l.worst, l.scratch, l.strtab) = (
+    (l.task_table, l.frame_table, l.worst, l.scratch, l.strtab) = (
         Box::default(),
         Box::default(),
         Box::default(),
@@ -242,14 +242,14 @@ pub(crate) fn perf_release() {
     );
 }
 
-/// The read's scratch, empty while the columns are not held.
+/// The read's scratch, empty while the blocks are not held.
 pub(crate) fn perf_scratch() -> &'static mut [f64] {
     &mut perf().scratch
 }
 
 /// Records a settled task. `row` is built only while recording, and it names
 /// a failure's file through the string table it is handed. A name the table
-/// has no room for is lost, as a record a full column drops is (`truncated`).
+/// has no room for is lost, as a record a full table drops is (`truncated`).
 pub(crate) fn perf_record(
     row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>) -> TaskRecord,
 ) {
@@ -265,13 +265,13 @@ pub(crate) fn perf_record(
     });
     l.truncated |= lost;
     let dropped = trim(
-        &l.task_ring[..l.task_len],
+        &l.task_table[..l.task_len],
         &mut l.task_head,
         row.end_ms - WINDOW_MS,
         |r| r.end_ms,
     );
-    drop_front(&mut l.task_ring, &mut l.task_len, dropped);
-    if !land_column(&mut l.task_ring, &mut l.task_len, &mut l.task_head, row) {
+    drop_front(&mut l.task_table, &mut l.task_len, dropped);
+    if !land_row(&mut l.task_table, &mut l.task_len, &mut l.task_head, row) {
         l.truncated = true;
     }
 }
@@ -313,7 +313,7 @@ fn at_frame(l: &mut Perf, frame: f64, write: impl Fn(&mut FrameSample)) {
         of(f);
     }
     // Walk back from the newest record to the frame named.
-    for f in l.frame_ring[l.frame_head..l.frame_len].iter_mut().rev() {
+    for f in l.frame_table[l.frame_head..l.frame_len].iter_mut().rev() {
         of(f);
         if f.gpu.frame != 0.0 && f.gpu.frame <= frame {
             break;
@@ -383,18 +383,18 @@ fn land(l: &mut Perf, s: FrameSample) {
     if s.settled == 0.0 && at < l.worst.len() {
         let end = l.worst_len.min(l.worst.len() - 1);
         l.worst.copy_within(at..end, at + 1);
-        l.worst[at] = WorstFrame::of(s, l.frame_ring[..l.frame_len].last());
+        l.worst[at] = WorstFrame::of(s, l.frame_table[..l.frame_len].last());
         l.worst_len = end + 1;
     }
 
     let dropped = trim(
-        &l.frame_ring[..l.frame_len],
+        &l.frame_table[..l.frame_len],
         &mut l.frame_head,
         s.t - WINDOW_MS,
         |f| f.t,
     );
-    drop_front(&mut l.frame_ring, &mut l.frame_len, dropped);
-    if !land_column(&mut l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
+    drop_front(&mut l.frame_table, &mut l.frame_len, dropped);
+    if !land_row(&mut l.frame_table, &mut l.frame_len, &mut l.frame_head, s) {
         l.truncated = true;
     }
 }
@@ -419,25 +419,25 @@ fn name_at(t: &mut [u8], len: &mut usize, file: &str) -> Option<u32> {
     Some(off)
 }
 
-/// The string table's names so far, empty while the columns are not held.
+/// The string table's names so far, empty while the blocks are not held.
 pub(crate) fn perf_strtab() -> &'static [u8] {
     let l = perf();
     &l.strtab[..l.strtab_len]
 }
 
-fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
-    ring.partition_point(|rec| at(rec) < t)
+fn first_at<T>(table: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
+    table.partition_point(|rec| at(rec) < t)
 }
 
 pub(crate) fn perf_frames() -> &'static [FrameSample] {
     let l = perf();
-    &l.frame_ring[l.frame_head..l.frame_len]
+    &l.frame_table[l.frame_head..l.frame_len]
 }
 
 /// The tasks lie in `end_ms` order, since a task is recorded as it settles.
 pub(crate) fn perf_tasks() -> &'static [TaskRecord] {
     let l = perf();
-    &l.task_ring[l.task_head..l.task_len]
+    &l.task_table[l.task_head..l.task_len]
 }
 
 pub(crate) fn perf_worst() -> &'static [WorstFrame] {
@@ -446,13 +446,13 @@ pub(crate) fn perf_worst() -> &'static [WorstFrame] {
 }
 
 pub(crate) fn perf_frames_since(t: f64) -> &'static [FrameSample] {
-    let ring = perf_frames();
-    &ring[first_at(ring, t, |f| f.t)..]
+    let table = perf_frames();
+    &table[first_at(table, t, |f| f.t)..]
 }
 
 pub(crate) fn perf_tasks_since(t: f64) -> &'static [TaskRecord] {
-    let ring = perf_tasks();
-    &ring[first_at(ring, t, |r| r.end_ms)..]
+    let table = perf_tasks();
+    &table[first_at(table, t, |r| r.end_ms)..]
 }
 
 #[cfg(test)]

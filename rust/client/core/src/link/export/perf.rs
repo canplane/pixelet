@@ -14,7 +14,7 @@ use crate::perf::record::{perf_frames, perf_strtab, perf_tasks, perf_worst, STRT
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
-use crate::spec::perf::{limit, now, stat, RING_NAMES};
+use crate::spec::perf::{limit, now, stat, TABLE_NAMES};
 use pxl_global::Global;
 
 use xpute_guest::clock::now;
@@ -41,11 +41,11 @@ pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
     Ok(read_timed(|| bytes_of(read::perf_read(window_ms))))
 }
 
-/// A ring's records as bytes, and the bytes a record takes.
-type Ring = (fn() -> &'static [u8], usize);
+/// A table's records as bytes, and the bytes a record takes.
+type Table = (fn() -> &'static [u8], usize);
 
-/// Each ring, in `RING_NAMES`' order: frames, tasks, worst.
-const RINGS: [Ring; RING_NAMES.len()] = [
+/// Each table, in `TABLE_NAMES`' order: frames, tasks, worst.
+const TABLES: [Table; TABLE_NAMES.len()] = [
     (|| bytes_of(perf_frames()), size_of::<FrameSample>()),
     (|| bytes_of(perf_tasks()), size_of::<TaskRecord>()),
     (|| bytes_of(perf_worst()), size_of::<WorstFrame>()),
@@ -55,27 +55,27 @@ const RINGS: [Ring; RING_NAMES.len()] = [
 const _: () = assert!(STRTAB_CAP <= limit::PAGE_BYTES as usize);
 const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_BYTES as usize);
 
-/// The ring being read, by its number, as it stood at its first page, so that
+/// The table being read, by its number, as it stood at its first page, so that
 /// the records landing between pages move none of its pages. It goes with its
 /// last page, the one that comes short.
 static READING: Global<Option<(u32, Vec<u8>)>> = Global::new();
 
-/// Answers up to `cnt` records of ring `ring` from its record `from`, no more
-/// than a page holds (`limit::PAGE_BYTES`), as the ring stood at its first
-/// page, the one from record 0.
-pub(super) fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
-    let &(read, record) = RINGS.get(ring as usize).ok_or(Errno::EINVAL)?;
+/// Answers the records of table `table` from its record `from`, as many as a
+/// page holds (`limit::PAGE_BYTES`), as the table stood at its first page, the
+/// one from record 0.
+pub(super) fn table(table: u32, from: u32) -> Result<Vec<u8>, Errno> {
+    let &(read, record) = TABLES.get(table as usize).ok_or(Errno::EINVAL)?;
     if from == 0 {
-        READING.set(Some((ring, read_timed(read))));
+        READING.set(Some((table, read_timed(read))));
     }
     let reading = READING.get(|| None);
-    let Some((_, b)) = reading.as_ref().filter(|(r, _)| *r == ring) else {
+    let Some((_, b)) = reading.as_ref().filter(|(t, _)| *t == table) else {
         return Err(Errno::EINVAL);
     };
     let page = limit::PAGE_BYTES as usize / record;
     let n = b.len() / record;
     let from = (from as usize).min(n);
-    let to = from + (cnt as usize).min(page).min(n - from);
+    let to = from + page.min(n - from);
     let out = b[from * record..to * record].to_vec();
     if to - from < page {
         *reading = None;

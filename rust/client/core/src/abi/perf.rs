@@ -11,8 +11,8 @@ pub const START: _rt::Method = 0;
 pub const STOP: _rt::Method = 1;
 /// `stats`
 pub const STATS: _rt::Method = 2;
-/// `ring`
-pub const RING: _rt::Method = 3;
+/// `table`
+pub const TABLE: _rt::Method = 3;
 /// `strtab`
 pub const STRTAB: _rt::Method = 4;
 
@@ -20,7 +20,7 @@ pub trait Guest {
     fn start(&self) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
     fn stop(&self) -> Result<(), _rt::Errno>;
     fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno>;
-    fn ring(&self, ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, _rt::Errno>;
+    fn table(&self, table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno>;
     fn strtab(&self) -> Result<Vec<u8>, _rt::Errno>;
 }
 
@@ -72,12 +72,11 @@ impl _rt::Object for _Object {
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                RING => {
+                TABLE => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let ring = r_.u32(0)?;
+                    let table = r_.u32(0)?;
                     let from = r_.u32(4)?;
-                    let cnt = r_.u32(8)?;
-                    match self.0.ring(ring, from, cnt) {
+                    match self.0.table(table, from) {
                         Ok(v) => _rt::Reply {
                             result: 0,
                             data: Some((

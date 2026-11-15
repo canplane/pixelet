@@ -1,6 +1,6 @@
 // pxl-core/perf/task.rs
 
-//! A task's row in the profiler's columns: what ran, when, and how it ended.
+//! A task's row in the profiler's task table: what ran, when, and how it ended.
 //! A row is made from an attempt the request scheduler ended
 //! (`TaskRecord::of`), when the link takes the scheduler's end event (link.rs
 //! `end`).

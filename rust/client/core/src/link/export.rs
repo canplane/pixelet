@@ -18,6 +18,7 @@ mod surface;
 use std::rc::Rc;
 
 use crate::abi;
+use crate::domain::control::input::forget;
 use crate::sys::sched::invalidate;
 use xpute_guest::abi::life;
 use xpute_kit::status::errno::Errno;
@@ -74,15 +75,8 @@ impl abi::camera::Guest for Core {
     fn north_up(&self) -> Result<(), Errno> {
         camera::north_up()
     }
-    fn goto(
-        &self,
-        lon: f64,
-        lat: f64,
-        dist: Option<f64>,
-        azimuth: Option<f64>,
-        polar: Option<f64>,
-    ) -> Result<(), Errno> {
-        camera::goto(lon, lat, dist, azimuth, polar)
+    fn goto(&self, lon: f64, lat: f64) -> Result<(), Errno> {
+        camera::goto(lon, lat)
     }
 }
 
@@ -90,16 +84,13 @@ impl abi::input::Guest for Core {
     fn pointer(
         &self,
         phase: abi::input::PointerPhase,
-        pointer_type: abi::input::PointerType,
+        touch: bool,
         id: i32,
-        button: i32,
+        drag: abi::input::Drag,
         x: f64,
         y: f64,
     ) -> Result<(), Errno> {
-        input::pointer(phase, pointer_type, id, button, x, y)
-    }
-    fn typing(&self, typing: bool) -> Result<(), Errno> {
-        input::typing(typing)
+        input::pointer(phase, touch, id, drag, x, y)
     }
     fn wheel(&self, delta_y: f64) -> Result<(), Errno> {
         input::wheel(delta_y)
@@ -194,8 +185,8 @@ impl abi::perf::Guest for Core {
     fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
         perf::stats(window_ms)
     }
-    fn ring(&self, ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
-        perf::ring(ring, from, cnt)
+    fn table(&self, table: u32, from: u32) -> Result<Vec<u8>, Errno> {
+        perf::table(table, from)
     }
     fn strtab(&self) -> Result<Vec<u8>, Errno> {
         perf::strtab()
@@ -213,10 +204,10 @@ impl life::Guest for Core {
     }
     /// A UI attached, the first or one a reload makes on the same core: it is
     /// posted the overlay whole at the entry's end (link.rs `tell_all`), and
-    /// starts with no pointer pressed and no text taken.
+    /// starts with no pointer pressed.
     fn attached(&self) -> Result<(), Errno> {
         super::tell_all();
-        input::forget_pointers();
+        forget();
         Ok(())
     }
 }

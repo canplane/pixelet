@@ -27,19 +27,14 @@ export function of_PointerPhase(val: number): PointerPhase | null {
     : null;
 }
 
-export type PointerType =
-  | typeof POINTER_TYPE_MOUSE
-  | typeof POINTER_TYPE_TOUCH
-  | typeof POINTER_TYPE_PEN;
-export const POINTER_TYPE_MOUSE = 0;
-export const POINTER_TYPE_TOUCH = 1;
-export const POINTER_TYPE_PEN = 2;
+export type Drag = typeof DRAG_NONE | typeof DRAG_PAN | typeof DRAG_ROTATE;
+export const DRAG_NONE = 0;
+export const DRAG_PAN = 1;
+export const DRAG_ROTATE = 2;
 
 /** The member `val` is, or null for a number no member has. */
-export function of_PointerType(val: number): PointerType | null {
-  return val === POINTER_TYPE_MOUSE ||
-    val === POINTER_TYPE_TOUCH ||
-    val === POINTER_TYPE_PEN
+export function of_Drag(val: number): Drag | null {
+  return val === DRAG_NONE || val === DRAG_PAN || val === DRAG_ROTATE
     ? val
     : null;
 }

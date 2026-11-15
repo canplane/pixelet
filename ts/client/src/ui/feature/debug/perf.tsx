@@ -195,7 +195,7 @@ export function PerfPanel() {
 
   useEffect(() => {
     if (!show) return;
-    // The ring is cleared before the observers are installed. The observers
+    // The table is cleared before the observers are installed. The observers
     // replay the long frames the page has buffered since it loaded, so a
     // panel that is on from boot shows the boot's long frames.
     long_frames_clear();

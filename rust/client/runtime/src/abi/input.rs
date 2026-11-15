@@ -7,18 +7,16 @@ pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
 /// `pointer`
 pub const POINTER: _rt::Method = 0;
-/// `typing`
-pub const TYPING: _rt::Method = 1;
 /// `wheel`
-pub const WHEEL: _rt::Method = 2;
+pub const WHEEL: _rt::Method = 1;
 /// `pinch`
-pub const PINCH: _rt::Method = 3;
+pub const PINCH: _rt::Method = 2;
 /// `move`
-pub const MOVE: _rt::Method = 4;
+pub const MOVE: _rt::Method = 3;
 /// `xr-pose`
-pub const XR_POSE: _rt::Method = 5;
+pub const XR_POSE: _rt::Method = 4;
 /// `xr-pose-end`
-pub const XR_POSE_END: _rt::Method = 6;
+pub const XR_POSE_END: _rt::Method = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -68,22 +66,22 @@ impl PointerPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum PointerType {
-    Mouse = 0,
-    Touch = 1,
-    Pen = 2,
+pub enum Drag {
+    None = 0,
+    Pan = 1,
+    Rotate = 2,
 }
 
-impl PointerType {
+impl Drag {
     /// Every member, in its source's own order.
-    pub const ALL: [PointerType; 3] = [PointerType::Mouse, PointerType::Touch, PointerType::Pen];
+    pub const ALL: [Drag; 3] = [Drag::None, Drag::Pan, Drag::Rotate];
 
     /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<PointerType> {
+    pub const fn of(val: u32) -> Option<Drag> {
         match val {
-            0 => Some(PointerType::Mouse),
-            1 => Some(PointerType::Touch),
-            2 => Some(PointerType::Pen),
+            0 => Some(Drag::None),
+            1 => Some(Drag::Pan),
+            2 => Some(Drag::Rotate),
             _ => None,
         }
     }
@@ -91,18 +89,18 @@ impl PointerType {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            PointerType::Mouse => "Mouse",
-            PointerType::Touch => "Touch",
-            PointerType::Pen => "Pen",
+            Drag::None => "None",
+            Drag::Pan => "Pan",
+            Drag::Rotate => "Rotate",
         }
     }
 }
 
 pub fn pointer(
     phase: PointerPhase,
-    pointer_type: PointerType,
+    touch: bool,
     id: i32,
-    button: i32,
+    drag: Drag,
     x: f64,
     y: f64,
 ) -> Result<(), _rt::Errno> {
@@ -111,22 +109,11 @@ pub fn pointer(
         POINTER,
         Some((32, &|w_: &mut _rt::Lower| {
             w_.u8(0, phase as u8);
-            w_.u8(1, pointer_type as u8);
+            w_.bool(1, touch);
             w_.i32(4, id);
-            w_.i32(8, button);
+            w_.u8(8, drag as u8);
             w_.f64(16, x);
             w_.f64(24, y);
-        })),
-    );
-    _rt::answer(r)
-}
-
-pub fn typing(typing: bool) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
-        HANDLE,
-        TYPING,
-        Some((1, &|w_: &mut _rt::Lower| {
-            w_.bool(0, typing);
         })),
     );
     _rt::answer(r)

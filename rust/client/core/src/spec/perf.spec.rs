@@ -59,9 +59,9 @@ pub mod limit {
     /// A reason's words: its fail, its detail and how many (STREAM_STAT.reasons).
     pub const REASON_WORDS: u32 = 3;
     pub const STEP_CAP: u32 = 32;
-    /// How far back the rings keep, the core's frames and tasks and the UI's long frames alike: the last minute.
+    /// How far back the tables keep, the core's frames and tasks and the UI's long frames alike: the last minute.
     pub const WINDOW_MS: u32 = 60000;
-    /// The most bytes one read of a ring hands over (perf.wit `ring`): a ring is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page.
+    /// The most bytes one read of a table hands over (perf.wit `table`): a table is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page.
     pub const PAGE_BYTES: u32 = 8192;
     /// In a build made for measuring, the hosts log a record of the GPU stream, the stream's run or the core's entry slower than this, the page's and the device's alike (xpute-gpu-link `GpuConfig::slow_ms`, @xpute/gpu-link `GpuConfig`).
     pub const SLOW_MS: u32 = 1000;
@@ -300,7 +300,7 @@ pub mod stat {
 
 /// What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.
 pub mod now {
-    /// Whether it records, how long the recording has run, whether it lost what it had no room for (a ring's oldest records, or a failure's file name the string table could not hold), and how many records each ring holds (RING_NAMES).
+    /// Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many records each table holds (TABLE_NAMES).
     pub mod recording_state {
         pub const AT: usize = 0;
         pub const RECORDING: usize = 0;
@@ -360,5 +360,5 @@ pub mod now {
     pub const WORDS: usize = 38;
 }
 
-/// The rings the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started.
-pub const RING_NAMES: &[&str] = &["frames", "tasks", "worst"];
+/// The tables the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started.
+pub const TABLE_NAMES: &[&str] = &["frames", "tasks", "worst"];

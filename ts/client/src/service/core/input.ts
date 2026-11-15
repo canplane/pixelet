@@ -2,16 +2,16 @@
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import {
+  type Drag,
   type PointerPhase,
-  type PointerType,
+  DRAG_NONE,
+  DRAG_PAN,
+  DRAG_ROTATE,
   POINTER_PHASE_DOWN,
   POINTER_PHASE_MOVE,
   POINTER_PHASE_UP,
   POINTER_PHASE_CANCEL,
   POINTER_PHASE_OUT,
-  POINTER_TYPE_MOUSE,
-  POINTER_TYPE_TOUCH,
-  POINTER_TYPE_PEN,
 } from "@/abi/input.enum.ts";
 import {
   type PointerKind,
@@ -22,17 +22,13 @@ import { ui } from "@/service/core/core.ts";
 
 export function pointer(
   phase: PointerPhase,
-  pointer_type: PointerType,
+  touch: boolean,
   id: i32,
-  button: i32,
+  drag: Drag,
   x: f64,
   y: f64,
 ): void {
-  void input.pointer(ui, phase, pointer_type, id, button, x, y);
-}
-
-export function typing(on: boolean): void {
-  void input.typing(ui, on);
+  void input.pointer(ui, phase, touch, id, drag, x, y);
 }
 
 export function wheel(delta_y: f64): void {
@@ -55,8 +51,16 @@ export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
   out: POINTER_PHASE_OUT,
 };
 
-export const POINTER_KIND: Readonly<Record<PointerKind, PointerType>> = {
-  mouse: POINTER_TYPE_MOUSE,
-  touch: POINTER_TYPE_TOUCH,
-  pen: POINTER_TYPE_PEN,
+/** What a press drags by its button, as a page numbers buttons: the primary
+ * pans, the secondary turns, and any other drags nothing. */
+export function drag_of(button: i32): Drag {
+  return button === 0 ? DRAG_PAN : button === 2 ? DRAG_ROTATE : DRAG_NONE;
+}
+
+/** Whether a pointer of each kind is a finger on a screen (pxl:core input
+ * `pointer`'s `touch`). */
+export const TOUCH: Readonly<Record<PointerKind, boolean>> = {
+  mouse: false,
+  touch: true,
+  pen: false,
 };

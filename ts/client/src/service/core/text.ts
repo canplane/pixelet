@@ -40,7 +40,6 @@ export function serve_text(link: Side): void {
         height,
         link.bytes(image.at, len),
       );
-      return 0;
     },
   });
 }

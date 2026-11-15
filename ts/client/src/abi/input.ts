@@ -3,10 +3,10 @@
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 import {
+  type Drag,
   type PointerPhase,
-  type PointerType,
+  of_Drag,
   of_PointerPhase,
-  of_PointerType,
 } from "./input.enum.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
@@ -18,18 +18,16 @@ export const HANDLE: Handle = 0x5ee0f8;
 
 /** `pointer` */
 export const POINTER: Method = 0;
-/** `typing` */
-export const TYPING: Method = 1;
 /** `wheel` */
-export const WHEEL: Method = 2;
+export const WHEEL: Method = 1;
 /** `pinch` */
-export const PINCH: Method = 3;
+export const PINCH: Method = 2;
 /** `move` */
-export const MOVE: Method = 4;
+export const MOVE: Method = 3;
 /** `xr-pose` */
-export const XR_POSE: Method = 5;
+export const XR_POSE: Method = 4;
 /** `xr-pose-end` */
-export const XR_POSE_END: Method = 6;
+export const XR_POSE_END: Method = 5;
 
 export function load_PointerPhase(r: Lift, at: number): PointerPhase {
   const v = of_PointerPhase(r.case(at, 5));
@@ -37,8 +35,8 @@ export function load_PointerPhase(r: Lift, at: number): PointerPhase {
   return v;
 }
 
-export function load_PointerType(r: Lift, at: number): PointerType {
-  const v = of_PointerType(r.case(at, 3));
+export function load_Drag(r: Lift, at: number): Drag {
+  const v = of_Drag(r.case(at, 3));
   if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
@@ -46,9 +44,9 @@ export function load_PointerType(r: Lift, at: number): PointerType {
 export async function pointer(
   link_: Sender,
   phase: PointerPhase,
-  pointer_type: PointerType,
+  touch: boolean,
   id: number,
-  button: number,
+  drag: Drag,
   x: number,
   y: number,
 ): Promise<void> {
@@ -56,21 +54,11 @@ export async function pointer(
     32,
     (w_) => {
       w_.u8(0, phase);
-      w_.u8(1, pointer_type);
+      w_.bool(1, touch);
       w_.i32(4, id);
-      w_.i32(8, button);
+      w_.u8(8, drag);
       w_.f64(16, x);
       w_.f64(24, y);
-    },
-  ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
-}
-
-export async function typing(link_: Sender, typing: boolean): Promise<void> {
-  const a_ = await link_.send(HANDLE, TYPING, [
-    1,
-    (w_) => {
-      w_.bool(0, typing);
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
