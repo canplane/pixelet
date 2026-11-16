@@ -2,9 +2,9 @@
 // 1.10.1 (CC0), ported to WGSL and to reversed depth, at its "performance"
 // settings with four hemisphere samples. Every position here is in view space.
 
-// The occlusion's words, read field by field from vec4s and never as a struct:
-// a uniform struct crashed the GPU process of Safari's WebGPU. The screen's
-// size and the fog are read from the frame's words.
+// The occlusion's words, read field by field from vec4s and never built back
+// into a struct: a struct built from them crashed the GPU process of Safari's
+// WebGPU. The screen's size and the fog are read from the frame's words.
 @group(0) @binding(6) var<uniform> ao_words: array<vec4f, AO_VEC4S>;
 
 // A pixel reads the blue noise tiled, its coordinates masked by the noise's side less one,

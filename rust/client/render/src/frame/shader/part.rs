@@ -247,7 +247,7 @@ macro_rules! lit {
 
 pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_BOX
-    lit!["paint", "box"],
+    lit!["paint", "raster_box", "box"],
     // SHADER_DECOR
     lit![
         "place",

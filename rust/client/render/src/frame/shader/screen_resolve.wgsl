@@ -8,23 +8,17 @@
 // of this frame's pixels around it, in luma and chroma, so that what moved, came or went
 // leaves no trail.
 
-struct Resolve {
-  // Takes a pixel's middle and depth in this frame's view, without the jitter, to its place in
-  // the last frame's view.
-  reproject: mat4x4f,
-  // `x` is the share this frame's color takes where its tile changed this frame and the last
-  // frame's view held the place.
-  blend: vec4f,
-};
+// The uniform's fields are listed in word.rs `resolve`, and build.rs appends an accessor for
+// each of them.
 
 @group(0) @binding(1) var world: texture_2d<f32>;
 @group(0) @binding(2) var world_depth: texture_depth_2d;
 @group(0) @binding(3) var history: texture_2d<f32>;
 @group(0) @binding(4) var history_sampler: sampler;
-@group(0) @binding(5) var<uniform> resolve: Resolve;
+@group(0) @binding(5) var<uniform> resolve_words: array<vec4f, RESOLVE_VEC4S>;
 // A tile's age (screen_tile.wgsl `tile_age`) decides the blend. At age 0 the tile changed this
 // frame: what the frames before left is held within this frame's pixels, and this frame takes
-// `resolve.blend.x`. Past 0 only the jitter has moved there since, and each frame takes its
+// `resolve_blend()`. Past 0 only the jitter has moved there since, and each frame takes its
 // even share of the sequence counted from the frame the tile changed in, so the first still
 // frame takes half. A frame takes all of it where the last frame's view did not hold the
 // place. The tile stays damaged for the frame it changed in and `TILE_JITTER_CNT - 1` still
@@ -59,9 +53,10 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   var m1 = c;
   var m2 = c * c;
   var depth = textureLoad(world_depth, p, 0);
-  let beside = array<vec2i, 4>(vec2i(-1, 0), vec2i(1, 0), vec2i(0, -1), vec2i(0, 1));
   for (var k = 0; k < 4; k++) {
-    let q = clamp(p + beside[k], vec2i(0), last);
+    // Left, right, up and down: the axis is `k`'s high bit, the way its low bit.
+    let d = (k & 1) * 2 - 1;
+    let q = clamp(p + select(vec2i(d, 0), vec2i(0, d), k >= 2), vec2i(0), last);
     let s = resolve_ycocg(textureLoad(world, q, 0));
     m1 += s;
     m2 += s * s;
@@ -70,13 +65,13 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   m1 /= 5.0;
   let spread = sqrt(max(m2 / 5.0 - m1 * m1, vec4f(0.0))) * RESOLVE_SPREAD;
   let ndc = vec2f(v.clip.x / size.x * 2.0 - 1.0, 1.0 - v.clip.y / size.y * 2.0);
-  let was = resolve.reproject * vec4f(ndc, depth, 1.0);
+  let was = resolve_reproject() * vec4f(ndc, depth, 1.0);
   let at = was.xy / was.w;
   let uv = vec2f(at.x * 0.5 + 0.5, 0.5 - at.y * 0.5);
   let tile = vec2u(p) / tile_side();
   let age = tile_age(tile.y * tiles.cnt.x + tile.x);
   let still = age > 0u;
-  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTER_CNT - 2u) + 2u), still);
+  var blend = select(resolve_blend(), 1.0 / f32(min(age - 1u, TILE_JITTER_CNT - 2u) + 2u), still);
   if (!(was.w > 0.0) || any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
     blend = 1.0;
   }

@@ -24,9 +24,8 @@ import {
 } from "@/abi/input.enum.ts";
 import { SETTING } from "@/abi/schema.spec.ts";
 import { perf_report_text } from "./report.ts";
-import { perf_report_read } from "./view.ts";
+import { perf_report_read, perf_window_start } from "./view.ts";
 import * as input from "@/service/core/input.ts";
-import * as perf from "@/service/core/perf.ts";
 import * as setting from "@/service/core/setting.ts";
 import { surface_box } from "@/service/platform/surface.tsx";
 
@@ -84,7 +83,7 @@ export async function perf_drive(): Promise<string> {
   }
   pointer(POINTER_PHASE_UP, [x, y - tilt]);
   await wait(SETTLE_MS);
-  perf.start();
+  perf_window_start();
   const on = (a: number): [f64, f64] => [
     x + RADIUS * Math.cos(a),
     y + RADIUS * Math.sin(a),

@@ -10,18 +10,6 @@ var<private> draw_slot: u32;
 
 fn ghost_box_word(k: u32) -> vec4f { return draws[draw_slot * DRAW_VEC4S + k]; }
 
-// Each face's four corners, wound counter-clockwise seen from outside, with the
-// faces in the order of paint.wgsl's `FACE_NORMAL`.
-const FACE_CORNER = array<vec3f, 24>(
-  vec3f(0.5, -0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, 0.5, 0.5), vec3f(0.5, -0.5, 0.5),
-  vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, -0.5, 0.5), vec3f(-0.5, 0.5, 0.5), vec3f(-0.5, 0.5, -0.5),
-  vec3f(-0.5, 0.5, -0.5), vec3f(-0.5, 0.5, 0.5), vec3f(0.5, 0.5, 0.5), vec3f(0.5, 0.5, -0.5),
-  vec3f(-0.5, -0.5, -0.5), vec3f(0.5, -0.5, -0.5), vec3f(0.5, -0.5, 0.5), vec3f(-0.5, -0.5, 0.5),
-  vec3f(-0.5, -0.5, 0.5), vec3f(0.5, -0.5, 0.5), vec3f(0.5, 0.5, 0.5), vec3f(-0.5, 0.5, 0.5),
-  vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, 0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, -0.5, -0.5),
-);
-const FACE_TRIANGLES = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
-
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) @interpolate(flat) rgb: vec3f,
@@ -46,9 +34,13 @@ struct Corner {
   world: vec3f,
 };
 
+// Vertex `k` of the box's 36, two triangles a face wound counter-clockwise seen from outside,
+// the faces numbered as paint.wgsl `face_normal` numbers them. The raster's corners
+// (`raster_corner`) are the same cube's with the faces the low side first, so a face's number
+// there is this one's with its last bit turned.
 fn box_corner(k: u32, side: f32, place: vec3f) -> Corner {
   let face = k / 6u;
-  let local = FACE_CORNER[face * 4u + FACE_TRIANGLES[k % 6u]];
+  let local = raster_corner((face ^ 1u) * 6u + k % 6u) - 0.5;
   let size = vec3f(side);
   return Corner(face, local, size, place + size * (local + 0.5));
 }
@@ -70,7 +62,7 @@ fn vs(@builtin(vertex_index) v: u32) -> VertexOut {
   o.clip = jittered(frame_view_proj() * vec4f(c.world, 1.0));
   let local = c.local;
   let size = c.size;
-  let normal = FACE_NORMAL[c.face];
+  let normal = face_normal(c.face);
   o.rgb = srgb_to_linear(unpack4x8unorm(ghost_box_rgb()).xyz);
   o.layer = f32(ghost_box_layer());
   o.local_pos = local;

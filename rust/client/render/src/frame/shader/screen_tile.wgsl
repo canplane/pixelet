@@ -39,12 +39,10 @@ fn tile_in_damage(ii: u32) -> bool {
   return tiles_in_damage(tiles, changed_at[ii]);
 }
 
+// Corner `vi` of a quad's two triangles, its step across and down worked out from the
+// vertex's number, as light_map.wgsl's quad's.
 fn tile_corner(vi: u32) -> vec2u {
-  let corners = array<vec2u, 6>(
-    vec2u(0u, 0u), vec2u(1u, 0u), vec2u(0u, 1u),
-    vec2u(0u, 1u), vec2u(1u, 0u), vec2u(1u, 1u),
-  );
-  return corners[vi];
+  return vec2u(u32(vi == 1u || vi == 2u || vi == 4u), u32(vi == 2u || vi == 4u || vi == 5u));
 }
 
 fn tile_px_clip(px: vec2f) -> vec4f {

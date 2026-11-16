@@ -32,6 +32,11 @@ own Vulkan driver. Each is a different compiler with its own faults.
   a module that holds `i32::MIN`.
 - **An atomic in a branch of its own.** naga reads its pointer out of scope;
   ask it of every lane, a no-op where there is nothing to do.
+
+  > Since 2026-11-16: the pointer read out of scope was in the WGSL naga's
+  > SPIR-V front end wrote from rust-gpu's output. The hand WGSL forms each
+  > atomic's pointer at its call, in its own branch, and naga validates it so;
+  > an atomic in a branch is kept where it stands.
 - **Arrays, and structs that hold arrays, returned from a function**, and
   **array- or struct-typed locals assigned in a branch** and read after
   it about loops. Adreno's driver refuses such modules with
@@ -78,6 +83,14 @@ part.rs `SHADERS` counts 86 now. The S23 has drawn with the shaders by hand
 since 2026-11-05
 ([the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md)).
 
+> Since 2026-11-16: `refuse_faults` (render build/check.rs) also refuses a
+> function that returns what holds an array and a constant, `let` or
+> `var<private>` array of vectors read at a place found as the shader runs.
+> The hand WGSL that did either works the value out (`face_normal`,
+> `tile_corner`, the full-screen triangle), reads the raster's packed corners
+> (box.wgsl), picks it by selects (the occlusion's samples) or returns a
+> `vec4f` (`propagate_slab`); the step ramp's colors are a table of scalars.
+
 ## What the host and a shader share
 
 The same S23 failed twice before, in September, with no error at all: it
@@ -111,6 +124,13 @@ block of that shape, two matrices and a `vec4f`, read every word right on the
 S23 through naga and through Tint
 ([the app that did not move](../../experiment/20261109-the-app-that-did-not-move/README.md)).
 The fault that was seen is a matrix in a `var<storage>` array.
+
+> Since 2026-11-16: render build/check.rs `refuse_faults` refuses a `var<uniform>` or
+> `var<storage>` with room inside it in every assembled module, as the first
+> test did. `Resolve` and `Propagate` are word.rs uniforms (`resolve`,
+> `propagate`), bound as `array<vec4f, N>` and read through their accessors, as
+> the other word.rs uniforms are: by this rule, not for a fault seen in them.
+> The second test's accessors are written by build.rs from word.rs now.
 
 ## Check
 

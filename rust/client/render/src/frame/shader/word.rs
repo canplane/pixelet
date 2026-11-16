@@ -328,6 +328,36 @@ uniform! {
 }
 pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
 
+uniform! {
+    /// The resolve's uniform (screen_resolve.wgsl, pass/resolve.rs).
+    resolve {
+        /// Takes a pixel's middle and depth in this frame's view, without the jitter, to its
+        /// place in the last frame's view.
+        REPROJECT: Mat4 = 0,
+        /// The share this frame's color takes where its tile changed this frame and the last
+        /// frame's view held the place.
+        BLEND: F32 = 16,
+    }
+}
+pub const RESOLVE_FLOATS: usize = floats(resolve::FIELDS);
+
+uniform! {
+    /// The uniform of the light's propagation to the screen (screen_propagate.wgsl,
+    /// pass/propagate.rs).
+    propagate {
+        /// Takes a point from the screen's clip space, with its reversed depth, to units from
+        /// the eye.
+        UNPROJECT: Mat4 = 0,
+        /// Takes a point in units from the eye to the light's clip space.
+        LIGHT_VIEW_PROJ: Mat4 = 16,
+        /// How many texels a receiver's taps reach each way.
+        SPREAD: F32 = 32,
+        /// The map's side in texels.
+        SIZE: F32 = 33,
+    }
+}
+pub const PROPAGATE_FLOATS: usize = floats(propagate::FIELDS);
+
 /// The size of a marker's instance in words, and of a location zone's box in
 /// floats, as the core lays them out (pxl-core domain/scene/marker/set.rs,
 /// domain/scene/indicator/location.rs) and marker.wgsl and location_zone.wgsl
@@ -452,7 +482,7 @@ pub const BOX_VERTEX_CNT: u32 = 36;
 
 /// Every uniform stated in this file, each of which build.rs writes
 /// accessors for.
-pub const UNIFORMS: [(&str, &[Field]); 12] = [
+pub const UNIFORMS: [(&str, &[Field]); 14] = [
     (draw::NAME, draw::FIELDS),
     (instance::NAME, instance::FIELDS),
     (skinned::NAME, skinned::FIELDS),
@@ -465,6 +495,8 @@ pub const UNIFORMS: [(&str, &[Field]); 12] = [
     (stars::NAME, stars::FIELDS),
     (ao::NAME, ao::FIELDS),
     (marker::NAME, marker::FIELDS),
+    (resolve::NAME, resolve::FIELDS),
+    (propagate::NAME, propagate::FIELDS),
 ];
 
 /// The cloud sheets' tile in lattice units and in texels (pass/cloud.rs).

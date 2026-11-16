@@ -1,7 +1,8 @@
 // @pxl/client/ui/feature/debug/perf.tsx
 
 /** The panel is shown while the `perf` setting is on, in any build, and while
- * that setting is on the core records from the moment it boots. */
+ * that setting is on the core records from the frame its settings are read, a
+ * few frames after it boots (pxl-core perf/window.rs). */
 
 import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
@@ -12,7 +13,11 @@ import { GAUGE, PerfGauge, PerfRec } from "./perf/gauge.tsx";
 import { Accordion, HINT_INK } from "./accordion.tsx";
 import { n1 } from "./perf/column.ts";
 import { perf_report_copy, perf_report_text } from "./perf/report.ts";
-import { moving_fps, perf_report_read } from "./perf/view.ts";
+import {
+  moving_fps,
+  perf_report_read,
+  perf_window_start,
+} from "./perf/view.ts";
 import { LIVE_WINDOW_MS, usePerfGauge } from "./perf/poll.ts";
 import {
   install_long_frame_observers,
@@ -174,11 +179,6 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
   );
 }
 
-function restart_window(): void {
-  perf.start();
-  long_frames_clear();
-}
-
 export function PerfPanel() {
   const show = useCore((s) => s.settings[SETTING.perf.key] === 1);
   const [hint, set_hint] = useState<string | null>(null);
@@ -229,7 +229,7 @@ export function PerfPanel() {
           label={recording ? "Restart" : "Start"}
           hint="clear everything and begin a fresh window"
           tint={recording ? PLAIN : GO}
-          onPress={restart_window}
+          onPress={perf_window_start}
         />
         <PanelButton
           onHint={set_hint}

@@ -58,6 +58,12 @@ in the source holds, and the compiler is the browser's or the driver's.
 a bug that bites; a real bug's fix is kept apart, documented, until a release
 carries it ([naga on Metal](../lesson/naga-on-metal.md)).
 
+> Since 2026-11-10 (e941907962): every wgpu crate is taken from the fork
+> `canplane/fork.wgpu` (`rust/Cargo.toml` `[patch.crates-io]`), the user having
+> allowed a patch where the fault is wgpu's
+> ([a device is not a page](../../lesson/a-device-is-not-a-page.md)); what the
+> fork changes is `rust/gpu/wgpu-fork.md`'s.
+
 **Names.** pxl-engine `tally` → `count`, `TOOK` → `REUSED`, perf's
 `eye_took`/`light_took` → `eye_reused`/`light_reused`; `light_take` →
 `light_item`, `sample_taken` → `sample_item`, light.wgsl `took` →

@@ -148,7 +148,7 @@ struct Hit {
 fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let face = min(ray_face(c.x), 5u);
   let axis = face / 2u;
-  let n = FACE_NORMAL[face];
+  let n = face_normal(face);
   let k = i32(UNIT_ZOOM) - i32(ray_zoom(c.x));
   let side = exp2(f32(k));
   let e = vec3f(eye_phase(0u, k), eye_phase(1u, k), eye_phase(2u, k));

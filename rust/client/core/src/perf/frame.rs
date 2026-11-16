@@ -77,8 +77,7 @@ pub(crate) struct FrameSample {
     /// since the last frame, which the frame was paced at (frame.rs `run`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
-    /// 1 when the frame asked for no next one. It is written once, when the
-    /// interval lands.
+    /// 1 when the frame asked for no next one.
     pub settled: f64,
     pub budget_ms: f64,
     /// The frame's measured parts.

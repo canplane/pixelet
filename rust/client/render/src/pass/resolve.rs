@@ -27,12 +27,14 @@ use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
 use crate::frame::shader::word::screen::{DAMAGE_FRAME_CNT, JITTER_CNT};
+use crate::frame::shader::word::{RESOLVE_FLOATS, resolve};
 use crate::gpu::api::WORLD_COLOR;
 use crate::gpu::api::{
     Gpu, Group, Load, RenderContext, buf_entry, buffer_usage, bytes, pass_desc, sampler_entry,
-    view_entry,
+    view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
+use crate::gpu::put::put_mat;
 use crate::gpu::surface::Surface;
 use crate::gpu::tile::{SIDE, TileGrid};
 use crate::spec::span::GpuSpanName;
@@ -40,9 +42,6 @@ use crate::spec::span::GpuSpanName;
 /// The least share a frame takes where what the frames before left is held to this frame's
 /// pixels. It trades how long a trail a moving thing leaves against how still an edge stands.
 const BLEND_LEAST: f32 = 0.1;
-
-/// The floats of the resolve's uniform (screen_resolve.wgsl `Resolve`).
-const UNIFORM_FLOATS: usize = 20;
 
 pub struct Resolve {
     pipeline: Pipeline,
@@ -87,7 +86,7 @@ impl Resolve {
                 1,
             ),
             uniform: g.buf(
-                (4 * UNIFORM_FLOATS) as u32,
+                word_sz(RESOLVE_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
@@ -173,12 +172,9 @@ impl Resolve {
             0 => 1.0,
             n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
         };
-        let mut u = [0.0f32; UNIFORM_FLOATS];
-        let m = self.reproject();
-        for (to, from) in u[..16].iter_mut().zip(m) {
-            *to = from as f32;
-        }
-        u[16] = blend;
+        let mut u = [0.0f32; RESOLVE_FLOATS];
+        put_mat(&mut u, resolve::REPROJECT, &self.reproject());
+        u[resolve::BLEND] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
         let [across, down] = self.tiles.square_cnt();
         let tiles = across * down;

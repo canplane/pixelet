@@ -3,7 +3,11 @@
 import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { BOOT_LOADING, BOOT_STARTED } from "@/service/sys/boot.ts";
+import {
+  BOOT_LOADING,
+  BOOT_STARTED,
+  BOOT_STARTING,
+} from "@/service/sys/boot.ts";
 import { install_console } from "@/ui/feature/debug/console.ts";
 import { useStanding } from "./feature/cover/standing.ts";
 import { cover_of, UI_PANIC } from "./feature/cover/cover.ts";
@@ -30,10 +34,10 @@ function AppBody({ children }: { children: ReactNode }) {
       );
     }
   }, [standing.stall]);
-  // A build made for measuring measures from the core's start, as the world
-  // begins to load (perf/measure.ts); any other build holds no way to.
+  // A build made for measuring measures from the core's start
+  // (perf/measure.ts); any other build holds no way to.
   useEffect(() => {
-    if (__PERF_DRIVE__ && standing.boot === BOOT_LOADING)
+    if (__PERF_DRIVE__ && standing.boot === BOOT_STARTING)
       void import("@/ui/feature/debug/perf/measure.ts").then((m) =>
         m.measure(),
       );

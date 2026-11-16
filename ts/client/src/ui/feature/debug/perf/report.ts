@@ -271,6 +271,8 @@ export function perf_report_text(r: PerfReport): string {
       r.t,
     )}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`,
   ];
+  if (r.truncated)
+    out.push("truncated: the window lost records it had no room for");
   out.push(...window_section(r));
   out.push(...tasks_section(r.tasks));
   out.push(`long frames n=${r.longs.length}${long_sources_text()}`);

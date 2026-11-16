@@ -6,6 +6,7 @@ import {
   type FrameSummary,
   read,
   type RecordingSection,
+  start,
   type Step,
   type TaskRecord,
   type TaskSummary,
@@ -13,9 +14,16 @@ import {
   type Worst,
 } from "@/service/core/perf.ts";
 import type { LongFrame } from "@/service/platform/types.ts";
-import { long_frames_since } from "./long-frame.ts";
+import { long_frames_clear, long_frames_since } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;
+
+/** Starts the profiler's window afresh: the core's tables and the platform's
+ * long frames together, so both cover the same span. */
+export function perf_window_start(): void {
+  start();
+  long_frames_clear();
+}
 
 export interface PerfReport {
   t: f64;
@@ -26,6 +34,8 @@ export interface PerfReport {
   recent: TaskRecord[];
   worst: Worst[];
   longs: LongFrame[];
+  /** Whether the window lost records it had no room for. */
+  truncated: boolean;
   recording: RecordingSection;
   view: ViewSection;
 }
@@ -99,6 +109,7 @@ export async function perf_report_read(): Promise<PerfReport> {
     recent,
     worst,
     longs: long_frames_since(-Infinity),
+    truncated: s.recording_state.truncated,
     recording: s.recording,
     view: s.view,
   };
