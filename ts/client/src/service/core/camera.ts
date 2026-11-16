@@ -4,20 +4,14 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { type Tracking, TRACKING_FOLLOW } from "@/abi/camera.enum.ts";
 import * as camera from "@/abi/camera.ts";
 import { ui } from "@/service/core/core.ts";
-import * as sensor from "@/service/platform/sensor.ts";
-import { ask_heading } from "@/service/core/sensor.ts";
+import { start_orient } from "@/service/core/sensor.ts";
 
-/** iOS Safari asks for the compass only during a press, and the prompt runs
- * here, so this must be called from the press itself. Follow asks for the
- * heading, and the view turns with it once it comes. */
+/** Follow starts the heading first, and the view turns with it once it comes;
+ * a heading not permitted leaves the tracking as it was. A page may ask the
+ * compass's permission only during a press, so this must be called from the
+ * press itself. */
 export async function tracking(tracking: Tracking): Promise<void> {
-  if (tracking === TRACKING_FOLLOW) {
-    if (!(await sensor.ORIENT.permit())) {
-      console.error("[orientation] could not start the sensor.");
-      return;
-    }
-    ask_heading();
-  }
+  if (tracking === TRACKING_FOLLOW && !(await start_orient())) return;
   void camera.track(ui, tracking);
 }
 

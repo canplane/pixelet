@@ -1,11 +1,10 @@
 // @pxl/client/service/core/sensor/device_orientation.ts
 
-/** The compass sensor's decisions: the heading an event means, when to start
- * it, and when silence counts as a lost sensor. The platform owns the listener
- * and iOS's permission prompt, and the driver hears only the answer. */
+/** The compass sensor's decisions: when to start it, and when silence counts
+ * as a lost sensor. The platform owns the listener, the permission and the
+ * heading an event means, and the driver hears the heading. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import type { PermissionAnswer } from "@/service/platform/types.ts";
 import { WATCHDOG_TIMEOUT_MS } from "./param.ts";
 import {
   device_orient_store,
@@ -26,9 +25,6 @@ export const ORIENTATION_COMMAND_STOP = 1;
 
 export interface OrientationPlatform {
   supported: boolean;
-  /** On iOS 13 and later, `requestPermission` must run inside a user
-   * gesture. */
-  needs_permission: boolean;
   /** Whether silence means the sensor is lost. A browser's sensor talks even
    * while the device is still. A device's sensor (Core Location) speaks only
    * on change and reports its own failure. */
@@ -39,7 +35,6 @@ export interface OrientationPlatform {
  * the place has none. */
 const PLATFORM: OrientationPlatform = {
   supported: false,
-  needs_permission: false,
   silence_is_loss: false,
 };
 
@@ -59,17 +54,9 @@ interface Orientation {
 
 const orient: Orientation = { last_event_at: 0, cmd: null };
 
-/** An orientation event. iOS's compass heading is preferred, and otherwise
- * the heading is derived from alpha. */
-export function orient_event(
-  webkit_compass_heading: f64 | null,
-  alpha: f64 | null,
-): void {
-  // An event with neither is a reading with no heading. One with no field at
-  // all is a page's word that it has no compass, which its reader tells apart
-  // (`orient_unavailable`).
-  const heading =
-    webkit_compass_heading ?? (alpha === null ? null : (360 - alpha) % 360);
+/** A heading, in degrees clockwise from north, or null for a reading with no
+ * heading. */
+export function orient_event(heading: f64 | null): void {
   orient.last_event_at = performance.now();
   set_orient(device_orient_store(), heading);
 }
@@ -84,9 +71,8 @@ export function orient_unavailable(): void {
   store.status = SENSOR_STATUS_UNAVAILABLE;
 }
 
-/** Asks for the heading. Returns true when the heading is tracked or now
- * asked for. Behind a permission, only the platform's prompt can start it, so
- * this returns false there. */
+/** Asks for the heading, once the platform permits it. Returns true when the
+ * heading is tracked or now asked for. */
 export function request_orient(): boolean {
   const store = device_orient_store();
   if (store.is_tracking_orient) return true;
@@ -94,7 +80,6 @@ export function request_orient(): boolean {
     store.status = SENSOR_STATUS_UNAVAILABLE;
     return false;
   }
-  if (PLATFORM.needs_permission) return false;
   store.status = SENSOR_STATUS_LOADING;
   orient.cmd = ORIENTATION_COMMAND_START;
   orient.last_event_at = performance.now();
@@ -102,28 +87,7 @@ export function request_orient(): boolean {
   return true;
 }
 
-/** The answer to the orientation permission. Where no prompt gates the
- * sensor, a grant came from outside the app (the device's settings) and
- * starts the listener here. */
-export function orient_permission(answer: PermissionAnswer): void {
-  const store = device_orient_store();
-  switch (answer) {
-    case "asking":
-      if (!store.is_tracking_orient) store.status = SENSOR_STATUS_LOADING;
-      break;
-    case "granted":
-      if (PLATFORM.needs_permission) {
-        orient.last_event_at = performance.now();
-        set_is_tracking_orient(store, true);
-      } else request_orient();
-      break;
-    case "denied":
-    case "failed":
-      set_is_tracking_orient(store, false);
-      store.status = SENSOR_STATUS_ERROR;
-  }
-}
-
+/** The compass is lost, or its permission refused. */
 export function on_orient_lost(): void {
   const store = device_orient_store();
   set_is_tracking_orient(store, false);

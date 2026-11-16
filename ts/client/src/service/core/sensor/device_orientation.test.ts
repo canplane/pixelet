@@ -22,13 +22,9 @@ import {
   SENSOR_STATUS_UNAVAILABLE,
 } from "./reading.ts";
 
-/** A page's compass: no prompt, and silence is a loss. */
+/** A page's compass: silence is a loss. */
 function page_compass(): void {
-  Object.assign(platform(), {
-    supported: true,
-    needs_permission: false,
-    silence_is_loss: true,
-  });
+  Object.assign(platform(), { supported: true, silence_is_loss: true });
 }
 
 test("orient_unavailable - a missing compass sets the compass's status alone", () => {
@@ -54,7 +50,7 @@ test("orient_stop - a hidden spell stops the heading, and asking again starts it
   take_orient_cmd();
   assert.ok(request_orient());
   assert.equal(take_orient_cmd(), ORIENTATION_COMMAND_START);
-  orient_event(10, null);
+  orient_event(10);
   orient_stop();
   orient_stop();
   assert.equal(take_orient_cmd(), ORIENTATION_COMMAND_STOP);

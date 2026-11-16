@@ -1,9 +1,8 @@
 // @pxl/client/service/platform/sensor.native.ts
 
 /**
- * Position and heading through expo-location. Both reach the listener in the
- * same shape as the page's, with the heading in the place of Safari's
- * `webkitCompassHeading`.
+ * Position and heading through expo-location, each reaching the listener as
+ * the page's does.
  */
 
 import { AppState, Linking } from "react-native";
@@ -192,7 +191,7 @@ function orient_start(): void {
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        listener.orient(heading, null);
+        listener.orient(heading);
       },
       (reason) => {
         console.error("[sensor] heading:", reason);
@@ -220,7 +219,6 @@ export const GEOLOCATION: GeolocationSensor = {
 };
 export const ORIENT: OrientationSensor = {
   has: PLATFORM.has_heading(),
-  gated: false,
   silence: false,
   // The compass is granted with the location, which is asked for when the
   // compass's watch starts.
