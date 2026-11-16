@@ -29,6 +29,12 @@ The GPU had not fallen behind; the core's CPU had, every step by about a fifth t
 third alike, and the terrain's tiles came slower. The temperatures of the two runs were
 not compared: #98's run has none recorded.
 
+> Since 2026-11-16 (`deb1fbb08c`): measured by turns after the change, the S23's Chrome
+> read HEAD's GPU p50 above #98's, at a lower GPU clock for the same use: a frame's
+> cycles are 3% fewer on HEAD, the lights' passes traded between them, and the other
+> platforms read at #98
+> ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+
 Some of #102's fields no longer meant what #98's did, so they did not compare: `paced`
 (#98 the paced interval, #102 one frame's gap), `budget` (#98 the turn's deadline, #102
 a constant), `refresh` (64 rAF gaps at #98, 16 vsync answers at #102), and `turns`,
@@ -151,7 +157,40 @@ times sooner, and timestamps leave little noise for more samples to smooth.
 
 - Nothing here is measured. The comparison is `script/perf/gate.py` against #98 when the
   user orders it; the deployed build carries no `PXL_PERF_DRIVE`.
+
+  > Since 2026-11-16 (`deb1fbb08c`): measured on the six platforms against #98 and on the
+  > S23 against the tree before the change
+  > ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
 - A display whose every frame outlasts one interval and is never refused reads two
   intervals; #98 read it the same way.
+
+  > Since 2026-11-16 (`deb1fbb08c`): the misread feeds the entry's budget, which may then
+  > run past the real next vsync and keep the next one late, so it can hold itself while
+  > the entries have work; the Mac's Safari read 28 to 32 ms on both builds with the GPU
+  > at 21 ms a frame and about 30 frames a second
+  > ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+
+  > Since 2026-11-16 (`3ac60df141`), on the user's word: the host tells the display's
+  > gaps, as it sees every frame (the device's display link, the page's animation frame
+  > loop), and answers the first vsync from when the core's frame is due; the core no
+  > longer reads the interval from the vsyncs it was answered, so a frame that outlasts
+  > one interval no longer moves it. Not measured.
 - Effects run outside any budget, and `location_step` re-grounds its zone inside one.
+
+  > Since 2026-11-16 (`deb1fbb08c`): settled before this minute.
+  > [Closing the scheduler](./20261109-closing-the-scheduler-the-reads-and-the-memory.md)
+  > kept the location indicator outside the turn's budget, with the glTF parse and the
+  > objects' apply, and the user closed the rest of a recompute's cost, each height's
+  > first ray from the root, as over-improvement. The code is the same as at #98.
+
+  > Since 2026-11-16 (`c55e180b1a`): the note above reads more into that minute than
+  > it holds. It found the location indicator outside the budget; the user closed one
+  > way of cutting a recompute's cost, handing a ray's descent from one height to the
+  > next. Moving the recompute under the budget was not weighed, and is open.
+  > `place::show` re-asks a ray for each visible place when a place's detail zoom
+  > changes, also outside the budget's pass.
 - The C++ heap's branch for wasm without atomics has not been compiled.
+
+  > Since 2026-11-16 (`deb1fbb08c`): it is the branch `make -C xpute/cpp wasm` compiles,
+  > for `wasm32-wasip1` without `-matomics`, and it compiles; the branch no target
+  > compiles is wasm with atomics.

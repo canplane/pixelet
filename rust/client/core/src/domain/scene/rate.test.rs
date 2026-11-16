@@ -43,57 +43,74 @@ fn the_target_is_paced_to_the_cap() {
 }
 
 /// Paces `n` vsyncs `gap_ms` apart, each with the next of `jitter_ms` added,
-/// as the frame task does: each measures the display, and one that is due
-/// opens a frame. Answers which vsyncs opened one.
-fn paced(gap_ms: f64, jitter_ms: &[f64], n: i32) -> Vec<bool> {
-    let mut frame_at = f64::NEG_INFINITY;
-    (0..n)
+/// as the frame task and a device's host do: a frame that costs `cost_ms`
+/// asks, once it has run, for the first vsync from when the next is due, and
+/// the host answers it with its gap since the vsync before, which it saw.
+/// Answers which vsyncs opened a frame.
+fn paced(gap_ms: f64, jitter_ms: &[f64], cost_ms: f64, n: usize) -> Vec<bool> {
+    let vsyncs: Vec<f64> = (0..n)
         .zip(jitter_ms.iter().cycle())
-        .map(|(k, jitter)| {
-            let at = f64::from(k) * gap_ms + jitter;
-            display::answered(at);
-            let due = is_due(at - frame_at, pace_ms());
-            if due {
-                frame_at = at;
-            }
-            due
-        })
-        .collect()
+        .map(|(k, jitter)| k as f64 * gap_ms + jitter)
+        .collect();
+    let mut opened = vec![false; n];
+    let (mut frame_at, mut asked_at) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+    loop {
+        let after = due_at(frame_at, pace_ms()).max(asked_at);
+        let Some(k) = vsyncs.iter().position(|&at| at >= after) else {
+            return opened;
+        };
+        display::answered(k.checked_sub(1).map_or(0.0, |j| vsyncs[k] - vsyncs[j]));
+        opened[k] = true;
+        frame_at = vsyncs[k];
+        asked_at = frame_at + cost_ms;
+    }
 }
 
 /// A 120 Hz display not yet measured takes one interval at `RATE_MAX_HZ` as
-/// its own, so its first vsync opens a frame; the next lands the first gap,
-/// one interval, and from then on a frame opens at every other vsync.
+/// its own; once a frame lands the first gap, one interval, a frame opens at
+/// every other vsync.
 #[test]
 fn a_120_hz_display_paces_every_other_vsync_once_measured() {
     settings_mut().res = ResMode::Fixed;
-    let opened = paced(DISPLAY_MS, &[0.0], 12);
-    assert_eq!(opened[..2], [true, false], "the first gap lands");
+    let opened = paced(DISPLAY_MS, &[0.0], 0.0, 12);
     assert!((display::interval_ms() - DISPLAY_MS).abs() < 1e-9);
-    let every_other: Vec<bool> = (0..12).map(|k| k % 2 == 0).collect();
-    assert_eq!(opened, every_other);
+    let at: Vec<usize> = (0..12).filter(|&k| opened[k]).collect();
+    assert!(at.len() > 3);
+    assert!(at.windows(2).skip(1).all(|w| w[1] - w[0] == 2), "{at:?}");
 }
 
 /// A 60 Hz display opens a frame at every vsync, its jitter skipping none.
 #[test]
 fn a_60_hz_display_keeps_every_vsync() {
     settings_mut().res = ResMode::Fixed;
-    let opened = paced(1000.0 / 60.0, &[0.0, 0.3, -0.3, 0.1, -0.2], 20);
+    let opened = paced(1000.0 / 60.0, &[0.0, 0.3, -0.3, 0.1, -0.2], 0.0, 20);
     assert!(opened.iter().all(|&o| o));
 }
 
-/// Gaps across frames that ran past a vsync are whole numbers of intervals,
-/// and the low quartile reads past them while more than a quarter of the
-/// gaps are one interval: five of sixteen here.
+/// A display whose every frame runs past the next vsync opens a frame at
+/// every other one, and its interval still reads one: the host answers each
+/// vsync's gap since the one before, not since the last frame.
+#[test]
+fn frames_longer_than_an_interval_keep_the_interval() {
+    settings_mut().res = ResMode::Fixed;
+    let gap_ms = 1000.0 / 60.0;
+    let opened = paced(gap_ms, &[0.0], 1.5 * gap_ms, 20);
+    let every_other: Vec<bool> = (0..20).map(|k| k % 2 == 0).collect();
+    assert_eq!(opened, every_other);
+    assert!((display::interval_ms() - gap_ms).abs() < 1e-9);
+}
+
+/// Gaps across a pause or a dropped frame, two or three intervals, do not
+/// move the low quartile while more than a quarter of the gaps are one
+/// interval: five of sixteen here. A vsync with no gap measures nothing.
 #[test]
 fn the_low_quartile_reads_past_long_gaps() {
-    let mut at = 0.0;
-    display::answered(at);
+    display::answered(0.0);
+    assert_eq!(display::interval_ms(), 0.0);
     for n in [
         2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 1.0, 3.0, 2.0, 1.0, 2.0, 3.0, 1.0, 3.0, 2.0,
     ] {
-        at += n * DISPLAY_MS;
-        display::answered(at);
+        display::answered(n * DISPLAY_MS);
     }
     assert!((display::interval_ms() - DISPLAY_MS).abs() < 1e-9);
 }

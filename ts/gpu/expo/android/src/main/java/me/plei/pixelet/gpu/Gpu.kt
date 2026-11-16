@@ -38,8 +38,8 @@ object Gpu {
   /** Lets `handle`'s window go, and returns once nothing draws into it. */
   external fun surfaceUnbind(handle: Int)
 
-  /** Tells the host of a display frame that started `ageNs` nanoseconds ago
-   * (pxl_gpu.h `pxl_gpu_vsync`). */
+  /** Tells the host of a display frame that started `ageNs` nanoseconds ago,
+   * at every frame (pxl_gpu.h `pxl_gpu_vsync`). */
   external fun vsync(ageNs: Long)
 
   /** `onState` calls this, and it sends the module's event

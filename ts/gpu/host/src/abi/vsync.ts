@@ -7,6 +7,7 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
+import type { Lift, Lower } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   type Handle,
@@ -21,8 +22,28 @@ export const HANDLE: Handle = 0x51cb2a;
 /** `next` */
 export const NEXT: Method = 0;
 
+export interface Frame {
+  at: u64;
+  gap: u64;
+}
+
+export const FRAME_SZ = 16;
+export const FRAME_ALIGN = 8;
+
+export function store_Frame(w: Lower, at: number, v: Frame): void {
+  w.u64(at, v.at);
+  w.u64(at + 8, v.gap);
+}
+
+export function load_Frame(r: Lift, at: number): Frame {
+  return {
+    at: r.u64(at),
+    gap: r.u64(at + 8),
+  };
+}
+
 export interface Host {
-  next(signal_: AbortSignal): Promise<u64>;
+  next(after: u64, signal_: AbortSignal): Promise<Frame>;
 }
 
 /** The object over `implementation`. */
@@ -31,17 +52,17 @@ function object(
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, _args, _ret) {
+    call(m, tag, args, _ret) {
       try {
         switch (m) {
           case NEXT: {
             const stop = new AbortController();
-            implementation.next(stop.signal).then(
+            implementation.next(args.u64(0), stop.signal).then(
               (v) =>
                 l.task_return(tag, 0, [
-                  8,
+                  FRAME_SZ,
                   (w) => {
-                    w.u64(0, v);
+                    store_Frame(w, 0, v);
                   },
                 ]),
               (e: unknown) => l.task_return(tag, refusal_of(e)),

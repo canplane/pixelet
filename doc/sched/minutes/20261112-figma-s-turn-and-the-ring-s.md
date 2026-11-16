@@ -239,6 +239,10 @@ From `f59a933e21` (2026-11-11) to main:
 - the core keeps its tick and phases on embassy's executor, with a budget of its
   own for each entry (`BUDGET_MS`) and `yield_if_spent` to leave it
   (`3e44a1a8cd`, pxl-core `sys/sched.rs`);
+
+  > Since 2026-11-16 (`deb1fbb08c`): an entry's budget runs from the frame's start
+  > and its paced interval, and the vsync answers its timestamp
+  > ([the deployed build's pace, taken back](../../minutes/20261116-the-deployed-builds-pace-taken-back.md)).
 - on a page the core runs in a worker (`4d95242546`).
 
 At `3cccd2cf7a` two time policies were laid one on the other: the host's quota
@@ -355,3 +359,12 @@ Worth comparing, not queued:
 - **The main thread against the worker at `HEAD`**, if the worker's 3.6 to 4 ms
   proves to matter. Read Long Animation Frames, INP and React's commits during
   drags and loads, on a desktop and on a phone.
+
+> Since 2026-11-16 (`deb1fbb08c`, `95d62a532f`): none of these is a question of
+> this case study, which asked about the structure and is closed above; the
+> structure has since moved further its way, and what it concludes holds. They
+> were measurements beside it. With the core in a worker by design, a long step
+> holds the core's own frame and not the UI's. The core's steps were measured
+> after the link on the S23 and its tick on the six platforms the app runs on
+> ([taken back](../../minutes/20261116-the-deployed-builds-pace-taken-back.md),
+> [measured](../../experiment/20261116-the-deployed-builds-pace-measured/README.md)).

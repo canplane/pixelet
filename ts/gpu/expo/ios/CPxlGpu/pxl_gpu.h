@@ -44,6 +44,8 @@ int32_t pxl_gpu_surface_bind(uint32_t handle, void *window);
 void pxl_gpu_surface_unbind(uint32_t handle);
 
 // Tells the host of a display frame, which started `age_ns` nanoseconds ago,
-// from the platform's display link on any thread; it answers the guest's
-// waiting `vsync.next` with the frame's start.
+// from the platform's display link on any thread, at every frame while the
+// link runs: it answers each of the guest's waiting `vsync.next`s whose
+// `after` the frame reaches with the frame's start and its gap since the one
+// before.
 void pxl_gpu_vsync(uint64_t age_ns);

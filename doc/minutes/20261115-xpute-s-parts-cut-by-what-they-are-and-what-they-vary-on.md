@@ -85,6 +85,17 @@ What the user reproved in the agents' work, to be kept clear of:
 > waits for the next paced slot, as a skipped one does
 > ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)).
 
+> Since 2026-11-16 (`3ac60df141`): the core asks the host for the first vsync from
+> when its frame is due (`vsync.next(after)`), so a skipped or refused frame costs
+> no entry at each vsync.
+
+> Since 2026-11-16 (`738224d277`): a page's wait of 0 answers by a posted message,
+> which no timer nesting clamps, so a yield is no timer's round trip. Each answer
+> still runs the core's whole `end`, left so: its two flushes, the GPU's run and
+> the UI's post, each hold one in flight, and the rest reads as microseconds an
+> entry in the code, unmeasured; an event loop's norm is the same, a cheap drain
+> each event and one frame a turn.
+
 ## What was decided
 
 - **The entities** (**the user**). xpute's parts are the kit, the link, the

@@ -73,10 +73,10 @@ answer, or the answer of a wait it armed. What it does there is its own, on
 embassy's executor (`sched.rs`). A frame is asked for (`invalidate`, or
 `invalidate_at` for a time, one clock wait armed for the earliest) and runs at
 the first vsync due by the frame's target interval since the last frame's
-start, as one task, in one order: the effects of what the UI sent, then the
-tick, then the draw (`frame.rs`). A vsync answers its frame's start on the
-host's monotonic clock, from which the display is measured
-(`sched/display.rs`).
+start, which the frame task asks of the host, as one task, in one order: the
+effects of what the UI sent, then the tick, then the draw (`frame.rs`). A vsync
+answers its frame's start on the host's monotonic clock and its gap since the
+frame before, from which the display is measured (`sched/display.rs`).
 
 Each entry has a deadline, by one rule (`sched.rs` `Budget`): a frame's budget
 is its target interval less `MARGIN_SHARE` (`param.rs`), and an entry ends at

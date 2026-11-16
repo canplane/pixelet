@@ -3,7 +3,8 @@
 /** The clocks the host implements for the guest
  * (wit/clocks/monotonic-clock.wit, wit/clocks/system-clock.wit), in nanoseconds
  * as wasi:clocks counts them: the monotonic one on `performance.now()`, its
- * waits on the event loop's own timers, and the system clock on `Date.now()`.
+ * waits on the event loop's own timers and a wait of 0 on a posted message,
+ * and the system clock on `Date.now()`.
  */
 
 import type { u64 } from "@xpute/kit/abi/word.ts";
@@ -23,15 +24,36 @@ export function mark(ms: number): u64 {
   return BigInt(round(ms * NS_PER_MS));
 }
 
+/** Calls `f` at the event loop's next pass, by a posted message, and returns
+ * what stops it. A timer set inside a timer's task nests, and a nested timer
+ * is clamped to 4 ms however short it is asked; a message is not. */
+function next_pass(f: () => void): () => void {
+  const c = new MessageChannel();
+  c.port1.onmessage = () => {
+    c.port1.close();
+    f();
+  };
+  c.port2.postMessage(null);
+  return () => c.port1.close();
+}
+
+/** Calls `f` once `ns` nanoseconds have passed, and returns what stops it. */
+function after(ns: u64, f: () => void): () => void {
+  const timer = setTimeout(f, Number(ns) / NS_PER_MS);
+  return () => clearTimeout(timer);
+}
+
 export function mount_clock(side: Side): void {
   monotonic_clock.mount(side, {
     now: () => mark(performance.now()),
-    // A wait its caller cancels stops its timer and answers ECANCELED.
+    // A wait of 0 answers at the event loop's next pass, as the WIT says; a
+    // wait its caller cancels stops what would answer it and answers
+    // ECANCELED.
     wait_for: (how_long, signal) =>
       new Promise((done, fail) => {
-        const timer = setTimeout(done, Number(how_long) / NS_PER_MS);
+        const stop = how_long === 0n ? next_pass(done) : after(how_long, done);
         signal.addEventListener("abort", () => {
-          clearTimeout(timer);
+          stop();
           fail(new XputeError(ERRNO_ECANCELED));
         });
       }),
