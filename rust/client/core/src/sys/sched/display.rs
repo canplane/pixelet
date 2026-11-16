@@ -1,12 +1,10 @@
 // pxl-core/sys/sched/display.rs
 
-//! The display's interval, measured from pxl-gpu-guest's vsync answers: the gaps
-//! between the frame starts they answer, of vsyncs armed back to back, read at
-//! their low quartile, so a late answer and the early one after it do not move
-//! it. A gap across a frame that ran past a vsync is a whole number of
-//! intervals, which the low quartile reads past while more than a quarter of
-//! the gaps are one; a vsync armed after the core stood idle is not back to
-//! back with the one before (`idle`).
+//! The display's interval, read from the gaps pxl-gpu-guest's vsync answers:
+//! each the time since the last frame the host saw before it, one frame's
+//! but across a pause (spec/gpu/wit/vsync.wit), read at their low quartile,
+//! so a gap across a pause or a frame the display dropped does not move it
+//! while more than a quarter of the gaps are one.
 
 use pxl_global::Global;
 
@@ -15,8 +13,6 @@ const GAP_CAP: usize = 16;
 
 #[derive(Default)]
 struct Display {
-    /// The last vsync's frame start, while vsyncs are armed back to back.
-    at: Option<f64>,
     /// The last gaps, oldest first once the ring has wrapped, and how many
     /// were seen.
     ring: [f64; GAP_CAP],
@@ -29,22 +25,18 @@ fn display() -> &'static mut Display {
     DISPLAY.get(Display::default)
 }
 
-/// A vsync answered the frame start `at`.
-pub(crate) fn answered(at: f64) {
-    let d = display();
-    if let Some(last) = d.at {
-        d.ring[d.seen_cnt % GAP_CAP] = at - last;
-        d.seen_cnt += 1;
+/// A vsync answered a frame `gap_ms` after the last the host saw, 0 for the
+/// host's first.
+pub(crate) fn answered(gap_ms: f64) {
+    if gap_ms <= 0.0 {
+        return;
     }
-    d.at = Some(at);
+    let d = display();
+    d.ring[d.seen_cnt % GAP_CAP] = gap_ms;
+    d.seen_cnt += 1;
 }
 
-/// The next vsync is not armed back to back with the last.
-pub(crate) fn idle() {
-    display().at = None;
-}
-
-/// The display's interval in ms, or 0 before two vsyncs came back to back.
+/// The display's interval in ms, or 0 before a vsync answered a gap.
 pub(crate) fn interval_ms() -> f64 {
     let d = display();
     let n = d.seen_cnt.min(GAP_CAP);

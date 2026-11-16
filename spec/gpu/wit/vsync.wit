@@ -1,11 +1,21 @@
 package pxl:gpu@0.1.0;
 
 // The display's vsync, which the host implements beside the GPU: a display's
-// refresh belongs to whoever holds the surface.
+// refresh belongs to whoever holds the surface, and so does its interval.
 interface vsync {
   use xpute:clocks/monotonic-clock@0.1.0.{mark};
+  use xpute:clocks/types@0.1.0.{duration};
 
-  // Answers at the display's next vsync, with the start of its frame on the
-  // host's monotonic clock, the clock `monotonic-clock.now` reads.
-  next: async func() -> mark;
+  // A display's frame: its start on the host's monotonic clock, the clock
+  // `monotonic-clock.now` reads; and the time since the last frame the host
+  // saw before it, 0 for its first. The host sees every frame while it
+  // runs, so the gap is one frame's but across a pause.
+  record frame {
+    at: mark,
+    gap: duration,
+  }
+
+  // Answers at the display's first vsync whose frame starts at `after` or
+  // later, with that frame; 0, at the next vsync.
+  next: async func(after: mark) -> frame;
 }

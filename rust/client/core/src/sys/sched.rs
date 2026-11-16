@@ -5,7 +5,8 @@
 //! leaves the entry.
 //!
 //! - `invalidate` asks for a frame: the frame task waits on it, then on the
-//!   display's next vsync, and runs the world's frame (frame.rs).
+//!   display's first vsync from when the frame is due, and runs the world's
+//!   frame (frame.rs).
 //! - `invalidate_at` asks for a frame at a time. Only the earliest time is
 //!   armed, by the timer task's one `monotonic-clock.wait-for` of xpute's, its
 //!   delay rounded up; an earlier time asked meanwhile arms the task again,

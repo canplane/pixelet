@@ -22,6 +22,10 @@ double ms(abi::clocks::monotonic_clock::Mark mark) noexcept {
     return static_cast<double>(mark) / NS_PER_MS;
 }
 
+std::uint64_t mark(double ms) noexcept {
+    return static_cast<std::uint64_t>(std::floor((ms > 0 ? ms : 0) * NS_PER_MS));
+}
+
 std::uint64_t duration(double ms) noexcept {
     return static_cast<std::uint64_t>(std::ceil((ms > 0 ? ms : 0) * NS_PER_MS));
 }

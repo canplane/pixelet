@@ -43,6 +43,34 @@ const wait_args = (ns: bigint) => {
 /** The writer of an answer, which a wait never writes. */
 const ret = new Lower(new Uint8Array(0), 0);
 
+/** Waits for the event loop's next pass, as a posted message comes. */
+const next_pass = () =>
+  new Promise((done) => {
+    const c = new MessageChannel();
+    c.port1.onmessage = () => {
+      c.port1.close();
+      done(null);
+    };
+    c.port2.postMessage(null);
+  });
+
+test("a wait of 0 answers at the event loop's next pass with no timer, and a canceled one answers ECANCELED alone", async () => {
+  vi.useFakeTimers();
+  const { clock, answers, stops } = mounted();
+  for (const tag of [1, 2]) {
+    assert.equal(
+      clock.call(WAIT_FOR, tag, wait_args(0n), ret),
+      ERRNO_EINPROGRESS,
+    );
+  }
+  stops.get(2)!();
+  await next_pass();
+  assert.deepEqual(answers, [
+    [2, ERRNO_ECANCELED],
+    [1, 0],
+  ]);
+});
+
 test("a canceled wait stops its timer and answers ECANCELED, and a wait answers once its time has passed", async () => {
   vi.useFakeTimers();
   const { clock, answers, stops } = mounted();

@@ -8,35 +8,65 @@ pub const HANDLE: _rt::Handle = 0x51cb2a;
 /// `next`
 pub const NEXT: _rt::Method = 0;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Frame {
+    pub at: u64,
+    pub gap: u64,
+}
+
+impl Frame {
+    pub const SZ: usize = 16;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u64(at, self.at);
+        w.u64(at + 8, self.gap);
+    }
+
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Frame, _rt::Errno> {
+        Ok(Frame {
+            at: r.u64(at)?,
+            gap: r.u64(at + 8)?,
+        })
+    }
+}
+
 pub trait Host {
-    fn next(&self, task_return: _rt::Return<u64>);
+    fn next(&self, after: u64, task_return: _rt::Return<Frame>);
 }
 
 struct _Object(&'static _rt::Side, _rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, _: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
         let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 NEXT => {
+                    let after = args_.u64(0)?;
                     let side_ = self.0;
-                    self.1.next(_rt::Return::new(
-                        Box::new(move |stop| side_.on_cancel(tag_, stop)),
-                        Box::new(move |got| match got {
-                            Ok(v) => {
-                                side_.task_return(
-                                    tag_,
-                                    0,
-                                    _rt::Packet::Args(Some((8, &|w: &mut _rt::Lower| {
-                                        w.u64(0, v);
-                                    }))),
-                                );
-                            }
-                            Err(e) => {
-                                side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
-                            }
-                        }),
-                    ));
+                    self.1.next(
+                        after,
+                        _rt::Return::new(
+                            Box::new(move |stop| side_.on_cancel(tag_, stop)),
+                            Box::new(move |got| match got {
+                                Ok(v) => {
+                                    side_.task_return(
+                                        tag_,
+                                        0,
+                                        _rt::Packet::Args(Some((
+                                            Frame::SZ,
+                                            &|w: &mut _rt::Lower| {
+                                                v.store(w, 0);
+                                            },
+                                        ))),
+                                    );
+                                }
+                                Err(e) => {
+                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                }
+                            }),
+                        ),
+                    );
                     _rt::Errno::EINPROGRESS as i32
                 }
                 _ => _rt::Errno::ENOSYS as i32,

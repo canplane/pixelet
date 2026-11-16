@@ -16,10 +16,18 @@ pub fn now() -> f64 {
     ms(monotonic_clock::now().or_bug(Errno::EPROTO))
 }
 
-/// A mark of the monotonic clock in ms, on `now`'s line: a time the host
-/// answers, as a display's frame start.
+/// A mark of the monotonic clock in ms, on `now`'s line, or a duration
+/// between two in ms: a time the host answers, as a display's frame start,
+/// or a span of one, as the gap since the frame before.
 pub fn ms(mark: monotonic_clock::Mark) -> f64 {
     mark as f64 / NS_PER_MS
+}
+
+/// A time in ms on `now`'s line as a mark of the monotonic clock, rounded
+/// down, and none before the clock's start (0): a time the program asks the
+/// host for, as a display's frame start.
+pub fn mark(ms: f64) -> monotonic_clock::Mark {
+    (ms.max(0.0) * NS_PER_MS).floor() as monotonic_clock::Mark
 }
 
 /// `ms` as a duration the monotonic clock waits for, rounded up.

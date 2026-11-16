@@ -298,29 +298,21 @@ pub(crate) fn refused_frames() -> Refused {
 
 /// The frame runs as one task because its parts must run in order, and
 /// nothing may rely on the order in which the executor runs tasks. It waits
-/// until a frame is asked for, then for vsyncs, each answering its frame's
-/// start, which measures the display (sys/sched/display.rs), until one is due
-/// by the frame's target interval since the last frame's start, run or
-/// refused (rate.rs `is_due`). That start begins the frame's budget
-/// (sys/sched.rs `begin_frame`), and the world's frame runs; once it has run,
-/// the entry's tasks get their share (`end_frame`). A gap across a frame that
-/// ran past a vsync is a whole number of the display's intervals, which the
-/// display's low quartile reads past; a wait for an ask is not back to back.
+/// until a frame is asked for, then for the first vsync from when the frame
+/// is due by the target interval since the last frame's start, run or
+/// refused (rate.rs `due_at`), which answers its frame's start and the gap
+/// the display is measured by (sys/sched/display.rs). That start begins the
+/// frame's budget (sys/sched.rs `begin_frame`), and the world's frame runs;
+/// once it has run, the entry's tasks get their share (`end_frame`).
 #[embassy_executor::task]
 async fn frame_task() {
     loop {
-        if !sched::is_invalid() {
-            display::idle();
-        }
         sched::invalidated().await;
-        let (at, display_ms, target_ms) = loop {
-            let at = clock::ms(vsync::next().await.or_bug(Errno::EPROTO));
-            display::answered(at);
-            let (display_ms, target_ms) = rate::pace_ms();
-            if rate::is_due(at - sched::frame_at(), (display_ms, target_ms)) {
-                break (at, display_ms, target_ms);
-            }
-        };
+        let (display_ms, target_ms) = rate::pace_ms();
+        let due_at = rate::due_at(sched::frame_at(), (display_ms, target_ms));
+        let frame = vsync::next(clock::mark(due_at)).await.or_bug(Errno::EPROTO);
+        display::answered(clock::ms(frame.gap));
+        let at = clock::ms(frame.at);
         sched::begin_frame(at, target_ms);
         // A frame whose stream the host still holds, or that the GPU cannot
         // take without blocking (`pxl_gpu_guest::admit::frame`), does not

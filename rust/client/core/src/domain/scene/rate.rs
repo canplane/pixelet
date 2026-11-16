@@ -2,8 +2,8 @@
 
 //! The frame's target interval (`target_ms`), a whole number of the display's
 //! measured intervals (sys/sched/display.rs), which the frame task keeps by
-//! skipping the vsyncs that come before it is due (`is_due`, frame.rs
-//! `frame_task`), both as the display is measured now (`pace_ms`). Before
+//! asking for the first vsync from when the next frame is due (`due_at`,
+//! frame.rs `frame_task`), both as the display is measured now (`pace_ms`). Before
 //! the display is measured, its interval is taken to be one interval at
 //! `RATE_MAX_HZ` (`display_ms`). The target is never
 //! shorter than the most display intervals that fit one interval at
@@ -105,12 +105,12 @@ pub(crate) fn target_ms(display_ms: f64) -> f64 {
     f64::from(interval(display_ms)) * display_ms
 }
 
-/// Whether a vsync `since_ms` after the last frame's start opens the next
-/// frame, paced as `pace_ms` answers, the display's interval and the target:
-/// once the target has passed, less half a display interval for the vsync's
-/// own jitter. A vsync that does not is skipped.
-pub(crate) fn is_due(since_ms: f64, (display_ms, target_ms): (f64, f64)) -> bool {
-    since_ms >= target_ms - display_ms / 2.0
+/// When the frame after one that started at `frame_at` is due, in ms, paced
+/// as `pace_ms` answers, the display's interval and the target: once the
+/// target has passed, less half a display interval for the vsync's own
+/// jitter. The first vsync from then opens it.
+pub(crate) fn due_at(frame_at: f64, (display_ms, target_ms): (f64, f64)) -> f64 {
+    frame_at + target_ms - display_ms / 2.0
 }
 
 /// Judges a drawn frame paced as `pace` that cost `cost_ms`, in `auto` alone.

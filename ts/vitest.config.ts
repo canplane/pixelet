@@ -17,6 +17,7 @@ export default defineConfig({
       "client/src/**/*.test.ts",
       "tool/shader/*.test.ts",
       "gpu/host/src/web.test.ts",
+      "gpu/host/src/vsync.test.ts",
       "gpu/expo/src/**/*.test.ts",
     ],
     // One test has Tint compile every shader, which runs long, so tests have
