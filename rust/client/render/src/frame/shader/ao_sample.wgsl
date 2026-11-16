@@ -9,14 +9,15 @@
 @group(0) @binding(2) var blue_noise: texture_2d<f32>;
 @group(0) @binding(3) var scene_depth: texture_depth_2d;
 
-// The hemisphere's sample directions, as N8AO's `generateHemisphereSamples(4)`
-// gives them.
-const HEMISPHERE = array<vec3f, AO_SAMPLES>(
-  vec3f(0.353553, 0.000000, 0.935414),
-  vec3f(-0.451544, 0.413652, 0.790569),
-  vec3f(0.069116, -0.787542, 0.612372),
-  vec3f(0.569142, 0.742346, 0.353553),
-);
+// Sample direction `k` of the hemisphere's `AO_SAMPLES`, as N8AO's
+// `generateHemisphereSamples(4)` gives them, picked by selects: a phone's driver
+// refuses a table of vectors read at a place found as the shader runs.
+fn hemisphere(k: i32) -> vec3f {
+  let odd = (k & 1) != 0;
+  let low = select(vec3f(0.353553, 0.000000, 0.935414), vec3f(-0.451544, 0.413652, 0.790569), odd);
+  let high = select(vec3f(0.069116, -0.787542, 0.612372), vec3f(0.569142, 0.742346, 0.353553), odd);
+  return select(low, high, k >= 2);
+}
 
 fn depth_at(p: vec2i) -> f32 {
   return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao_half()) - 1), 0).r;
@@ -96,7 +97,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var off_move = noise.g;
   let off_step = 1.0 / f32(AO_SAMPLES);
   for (var k = 0; k < AO_SAMPLES; k++) {
-    let dir = tbn * HEMISPHERE[k];
+    let dir = tbn * hemisphere(k);
     let move_amount = fract(off_move);
     off_move += off_step;
     let sample_pos = pos + AO_RADIUS * move_amount * dir;

@@ -56,8 +56,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let sprite_w = instance_f32(k, 3u);
   let size_px = vec2f(select(sprite_w, instance_f32(k, 10u), region), instance_f32(k, 4u));
   let frac = instance_f32(k, 9u);
-  let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
-  let q = corners[vi];
+  let q = vec2f(f32(vi & 1u), f32(vi >> 1u)) - 0.5;
 
   let anchor_view = (marker_view() * vec4f(anchor, 1.0)).xyz;
   let depth = max(-anchor_view.z, 1e-3);

@@ -61,6 +61,8 @@ fn constant() -> String {
         ("STARS_VEC4S", vec4s(STARS_FLOATS)),
         ("AO_VEC4S", vec4s(AO_FLOATS)),
         ("MARKER_VEC4S", vec4s(MARKER_FLOATS)),
+        ("RESOLVE_VEC4S", vec4s(RESOLVE_FLOATS)),
+        ("PROPAGATE_VEC4S", vec4s(PROPAGATE_FLOATS)),
         ("STAR_REC_VEC4S", vec4s(STAR_REC_FLOATS)),
         (
             "LOCATION_ZONE_COLOR",
@@ -1032,20 +1034,29 @@ fn debug_look() -> String {
         ("SHARE_COARSER", Vec3f(light(share::coarser::RGB))),
         ("STEPS_MOST", F32(steps::MOST)),
         ("STEPS_NONE", Vec3f(light(steps::NONE))),
+        // The ramp's colors laid end to end, three floats each: a phone's driver refuses a
+        // table of vectors read at a place found as the shader runs, and takes one of scalars.
         (
             "STEPS_RAMP",
-            Array(steps::RAMP.iter().map(|&c| Vec3f(light(c))).collect()),
+            Array(
+                steps::RAMP
+                    .iter()
+                    .flat_map(|&c| light(c))
+                    .map(F32)
+                    .collect(),
+            ),
         ),
-    ]) + &format!(
-        "fn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
-        last - 1
-    )
+    ]) + "fn steps_ramp_at(i: u32) -> vec3f { return vec3f(STEPS_RAMP[3u * i], STEPS_RAMP[3u * i + 1u], STEPS_RAMP[3u * i + 2u]); }\n"
+        + &format!(
+            "fn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(steps_ramp_at(i), steps_ramp_at(i + 1u), f - f32(i)); }}\n",
+            last - 1
+        )
 }
 
 /// An accessor for each field of every uniform `text` reads (frame/shader/word.rs `UNIFORMS`),
-/// which reads the field off the vec4s where the host wrote it. A uniform is never declared as
-/// a struct, as one crashed the GPU process of Safari's WebGPU. Each field is checked to lie
-/// within its vec4s and apart from the others.
+/// which reads the field off the vec4s where the host wrote it. A field is read alone, never
+/// built back with the others into a struct, as one built so crashed the GPU process of
+/// Safari's WebGPU. Each field is checked to lie within its vec4s and apart from the others.
 pub(crate) fn accessors(text: &str) -> String {
     use word::{Kind, UNIFORMS, floats};
     let mut out = String::new();

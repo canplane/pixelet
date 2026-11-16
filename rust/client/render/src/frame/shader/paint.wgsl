@@ -17,11 +17,10 @@
 
 // A face's outward normal by its number, which is 2·axis plus one where the
 // normal points down the axis, as a ray numbers faces (pxl-engine ray.rs).
-const FACE_NORMAL = array<vec3f, 6>(
-  vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
-  vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),
-  vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, -1.0),
-);
+fn face_normal(face: u32) -> vec3f {
+  let on = vec3f(vec3u(face / 2u) == vec3u(0u, 1u, 2u));
+  return select(on, -on, (face & 1u) != 0u);
+}
 
 fn srgb_to_linear(c: vec3f) -> vec3f {
   let low = c / 12.92;

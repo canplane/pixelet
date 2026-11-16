@@ -1,5 +1,5 @@
 {
-  $description: "The profiler's records and sections as the core lays them out and the client reads\nthem from the replies that hand them over (perf/record.rs, ts/client/src/service/core/perf.ts):\nword offsets, eight bytes a word. The names the numbers index are their owners':\na task's io's (spec/client/core/sys/io/demand.json5), a step's and an effect's the\nframe's (spec/client/core/perf/step.json5), a GPU span's the renderer's\n(spec/client/render/gpu/span.json5). A packed table gives each field's\nwidth and the generator lays the offsets out. Nothing is built\nfor a read: the core writes numbers where they stay, and the words for them are\nthe UI's. LIMIT holds the bounds the profiler keeps, and the one a build made for\nmeasuring hands its GPU hosts, which the core and the client both read.",
+  $description: "The profiler's records and sections as the core lays them out and the client reads\nthem from the replies that hand them over (perf/record.rs, ts/client/src/service/core/perf.ts):\nword offsets, eight bytes a word. The names the numbers index are their owners':\na task's io's (spec/client/core/sys/io/demand.json5), a step's and an effect's the\nframe's (spec/client/core/perf/step.json5), a GPU span's the renderer's\n(spec/client/render/gpu/span.json5). A packed table gives each field's\nwidth and the generator lays the offsets out. Nothing is built\nfor a read: the core writes numbers where they stay, and the words for them are\nthe UI's. LIMIT holds the bounds the profiler keeps, which the core and the client both read.",
   $extensions: {
     xpute: {
       uses: [
@@ -258,13 +258,12 @@
     $description: "What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.",
     $extensions: { xpute: { packed: true } },
     recording_state: {
-      $description: "Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many records each table holds (TABLE_NAMES).",
+      $description: "Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many frames and tasks its tables hold.",
       recording: { $value: 1 },
       elapsed_ms: { $value: 1 },
       truncated: { $value: 1 },
       frame_cnt: { $value: 1 },
       task_cnt: { $value: 1 },
-      worst_cnt: { $value: 1 },
     },
     draw: {
       $description: "Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frame_cnt` the frames the renderer encoded (pxl-render renderer.rs `drawn_frame_cnt`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (pxl-gpu-guest `admit::frame`) or the host still held the stream (pxl-gpu-guest stream.rs) (frame.rs `frame_task`).\nThen the device, as the host wrote its block (spec/gpu/api.json5 DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `err_cnt` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.",

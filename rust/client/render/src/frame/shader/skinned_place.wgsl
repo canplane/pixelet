@@ -6,8 +6,8 @@
 // they agree.
 
 // The draw's uniform is read field by field from vec4 words (word.rs `skinned`,
-// skinned_draw.slot.wgsl or skinned_draw.uniform.wgsl), never as a struct: a struct here makes
-// Safari's WebGPU lose its GPU process.
+// skinned_draw.slot.wgsl or skinned_draw.uniform.wgsl), never built back into a struct: a
+// struct built from them makes Safari's WebGPU lose its GPU process.
 fn draw_translation() -> vec3f { return from_eye(skinned_q(), skinned_r()); }
 
 // The palette is read as vec4 columns, because the Galaxy S23's Vulkan driver misreads an

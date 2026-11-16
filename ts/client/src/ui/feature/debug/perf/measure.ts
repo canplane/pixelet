@@ -100,8 +100,8 @@ function started(): Promise<void> {
   });
 }
 
-/** A run measures a page or an app shown from the core's start, as the world
- * begins to load (`BOOT_LOADING`), to its result, on whatever runs it. It ends
+/** A run measures a page or an app shown from the core's start
+ * (`BOOT_STARTING`), to its result, on whatever runs it. It ends
  * at once with the error where the page is hidden, which draws nothing while
  * its core waits for it to be shown again, or where the core stops, whose
  * reason the host says. */

@@ -7,8 +7,8 @@
 
 const WIDTH_PX: f32 = 3.0;
 
-// The draw's words, read field by field from vec4s and never as a struct: a
-// uniform struct crashed the GPU process of Safari's WebGPU.
+// The draw's words, read field by field from vec4s and never built back into a
+// struct: a struct built from them crashed the GPU process of Safari's WebGPU.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
 fn draw_translation() -> vec3f { return from_eye(draw_q(), draw_r()); }

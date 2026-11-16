@@ -21,17 +21,11 @@
 // `TileGrid`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which spells word.rs
 // `screen`'s rule.
 
-struct Propagate {
-  // `unproject` takes a point from the screen's clip space, with its reversed depth, to units
-  // from the eye, and `light` takes it on to the light's clip space.
-  unproject: mat4x4f,
-  light: mat4x4f,
-  // `x` is how many texels a receiver's taps reach each way, and `y` the map's side in texels.
-  spread: vec4f,
-};
+// The uniform's fields are listed in word.rs `propagate`, and build.rs appends an accessor for
+// each of them.
 
 @group(0) @binding(0) var depth: texture_depth_2d;
-@group(0) @binding(1) var<uniform> propagate: Propagate;
+@group(0) @binding(1) var<uniform> propagate_words: array<vec4f, PROPAGATE_VEC4S>;
 @group(0) @binding(2) var<storage, read> light_changed_at: array<u32>;
 @group(0) @binding(3) var<uniform> light_tiles: TileGrid;
 @group(0) @binding(4) var<storage, read_write> changed_at: array<u32>;
@@ -68,9 +62,9 @@ fn propagate_depth(p: vec2u, size: vec2u) -> f32 {
 // on the light's map, in texels.
 fn propagate_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
   let ndc = vec2f(c.x / f32(size.x) * 2.0 - 1.0, 1.0 - c.y / f32(size.y) * 2.0);
-  let e = propagate.unproject * vec4f(ndc, d, 1.0);
-  let l = propagate.light * vec4f(e.xyz / e.w, 1.0);
-  return vec2f(l.x * 0.5 + 0.5, 0.5 - l.y * 0.5) * propagate.spread.y;
+  let e = propagate_unproject() * vec4f(ndc, d, 1.0);
+  let l = propagate_light_view_proj() * vec4f(e.xyz / e.w, 1.0);
+  return vec2f(l.x * 0.5 + 0.5, 0.5 - l.y * 0.5) * propagate_size();
 }
 
 // The map tiles a receiver's taps read around the texels from `lo` to `hi`, as the first and
@@ -80,8 +74,8 @@ fn propagate_range(lo: vec2f, hi: vec2f) -> vec4i {
   let side = light_tiles.size.w;
   // The clamp is on integers, so the range stays within a tile past the map whatever floats it
   // came from.
-  let a = clamp(vec2i(floor((lo - propagate.spread.x) / side)), vec2i(-1), n);
-  let b = clamp(vec2i(floor((hi + propagate.spread.x) / side)), vec2i(-1), n);
+  let a = clamp(vec2i(floor((lo - propagate_spread()) / side)), vec2i(-1), n);
+  let b = clamp(vec2i(floor((hi + propagate_spread()) / side)), vec2i(-1), n);
   return vec4i(a, b);
 }
 
@@ -94,8 +88,9 @@ fn propagate_in_damage(lo: vec2f, hi: vec2f) -> bool {
 
 // The box, in the map's texels, around the slab of pixels from `at` to `at + side` each way
 // between the reversed depths `far` and `near`, found from the slab's eight corners taken into
-// the map. Whatever those pixels read lies within this box.
-fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> array<vec2f, 2> {
+// the map, as its least corner in `xy` and its most in `zw`. Whatever those pixels read lies
+// within this box.
+fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> vec4f {
   var lo = vec2f(1e30);
   var hi = vec2f(-1e30);
   for (var k = 0u; k < 8u; k++) {
@@ -104,7 +99,7 @@ fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> arr
     lo = min(lo, t);
     hi = max(hi, t);
   }
-  return array<vec2f, 2>(lo, hi);
+  return vec4f(lo, hi);
 }
 
 // The tile's least and most depth drawn, gathered from its squares' bounds as bits: a positive
@@ -171,7 +166,7 @@ fn screen_propagate_cs(
     let near = bitcast<f32>(atomicLoad(&slab_near));
     let rect = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
     let changed = tiles_age(tiles, changed_at[ti]) == 0u;
-    slab_in_damage = !changed && near > 0.0 && propagate_in_damage(rect[0], rect[1]);
+    slab_in_damage = !changed && near > 0.0 && propagate_in_damage(rect.xy, rect.zw);
   }
   if (!workgroupUniformLoad(&slab_in_damage)) {
     return;
@@ -182,8 +177,8 @@ fn screen_propagate_cs(
     return;
   }
   let rect = propagate_slab(at, BOUND_STEP, far, near, size);
-  let lo = rect[0];
-  let hi = rect[1];
+  let lo = rect.xy;
+  let hi = rect.zw;
   if (!propagate_in_damage(lo, hi)) {
     return;
   }

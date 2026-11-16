@@ -214,7 +214,6 @@ interface Summary {
     truncated: boolean;
     frame_cnt: u32;
     task_cnt: u32;
-    worst_cnt: u32;
   };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
@@ -354,7 +353,6 @@ async function perf_summary(window_ms: f64 | null): Promise<Summary> {
       truncated: n[R.AT + R.truncated] !== 0,
       frame_cnt: n[R.AT + R.frame_cnt],
       task_cnt: n[R.AT + R.task_cnt],
-      worst_cnt: n[R.AT + R.worst_cnt],
     },
     frames: frame_summary(s),
     tasks: task_summaries(s),
@@ -378,10 +376,23 @@ async function perf_draw(): Promise<DrawSection> {
 /** The words of a record of each table, in `TABLE_NAMES`' order. */
 const TABLE_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 
+// The core keeps one table's read open at a time, from its first page to the
+// one that comes short (link/export/perf.rs `READING`), so the tables are read
+// one after another.
+let reading: Promise<unknown> = Promise.resolve();
+
 /** The records of the table `name`: the frames and the tasks oldest first,
  * the worst frames longest first, read a page at a time until a page comes
  * short (`perf.json5` `LIMIT.PAGE_SZ`). */
-async function table(name: (typeof TABLE_NAMES)[number]): Promise<U8Array> {
+function table(name: (typeof TABLE_NAMES)[number]): Promise<U8Array> {
+  const next = reading.then(() => read_table(name));
+  reading = next.catch(() => undefined);
+  return next;
+}
+
+async function read_table(
+  name: (typeof TABLE_NAMES)[number],
+): Promise<U8Array> {
   const k = TABLE_NAMES.indexOf(name);
   const record = 8 * TABLE_WORDS[k]!;
   const full = Math.floor(LIMIT.PAGE_SZ / record) * record;
@@ -410,7 +421,10 @@ async function perf_frames(): Promise<Frame[]> {
 /** The tasks the table holds, oldest first: the last `last` of them, or all of
  * them when `last` is null. */
 async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
-  const [tasks, strtab] = await Promise.all([table("tasks"), perf.strtab(ui)]);
+  // The string table is read after the tasks, so that it holds every name
+  // their records point into.
+  const tasks = await table("tasks");
+  const strtab = await perf.strtab(ui);
   const all = words(tasks);
   const total = all.length / TASK.WORDS;
   const from = last === null ? 0 : Math.max(0, total - last);

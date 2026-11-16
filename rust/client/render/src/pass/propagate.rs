@@ -27,11 +27,12 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
 use crate::frame::shader::record::{COMPUTE_SCREEN_BOUND, COMPUTE_SCREEN_PROPAGATE};
-use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
+use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP, PROPAGATE_FLOATS, propagate};
 use crate::gpu::api::{
     Gpu, Group, RenderContext, buf_entry, buffer_usage, bytes, release, view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
+use crate::gpu::put::put_mat;
 use crate::gpu::tile::TileGrid;
 use crate::spec::span::GpuSpanName;
 
@@ -39,9 +40,6 @@ const _: () = assert!(
     BOUND_SQUARES * BOUND_SQUARES <= MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP,
     "a screen tile's squares are a workgroup every device takes"
 );
-
-/// The floats of the pass's uniform (screen_propagate.wgsl `Propagate`).
-const UNIFORM_FLOATS: usize = 36;
 
 pub struct Propagate {
     pipeline: Pipeline,
@@ -61,7 +59,7 @@ impl Propagate {
         Propagate {
             pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_PROPAGATE),
             uniform: g.buf(
-                word_sz(UNIFORM_FLOATS),
+                word_sz(PROPAGATE_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             bounds: 0,
@@ -74,26 +72,22 @@ impl Propagate {
 
     /// Writes this frame's uniform: the eye's view-projection `view_proj` and the light's
     /// `light_view_proj`, both taking units measured from the eye, and the reach of a
-    /// receiver's taps, `spread` texels each way on a map `side` texels a side.
+    /// receiver's taps, `spread` texels each way on a map `size` texels a side.
     pub fn prepare(
         &self,
         g: &Gpu,
         view_proj: &Mat4,
         light_view_proj: &Mat4,
         spread: f32,
-        side: u32,
+        size: u32,
     ) {
         let mut inv = mat4::new();
         mat4::invert(&mut inv, view_proj);
-        let mut u = [0.0f32; UNIFORM_FLOATS];
-        for (to, from) in u[..16].iter_mut().zip(inv) {
-            *to = from as f32;
-        }
-        for (to, from) in u[16..32].iter_mut().zip(light_view_proj) {
-            *to = *from as f32;
-        }
-        u[32] = spread;
-        u[33] = side as f32;
+        let mut u = [0.0f32; PROPAGATE_FLOATS];
+        put_mat(&mut u, propagate::UNPROJECT, &inv);
+        put_mat(&mut u, propagate::LIGHT_VIEW_PROJ, light_view_proj);
+        u[propagate::SPREAD] = spread;
+        u[propagate::SIZE] = size as f32;
         g.write_buf(self.uniform, 0, bytes(&u));
     }
 

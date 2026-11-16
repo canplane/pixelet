@@ -15,13 +15,15 @@ struct Run {
 
 @group(0) @binding(5) var<uniform> run: Run;
 
-// The disc's taps, as N8AO's `generateDenoiseSamples(4, 11)` gives them.
-const DISC = array<vec2f, AO_DENOISE_SAMPLES>(
-  vec2f(0.353553, 0.000000),
-  vec2f(0.000000, -0.594604),
-  vec2f(-0.805927, 0.000000),
-  vec2f(0.000000, 1.000000),
-);
+// Tap `k` of the disc's `AO_DENOISE_SAMPLES`, as N8AO's
+// `generateDenoiseSamples(4, 11)` gives them, picked by selects: a phone's driver
+// refuses a table of vectors read at a place found as the shader runs.
+fn disc(k: i32) -> vec2f {
+  let odd = (k & 1) != 0;
+  let low = select(vec2f(0.353553, 0.000000), vec2f(0.000000, -0.594604), odd);
+  let high = select(vec2f(-0.805927, 0.000000), vec2f(0.000000, 1.000000), odd);
+  return select(low, high, k >= 2);
+}
 
 fn depth_at(p: vec2i) -> f32 {
   return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao_half()) - 1), 0).r;
@@ -48,7 +50,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var occlusion = data.r;
   var cnt = 1.0;
   for (var k = 0; k < AO_DENOISE_SAMPLES; k++) {
-    let at = uv + (spin * DISC[k]) * texel * (AO_DENOISE_RADIUS / f32(AO_DOWNSCALE));
+    let at = uv + (spin * disc(k)) * texel * (AO_DENOISE_RADIUS / f32(AO_DOWNSCALE));
     let tap = textureSampleLevel(src, src_sampler, at, 0.0);
     let tap_normal = tap.gba * 2.0 - 1.0;
     let tap_depth = depth_at(vec2i(at * ao_half()));

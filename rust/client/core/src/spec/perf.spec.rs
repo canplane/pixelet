@@ -10,8 +10,7 @@
 // (spec/client/render/gpu/span.json5). A packed table gives each field's
 // width and the generator lays the offsets out. Nothing is built
 // for a read: the core writes numbers where they stay, and the words for them are
-// the UI's. LIMIT holds the bounds the profiler keeps, and the one a build made for
-// measuring hands its GPU hosts, which the core and the client both read.
+// the UI's. LIMIT holds the bounds the profiler keeps, which the core and the client both read.
 
 /// What the pick met (NOW.view `hit_kind`; pxl-core domain/query/ray.rs `HitKind`): the ground, a placed cube, placed cubes folded into a coarser box, or a decor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -298,7 +297,7 @@ pub mod stat {
 
 /// What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.
 pub mod now {
-    /// Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many records each table holds (TABLE_NAMES).
+    /// Whether it records, how long the recording has run, whether it lost what it had no room for (a table's oldest records, or a failure's file name the string table could not hold), and how many frames and tasks its tables hold.
     pub mod recording_state {
         pub const AT: usize = 0;
         pub const RECORDING: usize = 0;
@@ -306,13 +305,12 @@ pub mod now {
         pub const TRUNCATED: usize = 2;
         pub const FRAME_CNT: usize = 3;
         pub const TASK_CNT: usize = 4;
-        pub const WORST_CNT: usize = 5;
-        pub const WORDS: usize = 6;
+        pub const WORDS: usize = 5;
     }
     /// Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frame_cnt` the frames the renderer encoded (pxl-render renderer.rs `drawn_frame_cnt`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (pxl-gpu-guest `admit::frame`) or the host still held the stream (pxl-gpu-guest stream.rs) (frame.rs `frame_task`).
     /// Then the device, as the host wrote its block (spec/gpu/api.json5 DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `err_cnt` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.
     pub mod draw {
-        pub const AT: usize = 6;
+        pub const AT: usize = 5;
         pub const FRAME_CNT: usize = 0;
         pub const REFUSED_ADMIT: usize = 1;
         pub const REFUSED_STREAM: usize = 2;
@@ -327,7 +325,7 @@ pub mod now {
     /// The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell_zoom` the zoom the eye's rays draw there (pxl-core domain/query/ray.rs `by_dist`).
     /// The pick is what the tool held strikes there (pxl-core domain/control/edit/pick.rs `pick_at`): `hit_kind` what it met, an index into HIT_KIND; `pick_zoom` the zoom of the box struck and `ray_zoom` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-core domain/control/edit.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/edit/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: usize = 13;
+        pub const AT: usize = 12;
         pub const EYE_X: usize = 0;
         pub const EYE_Y: usize = 1;
         pub const EYE_Z: usize = 2;
@@ -355,7 +353,7 @@ pub mod now {
         pub const BLOCKED: usize = 24;
         pub const WORDS: usize = 25;
     }
-    pub const WORDS: usize = 38;
+    pub const WORDS: usize = 37;
 }
 
 /// The tables the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started.

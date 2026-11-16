@@ -176,7 +176,6 @@ pub(crate) fn perf_recording_state() -> RecordingStateSection {
         truncated: l.truncated as u8 as f64,
         frame_cnt: perf_frames().len() as f64,
         task_cnt: perf_tasks().len() as f64,
-        worst_cnt: perf_worst().len() as f64,
     }
 }
 
@@ -277,16 +276,16 @@ pub(crate) fn perf_record(
 }
 
 /// Records a frame whose record is `s`. It closes the interval in progress
-/// with `interval_ms`, the gap that just ended, and `settled`, whether that
-/// frame asked for no next one. It then lands that interval and opens `s`'s.
-pub(crate) fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool) {
+/// with `interval_ms`, the gap that just ended, then lands that interval and
+/// opens `s`'s.
+pub(crate) fn perf_record_frame(s: FrameSample, interval_ms: f64) {
     let l = perf();
     if !l.recording {
         return;
     }
     let at = now();
     if let Some(mut f) = l.open.replace(s) {
-        (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
+        f.interval_ms = interval_ms;
         land(l, f);
     }
     // Landing the record is profiler time too, so it goes into `perf_ms`.

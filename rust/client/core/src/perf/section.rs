@@ -36,12 +36,11 @@ pub(crate) struct RecordingStateSection {
     pub truncated: f64,
     pub frame_cnt: f64,
     pub task_cnt: f64,
-    pub worst_cnt: f64,
 }
 
 words!(RecordingStateSection, now::recording_state::WORDS,
     recording => now::recording_state::RECORDING, elapsed_ms => now::recording_state::ELAPSED_MS, truncated => now::recording_state::TRUNCATED,
-    frame_cnt => now::recording_state::FRAME_CNT, task_cnt => now::recording_state::TASK_CNT, worst_cnt => now::recording_state::WORST_CNT,
+    frame_cnt => now::recording_state::FRAME_CNT, task_cnt => now::recording_state::TASK_CNT,
 );
 
 /// Whether the core draws, as perf.json5's NOW `draw` says.

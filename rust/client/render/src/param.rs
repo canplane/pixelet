@@ -99,6 +99,8 @@ pub mod ao {
         /// resolution (`AO_DOWNSCALE`).
         DENOISE_RADIUS: f32 = 12.0;
     }
+    // ao_sample.wgsl `hemisphere` and ao_blur.wgsl `disc` hold N8AO's samples for four each.
+    const _: () = assert!(SAMPLES == 4 && DENOISE_SAMPLES == 4);
 }
 
 /// How finely the air is marched for its tables (pass/atmosphere.rs). The transmittance,

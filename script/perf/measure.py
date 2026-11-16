@@ -105,8 +105,11 @@ def polled(ev):
 
 
 def stream(cmd):
-    """The lines `cmd` writes, until the reader lets go."""
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, errors="replace")
+    """The lines `cmd` writes, to its output and its errors alike, until the
+    reader lets go."""
+    p = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace"
+    )
     try:
         yield from p.stdout
     finally:

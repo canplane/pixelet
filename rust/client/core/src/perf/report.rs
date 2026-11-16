@@ -149,6 +149,7 @@ pub(crate) fn perf_frame(t: CpuSample) {
         t: at,
         refresh_ms: t.refresh_ms,
         paced_ms: t.paced_ms,
+        settled: f64::from(u8::from(t.settled)),
         budget_ms: t.tick.budget_ms,
         effects_ms: t.effects_ms,
         tick_ms: t.tick.total_ms,
@@ -171,6 +172,5 @@ pub(crate) fn perf_frame(t: CpuSample) {
             ..rec
         },
         t.paced_ms,
-        t.settled,
     );
 }
