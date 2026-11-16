@@ -109,8 +109,8 @@ impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells a
     /// cell (`grid::CELL`) apart.
     pub fn of(tan: [f32; 2]) -> Grid {
-        let r6 = cast::SQRT_6 * CELL;
-        let k = 2.0 * r6;
+        let k = cast::NARROW_DIAGONAL * CELL;
+        let r6 = k / 2.0;
         let radius = r6 / (1.0 - r6) * beam::RADIUS_SLACK;
         let span = [
             libm::ceilf(2.0 * tan[0] / CELL) as u32,

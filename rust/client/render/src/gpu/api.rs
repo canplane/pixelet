@@ -37,7 +37,7 @@ use crate::frame::shader::access::{self, END};
 use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::group::BUFS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
-use crate::gpu::split::Split;
+use crate::gpu::track::Tracker;
 use crate::spec::api::{record, stream};
 use crate::spec::span::GpuSpanName;
 
@@ -661,8 +661,8 @@ struct State {
     /// the host holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
-    /// Where each encoder is cut into command buffers (gpu/split.rs).
-    split: Split,
+    /// What each pass's calls are held to as they are encoded (gpu/track.rs).
+    track: Tracker,
 }
 
 /// An image file being copied into its texture. The asker keeps the file's bytes until the
@@ -745,7 +745,7 @@ impl State {
             lost: false,
             ranges: Vec::new(),
             ranges_out: Vec::new(),
-            split: Split::default(),
+            track: Tracker::default(),
         }
     }
 }
@@ -1071,7 +1071,7 @@ pub fn release(id: Id) {
     if id != 0
         && let Some(s) = STATE.get(|| None).as_mut()
     {
-        s.split.let_go(id);
+        s.track.let_go(id);
         if writable(s) {
             s.encoder.destroy(&mut s.stream, id);
         } else {
@@ -1217,7 +1217,7 @@ impl Gpu {
             },
         ));
         let at = core::panic::Location::caller();
-        s.split
+        s.track
             .note_buffer(buf, usage & buffer_usage::INDIRECT != 0, at.line());
         buf
     }
@@ -1539,7 +1539,7 @@ impl Gpu {
         layout.holds(entries);
         let s = self.s();
         let group = handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries));
-        s.split.grouped(group, layout.writable(entries));
+        s.track.grouped(group, layout.writable(entries));
         group
     }
 
@@ -1632,72 +1632,29 @@ impl Gpu {
         None
     }
 
-    /// A command encoder. It is cut into several command buffers where its passes read args
-    /// written earlier in it (gpu/split.rs), and it is submitted as those command buffers.
+    /// A command encoder, submitted as one command buffer.
     #[track_caller]
     pub fn encoder(&self) -> Id {
         let s = self.s();
-        let encoder = handle_of(s.encoder.encoder(&mut s.stream));
-        s.split.begun(encoder);
-        encoder
+        handle_of(s.encoder.encoder(&mut s.stream))
     }
 
-    /// Makes `encoder` record into a new command buffer from here on (gpu/split.rs).
+    /// Holds an indirect call on `pass` that reads its count from `buf` to its usage scope.
     #[track_caller]
-    fn split(&self, encoder: Id) {
-        let s = self.s();
-        let next = handle_of(s.encoder.encoder(&mut s.stream));
-        s.split.split(encoder, next);
-    }
-
-    /// The pass in which an indirect call on `pass` that reads `buf` is recorded. Where `buf`
-    /// was written in the pass's own command buffer (`Split::cuts`), a compute pass is ended
-    /// and begun again in a new command buffer, with its pipeline and groups set again, the new
-    /// part one more pass of the same span. A render pass already begins in a command buffer of
-    /// its own where args were written before it (`Split::draws_apart`), so only its own draws
-    /// could have written `buf`, which is a bug.
-    #[track_caller]
-    fn indirect(&self, pass: Id, buf: Id) -> Id {
+    fn indirect(&self, pass: Id, buf: Id) {
         let s = self.s();
         // An indirect call must not write the buffer it reads its count from. A buffer bound
         // writable in a group set for the call, or in a render pass in any group set in the
         // pass, is refused at the call's line. The bug's first word names the group (its
         // index, or in a render pass its handle) and the binding; its second names the line
         // that made the buffer and the buffer. Each pair is a word's high and low halves.
-        if let Some((idx, binding)) = s.split.binds_writable(pass, buf) {
+        if let Some((idx, binding)) = s.track.binds_writable(pass, buf) {
             xpute_kit::bug!(
                 ENOTRECOVERABLE,
                 u64::from(idx) << 32 | u64::from(binding),
-                u64::from(s.split.made_at(buf)) << 32 | u64::from(buf)
+                u64::from(s.track.made_at(buf)) << 32 | u64::from(buf)
             );
         }
-        if !s.split.cuts(pass, buf) {
-            return s.split.pass_at(pass);
-        }
-        let (encoder, compute) = s.split.pass_on(pass).or_bug(Errno::ENOTRECOVERABLE);
-        xpute_kit::ensure!(compute, ENOTRECOVERABLE, pass, buf);
-        let o = s.split.open(pass).or_bug(Errno::ENOTRECOVERABLE);
-        let (was, span, pipeline) = (o.at, o.span, o.pipeline);
-        let groups = o.groups.clone();
-        s.encoder.end(&mut s.stream, was);
-        self.split(encoder);
-        let stamp = span.and_then(|span| self.stamp_pass(span));
-        let s = self.s();
-        let at = handle_of(
-            s.encoder
-                .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
-        );
-        let s = self.s();
-        if pipeline != 0 {
-            call::set_pipeline(&mut s.stream, at, pipeline);
-        }
-        for (idx, (group, offs)) in groups.iter().enumerate() {
-            if *group != 0 {
-                call::set_bind_group(&mut s.stream, at, idx as u32, *group, offs);
-            }
-        }
-        s.split.open(pass).or_bug(Errno::ENOTRECOVERABLE).at = at;
-        at
     }
 
     pub fn copy_texture(
@@ -1707,18 +1664,11 @@ impl Gpu {
         dst: &encode::TexelCopyTexture,
         size: [u32; 3],
     ) {
-        let s = self.s();
-        let encoder = s.split.at(encoder);
-        call::copy_texture_to_texture(&mut s.stream, encoder, src, dst, size);
+        call::copy_texture_to_texture(&mut self.s().stream, encoder, src, dst, size);
     }
 
     #[track_caller]
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
-        let named = encoder;
-        if self.s().split.draws_apart(named) {
-            self.split(named);
-        }
-        let encoder = self.s().split.at(named);
         let colors = [d.color, d.second].map(|view| encode::ColorAttachment {
             view,
             resolve: None,
@@ -1757,7 +1707,7 @@ impl Gpu {
                 occlusion: None,
             },
         ));
-        s.split.opened(pass, named, false, None);
+        s.track.opened(pass, false);
         pass
     }
 
@@ -1765,33 +1715,21 @@ impl Gpu {
     #[track_caller]
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        let span = stamp
-            .as_ref()
-            .and_then(|t| t.begin)
-            .map(|b| s.stamp_spans[b as usize / 2]);
-        let pass = handle_of(
-            s.encoder
-                .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
-        );
-        s.split.opened(pass, encoder, true, span);
+        let pass = handle_of(s.encoder.compute_pass(&mut s.stream, encoder, &stamp));
+        s.track.opened(pass, true);
         pass
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
-        let s = self.s();
-        call::dispatch(&mut s.stream, s.split.pass_at(pass), [x, y, z]);
-        s.split.ran(pass);
+        call::dispatch(&mut self.s().stream, pass, [x, y, z]);
     }
 
     /// Dispatches the workgroups that `buf` holds at `off`, as counts across, up and deep.
-    /// Only the GPU knows the counts, and they are written in a command buffer before the one
-    /// this call is recorded in (gpu/split.rs).
+    /// Only the GPU knows the counts.
     #[track_caller]
     pub fn dispatch_indirect(&self, pass: Id, buf: Id, off: u32) {
-        let at = self.indirect(pass, buf);
-        let s = self.s();
-        call::dispatch_indirect(&mut s.stream, at, buf, off);
-        s.split.ran(pass);
+        self.indirect(pass, buf);
+        call::dispatch_indirect(&mut self.s().stream, pass, buf, off);
     }
 
     #[track_caller]
@@ -1800,23 +1738,22 @@ impl Gpu {
         // A render pass that declares what it draws draws nothing else (frame/shader/access.rs
         // `Step::in_pass`). Any other pipeline is refused at the call's line, and the bug names
         // the pipeline's record and the pass.
-        if let Some(record) = s.split.undeclared(pass, pipeline) {
+        if let Some(record) = s.track.undeclared(pass, pipeline) {
             xpute_kit::bug!(ENOTRECOVERABLE, u64::from(record), u64::from(pass));
         }
-        call::set_pipeline(&mut s.stream, s.split.pass_at(pass), pipeline);
-        s.split.piped(pass, pipeline);
+        call::set_pipeline(&mut s.stream, pass, pipeline);
     }
 
     /// Holds render pass `pass` to drawing only `pipelines`, given by their records' numbers as
     /// the frame's declarations name them (frame/shader/access.rs `Step::in_pass`).
     pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
-        self.s().split.declared(pass, pipelines);
+        self.s().track.declared(pass, pipelines);
     }
 
     /// Notes that render pipeline `pipeline` was made from record `rec`, so that a pass
     /// that declares what it draws can check the pipeline.
     pub fn recorded(&self, pipeline: Id, rec: u32) {
-        self.s().split.recorded(pipeline, rec);
+        self.s().track.recorded(pipeline, rec);
     }
 
     /// Limits what `pass` draws to `rect`, `[x, y, width, height]` in its targets' pixels.
@@ -1830,15 +1767,15 @@ impl Gpu {
         // A whole render pass is one usage scope. A group that binds writable a buffer from
         // which one of the pass's indirect draws read its count is refused, as the draw is
         // when the group comes first (`indirect`), and the bug names them the same way.
-        if let Some((buf, binding)) = s.split.binds_read(pass, group) {
+        if let Some((buf, binding)) = s.track.binds_read(pass, group) {
             xpute_kit::bug!(
                 ENOTRECOVERABLE,
                 u64::from(group) << 32 | u64::from(binding),
-                u64::from(s.split.made_at(buf)) << 32 | u64::from(buf)
+                u64::from(s.track.made_at(buf)) << 32 | u64::from(buf)
             );
         }
-        call::set_bind_group(&mut s.stream, s.split.pass_at(pass), idx, group, offs);
-        s.split.bound(pass, idx, group, offs);
+        call::set_bind_group(&mut s.stream, pass, idx, group, offs);
+        s.track.bound(pass, idx, group);
     }
 
     /// A size of 0 is the rest of the buffer.
@@ -1873,16 +1810,14 @@ impl Gpu {
         first_vertex: u32,
         first_instance: u32,
     ) {
-        let s = self.s();
         call::draw(
-            &mut s.stream,
+            &mut self.s().stream,
             pass,
             vertex_cnt,
             instance_cnt,
             first_vertex,
             first_instance,
         );
-        s.split.ran(pass);
     }
 
     pub fn draw_indexed(
@@ -1893,9 +1828,8 @@ impl Gpu {
         first_idx: u32,
         first_instance: u32,
     ) {
-        let s = self.s();
         call::draw_indexed(
-            &mut s.stream,
+            &mut self.s().stream,
             pass,
             idx_cnt,
             instance_cnt,
@@ -1903,44 +1837,36 @@ impl Gpu {
             0,
             first_instance,
         );
-        s.split.ran(pass);
     }
 
     #[track_caller]
     pub fn draw_indirect(&self, pass: Id, buf: Id, off: u32) {
-        let at = self.indirect(pass, buf);
-        let s = self.s();
-        call::draw_indirect(&mut s.stream, at, buf, off);
-        s.split.ran(pass);
+        self.indirect(pass, buf);
+        call::draw_indirect(&mut self.s().stream, pass, buf, off);
     }
 
     #[track_caller]
     pub fn draw_indexed_indirect(&self, pass: Id, buf: Id, off: u32) {
-        let at = self.indirect(pass, buf);
-        let s = self.s();
-        call::draw_indexed_indirect(&mut s.stream, at, buf, off);
-        s.split.ran(pass);
+        self.indirect(pass, buf);
+        call::draw_indexed_indirect(&mut self.s().stream, pass, buf, off);
     }
 
     /// Ends the pass and lets its handle go.
     pub fn end(&self, pass: Id) {
         let s = self.s();
-        s.encoder.end(&mut s.stream, s.split.pass_at(pass));
-        s.split.closed(pass);
+        s.encoder.end(&mut s.stream, pass);
+        s.track.closed(pass);
     }
 
-    /// Submits the encoder's command buffers, each alone and in order, and
-    /// lets their handles go.
+    /// Submits the encoder's command buffer and lets its handle go.
     pub fn submit(&self, encoder: Id) {
         let s = self.s();
-        for e in s.split.submitted(encoder) {
-            s.encoder.submit(&mut s.stream, &[e]);
-        }
+        s.encoder.submit(&mut s.stream, &[encoder]);
     }
 
-    /// Submits the frame's encoder as its command buffers, each alone and in order. Where the
-    /// frame is timed, wrote any span, and a read is free, the last command buffer also
-    /// resolves the spans and copies them into that read's buffer, which is then mapped back.
+    /// Submits the frame's encoder. Where the frame is timed, wrote any span, and a read is
+    /// free, the encoder also resolves the spans and copies them into that read's buffer,
+    /// which is then mapped back.
     /// Before that, the earliest-asked read that is out is taken in if it landed, and it may
     /// then be asked again. A read's ticket is the order it was asked in, and its fence holds
     /// the ticket once it lands. Returns the read this frame's spans come back in.
@@ -1948,21 +1874,23 @@ impl Gpu {
         let s = self.s();
         s.stamps_complete = take_stamps(s);
         let free = (0..READ_CAP).find(|&r| s.stamps_out[r] == 0);
-        let bufs = s.split.submitted(encoder);
         let passes = s.stamp_cnt;
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, passes != 0) else {
-            for e in bufs {
-                s.encoder.submit(&mut s.stream, &[e]);
-            }
+            s.encoder.submit(&mut s.stream, &[encoder]);
             return None;
         };
         let bytes = 2 * passes as u32 * 8;
-        let last = *bufs.last().or_bug(Errno::ENOTRECOVERABLE);
-        call::resolve_query_set(&mut s.stream, last, set, 0, 2 * passes as u32, resolve, 0);
-        call::copy_buffer_to_buffer(&mut s.stream, last, (resolve, 0), (mapped[r], 0), bytes);
-        for e in bufs {
-            s.encoder.submit(&mut s.stream, &[e]);
-        }
+        call::resolve_query_set(
+            &mut s.stream,
+            encoder,
+            set,
+            0,
+            2 * passes as u32,
+            resolve,
+            0,
+        );
+        call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped[r], 0), bytes);
+        s.encoder.submit(&mut s.stream, &[encoder]);
         s.stamps_read[r] = (s.stamp_spans, passes);
         s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
         s.stamps_out[r] = s.stamps_asked_cnt;
@@ -2078,20 +2006,12 @@ impl Gpu {
     /// Zeroes `size` bytes of buffer `id` from `at`, in order among `encoder`'s commands.
     pub fn clear_buf(&self, encoder: Id, id: Id, at: u32, size: u32) {
         let s = self.s();
-        call::clear_buffer(&mut s.stream, s.split.at(encoder), id, at, Some(size));
-        s.split.copied(encoder, id);
+        call::clear_buffer(&mut s.stream, encoder, id, at, Some(size));
     }
 
     pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
         let s = self.s();
-        call::copy_buffer_to_buffer(
-            &mut s.stream,
-            s.split.at(encoder),
-            (from, at),
-            (to, to_at),
-            size,
-        );
-        s.split.copied(encoder, to);
+        call::copy_buffer_to_buffer(&mut s.stream, encoder, (from, at), (to, to_at), size);
     }
 
     /// Maps `length` bytes of buffer `id` from `off` back into the core's memory at `addr`.

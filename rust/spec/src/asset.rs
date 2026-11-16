@@ -131,10 +131,15 @@ impl decor::Decor {
 }
 
 impl decor::DecorMeta {
-    /// Its heading in radians.
+    /// Its heading in radians (`spin`).
     pub fn spin(&self) -> f64 {
-        f64::from(self.turn % 4) * core::f64::consts::FRAC_PI_2
+        spin(self.turn)
     }
+}
+
+/// The heading of a decor thing turned `turn` quarter turns, in radians.
+pub fn spin(turn: u32) -> f64 {
+    f64::from(turn % 4) * core::f64::consts::FRAC_PI_2
 }
 
 fn largest(a: f64, b: f64) -> f64 {

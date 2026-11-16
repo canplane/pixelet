@@ -12,8 +12,8 @@
 use crate::answer;
 use crate::clipmap;
 use crate::clipmap::{
-    BOUND_ENTRY_WORDS, BOUNDS_AT, BrickSource, COLUMNS_AT, OWN_AT, OWN_CELL_CNT, ROOT_AT,
-    RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMN_CNT,
+    BOUND_ENTRY_WORDS, BOUNDS_AT, BrickSource, COLUMNS_AT, FACE_NONE, OWN_AT, OWN_CELL_CNT,
+    ROOT_AT, RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMN_CNT,
     SPANS_COLUMN_WORDS, column_top,
 };
 use crate::{at, ground, way};
@@ -128,9 +128,9 @@ impl way::SpanTable for Scratch<'_> {
 /// The head word of a column's spans (`clipmap::SPANS_COLUMN_WORDS`).
 fn hdr_word(s: &SpanList) -> u32 {
     let face = if s.face == i32::MIN {
-        i16::MIN as i32
+        FACE_NONE
     } else {
-        s.face.clamp(i16::MIN as i32 + 1, i16::MAX as i32)
+        s.face.clamp(FACE_NONE + 1, i16::MAX as i32)
     };
     s.n | (face as u32) << 16
 }

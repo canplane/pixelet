@@ -284,8 +284,8 @@ fn walk_word() -> String {
         // slots within a disk grown by its taps' reach. A tile is taken to hold such a slot
         // when the tile's middle lies within that disk grown by half the tile's diagonal
         // (`light::TILE_READ_PAD`, light_propagate.wgsl).
-        ("LIGHT_MARGIN_PER_WIDTH", F32(2.0 * cast::SQRT_6)),
-        ("LIGHT_MARGIN_STEPS", F32(light::margin(0.0))),
+        ("LIGHT_MARGIN_PER_WIDTH", F32(cast::NARROW_DIAGONAL)),
+        ("LIGHT_MARGIN_ROUNDING_U", F32(light::MARGIN_ROUNDING_U)),
         ("LIGHT_TILE_READ_PAD", F32(light::TILE_READ_PAD)),
         ("LIGHT_FOOTPRINT_TILES", I32(light::FOOTPRINT_TILES)),
         ("LIGHT_READ_FIRST", I32(light::READ_TILES[0])),
@@ -740,7 +740,7 @@ fn world_word() -> String {
         ("TUNNELS_LAST", U32(cave::ROOT_TUNNELS[4])),
         ("SEA_LEVEL", I32(SEA_LEVEL)),
         ("SEA_CELL", I32(ground::SEA_CELL)),
-        ("FACE_NONE", I32(i16::MIN as i32)),
+        ("FACE_NONE", I32(clip::FACE_NONE)),
         ("EMPTY_LO", I32(ground::EMPTY[0])),
         ("EMPTY_HI", I32(ground::EMPTY[1])),
         ("UNBOUNDED_LO", I32(ground::UNBOUNDED[0])),
@@ -780,6 +780,7 @@ fn decor_word() -> String {
     use pxl_engine::{answer, cast, world};
     use pxl_spec::asset::decor::{DECORS, Orientation, ROWS, Row};
     use pxl_spec::asset::id::{IDX_BITS, Kind};
+    use pxl_spec::asset::spin;
     use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::coord::zoom::UNIT_ZOOM;
     use pxl_spec::value;
@@ -874,8 +875,8 @@ fn decor_word() -> String {
     // Each turn's spin is written as the bits of the float the Rust computes, so
     // decor_compact.wgsl writes the same spin the CPU does.
     let turns = (1u32 << g::TURN_BITS) - 1;
-    let spin = |t: u32| U32((t as f32 * core::f32::consts::FRAC_PI_2).to_bits());
-    out += &table("turn_spin", (0..turns).map(|t| (t, spin(t))), spin(turns));
+    let bits = |t: u32| U32((spin(t) as f32).to_bits());
+    out += &table("turn_spin", (0..turns).map(|t| (t, bits(t))), bits(turns));
     // How far below its box's top a cell keeping `k` eighths leaves its own top, as a share of
     // the cell's side (`cast::top`, `cast::fill_bound`), read as the Rust's float.
     let sink = |k: u32| {
