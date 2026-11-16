@@ -28,6 +28,10 @@ use pxl_spec::space::coord::q3::FRAC_W;
 
 /// How long a test waits for the device to finish its work before the test fails.
 const WAIT: Duration = Duration::from_secs(60);
+
+/// How many last places a device's distance squared may lie off the Rust's. A device may fuse
+/// a product into the sum of squares, which skips one rounding.
+pub(crate) const FUSED_ULPS: u32 = 1;
 /// How many frames a run may take to ask the world for everything its rays need (`Gpu::run`).
 const FRAMES_TO_ASK: u32 = 64;
 

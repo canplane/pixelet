@@ -75,9 +75,10 @@ pub const SHADER_GENERATION_MARK: u32 = 30;
 /// Fills a light's share of the air's volume, one column of froxels a workgroup
 /// (atmos_froxel.wgsl). It has one compute entry point.
 pub const SHADER_ATMOS_FROXEL: u32 = 31;
-/// Walks the eye's beam rays over the node cache alone (queue_walk.wgsl over corner.wgsl and
-/// beam.eye.wgsl). A ray that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK`
-/// then asks the world for that node, and `SHADER_QUEUE_LAST_CORNERS` ends the ray.
+/// Walks the eye's beam rays over the node cache alone, first (queue_walk.wgsl over corner.wgsl
+/// and beam.eye.wgsl). A ray that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK`
+/// then asks the world for that node, `SHADER_QUEUE_CORNERS_PARKED` walks the ray on, and
+/// `SHADER_QUEUE_LAST_CORNERS` ends it.
 pub const SHADER_QUEUE_CORNERS: u32 = 32;
 /// Finds where the rays of each cell of the camera grid start, from the beam rays about the
 /// cell (cell.wgsl). It is a port by hand with one compute entry point.
@@ -182,14 +183,15 @@ pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 65;
 pub const SHADER_LIGHT_CELL: u32 = 66;
 pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 67;
 pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 68;
-/// Walks the eye's samples over the node cache alone (queue_walk.wgsl over sample.wgsl and
-/// sample.eye.wgsl). A sample that meets a node no slot keeps is parked.
-/// `SHADER_QUEUE_ASK` then asks the world for that node, and
-/// `SHADER_QUEUE_LAST_SAMPLES` ends the sample's walk.
+/// Walks the eye's samples over the node cache alone, first (queue_walk.wgsl over sample.wgsl
+/// and sample.eye.wgsl). A sample that meets a node no slot keeps is parked.
+/// `SHADER_QUEUE_ASK` then asks the world for that node, `SHADER_QUEUE_SAMPLES_PARKED` walks
+/// the sample on, and `SHADER_QUEUE_LAST_SAMPLES` ends its walk.
 pub const SHADER_QUEUE_SAMPLES: u32 = 69;
-/// Walks the eye's holes over the node cache alone (queue_walk.wgsl over queue.wgsl and
+/// Walks the eye's holes over the node cache alone, first (queue_walk.wgsl over queue.wgsl and
 /// hole.eye.wgsl). A hole that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK` then
-/// asks the world for that node, and `SHADER_QUEUE_LAST` ends the hole's ray.
+/// asks the world for that node, `SHADER_QUEUE_PARKED` walks the hole's ray on, and
+/// `SHADER_QUEUE_LAST` ends it.
 pub const SHADER_QUEUE: u32 = 70;
 /// The last walk of the eye's beam rays, which asks the world where the node cache keeps no
 /// node (queue_last.wgsl over corner.wgsl and beam.eye.wgsl).
@@ -226,7 +228,17 @@ pub const SHADER_CAMERA_GRID: u32 = 81;
 pub const SHADER_QUEUE_LIGHT: u32 = 82;
 /// `SHADER_QUEUE_LAST` for the light's map.
 pub const SHADER_QUEUE_LAST_LIGHT: u32 = 83;
-pub const SHADER_CNT: u32 = 84;
+/// The second walks over the node cache alone, each over the rays its first walk parked
+/// (queue_walk.wgsl over queue_walk.parked.wgsl), as `SHADER_QUEUE_CORNERS`,
+/// `SHADER_QUEUE_SAMPLES`, `SHADER_QUEUE` and their light's are the first (over
+/// queue_walk.first.wgsl).
+pub const SHADER_QUEUE_CORNERS_PARKED: u32 = 84;
+pub const SHADER_QUEUE_SAMPLES_PARKED: u32 = 85;
+pub const SHADER_QUEUE_PARKED: u32 = 86;
+pub const SHADER_QUEUE_LIGHT_CORNERS_PARKED: u32 = 87;
+pub const SHADER_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 88;
+pub const SHADER_QUEUE_LIGHT_PARKED: u32 = 89;
+pub const SHADER_CNT: u32 = 90;
 
 /// The parts of the air as the frame's shaders read it: its medium, its tables and the sky,
 /// the eye in it, the march through it, its light and the view through it. A shader's own
@@ -485,6 +497,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "corner",
         "item_list",
         "queue_walk",
+        "queue_walk.first",
     ],
     // SHADER_CELL
     &["walk_word", "eye_bind", "px", "grid", "window", "cell"],
@@ -795,6 +808,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "corner",
         "item_list",
         "queue_walk",
+        "queue_walk.first",
     ],
     // SHADER_LIGHT_CELL
     &[
@@ -871,6 +885,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "sample",
         "item_list",
         "queue_walk",
+        "queue_walk.first",
     ],
     // SHADER_QUEUE
     &[
@@ -891,6 +906,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "hole.eye",
         "queue",
         "queue_walk",
+        "queue_walk.first",
     ],
     // SHADER_QUEUE_LAST_CORNERS
     &[
@@ -938,6 +954,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "sample",
         "item_list",
         "queue_walk",
+        "queue_walk.first",
     ],
     // SHADER_QUEUE_LAST_LIGHT_CORNERS
     &[
@@ -1066,6 +1083,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "hole.light",
         "queue",
         "queue_walk",
+        "queue_walk.first",
     ],
     // SHADER_QUEUE_LAST_LIGHT
     &[
@@ -1099,6 +1117,127 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "hole.light",
         "queue",
         "queue_last",
+    ],
+    // SHADER_QUEUE_CORNERS_PARKED
+    &[
+        "walk_word",
+        "eye_bind",
+        "walk_node",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "beam.eye",
+        "parked",
+        "corner_run.eye",
+        "corner",
+        "item_list",
+        "queue_walk",
+        "queue_walk.parked",
+    ],
+    // SHADER_QUEUE_SAMPLES_PARKED
+    &[
+        "walk_word",
+        "eye_bind",
+        "px",
+        "grid",
+        "walk_node",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "sample.eye",
+        "sample_put",
+        "parked",
+        "sample_run.eye",
+        "sample",
+        "item_list",
+        "queue_walk",
+        "queue_walk.parked",
+    ],
+    // SHADER_QUEUE_PARKED
+    &[
+        "walk_word",
+        "eye_bind",
+        "px",
+        "grid",
+        "walk_node",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "hit",
+        "miss_word",
+        "walked",
+        "parked",
+        "hole_run.eye",
+        "hole.eye",
+        "queue",
+        "queue_walk",
+        "queue_walk.parked",
+    ],
+    // SHADER_QUEUE_LIGHT_CORNERS_PARKED
+    &[
+        "walk_word",
+        "eye_bind",
+        "walk_node",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "light_aim",
+        "light_list",
+        "beam.light",
+        "parked",
+        "corner_run.light",
+        "corner",
+        "item_list",
+        "queue_walk",
+        "queue_walk.parked",
+    ],
+    // SHADER_QUEUE_LIGHT_SAMPLES_PARKED
+    &[
+        "walk_word",
+        "eye_bind",
+        "walk_node",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "light_aim",
+        "light_resume",
+        "light_list",
+        "sample.light",
+        "sample_put",
+        "parked",
+        "sample_run.light",
+        "sample",
+        "item_list",
+        "queue_walk",
+        "queue_walk.parked",
+    ],
+    // SHADER_QUEUE_LIGHT_PARKED
+    &[
+        "walk_word",
+        "eye_bind",
+        "px",
+        "grid",
+        "walk_node",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "hit",
+        "miss_word",
+        "walked",
+        "light_aim",
+        "light_resume",
+        "parked",
+        "hole_run.light",
+        "hole.light",
+        "queue",
+        "queue_walk",
+        "queue_walk.parked",
     ],
 ];
 

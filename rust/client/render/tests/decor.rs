@@ -1941,14 +1941,40 @@ fn regions_of(recs: &[u32], order: &[usize]) -> Vec<u32> {
     counted
 }
 
+/// How far along the Rust's distance squared a record's zoom and its level of detail may be
+/// taken, `[zoom, level of detail]`, where the pass by hand sizes the record otherwise: a GPU
+/// decides both, a drawing's, in floats. The zoom is asked at the sum of squares alone, which
+/// may fuse (`gpu::FUSED_ULPS`). The level of detail divides by a square root: WGSL's square root
+/// is `1 / inverseSqrt`, about 4.5 ulps, Metal's division was measured 13 ulps off, the device's
+/// sum of squares may fuse, and the Rust's square root and division round half an ulp each, so
+/// the angle a record spans may lie 20 ulps off. That is half a power of the distance squared,
+/// so twice as many of its ulps, and twice again where a float's ulp halves across its binade.
+const EDGES: [[i32; 2]; 4] = {
+    const ZOOM: i32 = gpu::FUSED_ULPS as i32;
+    const LOD: i32 = 4 * 20;
+    [[-ZOOM, 0], [ZOOM, 0], [0, -LOD], [0, LOD]]
+};
+
+/// The records `cnt_rust` sizes from `recs` about each of `EDGES`, which the pass by hand may
+/// take a record's word from where it differs from the Rust's.
+fn cnt_edges(w: &World, sizing: &Sizing, recs: &[u32], workgroups: u32) -> [Vec<u32>; 4] {
+    EDGES.map(|ulps| {
+        let mut r = recs.to_vec();
+        cnt_rust(w, sizing, &mut r, workgroups, ulps);
+        r
+    })
+}
+
 /// The test's reference for `decor_cnt_cs`, which writes into each record the pass reads the
 /// region `generation`'s rules size it into, for what the frame `sizing` asks over the clip
 /// levels of `w`. A record is asked at the zoom the rays ask at its distance (`dist2`,
 /// `Detail::at`); one the ground generated is asked at that zoom held to what the clip levels
 /// hold where it stands (`ray_zoom`). It is drawn only where that zoom draws its record's zoom
 /// (`drawn_at`), as a model, an impostor or culled by the angle its group spans
-/// (`drawing::lod`), and the decor left out is drawn as nothing.
-fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32) {
+/// (`drawing::lod`), and the decor left out is drawn as nothing. The distance squared the zoom
+/// is asked at and the one the level of detail is taken at are each `ulps` floats along from the
+/// Rust's (`EDGES`).
+fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32, ulps: [i32; 2]) {
     let detail = Detail {
         range: sizing.range,
         spacing: Spacing::NONE,
@@ -1963,9 +1989,10 @@ fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32) {
         }
         let at = [recs[i + 1] as i32, recs[i + 2] as i32, recs[i + 3] as i32];
         let d2 = generation::dist2(sizing.origin, at);
+        let along = |n: i32| f32::from_bits((d2.to_bits() as i32 + n) as u32);
         // Placed decor's records lie past the entries'.
         let placed = i >= generation::rec_at(generation::ENTRY_REC_CAP) as usize;
-        let ask = detail.at(d2);
+        let ask = detail.at(along(ulps[0]));
         let zoom = if placed {
             ask
         } else {
@@ -1974,7 +2001,8 @@ fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32) {
         let (decor, variant, _, cell_zoom) = generation::rec_of(word);
         let group = DECORS[decor as usize].first_group() + variant;
         let hidden = hide[3] != 0 && hide[..3] == at.map(|v| v as u32);
-        let across = angle(drawing::EXTENTS + group) / d2.sqrt().max(drawing::NEAREST_U);
+        let across =
+            angle(drawing::EXTENTS + group) / along(ulps[1]).sqrt().max(drawing::NEAREST_U);
         let lod = drawing::lod(
             across,
             angle(drawing::MODEL_ANGLE),
@@ -1992,7 +2020,9 @@ fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32) {
 
 /// `decor_cnt_cs` by hand, however its threads fall, run `RUNS_OF_CNT` times a case. Each
 /// record must be the Rust's word for word, with the region it sizes the record into
-/// (`cnt_rust`), and each region's count must be the count of its records.
+/// (`cnt_rust`), and each region's count must be the count of its records. A record by an edge,
+/// which the Rust sizes otherwise a little along its distance squared (`EDGES`), may take
+/// either region, and the test counts those.
 #[test]
 fn hand_cnt_counts_its_regions() {
     const RUNS_OF_CNT: u32 = 6;
@@ -2000,7 +2030,7 @@ fn hand_cnt_counts_its_regions() {
         return;
     };
     let hand = hand_pipeline(&device, COMPUTE_GENERATION_CNT);
-    let mut drawn_total = 0u64;
+    let (mut drawn_total, mut edge_total) = (0u64, 0u64);
     for (name, at, placed) in [
         ("east of the seam", real_world::EYE, 0),
         ("east of the seam, placed", real_world::EYE, 80),
@@ -2027,7 +2057,8 @@ fn hand_cnt_counts_its_regions() {
         coarse.range = [16, 22];
         for sizing in [base, near, coarse] {
             let mut want = recs.clone();
-            cnt_rust(&world, &sizing, &mut want, workgroups);
+            cnt_rust(&world, &sizing, &mut want, workgroups, [0, 0]);
+            let edge_wants = cnt_edges(&world, &sizing, &recs, workgroups);
             let (drawing, eye_buf) = (
                 buf(&device, &sizing.drawing),
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2051,7 +2082,10 @@ fn hand_cnt_counts_its_regions() {
                 dispatch(&device, &queue, &hand, &at, [workgroups, 1, 1]);
                 let got = read(&device, &queue, &r_buf, sizing.name);
                 let got_regions = read(&device, &queue, &regions, sizing.name);
-                let apart: Vec<usize> = (0..want.len()).filter(|&k| got[k] != want[k]).collect();
+                let (by_edge, apart): (Vec<usize>, Vec<usize>) = (0..want.len())
+                    .filter(|&k| got[k] != want[k])
+                    .partition(|&k| edge_wants.iter().any(|r| got[k] == r[k]));
+                edge_total += by_edge.len() as u64;
                 if let Some(&k) = apart.first() {
                     panic!(
                         "{name}, {}, run {run}: {} words apart, at {k} {:x} against {:x}",
@@ -2063,7 +2097,7 @@ fn hand_cnt_counts_its_regions() {
                 }
                 assert_eq!(
                     got_regions[..drawing::REGION_CNT as usize],
-                    regions_of(&want, &order)[..drawing::REGION_CNT as usize],
+                    regions_of(&got, &order)[..drawing::REGION_CNT as usize],
                     "{name}, {}: counts, run {run}",
                     sizing.name
                 );
@@ -2076,7 +2110,7 @@ fn hand_cnt_counts_its_regions() {
             }
         }
     }
-    eprintln!("cnt: {drawn_total} drawn");
+    eprintln!("cnt: {drawn_total} drawn, {edge_total} records by an edge took the other region");
     assert!(drawn_total > 0);
 }
 
@@ -2477,14 +2511,15 @@ fn list_hdr(frame: &Frame) -> Vec<u32> {
 
 impl Model {
     /// Runs the frame through the Rust's passes, laying a pair's records in `thin_leaves`'s
-    /// order, and returns the records it leaves, each sized for the frame.
+    /// order, and returns the records it leaves, each sized for the frame, and those sized about
+    /// each of `EDGES` (`cnt_edges`).
     fn step(
         &mut self,
         world: World,
         frame: &Frame,
         tally: &mut Tally,
         claims: &mut Vec<[i32; 3]>,
-    ) -> Vec<u32> {
+    ) -> (Vec<u32>, [Vec<u32>; 4]) {
         for &s in &frame.stale {
             self.recs[generation::hdr_at(s) as usize + 2] = 0;
         }
@@ -2579,19 +2614,28 @@ impl Model {
                 }
             }
         }
-        cnt_rust(&world, &frame.sizing, &mut self.recs, self.workgroups);
-        self.recs.clone()
+        cnt_rust(
+            &world,
+            &frame.sizing,
+            &mut self.recs,
+            self.workgroups,
+            [0, 0],
+        );
+        let edges = cnt_edges(&world, &frame.sizing, &self.recs, self.workgroups);
+        (self.recs.clone(), edges)
     }
 }
 
 /// Where what a frame left differs from what it must leave. Each pair's records, and placed
-/// decor's, must match the Rust's `want` word for word, with the regions it sized them into.
+/// decor's, must match the Rust's `want` word for word, with the regions it sized them into, or
+/// one of those it sizes about an edge (`edges`, `cnt_edges`).
 /// What the draws read must agree with the records the frame sized: each region's count is its
 /// records', its slots hold their lanes, and the args, the uniforms and the count that
 /// light_mark_draws.wgsl `instance_cnt` reads follow from them.
 fn frame_differs(
     got: &FrameLeft,
     want: &[u32],
+    edges: &[Vec<u32>; 4],
     clipmap: &[[i32; 4]],
     workgroups: u32,
     drawing: &[u32],
@@ -2601,6 +2645,7 @@ fn frame_differs(
     let mut out = Vec::new();
     let pairs = pairs_of(&got.recs);
     let want_pairs = pairs_of(want);
+    let edge_pairs = edges.each_ref().map(|e| pairs_of(e));
     if pairs.len() != want_pairs.len() {
         out.push(format!(
             "pairs {} against {}",
@@ -2627,6 +2672,9 @@ fn frame_differs(
                 g[0] == w[0]
             } else {
                 g == w
+                    || edge_pairs
+                        .iter()
+                        .any(|e| e.get(k).and_then(|(_, l)| l.get(leaf)) == Some(g))
             };
             if !same {
                 out.push(format!("{k:?} {leaf:?}: got {g:x?}, want {w:x?}"));
@@ -2637,7 +2685,8 @@ fn frame_differs(
     let first = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
     for p in 0..want[generation::PLACED_HDR as usize] as usize {
         let at = first + p * r;
-        if got.recs[at..at + r] != want[at..at + r] {
+        let left = &got.recs[at..at + r];
+        if left != &want[at..at + r] && edges.iter().all(|e| left != &e[at..at + r]) {
             out.push(format!(
                 "placed record {p}: got {:x?}, want {:x?}",
                 &got.recs[at..at + r],
@@ -3243,9 +3292,9 @@ fn hand_frames_answer_as_the_rust() {
         let mut step =
             |model: &mut Model, frame: Frame, tally: &mut Tally, claims: &mut Vec<[i32; 3]>| {
                 let w = if frame.placed_decor { world } else { without };
-                let left = model.step(w, &frame, tally, claims);
+                let (left, edges) = model.step(w, &frame, tally, claims);
                 eprintln!("{name}, {}: {} pairs", frame.name, pairs_of(&left).len());
-                wants.push((frame, left));
+                wants.push((frame, left, edges));
             };
         step(&mut model, first.clone(), &mut tally, &mut claims);
         let reach = |p: [i32; 3], r: i32| [p[0] - r, p[1] - r, p[0] + r, p[1] + r];
@@ -3417,7 +3466,7 @@ fn hand_frames_answer_as_the_rust() {
             let chain = chain_on();
             let t1 = std::time::Instant::now();
             let mut apart = 0;
-            for (frame, want) in &wants {
+            for (frame, want, edges) in &wants {
                 let b = WorldBinding {
                     clipmap: &clipmap,
                     ground: &ground,
@@ -3436,6 +3485,7 @@ fn hand_frames_answer_as_the_rust() {
                 let mut d = frame_differs(
                     &got,
                     want,
+                    edges,
                     &built.clipmap,
                     workgroups,
                     &frame.sizing.drawing,

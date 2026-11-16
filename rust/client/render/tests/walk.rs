@@ -71,13 +71,9 @@ fn next_down(x: f32) -> f32 {
     f32::from_bits(x.to_bits() - 1)
 }
 
-/// How many last places a device's distance squared may lie off the Rust's. A device may fuse
-/// a product into the sum (`squared`), which skips one rounding.
-const FUSED_ULPS: u32 = 1;
-
 /// On a split distance squared, `2304 · 4^k`, and on the floats either side of it, the zoom the
 /// walks ask must be `grid::cell_zoom_at`'s. The vectors lie along an axis, a little off an
-/// axis, and across all three axes. A device's distance squared may lie up to `FUSED_ULPS` off
+/// axis, and across all three axes. A device's distance squared may lie up to `gpu::FUSED_ULPS` off
 /// the Rust's, and its zoom must then be the one at its own distance. The test counts each case
 /// that took the other zoom that way.
 #[test]
@@ -148,7 +144,7 @@ fn hand_zoom_on_a_split_distance() {
             continue;
         }
         let off = (got_r2.to_bits() as i64 - want_r2.to_bits() as i64).unsigned_abs();
-        if off <= u64::from(FUSED_ULPS) && got == grid::cell_zoom_at(got_r2) {
+        if off <= u64::from(gpu::FUSED_ULPS) && got == grid::cell_zoom_at(got_r2) {
             fused += u32::from(got != want);
             continue;
         }

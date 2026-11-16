@@ -112,6 +112,9 @@ export interface SurfaceDriver {
   close(handle: u32): void;
 }
 
+/** A pointer's phase in the place's own words, the DOM's pointer events and a
+ * native view's payload; service/core maps them to the core's enum
+ * (input.ts `POINTER_PHASE`), so the platform names nothing of the core. */
 export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
 export type PointerKind = "mouse" | "touch" | "pen";
 

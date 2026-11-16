@@ -1,8 +1,10 @@
 // pxl-render/frame/shader/queue_walk.wgsl
 
 // A run's two walks over the node cache alone (walk.wgsl, cached.wgsl): the first over the
-// run's items, and the second over the rays the first parked. The part for the run's kind
-// names its items and gives their rays, starts and ends (queue.wgsl for the holes). The walks
+// run's items, and the second over the rays the first parked. Each walk is a module of its own:
+// its side (queue_walk.first.wgsl, queue_walk.parked.wgsl) names the items it takes, where each
+// starts and where its asks are counted. The part for the run's kind names its items and gives
+// their rays, starts and ends (queue.wgsl for the holes). The walks
 // are a fixed dispatch (pxl-engine `ray::QUEUE_GROUP_CNT`). Each lane takes the next item when its
 // own ray ends or is parked, walks it `QUEUE_STEP_CNT` steps at a time, and holds its state
 // between them, so a lane whose ray ends early walks another while the long ones go on. A ray
@@ -48,18 +50,18 @@ fn hit_rows(rows: u32) {
 }
 
 /// Lists for the asks the node at which an item's walk `w` was left, which no slot keeps. It is
-/// listed for the asks after the first walk, or after the `parked`, and only where
+/// listed for the asks after this walk (`queue_asks_at`), and only where
 /// the node cache keeps such a node at all (`keeps`). The record holds the node's zoom, its
 /// index, the zooms asked, and what was handed to its parent. That is read from the slot that
 /// keeps the parent at the zooms the ray asked it at, as the walk went through the parent.
 /// Where no slot keeps the parent, the node is asked from the top.
-fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
+fn list_ask(aim: Aim, w: WalkEnd) {
   let r0 = root_of(aim.origin);
   let c = idx_of(w.corner, w.zoom, w.roots, r0);
   if (!keeps(w.zoom, c)) {
     return;
   }
-  let r = atomicAdd(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)], 1u);
+  let r = atomicAdd(&queue[queue_asks_at()], 1u);
   if (r >= QUEUE_RECS_CAP) {
     return;
   }
@@ -83,26 +85,16 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
   atomicStore(&queue[at + QUEUE_REC_INHERITANCE + 2u], inheritance.z);
 }
 
-/// Where item `item`, whose ray is `aim`, starts in the first walk, or goes on from in the
-/// `parked`.
-fn start_of(item: u32, aim: Aim, parked: bool) -> Start {
-  if (parked) {
-    return parked_start(item);
-  }
-  return item_start(item, aim);
-}
-
-/// The lanes of a walk: the first, or the `parked` over what the first parked.
-/// Each lane holds one ray at a time. A ray that finds the pool full ends as a lack where it
-/// stands.
-fn queue_walk(parked: bool) {
+/// The lanes of the walk. Each lane holds one ray at a time. A ray that finds the pool full ends
+/// as a lack where it stands.
+fn queue_walk() {
   loop {
-    let item = next_item(parked);
+    let item = queue_next();
     if (item == NONE) {
       break;
     }
     let aim = item_aim(item);
-    let s = start_of(item, aim, parked);
+    let s = queue_start(item, aim);
     var t = s.t;
     var corner = s.corner;
     var zoom = s.zoom;
@@ -126,7 +118,7 @@ fn queue_walk(parked: bool) {
         }
       } else if (w.ends == ENDS_LEFT) {
         if (park(item, w.t, w.corner, w.zoom, w.roots, w.step)) {
-          list_ask(aim, w, parked);
+          list_ask(aim, w);
         } else {
           finish(item, aim, to_lack(w));
         }
@@ -136,14 +128,4 @@ fn queue_walk(parked: bool) {
       break;
     }
   }
-}
-
-@compute @workgroup_size(QUEUE_LANE_CNT)
-fn queue_cs() {
-  queue_walk(false);
-}
-
-@compute @workgroup_size(QUEUE_LANE_CNT)
-fn queue_parked_cs() {
-  queue_walk(true);
 }
