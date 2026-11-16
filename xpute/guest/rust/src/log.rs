@@ -1,6 +1,6 @@
 // xpute-guest/log.rs
 
-//! The guest's log records, told to its host by the log it serves
+//! The guest's log records, told to its host by the log it implements
 //! (wit/log/log.wit), as cpp/xpute/guest/log.hpp is a C++ guest's: a level, a
 //! context and a message, each record worth telling and neither an error nor
 //! a bug.

@@ -1,6 +1,6 @@
 [package]
 name = "xpute-host"
-description = "xpute's host in Rust: its end of the link, the bindings served there, and what it serves the guest"
+description = "xpute's host in Rust: its end of the link, the bindings mounted there, and what it implements for the guest"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
@@ -15,7 +15,7 @@ path = "src/lib.rs"
 [dependencies]
 xpute-kit.workspace = true
 # The contract's pure types, shared rather than copied: the link machine its
-# runtime makes and gives it, which its bindings serve on, and an answer given
+# runtime makes and gives it, which its bindings mount on, and an answer given
 # later (clock.rs).
 xpute-link.workspace = true
 
@@ -31,3 +31,6 @@ xpute-runtime-native.workspace = true
 [[test]]
 name = "clock"
 path = "src/clock.test.rs"
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
 // @pxl/client/service/sys/fs/file.ts
 
 /**
- * The core's files (xpute wit/fs/file.wit), served from the binding behind
+ * The core's files (xpute wit/fs/file.wit), implemented from the binding behind
  * their paths (binding.ts), one opener mounted at each node atop file.json5's
  * `path` tree. An open answers at once and starts the file's read; what the
  * read comes to, its bytes or its error, waits in the file, and each `size`
@@ -18,7 +18,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Memory, type Serving } from "@xpute/link";
+import { type Callee, ComponentError, type Memory } from "@xpute/link";
 import * as file from "@xpute/host/abi/fs/file.ts";
 import { ERROR_CODE_IO } from "@xpute/host/abi/fs/types.enum.ts";
 
@@ -105,7 +105,7 @@ function open(mem: Memory, p: Path): file.HostFile {
 
 /** Mounts an opener on `link` at each node atop file.json5's `path` tree,
  * over the core's memory `mem`. */
-export function serve_files(link: Serving, mem: Memory): void {
+export function mount_files(link: Callee, mem: Memory): void {
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;
     if (id === undefined) continue;

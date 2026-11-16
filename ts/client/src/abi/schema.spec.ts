@@ -43,6 +43,16 @@ export function of_CameraMode(val: number): CameraMode | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_CameraMode(val: CameraMode): string {
+  switch (val) {
+    case CAMERA_MODE_ORBIT:
+      return "orbit";
+    case CAMERA_MODE_FIRST_PERSON:
+      return "first_person";
+  }
+}
+
 /** What terrain does to the camera.
  *
  *   through — nothing. The eye goes wherever the controls put it, ground
@@ -69,6 +79,18 @@ export function of_OrbitObstacleMode(val: number): OrbitObstacleMode | null {
     val === ORBIT_OBSTACLE_MODE_CLIMB
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_OrbitObstacleMode(val: OrbitObstacleMode): string {
+  switch (val) {
+    case ORBIT_OBSTACLE_MODE_THROUGH:
+      return "through";
+    case ORBIT_OBSTACLE_MODE_STOP:
+      return "stop";
+    case ORBIT_OBSTACLE_MODE_CLIMB:
+      return "climb";
+  }
 }
 
 /** Where the ambient occlusion comes from. Either is the sky's visibility
@@ -102,6 +124,18 @@ export function of_AoMode(val: number): AoMode | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_AoMode(val: AoMode): string {
+  switch (val) {
+    case AO_MODE_OFF:
+      return "off";
+    case AO_MODE_CORNER:
+      return "corner";
+    case AO_MODE_SCREEN:
+      return "screen";
+  }
+}
+
 /** How many device pixels the world is drawn at to a CSS pixel, and the rate
  * frames go at.
  *
@@ -125,6 +159,18 @@ export function of_ResMode(val: number): ResMode | null {
   return val === RES_MODE_AUTO || val === RES_MODE_FIXED || val === RES_MODE_LOW
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_ResMode(val: ResMode): string {
+  switch (val) {
+    case RES_MODE_AUTO:
+      return "auto";
+    case RES_MODE_FIXED:
+      return "fixed";
+    case RES_MODE_LOW:
+      return "low";
+  }
 }
 
 /** The hour the sky is drawn at, at the place the sky is seen from: the
@@ -163,6 +209,24 @@ export function of_SkyTime(val: number): SkyTime | null {
     val === SKY_TIME_DUSK
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_SkyTime(val: SkyTime): string {
+  switch (val) {
+    case SKY_TIME_REAL:
+      return "real";
+    case SKY_TIME_DAWN:
+      return "dawn";
+    case SKY_TIME_MORNING:
+      return "morning";
+    case SKY_TIME_NOON:
+      return "noon";
+    case SKY_TIME_AFTERNOON:
+      return "afternoon";
+    case SKY_TIME_DUSK:
+      return "dusk";
+  }
 }
 
 /** Every setting, by its number in schema.json5's SETTING. */
@@ -285,6 +349,56 @@ export function of_SettingKey(val: number): SettingKey | null {
     val === SETTING_KEY_SKY_TIME
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_SettingKey(val: SettingKey): string {
+  switch (val) {
+    case SETTING_KEY_TEXTURE:
+      return "texture";
+    case SETTING_KEY_DECOR:
+      return "decor";
+    case SETTING_KEY_CLOUD:
+      return "cloud";
+    case SETTING_KEY_PLACE:
+      return "place";
+    case SETTING_KEY_TILT_LOCK:
+      return "tilt_lock";
+    case SETTING_KEY_CAMERA_MODE:
+      return "camera_mode";
+    case SETTING_KEY_SURFACE_FOLLOW:
+      return "surface_follow";
+    case SETTING_KEY_ORBIT_OBSTACLE:
+      return "orbit_obstacle";
+    case SETTING_KEY_EDGE_SHADE:
+      return "edge_shade";
+    case SETTING_KEY_RIM_LIGHT:
+      return "rim_light";
+    case SETTING_KEY_AO:
+      return "ao";
+    case SETTING_KEY_SHADOW:
+      return "shadow";
+    case SETTING_KEY_RES:
+      return "res";
+    case SETTING_KEY_VIEW:
+      return "view";
+    case SETTING_KEY_PERF:
+      return "perf";
+    case SETTING_KEY_WORLD_GIZMO:
+      return "world_gizmo";
+    case SETTING_KEY_CAMERA_GIZMO:
+      return "camera_gizmo";
+    case SETTING_KEY_PERSON:
+      return "person";
+    case SETTING_KEY_PET:
+      return "pet";
+    case SETTING_KEY_RAY_STEP:
+      return "ray_step";
+    case SETTING_KEY_RAY_CNT:
+      return "ray_cnt";
+    case SETTING_KEY_SKY_TIME:
+      return "sky_time";
+  }
 }
 
 export const SETTING = {

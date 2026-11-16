@@ -93,7 +93,7 @@ fn call_trapped(err: &str) {
 }
 
 /// Tells the app the guest stopped, with the report of the broken
-/// invariant: the guest's, which the host that serves the stop hands it
+/// invariant: the guest's, which the host that implements the stop hands it
 /// (native.rs `stopped`), or the host's own failure
 /// (native.rs `hook`), as @xpute/runtime-web worker.ts `tell_stop` tells a
 /// page. It is kept before it is told (`stop`), so a UI that reads none

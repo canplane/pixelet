@@ -55,3 +55,12 @@ impl fmt::Display for XputeError {
 }
 
 impl std::error::Error for XputeError {}
+
+/// What a person reads of the errno `errnum`: its name and its text, or its
+/// number where no errno is it, as @xpute/kit `strerror` writes it.
+pub fn strerror(errnum: i32) -> String {
+    Errno::of(errnum).map_or_else(
+        || format!("errno {errnum}"),
+        |e| format!("{}: {}", e.name(), e.text()),
+    )
+}

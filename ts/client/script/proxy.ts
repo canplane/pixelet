@@ -4,8 +4,7 @@
  * What a dev server and the page's preview (script/web.ts `serve`) answer
  * besides the bundle: the routes the page asks of its own origin, forwarded
  * to wherever the tiles come from, which the build's define names too
- * (`tile_source`, babel.config.ts). A page's console is answered by
- * @pxl/build/console.ts instead. Expo's transform loads this file for
+ * (`tile_source`, babel.config.ts). Expo's transform loads this file for
  * metro.config.ts, and Node loads it too, so it must not read `import.meta`.
  */
 

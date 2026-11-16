@@ -1,16 +1,17 @@
 // @pxl/gpu/host/src/web.ts
 
 /**
- * A page's GPU, served to a guest in the page's worker (spec/gpu/wit/gpu.wit): the
- * host (host.ts) runs the records the guest lends to `gpu.run` on the device
- * the guest's `device` holds, and draws on the canvases given beside the link
- * under their surface's handle (spec/gpu/wit/surface.wit). The device is asked for
- * when the guest asks it ready, and a refusal is answered, not retried: the
- * guest asks again when it sees fit. A WebAssembly module reaches
- * WebGPU no other way. What the page has of a GPU this server tells the page
- * itself as that changes, posted from the worker (`GpuReport`), as a device's
- * GPU host tells its app through its own module (pxl-gpu-host
- * native.rs `state_on`); the program's assembly hears it on the page.
+ * A page's GPU, implemented for a guest in the page's worker
+ * (spec/gpu/wit/gpu.wit): the host (host.ts) runs the records the guest lends
+ * to `gpu.run` on the device the guest's `device` holds, and draws on the
+ * canvases given beside the link under their surface's handle
+ * (spec/gpu/wit/surface.wit). The device is asked for when the guest asks it
+ * ready, and a refusal is answered, not retried: the guest asks again when it
+ * sees fit. A WebAssembly module reaches WebGPU no other way. What the page has
+ * of a GPU this host tells the page itself as that changes, posted from the
+ * worker (`GpuReport`), as a device's GPU host tells its app through its own
+ * module (pxl-gpu-host native.rs `state_on`); the program's assembly hears it
+ * on the page.
  */
 
 import type { u32, u64 } from "@xpute/kit/abi/word.ts";
@@ -19,8 +20,8 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
 import { log } from "@xpute/host";
 import { LEVEL_WARN } from "@xpute/host/abi/log/log.enum.ts";
-import * as gpu from "../../link/src/abi/gpu.ts";
-import { ERROR_CODE_NO_DEVICE } from "../../link/src/abi/gpu.enum.ts";
+import * as gpu from "./abi/gpu.ts";
+import { ERROR_CODE_NO_DEVICE } from "./abi/gpu.enum.ts";
 import {
   type GpuAsk,
   type GpuConfig,
@@ -54,9 +55,9 @@ export class WebGpu {
     this.cfg = cfg;
   }
 
-  /** Mounts `gpu` on the side, whose `get_device` serves the device under
+  /** Mounts `gpu` on the side, whose `get_device` adds the device under
    * a handle the side issues. */
-  serve(): void {
+  mount(): void {
     gpu.mount(this.side, {
       run: async (recs) => {
         this.host?.run(

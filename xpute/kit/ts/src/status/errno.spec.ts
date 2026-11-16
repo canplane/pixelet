@@ -62,248 +62,41 @@ export function of_Kind(val: number): Kind | null {
     : null;
 }
 
-export const ERRNO = {
-  OK: {
-    number: 0 as number,
-    text: "Success",
-  },
-  EPERM: {
-    number: -1 as number,
-    text: "Operation not permitted",
-  },
-  ENOENT: {
-    number: -2 as number,
-    text: "No such file or directory / entry not found",
-  },
-  ESRCH: {
-    number: -3 as number,
-    text: "No such process",
-  },
-  EINTR: {
-    number: -4 as number,
-    text: "Interrupted system call",
-  },
-  EIO: {
-    number: -5 as number,
-    text: "I/O error",
-  },
-  ENXIO: {
-    number: -6 as number,
-    text: "No such device or address",
-  },
-  E2BIG: {
-    number: -7 as number,
-    text: "Argument list too long / object too large for fixed local cap",
-  },
-  ENOEXEC: {
-    number: -8 as number,
-    text: "Exec format error",
-  },
-  EBADF: {
-    number: -9 as number,
-    text: "Bad file descriptor / bad handle",
-  },
-  ECHILD: {
-    number: -10 as number,
-    text: "No child processes",
-  },
-  EAGAIN: {
-    number: -11 as number,
-    text: "Try again / Resource temporarily unavailable",
-  },
-  ENOMEM: {
-    number: -12 as number,
-    text: "Out of memory",
-  },
-  EACCES: {
-    number: -13 as number,
-    text: "Permission denied",
-  },
-  EFAULT: {
-    number: -14 as number,
-    text: "Bad address",
-  },
-  EBUSY: {
-    number: -16 as number,
-    text: "Device or resource busy",
-  },
-  EEXIST: {
-    number: -17 as number,
-    text: "File exists / duplicate bind",
-  },
-  EXDEV: {
-    number: -18 as number,
-    text: "Cross-device link",
-  },
-  ENODEV: {
-    number: -19 as number,
-    text: "No such device",
-  },
-  ENOTDIR: {
-    number: -20 as number,
-    text: "Not a directory",
-  },
-  EISDIR: {
-    number: -21 as number,
-    text: "Is a directory",
-  },
-  EINVAL: {
-    number: -22 as number,
-    text: "Invalid argument",
-  },
-  ENFILE: {
-    number: -23 as number,
-    text: "File table overflow (system-wide)",
-  },
-  EMFILE: {
-    number: -24 as number,
-    text: "Too many open files (process)",
-  },
-  ENOTTY: {
-    number: -25 as number,
-    text: "Not a tty",
-  },
-  EFBIG: {
-    number: -27 as number,
-    text: "File too large / payload too large",
-  },
-  ENOSPC: {
-    number: -28 as number,
-    text: "No space left on device / local mailbox full",
-  },
-  ESPIPE: {
-    number: -29 as number,
-    text: "Illegal seek",
-  },
-  EROFS: {
-    number: -30 as number,
-    text: "Read-only file system",
-  },
-  EMLINK: {
-    number: -31 as number,
-    text: "Too many links",
-  },
-  EPIPE: {
-    number: -32 as number,
-    text: "Broken pipe",
-  },
-  EDOM: {
-    number: -33 as number,
-    text: "Math argument out of domain",
-  },
-  ERANGE: {
-    number: -34 as number,
-    text: "Math result not representable",
-  },
-  ENOSYS: {
-    number: -38 as number,
-    text: "Function not implemented",
-  },
-  EPROTO: {
-    number: -71 as number,
-    text: "Protocol error",
-  },
-  EBADMSG: {
-    number: -74 as number,
-    text: "Bad message (protocol/frame/payload invalid)",
-  },
-  EOVERFLOW: {
-    number: -75 as number,
-    text: "Value too large for target type / overflow",
-  },
-  EMSGSIZE: {
-    number: -90 as number,
-    text: "Message too long / packet too large",
-  },
-  ENOTSUP: {
-    number: -95 as number,
-    text: "Operation not supported",
-  },
-  EILSEQ: {
-    number: -84 as number,
-    text: "Illegal byte sequence (decode/encoding failure)",
-  },
-  EADDRINUSE: {
-    number: -98 as number,
-    text: "Address already in use",
-  },
-  EADDRNOTAVAIL: {
-    number: -99 as number,
-    text: "Cannot assign requested address",
-  },
-  ENETDOWN: {
-    number: -100 as number,
-    text: "Network is down",
-  },
-  ENETUNREACH: {
-    number: -101 as number,
-    text: "Network is unreachable",
-  },
-  ENETRESET: {
-    number: -102 as number,
-    text: "Network dropped connection because of reset",
-  },
-  ECONNABORTED: {
-    number: -103 as number,
-    text: "Software caused connection abort",
-  },
-  ECONNRESET: {
-    number: -104 as number,
-    text: "Connection reset by peer",
-  },
-  ENOBUFS: {
-    number: -105 as number,
-    text: "No buffer space available",
-  },
-  EISCONN: {
-    number: -106 as number,
-    text: "Transport endpoint is already connected",
-  },
-  ENOTCONN: {
-    number: -107 as number,
-    text: "Transport endpoint is not connected",
-  },
-  ESHUTDOWN: {
-    number: -108 as number,
-    text: "Cannot send after transport endpoint shutdown",
-  },
-  ETOOMANYREFS: {
-    number: -109 as number,
-    text: "Too many references",
-  },
-  ETIMEDOUT: {
-    number: -110 as number,
-    text: "Connection timed out",
-  },
-  ECONNREFUSED: {
-    number: -111 as number,
-    text: "Connection refused",
-  },
-  EHOSTDOWN: {
-    number: -112 as number,
-    text: "Host is down",
-  },
-  EHOSTUNREACH: {
-    number: -113 as number,
-    text: "No route to host",
-  },
-  EALREADY: {
-    number: -114 as number,
-    text: "Operation already in progress",
-  },
-  EINPROGRESS: {
-    number: -115 as number,
-    text: "Operation now in progress",
-  },
-  ECANCELED: {
-    number: -125 as number,
-    text: "Operation canceled",
-  },
-  ENOTRECOVERABLE: {
-    number: -131 as number,
-    text: "State not recoverable: an invariant the code stands on does not hold",
-  },
-} as const;
+/** The member's name, as its source spells it. */
+export function name_Kind(val: Kind): string {
+  switch (val) {
+    case KIND_OK:
+      return "ok";
+    case KIND_CANCELLED:
+      return "cancelled";
+    case KIND_UNKNOWN:
+      return "unknown";
+    case KIND_INVALID_ARGUMENT:
+      return "invalid_argument";
+    case KIND_DEADLINE_EXCEEDED:
+      return "deadline_exceeded";
+    case KIND_NOT_FOUND:
+      return "not_found";
+    case KIND_ALREADY_EXISTS:
+      return "already_exists";
+    case KIND_PERMISSION_DENIED:
+      return "permission_denied";
+    case KIND_RESOURCE_EXHAUSTED:
+      return "resource_exhausted";
+    case KIND_FAILED_PRECONDITION:
+      return "failed_precondition";
+    case KIND_OUT_OF_RANGE:
+      return "out_of_range";
+    case KIND_UNIMPLEMENTED:
+      return "unimplemented";
+    case KIND_INTERNAL:
+      return "internal";
+    case KIND_UNAVAILABLE:
+      return "unavailable";
+    case KIND_DATA_LOSS:
+      return "data_loss";
+  }
+}
 
 export type Errno =
   | typeof ERRNO_OK
@@ -493,6 +286,132 @@ export function of_Errno(val: number): Errno | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_Errno(val: Errno): string {
+  switch (val) {
+    case ERRNO_OK:
+      return "OK";
+    case ERRNO_EPERM:
+      return "EPERM";
+    case ERRNO_ENOENT:
+      return "ENOENT";
+    case ERRNO_ESRCH:
+      return "ESRCH";
+    case ERRNO_EINTR:
+      return "EINTR";
+    case ERRNO_EIO:
+      return "EIO";
+    case ERRNO_ENXIO:
+      return "ENXIO";
+    case ERRNO_E2BIG:
+      return "E2BIG";
+    case ERRNO_ENOEXEC:
+      return "ENOEXEC";
+    case ERRNO_EBADF:
+      return "EBADF";
+    case ERRNO_ECHILD:
+      return "ECHILD";
+    case ERRNO_EAGAIN:
+      return "EAGAIN";
+    case ERRNO_ENOMEM:
+      return "ENOMEM";
+    case ERRNO_EACCES:
+      return "EACCES";
+    case ERRNO_EFAULT:
+      return "EFAULT";
+    case ERRNO_EBUSY:
+      return "EBUSY";
+    case ERRNO_EEXIST:
+      return "EEXIST";
+    case ERRNO_EXDEV:
+      return "EXDEV";
+    case ERRNO_ENODEV:
+      return "ENODEV";
+    case ERRNO_ENOTDIR:
+      return "ENOTDIR";
+    case ERRNO_EISDIR:
+      return "EISDIR";
+    case ERRNO_EINVAL:
+      return "EINVAL";
+    case ERRNO_ENFILE:
+      return "ENFILE";
+    case ERRNO_EMFILE:
+      return "EMFILE";
+    case ERRNO_ENOTTY:
+      return "ENOTTY";
+    case ERRNO_EFBIG:
+      return "EFBIG";
+    case ERRNO_ENOSPC:
+      return "ENOSPC";
+    case ERRNO_ESPIPE:
+      return "ESPIPE";
+    case ERRNO_EROFS:
+      return "EROFS";
+    case ERRNO_EMLINK:
+      return "EMLINK";
+    case ERRNO_EPIPE:
+      return "EPIPE";
+    case ERRNO_EDOM:
+      return "EDOM";
+    case ERRNO_ERANGE:
+      return "ERANGE";
+    case ERRNO_ENOSYS:
+      return "ENOSYS";
+    case ERRNO_EPROTO:
+      return "EPROTO";
+    case ERRNO_EBADMSG:
+      return "EBADMSG";
+    case ERRNO_EOVERFLOW:
+      return "EOVERFLOW";
+    case ERRNO_EMSGSIZE:
+      return "EMSGSIZE";
+    case ERRNO_ENOTSUP:
+      return "ENOTSUP";
+    case ERRNO_EILSEQ:
+      return "EILSEQ";
+    case ERRNO_EADDRINUSE:
+      return "EADDRINUSE";
+    case ERRNO_EADDRNOTAVAIL:
+      return "EADDRNOTAVAIL";
+    case ERRNO_ENETDOWN:
+      return "ENETDOWN";
+    case ERRNO_ENETUNREACH:
+      return "ENETUNREACH";
+    case ERRNO_ENETRESET:
+      return "ENETRESET";
+    case ERRNO_ECONNABORTED:
+      return "ECONNABORTED";
+    case ERRNO_ECONNRESET:
+      return "ECONNRESET";
+    case ERRNO_ENOBUFS:
+      return "ENOBUFS";
+    case ERRNO_EISCONN:
+      return "EISCONN";
+    case ERRNO_ENOTCONN:
+      return "ENOTCONN";
+    case ERRNO_ESHUTDOWN:
+      return "ESHUTDOWN";
+    case ERRNO_ETOOMANYREFS:
+      return "ETOOMANYREFS";
+    case ERRNO_ETIMEDOUT:
+      return "ETIMEDOUT";
+    case ERRNO_ECONNREFUSED:
+      return "ECONNREFUSED";
+    case ERRNO_EHOSTDOWN:
+      return "EHOSTDOWN";
+    case ERRNO_EHOSTUNREACH:
+      return "EHOSTUNREACH";
+    case ERRNO_EALREADY:
+      return "EALREADY";
+    case ERRNO_EINPROGRESS:
+      return "EINPROGRESS";
+    case ERRNO_ECANCELED:
+      return "ECANCELED";
+    case ERRNO_ENOTRECOVERABLE:
+      return "ENOTRECOVERABLE";
+  }
+}
+
 /** The member's `kind`. */
 export function kind_Errno(val: Errno): Kind {
   switch (val) {
@@ -616,5 +535,131 @@ export function kind_Errno(val: Errno): Kind {
       return KIND_CANCELLED;
     case ERRNO_ENOTRECOVERABLE:
       return KIND_INTERNAL;
+  }
+}
+
+/** The member's `text`. */
+export function text_Errno(val: Errno): string {
+  switch (val) {
+    case ERRNO_OK:
+      return "Success";
+    case ERRNO_EPERM:
+      return "Operation not permitted";
+    case ERRNO_ENOENT:
+      return "No such file or directory / entry not found";
+    case ERRNO_ESRCH:
+      return "No such process";
+    case ERRNO_EINTR:
+      return "Interrupted system call";
+    case ERRNO_EIO:
+      return "I/O error";
+    case ERRNO_ENXIO:
+      return "No such device or address";
+    case ERRNO_E2BIG:
+      return "Argument list too long / object too large for fixed local cap";
+    case ERRNO_ENOEXEC:
+      return "Exec format error";
+    case ERRNO_EBADF:
+      return "Bad file descriptor / bad handle";
+    case ERRNO_ECHILD:
+      return "No child processes";
+    case ERRNO_EAGAIN:
+      return "Try again / Resource temporarily unavailable";
+    case ERRNO_ENOMEM:
+      return "Out of memory";
+    case ERRNO_EACCES:
+      return "Permission denied";
+    case ERRNO_EFAULT:
+      return "Bad address";
+    case ERRNO_EBUSY:
+      return "Device or resource busy";
+    case ERRNO_EEXIST:
+      return "File exists / duplicate bind";
+    case ERRNO_EXDEV:
+      return "Cross-device link";
+    case ERRNO_ENODEV:
+      return "No such device";
+    case ERRNO_ENOTDIR:
+      return "Not a directory";
+    case ERRNO_EISDIR:
+      return "Is a directory";
+    case ERRNO_EINVAL:
+      return "Invalid argument";
+    case ERRNO_ENFILE:
+      return "File table overflow (system-wide)";
+    case ERRNO_EMFILE:
+      return "Too many open files (process)";
+    case ERRNO_ENOTTY:
+      return "Not a tty";
+    case ERRNO_EFBIG:
+      return "File too large / payload too large";
+    case ERRNO_ENOSPC:
+      return "No space left on device / local mailbox full";
+    case ERRNO_ESPIPE:
+      return "Illegal seek";
+    case ERRNO_EROFS:
+      return "Read-only file system";
+    case ERRNO_EMLINK:
+      return "Too many links";
+    case ERRNO_EPIPE:
+      return "Broken pipe";
+    case ERRNO_EDOM:
+      return "Math argument out of domain";
+    case ERRNO_ERANGE:
+      return "Math result not representable";
+    case ERRNO_ENOSYS:
+      return "Function not implemented";
+    case ERRNO_EPROTO:
+      return "Protocol error";
+    case ERRNO_EBADMSG:
+      return "Bad message (protocol/frame/payload invalid)";
+    case ERRNO_EOVERFLOW:
+      return "Value too large for target type / overflow";
+    case ERRNO_EMSGSIZE:
+      return "Message too long / packet too large";
+    case ERRNO_ENOTSUP:
+      return "Operation not supported";
+    case ERRNO_EILSEQ:
+      return "Illegal byte sequence (decode/encoding failure)";
+    case ERRNO_EADDRINUSE:
+      return "Address already in use";
+    case ERRNO_EADDRNOTAVAIL:
+      return "Cannot assign requested address";
+    case ERRNO_ENETDOWN:
+      return "Network is down";
+    case ERRNO_ENETUNREACH:
+      return "Network is unreachable";
+    case ERRNO_ENETRESET:
+      return "Network dropped connection because of reset";
+    case ERRNO_ECONNABORTED:
+      return "Software caused connection abort";
+    case ERRNO_ECONNRESET:
+      return "Connection reset by peer";
+    case ERRNO_ENOBUFS:
+      return "No buffer space available";
+    case ERRNO_EISCONN:
+      return "Transport endpoint is already connected";
+    case ERRNO_ENOTCONN:
+      return "Transport endpoint is not connected";
+    case ERRNO_ESHUTDOWN:
+      return "Cannot send after transport endpoint shutdown";
+    case ERRNO_ETOOMANYREFS:
+      return "Too many references";
+    case ERRNO_ETIMEDOUT:
+      return "Connection timed out";
+    case ERRNO_ECONNREFUSED:
+      return "Connection refused";
+    case ERRNO_EHOSTDOWN:
+      return "Host is down";
+    case ERRNO_EHOSTUNREACH:
+      return "No route to host";
+    case ERRNO_EALREADY:
+      return "Operation already in progress";
+    case ERRNO_EINPROGRESS:
+      return "Operation now in progress";
+    case ERRNO_ECANCELED:
+      return "Operation canceled";
+    case ERRNO_ENOTRECOVERABLE:
+      return "State not recoverable: an invariant the code stands on does not hold";
   }
 }

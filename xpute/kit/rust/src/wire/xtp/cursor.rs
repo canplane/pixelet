@@ -4,7 +4,10 @@
 //! checks its header; a node's bytes are read and checked only when a `get`
 //! reaches them.
 
-#![allow(non_snake_case)]
+#![expect(
+    non_snake_case,
+    reason = "the helpers are spelled as in the TypeScript kit, so one name reads the same on both sides"
+)]
 
 use crate::status::errno::Errno;
 use crate::status::error::XputeError;
@@ -362,7 +365,7 @@ impl<'a> NodeCursor<'a> {
         let len = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
 
-        let elem_sz = core::mem::size_of::<T>() as u32;
+        let elem_sz = size_of::<T>() as u32;
         let payload_sz = len.wrapping_mul(elem_sz);
 
         if len != 0 && payload_sz / elem_sz != len {
@@ -380,7 +383,7 @@ impl<'a> NodeCursor<'a> {
         // SAFETY: the payload is WORD_SZ-aligned, enough for every element
         // type (8 bytes at most), and the bounds above keep it in the packet.
         Ok(unsafe {
-            core::slice::from_raw_parts(self.pkt[at..].as_ptr() as *const T, len as usize)
+            core::slice::from_raw_parts(self.pkt[at..].as_ptr().cast::<T>(), len as usize)
         })
     }
 
@@ -657,13 +660,13 @@ impl<'a> BranchCursor<'a> {
 
 pub(super) fn bytes_of<T: Copy>(a: &[T]) -> &[u8] {
     // SAFETY: the elements are the packet's own bytes, read back as bytes.
-    unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) }
+    unsafe { core::slice::from_raw_parts(a.as_ptr().cast::<u8>(), size_of_val(a)) }
 }
 
 pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
-    let n = a.bytes.len() / core::mem::size_of::<T>();
+    let n = a.bytes.len() / size_of::<T>();
     // SAFETY: a leaf's bytes are its elements, as the packet laid them out.
-    unsafe { core::slice::from_raw_parts(a.bytes.as_ptr() as *const T, n) }
+    unsafe { core::slice::from_raw_parts(a.bytes.as_ptr().cast::<T>(), n) }
 }
 
 #[cfg(test)]

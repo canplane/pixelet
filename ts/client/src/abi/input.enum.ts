@@ -27,6 +27,22 @@ export function of_PointerPhase(val: number): PointerPhase | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_PointerPhase(val: PointerPhase): string {
+  switch (val) {
+    case POINTER_PHASE_DOWN:
+      return "Down";
+    case POINTER_PHASE_MOVE:
+      return "Move";
+    case POINTER_PHASE_UP:
+      return "Up";
+    case POINTER_PHASE_OUT:
+      return "Out";
+    case POINTER_PHASE_CANCEL:
+      return "Cancel";
+  }
+}
+
 export type Drag = typeof DRAG_NONE | typeof DRAG_PAN | typeof DRAG_ROTATE;
 export const DRAG_NONE = 0;
 export const DRAG_PAN = 1;
@@ -37,4 +53,16 @@ export function of_Drag(val: number): Drag | null {
   return val === DRAG_NONE || val === DRAG_PAN || val === DRAG_ROTATE
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_Drag(val: Drag): string {
+  switch (val) {
+    case DRAG_NONE:
+      return "None";
+    case DRAG_PAN:
+      return "Pan";
+    case DRAG_ROTATE:
+      return "Rotate";
+  }
 }

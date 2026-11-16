@@ -34,7 +34,7 @@
       "entry": ["src/runtime/worker.ts", "plugin/*.ts", "script/*.ts"],
       "ignoreFiles": ["src/conform.ts"],
       "ignoreUnresolved": [
-        "(?:^|/)(?:page|boot|db|device|locale|log|online|origin|safe-area|sensor|share|storage|viewport|visibility|surface|above-keyboard|backdrop|motion|pan|typeface)\\.tsx?$",
+        "(?:^|/)(?:page|boot|db|device|drive|locale|online|origin|safe-area|sensor|share|storage|viewport|visibility|surface|above-keyboard|backdrop|motion|pan|typeface)\\.tsx?$",
       ],
       "ignoreDependencies": ["expo-updates", "babel-preset-expo"],
       "includeSubpathExports": true,

@@ -2,7 +2,7 @@
 
 //! What the app's lifecycle (xpute wit/life/life.wit) does in the core: being
 //! hidden, the last moment a save is sure to happen, and being shown again.
-//! link/export.rs serves the interface's methods, a UI's attach among them.
+//! link/export.rs implements the interface's methods, a UI's attach among them.
 
 use core::future::poll_fn;
 use core::task::{Poll, Waker};

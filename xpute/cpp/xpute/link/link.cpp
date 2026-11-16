@@ -99,7 +99,7 @@ std::int32_t Side::recv(std::uint64_t at) {
         }
         return 0;
     }
-    Reply reply = pkt ? serve(f.handle, f.method, f.tag, *pkt) : Reply{status(pkt.error().errnum)};
+    Reply reply = pkt ? run(f.handle, f.method, f.tag, *pkt) : Reply{status(pkt.error().errnum)};
     // The args are read: the answer goes in the frame they came in.
     Frame words = f;
     words.res = true;
@@ -120,7 +120,7 @@ void Side::run_due() {
     }
 }
 
-Reply Side::serve(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args) {
+Reply Side::run(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args) {
     if (h == ROOT && m == OPEN) {
         Result<Handle> o = opened(args);
         if (!o) return Reply{status(o.error().errnum)};

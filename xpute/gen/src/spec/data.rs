@@ -769,10 +769,12 @@ fn rs_leaf(
 
 /// A field of an enum table's records whose `$type` names an enum the spec
 /// declares maps each member to one of that enum's members: every member is a
-/// record that names one, of that enum. The field leaves the records, and the table
-/// holds it under `$map`, the field with its enum and the members it names in
-/// the table's order, which each language writes as a function of the member
-/// (`rs_map`, `ts_map`, `cpp_map`).
+/// record that names one, of that enum. So does a field that every record
+/// gives as text, each member to its text (`$type` `str`). The field leaves
+/// the records, and the table holds it under `$map`, the field with its enum,
+/// or `str`, and what each member maps to in the table's order, which each
+/// language writes as a function of the member (`rs_map`, `ts_map`,
+/// `cpp_map`).
 fn mapped(spec: Node) -> Result<Node, String> {
     let Node::Obj(entries) = spec else {
         return Ok(spec);
@@ -833,6 +835,25 @@ fn map_table(name: &str, n: Node, enums: &[(String, Node)]) -> Result<Node, Stri
             ]),
         ));
     }
+    let text = |v: &Node, f: &str| {
+        v.get(f)
+            .filter(|x| x.is_wrapper() && x.str_at("$type").is_none())
+            .and_then(|x| x.val().str())
+            .map(str::to_string)
+    };
+    let first = n.named().next().map(|(_, v)| v);
+    for (f, _) in first.into_iter().flat_map(Node::named) {
+        let texts: Option<Vec<Node>> = n.named().map(|(_, v)| text(v, f).map(Node::Str)).collect();
+        if let Some(texts) = texts {
+            map.push((
+                f.to_string(),
+                Node::Obj(vec![
+                    ("$type".into(), Node::Str("str".into())),
+                    ("$value".into(), Node::Arr(texts)),
+                ]),
+            ));
+        }
+    }
     if map.is_empty() {
         return Ok(n);
     }
@@ -882,10 +903,29 @@ fn rs_map(
     let mut out = vec![format!("{indent}impl {e} {{")];
     for (i, (f, m)) in map.named().enumerate() {
         let ty = type_of(m, "");
-        let (to, casing) = enum_path(ty, scope).ok_or(format!("{e}.{f}: {ty} is no enum"))?;
         if i != 0 {
             out.push(String::new());
         }
+        if ty == "str" {
+            out.extend([
+                format!("{indent}    /// The member's `{f}`."),
+                format!(
+                    "{indent}    pub const fn {}(self) -> &'static str {{",
+                    rs_field(f)
+                ),
+                format!("{indent}        match self {{"),
+            ]);
+            for (mem, t) in members.iter().zip(m.val().arr().unwrap_or_default()) {
+                out.push(format!(
+                    "{indent}            {e}::{} => {},",
+                    mem.ident,
+                    json_str(t.str().unwrap_or_default())
+                ));
+            }
+            out.extend([format!("{indent}        }}"), format!("{indent}    }}")]);
+            continue;
+        }
+        let (to, casing) = enum_path(ty, scope).ok_or(format!("{e}.{f}: {ty} is no enum"))?;
         out.extend([
             format!("{indent}    /// The member's `{f}`."),
             format!("{indent}    pub const fn {}(self) -> {to} {{", rs_field(f)),
@@ -916,6 +956,23 @@ fn ts_map(
     let mut out = Vec::new();
     for (f, m) in map.named() {
         let to = type_of(m, "");
+        if to == "str" {
+            out.extend([
+                String::new(),
+                format!("/** The member's `{f}`. */"),
+                format!("export function {}(val: {e}): string {{", map_ident(f, e)),
+                "  switch (val) {".into(),
+            ]);
+            for (mem, t) in members.iter().zip(m.val().arr().unwrap_or_default()) {
+                out.push(format!("    case {}:", ts_const(e, mem)));
+                out.push(format!(
+                    "      return {};",
+                    json_str(t.str().unwrap_or_default())
+                ));
+            }
+            out.extend(["  }".to_string(), "}".into()]);
+            continue;
+        }
         let (_, targets) = enums
             .iter()
             .find(|(n, _)| n == to)
@@ -942,22 +999,28 @@ fn ts_map(
 
 /// The enum `e`'s `$map` in C++: each field a function of the member
 /// (`map_ident`), its switch covering every member.
-fn cpp_map(e: &str, members: &[Member], map: &Node, out: &mut Vec<String>) {
+fn cpp_map(e: &str, members: &[Member], map: &Node, out: &mut Vec<String>, inc: &mut Includes) {
     for (f, m) in map.named() {
         let to = type_of(m, "");
+        let text = to == "str";
+        if text {
+            inc.insert("string_view");
+        }
+        let ret = if text { "std::string_view" } else { to };
         out.extend([
             String::new(),
             format!("// The member's `{f}`."),
-            format!("constexpr {to} {}({e} val) noexcept {{", map_ident(f, e)),
+            format!("constexpr {ret} {}({e} val) noexcept {{", map_ident(f, e)),
             "    switch (val) {".into(),
         ]);
-        for (mem, name) in members.iter().zip(m.val().arr().unwrap_or_default()) {
-            let name = name.str().unwrap_or_default();
-            out.push(format!(
-                "    case {e}::{}: return {to}::{};",
-                mem.ident,
-                cpp_member(name)
-            ));
+        for (mem, v) in members.iter().zip(m.val().arr().unwrap_or_default()) {
+            let v = v.str().unwrap_or_default();
+            let lit = if text {
+                json_str(v)
+            } else {
+                format!("{to}::{}", cpp_member(v))
+            };
+            out.push(format!("    case {e}::{}: return {lit};", mem.ident));
         }
         out.extend([
             "    }".to_string(),
@@ -1843,7 +1906,7 @@ fn cpp_items(
             let members = numbers(name, &keys, repr, cpp_member)?;
             cpp_enum(name, &members, repr.cpp, &mut lines, inc);
             if let Some(map) = n.get("$map") {
-                cpp_map(&pascal(name), &members, map, &mut lines);
+                cpp_map(&pascal(name), &members, map, &mut lines, inc);
             }
         }
         if !body.is_empty() {

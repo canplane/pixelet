@@ -55,6 +55,10 @@ object Runtime {
    * `xpute_trap`). */
   external fun trap(): String?
 
+  /** Writes a log record of the UI's by the runtime's writer (xpute.h
+   * `xpute_log`). */
+  external fun log(level: Int, context: String, message: String)
+
   /** These send the module's events (XputeModule.kt). */
   @Volatile var notify: (() -> Unit)? = null
   @Volatile var stopped: ((Stop) -> Unit)? = null

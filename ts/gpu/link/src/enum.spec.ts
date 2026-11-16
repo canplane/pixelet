@@ -400,6 +400,202 @@ export function of_TextureFormat(val: number): TextureFormat | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_TextureFormat(val: TextureFormat): string {
+  switch (val) {
+    case TEXTURE_FORMAT_R8UNORM:
+      return "r8unorm";
+    case TEXTURE_FORMAT_R8SNORM:
+      return "r8snorm";
+    case TEXTURE_FORMAT_R8UINT:
+      return "r8uint";
+    case TEXTURE_FORMAT_R8SINT:
+      return "r8sint";
+    case TEXTURE_FORMAT_R16UINT:
+      return "r16uint";
+    case TEXTURE_FORMAT_R16SINT:
+      return "r16sint";
+    case TEXTURE_FORMAT_R16FLOAT:
+      return "r16float";
+    case TEXTURE_FORMAT_RG8UNORM:
+      return "rg8unorm";
+    case TEXTURE_FORMAT_RG8SNORM:
+      return "rg8snorm";
+    case TEXTURE_FORMAT_RG8UINT:
+      return "rg8uint";
+    case TEXTURE_FORMAT_RG8SINT:
+      return "rg8sint";
+    case TEXTURE_FORMAT_R32UINT:
+      return "r32uint";
+    case TEXTURE_FORMAT_R32SINT:
+      return "r32sint";
+    case TEXTURE_FORMAT_R32FLOAT:
+      return "r32float";
+    case TEXTURE_FORMAT_RG16UINT:
+      return "rg16uint";
+    case TEXTURE_FORMAT_RG16SINT:
+      return "rg16sint";
+    case TEXTURE_FORMAT_RG16FLOAT:
+      return "rg16float";
+    case TEXTURE_FORMAT_RGBA8UNORM:
+      return "rgba8unorm";
+    case TEXTURE_FORMAT_RGBA8UNORM_SRGB:
+      return "rgba8unorm-srgb";
+    case TEXTURE_FORMAT_RGBA8SNORM:
+      return "rgba8snorm";
+    case TEXTURE_FORMAT_RGBA8UINT:
+      return "rgba8uint";
+    case TEXTURE_FORMAT_RGBA8SINT:
+      return "rgba8sint";
+    case TEXTURE_FORMAT_BGRA8UNORM:
+      return "bgra8unorm";
+    case TEXTURE_FORMAT_BGRA8UNORM_SRGB:
+      return "bgra8unorm-srgb";
+    case TEXTURE_FORMAT_RGB9E5UFLOAT:
+      return "rgb9e5ufloat";
+    case TEXTURE_FORMAT_RGB10A2UINT:
+      return "rgb10a2uint";
+    case TEXTURE_FORMAT_RGB10A2UNORM:
+      return "rgb10a2unorm";
+    case TEXTURE_FORMAT_RG11B10UFLOAT:
+      return "rg11b10ufloat";
+    case TEXTURE_FORMAT_RG32UINT:
+      return "rg32uint";
+    case TEXTURE_FORMAT_RG32SINT:
+      return "rg32sint";
+    case TEXTURE_FORMAT_RG32FLOAT:
+      return "rg32float";
+    case TEXTURE_FORMAT_RGBA16UINT:
+      return "rgba16uint";
+    case TEXTURE_FORMAT_RGBA16SINT:
+      return "rgba16sint";
+    case TEXTURE_FORMAT_RGBA16FLOAT:
+      return "rgba16float";
+    case TEXTURE_FORMAT_RGBA32UINT:
+      return "rgba32uint";
+    case TEXTURE_FORMAT_RGBA32SINT:
+      return "rgba32sint";
+    case TEXTURE_FORMAT_RGBA32FLOAT:
+      return "rgba32float";
+    case TEXTURE_FORMAT_STENCIL8:
+      return "stencil8";
+    case TEXTURE_FORMAT_DEPTH16UNORM:
+      return "depth16unorm";
+    case TEXTURE_FORMAT_DEPTH24PLUS:
+      return "depth24plus";
+    case TEXTURE_FORMAT_DEPTH24PLUS_STENCIL8:
+      return "depth24plus-stencil8";
+    case TEXTURE_FORMAT_DEPTH32FLOAT:
+      return "depth32float";
+    case TEXTURE_FORMAT_DEPTH32FLOAT_STENCIL8:
+      return "depth32float-stencil8";
+    case TEXTURE_FORMAT_BC1_RGBA_UNORM:
+      return "bc1-rgba-unorm";
+    case TEXTURE_FORMAT_BC1_RGBA_UNORM_SRGB:
+      return "bc1-rgba-unorm-srgb";
+    case TEXTURE_FORMAT_BC2_RGBA_UNORM:
+      return "bc2-rgba-unorm";
+    case TEXTURE_FORMAT_BC2_RGBA_UNORM_SRGB:
+      return "bc2-rgba-unorm-srgb";
+    case TEXTURE_FORMAT_BC3_RGBA_UNORM:
+      return "bc3-rgba-unorm";
+    case TEXTURE_FORMAT_BC3_RGBA_UNORM_SRGB:
+      return "bc3-rgba-unorm-srgb";
+    case TEXTURE_FORMAT_BC4_R_UNORM:
+      return "bc4-r-unorm";
+    case TEXTURE_FORMAT_BC4_R_SNORM:
+      return "bc4-r-snorm";
+    case TEXTURE_FORMAT_BC5_RG_UNORM:
+      return "bc5-rg-unorm";
+    case TEXTURE_FORMAT_BC5_RG_SNORM:
+      return "bc5-rg-snorm";
+    case TEXTURE_FORMAT_BC6H_RGB_UFLOAT:
+      return "bc6h-rgb-ufloat";
+    case TEXTURE_FORMAT_BC6H_RGB_FLOAT:
+      return "bc6h-rgb-float";
+    case TEXTURE_FORMAT_BC7_RGBA_UNORM:
+      return "bc7-rgba-unorm";
+    case TEXTURE_FORMAT_BC7_RGBA_UNORM_SRGB:
+      return "bc7-rgba-unorm-srgb";
+    case TEXTURE_FORMAT_ETC2_RGB8UNORM:
+      return "etc2-rgb8unorm";
+    case TEXTURE_FORMAT_ETC2_RGB8UNORM_SRGB:
+      return "etc2-rgb8unorm-srgb";
+    case TEXTURE_FORMAT_ETC2_RGB8A1UNORM:
+      return "etc2-rgb8a1unorm";
+    case TEXTURE_FORMAT_ETC2_RGB8A1UNORM_SRGB:
+      return "etc2-rgb8a1unorm-srgb";
+    case TEXTURE_FORMAT_ETC2_RGBA8UNORM:
+      return "etc2-rgba8unorm";
+    case TEXTURE_FORMAT_ETC2_RGBA8UNORM_SRGB:
+      return "etc2-rgba8unorm-srgb";
+    case TEXTURE_FORMAT_EAC_R11UNORM:
+      return "eac-r11unorm";
+    case TEXTURE_FORMAT_EAC_R11SNORM:
+      return "eac-r11snorm";
+    case TEXTURE_FORMAT_EAC_RG11UNORM:
+      return "eac-rg11unorm";
+    case TEXTURE_FORMAT_EAC_RG11SNORM:
+      return "eac-rg11snorm";
+    case TEXTURE_FORMAT_ASTC_4X4_UNORM:
+      return "astc-4x4-unorm";
+    case TEXTURE_FORMAT_ASTC_4X4_UNORM_SRGB:
+      return "astc-4x4-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_5X4_UNORM:
+      return "astc-5x4-unorm";
+    case TEXTURE_FORMAT_ASTC_5X4_UNORM_SRGB:
+      return "astc-5x4-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_5X5_UNORM:
+      return "astc-5x5-unorm";
+    case TEXTURE_FORMAT_ASTC_5X5_UNORM_SRGB:
+      return "astc-5x5-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_6X5_UNORM:
+      return "astc-6x5-unorm";
+    case TEXTURE_FORMAT_ASTC_6X5_UNORM_SRGB:
+      return "astc-6x5-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_6X6_UNORM:
+      return "astc-6x6-unorm";
+    case TEXTURE_FORMAT_ASTC_6X6_UNORM_SRGB:
+      return "astc-6x6-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_8X5_UNORM:
+      return "astc-8x5-unorm";
+    case TEXTURE_FORMAT_ASTC_8X5_UNORM_SRGB:
+      return "astc-8x5-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_8X6_UNORM:
+      return "astc-8x6-unorm";
+    case TEXTURE_FORMAT_ASTC_8X6_UNORM_SRGB:
+      return "astc-8x6-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_8X8_UNORM:
+      return "astc-8x8-unorm";
+    case TEXTURE_FORMAT_ASTC_8X8_UNORM_SRGB:
+      return "astc-8x8-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_10X5_UNORM:
+      return "astc-10x5-unorm";
+    case TEXTURE_FORMAT_ASTC_10X5_UNORM_SRGB:
+      return "astc-10x5-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_10X6_UNORM:
+      return "astc-10x6-unorm";
+    case TEXTURE_FORMAT_ASTC_10X6_UNORM_SRGB:
+      return "astc-10x6-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_10X8_UNORM:
+      return "astc-10x8-unorm";
+    case TEXTURE_FORMAT_ASTC_10X8_UNORM_SRGB:
+      return "astc-10x8-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_10X10_UNORM:
+      return "astc-10x10-unorm";
+    case TEXTURE_FORMAT_ASTC_10X10_UNORM_SRGB:
+      return "astc-10x10-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_12X10_UNORM:
+      return "astc-12x10-unorm";
+    case TEXTURE_FORMAT_ASTC_12X10_UNORM_SRGB:
+      return "astc-12x10-unorm-srgb";
+    case TEXTURE_FORMAT_ASTC_12X12_UNORM:
+      return "astc-12x12-unorm";
+    case TEXTURE_FORMAT_ASTC_12X12_UNORM_SRGB:
+      return "astc-12x12-unorm-srgb";
+  }
+}
+
 /** These are the members of GPUVertexFormat. */
 export const VERTEX_FORMATS = [
   "uint8",
@@ -576,6 +772,94 @@ export function of_VertexFormat(val: number): VertexFormat | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_VertexFormat(val: VertexFormat): string {
+  switch (val) {
+    case VERTEX_FORMAT_UINT8:
+      return "uint8";
+    case VERTEX_FORMAT_UINT8X2:
+      return "uint8x2";
+    case VERTEX_FORMAT_UINT8X4:
+      return "uint8x4";
+    case VERTEX_FORMAT_SINT8:
+      return "sint8";
+    case VERTEX_FORMAT_SINT8X2:
+      return "sint8x2";
+    case VERTEX_FORMAT_SINT8X4:
+      return "sint8x4";
+    case VERTEX_FORMAT_UNORM8:
+      return "unorm8";
+    case VERTEX_FORMAT_UNORM8X2:
+      return "unorm8x2";
+    case VERTEX_FORMAT_UNORM8X4:
+      return "unorm8x4";
+    case VERTEX_FORMAT_SNORM8:
+      return "snorm8";
+    case VERTEX_FORMAT_SNORM8X2:
+      return "snorm8x2";
+    case VERTEX_FORMAT_SNORM8X4:
+      return "snorm8x4";
+    case VERTEX_FORMAT_UINT16:
+      return "uint16";
+    case VERTEX_FORMAT_UINT16X2:
+      return "uint16x2";
+    case VERTEX_FORMAT_UINT16X4:
+      return "uint16x4";
+    case VERTEX_FORMAT_SINT16:
+      return "sint16";
+    case VERTEX_FORMAT_SINT16X2:
+      return "sint16x2";
+    case VERTEX_FORMAT_SINT16X4:
+      return "sint16x4";
+    case VERTEX_FORMAT_UNORM16:
+      return "unorm16";
+    case VERTEX_FORMAT_UNORM16X2:
+      return "unorm16x2";
+    case VERTEX_FORMAT_UNORM16X4:
+      return "unorm16x4";
+    case VERTEX_FORMAT_SNORM16:
+      return "snorm16";
+    case VERTEX_FORMAT_SNORM16X2:
+      return "snorm16x2";
+    case VERTEX_FORMAT_SNORM16X4:
+      return "snorm16x4";
+    case VERTEX_FORMAT_FLOAT16:
+      return "float16";
+    case VERTEX_FORMAT_FLOAT16X2:
+      return "float16x2";
+    case VERTEX_FORMAT_FLOAT16X4:
+      return "float16x4";
+    case VERTEX_FORMAT_FLOAT32:
+      return "float32";
+    case VERTEX_FORMAT_FLOAT32X2:
+      return "float32x2";
+    case VERTEX_FORMAT_FLOAT32X3:
+      return "float32x3";
+    case VERTEX_FORMAT_FLOAT32X4:
+      return "float32x4";
+    case VERTEX_FORMAT_UINT32:
+      return "uint32";
+    case VERTEX_FORMAT_UINT32X2:
+      return "uint32x2";
+    case VERTEX_FORMAT_UINT32X3:
+      return "uint32x3";
+    case VERTEX_FORMAT_UINT32X4:
+      return "uint32x4";
+    case VERTEX_FORMAT_SINT32:
+      return "sint32";
+    case VERTEX_FORMAT_SINT32X2:
+      return "sint32x2";
+    case VERTEX_FORMAT_SINT32X3:
+      return "sint32x3";
+    case VERTEX_FORMAT_SINT32X4:
+      return "sint32x4";
+    case VERTEX_FORMAT_UNORM10_10_10_2:
+      return "unorm10-10-10-2";
+    case VERTEX_FORMAT_UNORM8X4_BGRA:
+      return "unorm8x4-bgra";
+  }
+}
+
 export const PRIMITIVE_TOPOLOGIES = [
   "point-list",
   "line-list",
@@ -607,6 +891,22 @@ export function of_PrimitiveTopology(val: number): PrimitiveTopology | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_PrimitiveTopology(val: PrimitiveTopology): string {
+  switch (val) {
+    case PRIMITIVE_TOPOLOGY_POINT_LIST:
+      return "point-list";
+    case PRIMITIVE_TOPOLOGY_LINE_LIST:
+      return "line-list";
+    case PRIMITIVE_TOPOLOGY_LINE_STRIP:
+      return "line-strip";
+    case PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
+      return "triangle-list";
+    case PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
+      return "triangle-strip";
+  }
+}
+
 export const INDEX_FORMATS = ["uint16", "uint32"] as const;
 
 export type IndexFormat =
@@ -621,6 +921,16 @@ export function of_IndexFormat(val: number): IndexFormat | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_IndexFormat(val: IndexFormat): string {
+  switch (val) {
+    case INDEX_FORMAT_UINT16:
+      return "uint16";
+    case INDEX_FORMAT_UINT32:
+      return "uint32";
+  }
+}
+
 export const FRONT_FACES = ["ccw", "cw"] as const;
 
 export type FrontFace = typeof FRONT_FACE_CCW | typeof FRONT_FACE_CW;
@@ -630,6 +940,16 @@ export const FRONT_FACE_CW = 1;
 /** The member `val` is, or null for a number no member has. */
 export function of_FrontFace(val: number): FrontFace | null {
   return val === FRONT_FACE_CCW || val === FRONT_FACE_CW ? val : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_FrontFace(val: FrontFace): string {
+  switch (val) {
+    case FRONT_FACE_CCW:
+      return "ccw";
+    case FRONT_FACE_CW:
+      return "cw";
+  }
 }
 
 export const CULL_MODES = ["none", "front", "back"] as const;
@@ -647,6 +967,18 @@ export function of_CullMode(val: number): CullMode | null {
     val === CULL_MODE_BACK
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_CullMode(val: CullMode): string {
+  switch (val) {
+    case CULL_MODE_NONE:
+      return "none";
+    case CULL_MODE_FRONT:
+      return "front";
+    case CULL_MODE_BACK:
+      return "back";
+  }
 }
 
 export const COMPARE_FUNCTIONS = [
@@ -692,6 +1024,28 @@ export function of_CompareFunction(val: number): CompareFunction | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_CompareFunction(val: CompareFunction): string {
+  switch (val) {
+    case COMPARE_FUNCTION_NEVER:
+      return "never";
+    case COMPARE_FUNCTION_LESS:
+      return "less";
+    case COMPARE_FUNCTION_EQUAL:
+      return "equal";
+    case COMPARE_FUNCTION_LESS_EQUAL:
+      return "less-equal";
+    case COMPARE_FUNCTION_GREATER:
+      return "greater";
+    case COMPARE_FUNCTION_NOT_EQUAL:
+      return "not-equal";
+    case COMPARE_FUNCTION_GREATER_EQUAL:
+      return "greater-equal";
+    case COMPARE_FUNCTION_ALWAYS:
+      return "always";
+  }
+}
+
 export const STENCIL_OPERATIONS = [
   "keep",
   "zero",
@@ -735,6 +1089,28 @@ export function of_StencilOperation(val: number): StencilOperation | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_StencilOperation(val: StencilOperation): string {
+  switch (val) {
+    case STENCIL_OPERATION_KEEP:
+      return "keep";
+    case STENCIL_OPERATION_ZERO:
+      return "zero";
+    case STENCIL_OPERATION_REPLACE:
+      return "replace";
+    case STENCIL_OPERATION_INVERT:
+      return "invert";
+    case STENCIL_OPERATION_INCREMENT_CLAMP:
+      return "increment-clamp";
+    case STENCIL_OPERATION_DECREMENT_CLAMP:
+      return "decrement-clamp";
+    case STENCIL_OPERATION_INCREMENT_WRAP:
+      return "increment-wrap";
+    case STENCIL_OPERATION_DECREMENT_WRAP:
+      return "decrement-wrap";
+  }
+}
+
 export const BLEND_OPERATIONS = [
   "add",
   "subtract",
@@ -764,6 +1140,22 @@ export function of_BlendOperation(val: number): BlendOperation | null {
     val === BLEND_OPERATION_MAX
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_BlendOperation(val: BlendOperation): string {
+  switch (val) {
+    case BLEND_OPERATION_ADD:
+      return "add";
+    case BLEND_OPERATION_SUBTRACT:
+      return "subtract";
+    case BLEND_OPERATION_REVERSE_SUBTRACT:
+      return "reverse-subtract";
+    case BLEND_OPERATION_MIN:
+      return "min";
+    case BLEND_OPERATION_MAX:
+      return "max";
+  }
 }
 
 export const BLEND_FACTORS = [
@@ -845,6 +1237,46 @@ export function of_BlendFactor(val: number): BlendFactor | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_BlendFactor(val: BlendFactor): string {
+  switch (val) {
+    case BLEND_FACTOR_ZERO:
+      return "zero";
+    case BLEND_FACTOR_ONE:
+      return "one";
+    case BLEND_FACTOR_SRC:
+      return "src";
+    case BLEND_FACTOR_ONE_MINUS_SRC:
+      return "one-minus-src";
+    case BLEND_FACTOR_SRC_ALPHA:
+      return "src-alpha";
+    case BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
+      return "one-minus-src-alpha";
+    case BLEND_FACTOR_DST:
+      return "dst";
+    case BLEND_FACTOR_ONE_MINUS_DST:
+      return "one-minus-dst";
+    case BLEND_FACTOR_DST_ALPHA:
+      return "dst-alpha";
+    case BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
+      return "one-minus-dst-alpha";
+    case BLEND_FACTOR_SRC_ALPHA_SATURATED:
+      return "src-alpha-saturated";
+    case BLEND_FACTOR_CONSTANT:
+      return "constant";
+    case BLEND_FACTOR_ONE_MINUS_CONSTANT:
+      return "one-minus-constant";
+    case BLEND_FACTOR_SRC1:
+      return "src1";
+    case BLEND_FACTOR_ONE_MINUS_SRC1:
+      return "one-minus-src1";
+    case BLEND_FACTOR_SRC1_ALPHA:
+      return "src1-alpha";
+    case BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
+      return "one-minus-src1-alpha";
+  }
+}
+
 export const VERTEX_STEP_MODES = ["vertex", "instance"] as const;
 
 export type VertexStepMode =
@@ -857,6 +1289,16 @@ export function of_VertexStepMode(val: number): VertexStepMode | null {
   return val === VERTEX_STEP_MODE_VERTEX || val === VERTEX_STEP_MODE_INSTANCE
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_VertexStepMode(val: VertexStepMode): string {
+  switch (val) {
+    case VERTEX_STEP_MODE_VERTEX:
+      return "vertex";
+    case VERTEX_STEP_MODE_INSTANCE:
+      return "instance";
+  }
 }
 
 export const ADDRESS_MODES = [
@@ -882,6 +1324,18 @@ export function of_AddressMode(val: number): AddressMode | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_AddressMode(val: AddressMode): string {
+  switch (val) {
+    case ADDRESS_MODE_CLAMP_TO_EDGE:
+      return "clamp-to-edge";
+    case ADDRESS_MODE_REPEAT:
+      return "repeat";
+    case ADDRESS_MODE_MIRROR_REPEAT:
+      return "mirror-repeat";
+  }
+}
+
 export const FILTER_MODES = ["nearest", "linear"] as const;
 
 export type FilterMode = typeof FILTER_MODE_NEAREST | typeof FILTER_MODE_LINEAR;
@@ -891,6 +1345,16 @@ export const FILTER_MODE_LINEAR = 1;
 /** The member `val` is, or null for a number no member has. */
 export function of_FilterMode(val: number): FilterMode | null {
   return val === FILTER_MODE_NEAREST || val === FILTER_MODE_LINEAR ? val : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_FilterMode(val: FilterMode): string {
+  switch (val) {
+    case FILTER_MODE_NEAREST:
+      return "nearest";
+    case FILTER_MODE_LINEAR:
+      return "linear";
+  }
 }
 
 export const MIPMAP_FILTER_MODES = ["nearest", "linear"] as const;
@@ -905,6 +1369,16 @@ export function of_MipmapFilterMode(val: number): MipmapFilterMode | null {
   return val === MIPMAP_FILTER_MODE_NEAREST || val === MIPMAP_FILTER_MODE_LINEAR
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_MipmapFilterMode(val: MipmapFilterMode): string {
+  switch (val) {
+    case MIPMAP_FILTER_MODE_NEAREST:
+      return "nearest";
+    case MIPMAP_FILTER_MODE_LINEAR:
+      return "linear";
+  }
 }
 
 export const TEXTURE_DIMENSIONS = ["1d", "2d", "3d"] as const;
@@ -924,6 +1398,18 @@ export function of_TextureDimension(val: number): TextureDimension | null {
     val === TEXTURE_DIMENSION_3D
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_TextureDimension(val: TextureDimension): string {
+  switch (val) {
+    case TEXTURE_DIMENSION_1D:
+      return "1d";
+    case TEXTURE_DIMENSION_2D:
+      return "2d";
+    case TEXTURE_DIMENSION_3D:
+      return "3d";
+  }
 }
 
 export const TEXTURE_VIEW_DIMENSIONS = [
@@ -963,6 +1449,24 @@ export function of_TextureViewDimension(
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_TextureViewDimension(val: TextureViewDimension): string {
+  switch (val) {
+    case TEXTURE_VIEW_DIMENSION_1D:
+      return "1d";
+    case TEXTURE_VIEW_DIMENSION_2D:
+      return "2d";
+    case TEXTURE_VIEW_DIMENSION_2D_ARRAY:
+      return "2d-array";
+    case TEXTURE_VIEW_DIMENSION_CUBE:
+      return "cube";
+    case TEXTURE_VIEW_DIMENSION_CUBE_ARRAY:
+      return "cube-array";
+    case TEXTURE_VIEW_DIMENSION_3D:
+      return "3d";
+  }
+}
+
 export const TEXTURE_ASPECTS = ["all", "stencil-only", "depth-only"] as const;
 
 export type TextureAspect =
@@ -980,6 +1484,18 @@ export function of_TextureAspect(val: number): TextureAspect | null {
     val === TEXTURE_ASPECT_DEPTH_ONLY
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_TextureAspect(val: TextureAspect): string {
+  switch (val) {
+    case TEXTURE_ASPECT_ALL:
+      return "all";
+    case TEXTURE_ASPECT_STENCIL_ONLY:
+      return "stencil-only";
+    case TEXTURE_ASPECT_DEPTH_ONLY:
+      return "depth-only";
+  }
 }
 
 export const BUFFER_BINDING_TYPES = [
@@ -1005,6 +1521,18 @@ export function of_BufferBindingType(val: number): BufferBindingType | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_BufferBindingType(val: BufferBindingType): string {
+  switch (val) {
+    case BUFFER_BINDING_TYPE_UNIFORM:
+      return "uniform";
+    case BUFFER_BINDING_TYPE_STORAGE:
+      return "storage";
+    case BUFFER_BINDING_TYPE_READ_ONLY_STORAGE:
+      return "read-only-storage";
+  }
+}
+
 export const SAMPLER_BINDING_TYPES = [
   "filtering",
   "non-filtering",
@@ -1026,6 +1554,18 @@ export function of_SamplerBindingType(val: number): SamplerBindingType | null {
     val === SAMPLER_BINDING_TYPE_COMPARISON
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_SamplerBindingType(val: SamplerBindingType): string {
+  switch (val) {
+    case SAMPLER_BINDING_TYPE_FILTERING:
+      return "filtering";
+    case SAMPLER_BINDING_TYPE_NON_FILTERING:
+      return "non-filtering";
+    case SAMPLER_BINDING_TYPE_COMPARISON:
+      return "comparison";
+  }
 }
 
 export const TEXTURE_SAMPLE_TYPES = [
@@ -1059,6 +1599,22 @@ export function of_TextureSampleType(val: number): TextureSampleType | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_TextureSampleType(val: TextureSampleType): string {
+  switch (val) {
+    case TEXTURE_SAMPLE_TYPE_FLOAT:
+      return "float";
+    case TEXTURE_SAMPLE_TYPE_UNFILTERABLE_FLOAT:
+      return "unfilterable-float";
+    case TEXTURE_SAMPLE_TYPE_DEPTH:
+      return "depth";
+    case TEXTURE_SAMPLE_TYPE_SINT:
+      return "sint";
+    case TEXTURE_SAMPLE_TYPE_UINT:
+      return "uint";
+  }
+}
+
 export const STORAGE_TEXTURE_ACCESSES = [
   "write-only",
   "read-only",
@@ -1084,6 +1640,18 @@ export function of_StorageTextureAccess(
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_StorageTextureAccess(val: StorageTextureAccess): string {
+  switch (val) {
+    case STORAGE_TEXTURE_ACCESS_WRITE_ONLY:
+      return "write-only";
+    case STORAGE_TEXTURE_ACCESS_READ_ONLY:
+      return "read-only";
+    case STORAGE_TEXTURE_ACCESS_READ_WRITE:
+      return "read-write";
+  }
+}
+
 export const LOAD_OPS = ["load", "clear"] as const;
 
 export type LoadOp = typeof LOAD_OP_LOAD | typeof LOAD_OP_CLEAR;
@@ -1095,6 +1663,16 @@ export function of_LoadOp(val: number): LoadOp | null {
   return val === LOAD_OP_LOAD || val === LOAD_OP_CLEAR ? val : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_LoadOp(val: LoadOp): string {
+  switch (val) {
+    case LOAD_OP_LOAD:
+      return "load";
+    case LOAD_OP_CLEAR:
+      return "clear";
+  }
+}
+
 export const STORE_OPS = ["store", "discard"] as const;
 
 export type StoreOp = typeof STORE_OP_STORE | typeof STORE_OP_DISCARD;
@@ -1104,6 +1682,16 @@ export const STORE_OP_DISCARD = 1;
 /** The member `val` is, or null for a number no member has. */
 export function of_StoreOp(val: number): StoreOp | null {
   return val === STORE_OP_STORE || val === STORE_OP_DISCARD ? val : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_StoreOp(val: StoreOp): string {
+  switch (val) {
+    case STORE_OP_STORE:
+      return "store";
+    case STORE_OP_DISCARD:
+      return "discard";
+  }
 }
 
 export const QUERY_TYPES = ["occlusion", "timestamp"] as const;
@@ -1120,6 +1708,16 @@ export function of_QueryType(val: number): QueryType | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_QueryType(val: QueryType): string {
+  switch (val) {
+    case QUERY_TYPE_OCCLUSION:
+      return "occlusion";
+    case QUERY_TYPE_TIMESTAMP:
+      return "timestamp";
+  }
+}
+
 export const CANVAS_ALPHA_MODES = ["opaque", "premultiplied"] as const;
 
 export type CanvasAlphaMode =
@@ -1133,6 +1731,16 @@ export function of_CanvasAlphaMode(val: number): CanvasAlphaMode | null {
     val === CANVAS_ALPHA_MODE_PREMULTIPLIED
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_CanvasAlphaMode(val: CanvasAlphaMode): string {
+  switch (val) {
+    case CANVAS_ALPHA_MODE_OPAQUE:
+      return "opaque";
+    case CANVAS_ALPHA_MODE_PREMULTIPLIED:
+      return "premultiplied";
+  }
 }
 
 /** GPUFeatureName. The DEVICE block (api.json5) holds a device's features as one bit each,
@@ -1214,6 +1822,46 @@ export function of_FeatureName(val: number): FeatureName | null {
     val === FEATURE_NAME_SUBGROUPS
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_FeatureName(val: FeatureName): string {
+  switch (val) {
+    case FEATURE_NAME_DEPTH_CLIP_CONTROL:
+      return "depth-clip-control";
+    case FEATURE_NAME_DEPTH32FLOAT_STENCIL8:
+      return "depth32float-stencil8";
+    case FEATURE_NAME_TEXTURE_COMPRESSION_BC:
+      return "texture-compression-bc";
+    case FEATURE_NAME_TEXTURE_COMPRESSION_BC_SLICED_3D:
+      return "texture-compression-bc-sliced-3d";
+    case FEATURE_NAME_TEXTURE_COMPRESSION_ETC2:
+      return "texture-compression-etc2";
+    case FEATURE_NAME_TEXTURE_COMPRESSION_ASTC:
+      return "texture-compression-astc";
+    case FEATURE_NAME_TEXTURE_COMPRESSION_ASTC_SLICED_3D:
+      return "texture-compression-astc-sliced-3d";
+    case FEATURE_NAME_TIMESTAMP_QUERY:
+      return "timestamp-query";
+    case FEATURE_NAME_INDIRECT_FIRST_INSTANCE:
+      return "indirect-first-instance";
+    case FEATURE_NAME_SHADER_F16:
+      return "shader-f16";
+    case FEATURE_NAME_RG11B10UFLOAT_RENDERABLE:
+      return "rg11b10ufloat-renderable";
+    case FEATURE_NAME_BGRA8UNORM_STORAGE:
+      return "bgra8unorm-storage";
+    case FEATURE_NAME_FLOAT32_FILTERABLE:
+      return "float32-filterable";
+    case FEATURE_NAME_FLOAT32_BLENDABLE:
+      return "float32-blendable";
+    case FEATURE_NAME_CLIP_DISTANCES:
+      return "clip-distances";
+    case FEATURE_NAME_DUAL_SOURCE_BLENDING:
+      return "dual-source-blending";
+    case FEATURE_NAME_SUBGROUPS:
+      return "subgroups";
+  }
 }
 
 /** The members of GPUSupportedLimits. The DEVICE block (api.json5) holds a device's limits
@@ -1351,4 +1999,72 @@ export function of_LimitName(val: number): LimitName | null {
     val === LIMIT_NAME_MAX_COMPUTE_WORKGROUPS_PER_DIMENSION
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_LimitName(val: LimitName): string {
+  switch (val) {
+    case LIMIT_NAME_MAX_TEXTURE_DIMENSION_1D:
+      return "maxTextureDimension1D";
+    case LIMIT_NAME_MAX_TEXTURE_DIMENSION_2D:
+      return "maxTextureDimension2D";
+    case LIMIT_NAME_MAX_TEXTURE_DIMENSION_3D:
+      return "maxTextureDimension3D";
+    case LIMIT_NAME_MAX_TEXTURE_ARRAY_LAYERS:
+      return "maxTextureArrayLayers";
+    case LIMIT_NAME_MAX_BIND_GROUPS:
+      return "maxBindGroups";
+    case LIMIT_NAME_MAX_BIND_GROUPS_PLUS_VERTEX_BUFFERS:
+      return "maxBindGroupsPlusVertexBuffers";
+    case LIMIT_NAME_MAX_BINDINGS_PER_BIND_GROUP:
+      return "maxBindingsPerBindGroup";
+    case LIMIT_NAME_MAX_DYNAMIC_UNIFORM_BUFFERS_PER_PIPELINE_LAYOUT:
+      return "maxDynamicUniformBuffersPerPipelineLayout";
+    case LIMIT_NAME_MAX_DYNAMIC_STORAGE_BUFFERS_PER_PIPELINE_LAYOUT:
+      return "maxDynamicStorageBuffersPerPipelineLayout";
+    case LIMIT_NAME_MAX_SAMPLED_TEXTURES_PER_SHADER_STAGE:
+      return "maxSampledTexturesPerShaderStage";
+    case LIMIT_NAME_MAX_SAMPLERS_PER_SHADER_STAGE:
+      return "maxSamplersPerShaderStage";
+    case LIMIT_NAME_MAX_STORAGE_BUFFERS_PER_SHADER_STAGE:
+      return "maxStorageBuffersPerShaderStage";
+    case LIMIT_NAME_MAX_STORAGE_TEXTURES_PER_SHADER_STAGE:
+      return "maxStorageTexturesPerShaderStage";
+    case LIMIT_NAME_MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE:
+      return "maxUniformBuffersPerShaderStage";
+    case LIMIT_NAME_MAX_UNIFORM_BUFFER_BINDING_SIZE:
+      return "maxUniformBufferBindingSize";
+    case LIMIT_NAME_MAX_STORAGE_BUFFER_BINDING_SIZE:
+      return "maxStorageBufferBindingSize";
+    case LIMIT_NAME_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT:
+      return "minUniformBufferOffsetAlignment";
+    case LIMIT_NAME_MIN_STORAGE_BUFFER_OFFSET_ALIGNMENT:
+      return "minStorageBufferOffsetAlignment";
+    case LIMIT_NAME_MAX_VERTEX_BUFFERS:
+      return "maxVertexBuffers";
+    case LIMIT_NAME_MAX_BUFFER_SIZE:
+      return "maxBufferSize";
+    case LIMIT_NAME_MAX_VERTEX_ATTRIBUTES:
+      return "maxVertexAttributes";
+    case LIMIT_NAME_MAX_VERTEX_BUFFER_ARRAY_STRIDE:
+      return "maxVertexBufferArrayStride";
+    case LIMIT_NAME_MAX_INTER_STAGE_SHADER_VARIABLES:
+      return "maxInterStageShaderVariables";
+    case LIMIT_NAME_MAX_COLOR_ATTACHMENTS:
+      return "maxColorAttachments";
+    case LIMIT_NAME_MAX_COLOR_ATTACHMENT_BYTES_PER_SAMPLE:
+      return "maxColorAttachmentBytesPerSample";
+    case LIMIT_NAME_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE:
+      return "maxComputeWorkgroupStorageSize";
+    case LIMIT_NAME_MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP:
+      return "maxComputeInvocationsPerWorkgroup";
+    case LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_X:
+      return "maxComputeWorkgroupSizeX";
+    case LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Y:
+      return "maxComputeWorkgroupSizeY";
+    case LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Z:
+      return "maxComputeWorkgroupSizeZ";
+    case LIMIT_NAME_MAX_COMPUTE_WORKGROUPS_PER_DIMENSION:
+      return "maxComputeWorkgroupsPerDimension";
+  }
 }

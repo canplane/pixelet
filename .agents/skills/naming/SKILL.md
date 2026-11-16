@@ -83,7 +83,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
   | a frame's word naming its target handle and method | its `cmd` | vec, vector, opcode |
-  | a function of an interface the other side serves (the UI calls the core's exports, the guest its imports) | a method | command, hostcall, system call, hypercall |
+  | a function of an interface the other side implements (the UI calls the core's exports, the guest its imports) | a method | command, hostcall, system call, hypercall |
+  | what a side does with an interface whose methods the other side calls over the link (the guest its exports, the host and the UI the imports) | it implements it, its implementation; what installs one on the link is `mount` (`mount_text`, `Mount`) | serve, server |
   | a method answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant` (`Quadrant::new`) | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
@@ -106,8 +107,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | decor drawn as a model, an impostor or not at all by its distance | its `lod` | tier |
 
   `at` is where a thing is, `to` where it is going.
-- xpute's names are the mechanism's, as the component model has them: the
-  guest, the host that serves it, the UI, a device and a frame. Two are
+- xpute's names are the mechanism's, as the component model has them: the guest,
+  the host that implements its imports, the UI, a device and a frame. Two are
   outside the standard: the `link`, xpute's own word, the protocol both sides
   run, and its code, named for the data link layer (L2): it knows its two
   ends and not the wire under them, and what crosses it is a `frame`; and the

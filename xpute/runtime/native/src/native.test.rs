@@ -12,6 +12,7 @@ use xpute_runtime_native::native::Boot;
 mod app;
 
 use app::Exit;
+use xpute_guest::link;
 
 /// The host's interface whose method fails.
 const FAIL: Handle = NAMED | 0x20;
@@ -30,13 +31,13 @@ struct Relay;
 
 impl Object for Relay {
     fn call(&self, _: Method, _: Tag, _: Option<&[u8]>) -> Reply {
-        Reply::from(xpute_guest::link::call(FAIL, 0, None).0)
+        Reply::from(link::call(FAIL, 0, None).0)
     }
 }
 
 xpute_guest::link!(
     4096,
-    || xpute_guest::link::mount_named(RELAY, Rc::new(Relay)),
+    || link::mount_named(RELAY, Rc::new(Relay)),
     || {},
     || false
 );
@@ -44,13 +45,13 @@ xpute_guest::link!(
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![Box::new(|side| side.mount_named(FAIL, Rc::new(Fail)))],
+        mounts: vec![Box::new(|side| side.mount_named(FAIL, Rc::new(Fail)))],
         imports: &[("fail", FAIL)],
         calls: &[],
     }
 }
 
-/// The host's failure, as it serves the guest, is told once as a stop and
+/// The host's failure, as it answers the guest, is told once as a stop and
 /// then as a trap; after it the UI's methods answer EPIPE, and a failure on
 /// another thread tells nothing more.
 #[test]

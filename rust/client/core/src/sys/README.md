@@ -1,12 +1,11 @@
 # sys
 
-The core cannot read a file, open a connection or tell the time. What serves
-it across xpute's link does all of that for it. What the core has is its
-memory, laid out once, and the entries the link gives it. `sys/` is the layer
-that makes those enough. It turns what the layers above want into calls across
-the link, fits every answer
-into memory that was set aside at boot, and spends each entry's time in an order
-the rest of the core can rely on.
+The core cannot read a file, open a connection or tell the time. What implements
+its imports across xpute's link does all of that for it. What the core has is
+its memory, laid out once, and the entries the link gives it. `sys/` is the
+layer that makes those enough. It turns what the layers above want into calls
+across the link, fits every answer into memory that was set aside at boot, and
+spends each entry's time in an order the rest of the core can rely on.
 
 `sys/` imports nothing from the domain, the renderer or the profiler, and
 `cargo check-rules` refuses such an import.

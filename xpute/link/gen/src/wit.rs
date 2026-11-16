@@ -2,7 +2,7 @@
 
 //! This writes the link's bindings from WIT (xpute/link/wit/types.wit), in Rust,
 //! TypeScript and C++. For each interface it writes its methods' numbers, its
-//! types, the side that serves it and the side that calls it: a singleton
+//! types, the side that implements it and the side that calls it: a singleton
 //! interface's functions are one object's methods, under its named handle, the
 //! FNV-1a hash of `package/interface` folded below frame.json5's `NAMED`, and
 //! each resource's methods another's. A method's number is its place among its
@@ -64,10 +64,10 @@ pub struct WitTarget<'a> {
     pub side: Option<Side>,
 }
 
-/// A side of the link. A package's world is its guest's, which serves what
-/// the world exports and calls what it imports; every other side, the
-/// TypeScript too, serves the imports and calls the exports. A package whose
-/// interfaces have functions declares its world.
+/// A side of the link. A package's world is its guest's, which implements
+/// what the world exports and calls what it imports; every other side, the
+/// TypeScript too, implements the imports and calls the exports. A package
+/// whose interfaces have functions declares its world.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
     Guest,
@@ -288,10 +288,11 @@ fn object_method(o: &Obj, f: &Function) -> String {
     }
 }
 
-/// The trait or interface that serves an object, by the side that serves
-/// it (`Guest`, `Host`): a singleton's is the side's name, and a resource's
-/// the side's and the resource's, as wit-bindgen's and wasmtime's are.
-fn serving(o: &Obj, side: &str) -> String {
+/// The trait or interface an object's implementation implements, named by the
+/// side that implements it (`Guest`, `Host`): a singleton's is the side's
+/// name, and a resource's the side's and the resource's, as wit-bindgen's and
+/// wasmtime's are.
+fn side_trait(o: &Obj, side: &str) -> String {
     if o.resource {
         format!("{side}{}", pascal(&o.name))
     } else {
@@ -350,6 +351,7 @@ const TS_GIVEN: [&str; 33] = [
     "ERRNO_EBADMSG",
     "ERRNO_EINPROGRESS",
     "ERRNO_ENOSYS",
+    "Callee",
     "ComponentError",
     "Handle",
     "Lift",
@@ -358,7 +360,6 @@ const TS_GIVEN: [&str; 33] = [
     "Method",
     "Ref",
     "Sender",
-    "Serving",
     "XputeError",
     "refusal_of",
     "AbortController",
@@ -398,10 +399,10 @@ fn interface_ts_module(r: &Resolve, i: InterfaceId) -> String {
     }
 }
 
-/// Whether `n` is a resource's serving trait or interface's form, a side's
+/// Whether `n` is a resource's side trait or interface's form, a side's
 /// name and then a word (`GuestDevice`, `HostDevice`), which any module may
 /// name.
-fn is_serving(n: &str) -> bool {
+fn is_side_trait(n: &str) -> bool {
     ["Guest", "Host"].iter().any(|s| {
         n.strip_prefix(s)
             .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_uppercase()))
@@ -409,18 +410,18 @@ fn is_serving(n: &str) -> bool {
 }
 
 /// Whether the Rust bindings give `n`: one of `RS_GIVEN`, a lent buffer's
-/// generic (`T0`, …), or a resource's serving trait's form.
+/// generic (`T0`, …), or a resource's side trait's form.
 fn rs_given(n: &str) -> bool {
     RS_GIVEN.contains(&n)
         || n.strip_prefix('T')
             .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
-        || is_serving(n)
+        || is_side_trait(n)
 }
 
 /// Whether the TypeScript bindings give `n`: one of `TS_GIVEN`, or a
-/// resource's serving interface's form.
+/// resource's side interface's form.
 fn ts_given(n: &str) -> bool {
-    TS_GIVEN.contains(&n) || is_serving(n)
+    TS_GIVEN.contains(&n) || is_side_trait(n)
 }
 
 /// A WIT type's name, in a language whose bindings give the names `given`,
@@ -783,7 +784,7 @@ fn package_name(r: &Resolve, i: InterfaceId) -> String {
 /// What a side does with an interface.
 #[derive(Clone, Copy)]
 enum Role {
-    Serve,
+    Implement,
     Call,
 }
 
@@ -1132,7 +1133,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, own: &[WitTarget]) -> Result<Vec<
         }
     }
     // What the package's world exports and imports, by interface: whether
-    // the guest serves it.
+    // the guest implements it.
     let world = match p.worlds.values().collect::<Vec<_>>()[..] {
         [] => None,
         [&w] => Some(&r.worlds[w]),
@@ -1170,19 +1171,25 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, own: &[WitTarget]) -> Result<Vec<
             depth: std::cell::Cell::default(),
             externs: &externs,
         };
-        // Whether the guest serves the interface, as its world exports it, or
-        // calls it, as its world imports it; none for one of types alone.
-        let guest_serves = match world {
+        // Whether the guest implements the interface, as its world exports it,
+        // or calls it, as its world imports it; none for one of types alone.
+        let guest_implements = match world {
             _ if objs.is_empty() => None,
             Some(w) if has(&w.exports, i) => Some(true),
             Some(w) if has(&w.imports, i) => Some(false),
             Some(_) => return Err(format!("{at}: in no world of its package")),
             None => return Err(format!("{at}: its package has no world")),
         };
-        let role = |serves: bool| if serves { Role::Serve } else { Role::Call };
+        let role = |implements: bool| {
+            if implements {
+                Role::Implement
+            } else {
+                Role::Call
+            }
+        };
         let m = rs_name(iname);
         if let Some(dir) = rs_dir {
-            let rs_role = match (guest_serves, &side) {
+            let rs_role = match (guest_implements, &side) {
                 (None, _) => None,
                 (Some(g), Some((side, guest))) => Some((
                     role(g == *guest),
@@ -1206,7 +1213,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, own: &[WitTarget]) -> Result<Vec<
             }
         }
         if let Some(dir) = t.ts {
-            let ts_role = match (guest_serves, t.side) {
+            let ts_role = match (guest_implements, t.side) {
                 (None, _) => None,
                 (Some(g), Some(Side::Host)) => Some(role(!g)),
                 (Some(_), _) => {
@@ -1234,7 +1241,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, own: &[WitTarget]) -> Result<Vec<
             outs.push(Output::new(&path, text));
         }
         if let Some(dir) = t.cpp {
-            let cpp_role = match (guest_serves, t.side) {
+            let cpp_role = match (guest_implements, t.side) {
                 (None, _) => None,
                 (Some(g), Some(Side::Guest)) => Some(role(g)),
                 (Some(_), _) => return Err(format!("{at}: C++ is written for the guest alone")),

@@ -2,7 +2,6 @@
 
 package xpute
 
-import android.util.Log
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -111,6 +110,8 @@ class XputeModule : Module() {
     /** What trapped the guest, or null before it trapped (`Runtime.trap()`). */
     Function("trap") { Runtime.trap() }
 
-    Function("log") { line: String -> Log.i("xpute", line); Unit }
+    Function("log") { level: Int, context: String, message: String ->
+      Runtime.log(level, context, message)
+    }
   }
 }

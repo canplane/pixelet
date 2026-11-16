@@ -7,7 +7,6 @@ use xpute_link::mem;
 
 use super::GpuHost;
 use super::surface::Frame;
-use pxl_gpu_link::admit;
 use pxl_gpu_link::spec::device;
 
 /// A `FrameGuard` is a frame drawn and not yet done. It stays counted until
@@ -33,15 +32,6 @@ impl Drop for FrameGuard {
 }
 
 impl GpuHost {
-    /// This says whether a run may draw a frame. It may while fewer frames
-    /// than the frame latency are unfinished.
-    pub fn admit_frame(&self) -> bool {
-        admit::admits(
-            self.unfinished_cnt.load(Ordering::Relaxed),
-            self.frame_latency,
-        )
-    }
-
     /// Counts a frame the stream drew as unfinished until the queue has done
     /// the work submitted with it.
     pub(super) fn count_frame(&self) {

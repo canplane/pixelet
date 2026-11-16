@@ -22,3 +22,6 @@ path = "src/main.rs"
 [dependencies]
 xpute-gen.workspace = true
 wit-parser = "=0.263.0"
+
+[lints]
+workspace = true

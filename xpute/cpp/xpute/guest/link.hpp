@@ -48,10 +48,10 @@ std::int32_t recv();
 // objects are the resources of the interface of the named handle `h`.
 void mount(link::Handle h, std::vector<link::Token> prefix, link::Opener open);
 
-// Serves `o` under its interface's named handle `h`.
+// Mounts `o` under its interface's named handle `h`.
 void mount_named(link::Handle h, std::unique_ptr<link::Object> o);
 
-// Serves `o` under a handle issued for it, for a method to answer.
+// Adds `o` under a handle issued for it, for a method to answer.
 link::Handle add(std::unique_ptr<link::Object> o);
 
 // Opens the object `uri` names on the host, and answers its handle.
@@ -72,7 +72,7 @@ link::Tag send(link::Handle h, link::Method m, const link::Args &args, link::Ans
 // (`frame.json5` `CANCEL`).
 void cancel(link::Tag t);
 
-// Puts `stop` as how the request `t` the guest serves stops if it is
+// Puts `stop` as how the request `t` the guest answers stops if it is
 // canceled.
 void on_cancel(link::Tag t, std::function<void()> stop);
 
@@ -88,13 +88,13 @@ bool in_guest() noexcept;
 } // namespace xpute::guest
 
 // Defines the guest's three exports (`link/wit/types.wit`), over frames of
-// `cap_` bytes, with `boot_` mounting what the guest serves and opening what
-// it calls, and `enter_` and `end_` starting and ending each entry; from its
-// init on, the guest's failures are its own (`stop.hpp` `hook`). A module
-// exports them by name; a native guest as C symbols, which catch a bug
-// (kit `caught`) and answer a trap (`TRAP`, or `TRAP_AT` for init's
-// layout), as a Rust guest's catch its panic. A failed check of libc++'s own
-// still aborts a native guest's process, where a module traps.
+// `cap_` bytes, with `boot_` mounting what the guest implements and opening
+// what it calls, and `enter_` and `end_` starting and ending each entry; from
+// its init on, the guest's failures are its own (`stop.hpp` `hook`). A module
+// exports them by name; a native guest as C symbols, which catch a bug (kit
+// `caught`) and answer a trap (`TRAP`, or `TRAP_AT` for init's layout), as a
+// Rust guest's catch its panic. A failed check of libc++'s own still aborts a
+// native guest's process, where a module traps.
 #ifdef __wasm__
 // The module's static initializers, which wasm-ld gathers into one function.
 // The guest's first export runs them, before anything of the program, as a

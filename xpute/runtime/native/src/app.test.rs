@@ -48,7 +48,7 @@ pub fn exits() -> Vec<Exit> {
 }
 
 /// Starts a UI on the runtime, as the app's module does (`xpute_start`):
-/// what it serves, its named interfaces and none opened by a prefix. It
+/// what it implements, its named interfaces and none opened by a prefix. It
 /// answers the UI's handle.
 pub fn start(start: Start, named: &[Handle]) -> u32 {
     listener::stopped_on(Some(stopped));
@@ -75,7 +75,7 @@ pub type Message = Vec<i64>;
 
 /// The messages of the batch the UI of the handle `ui` takes now.
 pub fn take(ui: u32) -> Vec<Message> {
-    let batch = xpute_runtime_native::native::take(ui);
+    let batch = native::take(ui);
     // The batch is read from a copy laid on words, as XTP reads a packet
     // where it starts on a word.
     let mut words = vec![0u64; batch.1.div_ceil(8)];
@@ -83,7 +83,7 @@ pub fn take(ui: u32) -> Vec<Message> {
     // holds as many bytes and more.
     unsafe {
         core::ptr::copy_nonoverlapping(batch.0, words.as_mut_ptr().cast::<u8>(), batch.1);
-        xpute_runtime_native::native::taken_free(batch.0, batch.1);
+        native::taken_free(batch.0, batch.1);
     }
     // SAFETY: `words`' bytes, every one set.
     let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), batch.1) };

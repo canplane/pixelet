@@ -2,7 +2,8 @@
 
 //! The link's bindings in TypeScript (wit.rs): a module per interface, its
 //! types, each storing itself into a packet and loading itself from one
-//! (@xpute/link cabi.ts), the side that serves it and the side that calls it.
+//! (@xpute/link cabi.ts), the side that implements it and the side that calls
+//! it.
 
 use std::fmt::Write as _;
 
@@ -12,7 +13,7 @@ use xpute_gen::spec::{of_ident, screaming, snake, ts_enum, ts_ident, ts_number};
 
 use super::{
     Gen, Kind, Obj, Role, cases, discriminant, escaped, is_async, kind, members, method_const,
-    method_name, object_method, params, plus, rec_layout, serving, ts_given, type_name,
+    method_name, object_method, params, plus, rec_layout, side_trait, ts_given, type_name,
     variant_layout,
 };
 
@@ -197,10 +198,11 @@ impl Gen<'_> {
         Ok(format!("[{sz}, (w_) => {{ {} }}]", writes.join(" ")))
     }
 
-    /// The serving side of an object: its interface, and the object over it.
+    /// The implementing side of an object: its interface, and the object over
+    /// it.
     fn ts_export(&self, o: &Obj, out: &mut String) -> Result<(), String> {
         let link = self.link_ts;
-        let t = serving(o, "Host");
+        let t = side_trait(o, "Host");
         let _ = writeln!(out, "export interface {t} {{");
         for f in &o.methods {
             let mut sig: Vec<String> = self
@@ -239,7 +241,7 @@ impl Gen<'_> {
         let pick = if o.methods.iter().any(|f| is_async(f)) {
             format!(
                 "l: Pick<{}, \"task_return\" | \"on_cancel\">, ",
-                self.ts_use(link, "Serving", true)
+                self.ts_use(link, "Callee", true)
             )
         } else {
             String::new()
@@ -339,7 +341,7 @@ impl Gen<'_> {
             self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false)
         );
         if !o.resource {
-            let ln = self.ts_use(link, "Serving", true);
+            let ln = self.ts_use(link, "Callee", true);
             let pick = if pick.is_empty() {
                 format!("l: Pick<{ln}, \"mount_named\">")
             } else {
@@ -352,7 +354,7 @@ impl Gen<'_> {
             };
             let _ = writeln!(
                 out,
-                "/** Serves `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n"
+                "/** Mounts `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n"
             );
         }
         Ok(())
@@ -449,7 +451,7 @@ impl Gen<'_> {
         if let Some(role) = role {
             for o in objs {
                 match role {
-                    Role::Serve => self.ts_export(o, &mut out)?,
+                    Role::Implement => self.ts_export(o, &mut out)?,
                     Role::Call => self.ts_import(o, &mut out)?,
                 }
             }

@@ -12,7 +12,7 @@ path = "src/lib.rs"
 pxl-gpu-link.workspace = true
 xpute-link.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
-# It serves the GPU's bindings (src/abi.rs) on the host's side, on
+# It mounts the GPU's bindings (src/abi.rs) on the host's side, on
 # the guest's thread, and hands a job's result back there (native.rs).
 xpute-host.workspace = true
 # The pipelines being made, by the guest's handle (lib.rs).

@@ -6,10 +6,10 @@ import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
+  type Callee,
   type Handle,
   type LinkObject,
   type Method,
-  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -85,9 +85,9 @@ function object(implementation: Host): LinkObject {
   };
 }
 
-/** Serves `implementation` under the interface's handle. */
+/** Mounts `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Serving, "mount_named">,
+  l: Pick<Callee, "mount_named">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(implementation));

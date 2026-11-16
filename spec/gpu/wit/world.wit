@@ -1,7 +1,7 @@
 package pxl:gpu@0.1.0;
 
 // The GPU a guest draws with, and the frames it is paced by, which its host
-// serves; and the surfaces it draws on, which it serves its host.
+// implements; and the surfaces it draws on, which it implements for its host.
 
 world guest {
   import gpu;

@@ -165,10 +165,10 @@ impl<R: Range> BuddyMalloc<R> {
         }
         (h.bucket_limit..h.bucket_cnt)
             .find(|&b| {
-                let list = &h.buckets[b] as *const List;
+                let list = &raw const h.buckets[b];
                 // SAFETY: the head is this heap's own field; an empty list
                 // points at itself.
-                unsafe { !core::ptr::eq((*list).next, list) }
+                unsafe { !ptr::eq((*list).next, list) }
             })
             .map_or(0, |b| 1usize << (h.max_log2 - b))
     }
@@ -253,7 +253,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
     }
 
     fn list_init(&mut self, bucket: usize) {
-        let list = &mut self.buckets[bucket] as *mut List;
+        let list = &raw mut self.buckets[bucket];
         // SAFETY: the head is this heap's own field, live for its life.
         unsafe {
             (*list).prev = list;
@@ -264,7 +264,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
     /// # Safety
     /// `entry` is a free block of at least `size_of::<List>()` bytes.
     unsafe fn list_push(&mut self, bucket: usize, entry: *mut List) {
-        let list = &mut self.buckets[bucket] as *mut List;
+        let list = &raw mut self.buckets[bucket];
         // SAFETY: the caller's, and the head is live.
         unsafe {
             let prev = (*list).prev;
@@ -287,7 +287,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
     }
 
     fn list_pop(&mut self, bucket: usize) -> *mut List {
-        let list = &mut self.buckets[bucket] as *mut List;
+        let list = &raw mut self.buckets[bucket];
         // SAFETY: the head is live and its links are this heap's own.
         unsafe {
             let back = (*list).prev;
@@ -322,7 +322,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
             // The root is in use, so the new root is SPLIT: its left child is
             // the old root and its right child a new free block.
             let right_child = self.ptr_for_node(root + 1, self.bucket_limit);
-            if !self.update_max_ptr(right_child as usize + core::mem::size_of::<List>()) {
+            if !self.update_max_ptr(right_child as usize + size_of::<List>()) {
                 return false;
             }
             // SAFETY: the right child is a free block, and the bytes for its
@@ -356,15 +356,12 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
                     && self.node_is_split.as_ref().len() * 8 == 1 << (self.bucket_cnt - 1),
                 ENOTRECOVERABLE
             );
-            crate::ensure!(
-                1usize << min_log2 >= core::mem::size_of::<List>(),
-                ENOTRECOVERABLE
-            );
+            crate::ensure!(1usize << min_log2 >= size_of::<List>(), ENOTRECOVERABLE);
             self.base_ptr = base;
             self.max_ptr = base;
             self.end_ptr = end;
             self.bucket_limit = self.bucket_cnt - 1;
-            self.update_max_ptr(self.base_ptr + core::mem::size_of::<List>());
+            self.update_max_ptr(self.base_ptr + size_of::<List>());
             self.list_init(self.bucket_cnt - 1);
             let base = self.base_ptr as *mut List;
             // SAFETY: the first block of the range, reserved just above.
@@ -404,7 +401,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
 
             let sz = 1usize << (self.max_log2 - bucket);
             let need_sz = if bucket < original_bucket {
-                sz / 2 + core::mem::size_of::<List>()
+                sz / 2 + size_of::<List>()
             } else {
                 sz
             };
@@ -435,7 +432,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
 
             self.live += 1 << (self.max_log2 - original_bucket);
             self.allocs = self.allocs.wrapping_add(1);
-            return ptr as *mut u8;
+            return ptr.cast::<u8>();
         }
     }
 
@@ -444,7 +441,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
             return;
         }
 
-        let ptr = ptr as *mut List;
+        let ptr = ptr.cast::<List>();
         let mut bucket = self.bucket_for_request(request);
         self.live -= 1 << (self.max_log2 - bucket);
         self.releases = self.releases.wrapping_add(1);

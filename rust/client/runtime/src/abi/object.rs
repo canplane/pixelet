@@ -65,7 +65,7 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `implementation` under the interface's handle on `side_`.
+/// Mounts `implementation` under the interface's handle on `side_`.
 pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
     side_.mount_named(HANDLE, _rt::Rc::new(_Object(side_, implementation)));
 }

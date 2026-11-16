@@ -18,9 +18,11 @@
 //! the next present sibling, and inside its parent; a reader refuses a packet
 //! that breaks this.
 
-// The helpers and the type names are spelled as in the TypeScript kit, so one
-// name reads the same on both sides.
-#![allow(non_snake_case, non_camel_case_types, clippy::identity_op)]
+#![expect(
+    non_snake_case,
+    non_camel_case_types,
+    reason = "the helpers and the type names are spelled as in the TypeScript kit, so one name reads the same on both sides"
+)]
 
 use crate::abi::word::{field_get32, field_set32};
 use crate::status::errno::Errno;
@@ -106,6 +108,10 @@ pub type LeafType = u8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
+#[expect(
+    clippy::identity_op,
+    reason = "each scalar type is written as its tag's bits, `0x80 | 0` among them"
+)]
 pub enum ScalarType {
     U8 = 0x80 | 0,         // I(0, 0)
     I8 = 0x80 | 8,         // I(0, 1)

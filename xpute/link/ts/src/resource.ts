@@ -1,7 +1,7 @@
 // @xpute/link/resource.ts
 
 /**
- * A handle names an object on the side that serves it, which issued it
+ * A handle names an object on the side that implements it, which issued it
  * (xpute-link resource.rs). As the component model's table does, a handle's
  * slot is used again once its object is dropped, so that a side issues
  * handles for as long as it runs, the slots dropped first used first, so
@@ -30,7 +30,7 @@ const ISSUED = 0xffff_ffff;
  * slot while it is free, 0 for none; `ISSUED` while it is issued. */
 type Slot<T> = { generation: u32; val: T | undefined; next: u32 };
 
-/** The objects a side serves, by handle: slot `k` at `k - 1`, and the queue
+/** The objects a side implements, by handle: slot `k` at `k - 1`, and the queue
  * of the slots dropped, through their `next`, from `_head` to `_tail`. */
 export class Table<T> {
   private readonly _slots: Slot<T>[] = [];

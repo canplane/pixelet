@@ -1,11 +1,11 @@
 // xpute-host/runtime.rs
 
-//! What the host needs of the runtime it runs in, which the runtime
-//! implements and gives it once, on the guest's thread, before it mounts any
-//! server (`init`), as a page's runtime gives @xpute/host its own: the way
-//! back to the guest's thread (`post`), the timers there (`after`, `clear`),
-//! where the guest's stop is told (`stopped`), and where a log record is
-//! written (`log`).
+//! What the host needs of the runtime it runs in, which the runtime implements
+//! and gives it once, on the guest's thread, before it mounts any
+//! implementation (`init`), as a page's runtime gives @xpute/host its own: the
+//! way back to the guest's thread (`post`), the timers there (`after`,
+//! `clear`), where the guest's stop is told (`stopped`), and where a log record
+//! is written (`log`).
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -24,7 +24,7 @@ pub type Task = Box<dyn FnOnce() + Send>;
 pub type Timer = (Instant, u64);
 
 /// The report of a broken invariant before the guest stops: the guest's
-/// (wit/stop/stop.wit), which the host that serves the stop hands its
+/// (wit/stop/stop.wit), which the host that implements the stop hands its
 /// runtime (stop.rs), or the host's own failure, which its runtime
 /// reports itself. A panic the language raised carries its own message; a
 /// bug carries none.

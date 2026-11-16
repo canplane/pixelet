@@ -53,21 +53,29 @@ fn host(
     )
 }
 
-/// Each host counts its own frames. One at its latency holds back no other
-/// host, and its frames end as the device is polled.
+/// Each host counts its own frames, and its frames end as the device is
+/// polled.
 #[test]
-fn host_paces_frames() {
+fn host_counts_frames() {
     let (adapter, device, queue) = device();
     let (busy, other) = (
         host(&adapter, &device, &queue, 1),
-        host(&adapter, &device, &queue, 2),
+        host(&adapter, &device, &queue, 1),
     );
-    assert!(busy.admit_frame());
+    let unfinished = |h: &GpuHost| h.unfinished_cnt.load(Ordering::Relaxed);
     busy.count_frame();
-    assert!(!busy.admit_frame(), "its one frame is unfinished");
-    assert!(other.admit_frame(), "another host's frames are not its own");
+    assert_eq!(unfinished(&busy), 1, "its one frame is unfinished");
+    assert_eq!(
+        unfinished(&other),
+        0,
+        "another host's frames are not its own"
+    );
     let _ = device.poll(PollType::wait_indefinitely());
-    assert!(busy.admit_frame(), "its frame ended with the queue's work");
+    assert_eq!(
+        unfinished(&busy),
+        0,
+        "its frame ended with the queue's work"
+    );
 }
 
 /// A frame's callback takes it off its count whether the queue calls it or
@@ -91,7 +99,6 @@ fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
     let h = host(&adapter, &device, &queue, 1);
     let count = h.unfinished_cnt.clone();
-    assert!(h.admit_frame());
     h.count_frame();
     assert_eq!(
         count.load(Ordering::Relaxed),

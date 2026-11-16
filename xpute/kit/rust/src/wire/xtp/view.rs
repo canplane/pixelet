@@ -4,7 +4,10 @@
 //! `TreeEncoder` then lays out as a packet. A `None` value writes a typed
 //! null, an absent node that keeps its type.
 
-#![allow(non_snake_case)]
+#![expect(
+    non_snake_case,
+    reason = "the helpers are spelled as in the TypeScript kit, so one name reads the same on both sides"
+)]
 
 use crate::status::error::XputeError;
 
@@ -22,9 +25,7 @@ fn seq<'a>(type_: SequenceType, val: Option<SequenceVal<'a>>) -> Node<'a> {
 fn array<'a, T: Copy>(type_: SequenceType, arr: Option<&'a [T]>) -> Option<SequenceVal<'a>> {
     arr.map(|a| {
         // SAFETY: plain numbers read back as their bytes.
-        let bytes = unsafe {
-            core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a))
-        };
+        let bytes = unsafe { core::slice::from_raw_parts(a.as_ptr().cast::<u8>(), size_of_val(a)) };
         SequenceVal::Array(Array {
             type_,
             bytes: bytes.into(),

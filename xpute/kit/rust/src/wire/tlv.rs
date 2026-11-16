@@ -25,9 +25,10 @@ const U64_SZ: u32 = size_of::<u64>() as u32;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-// The width tags are spelled `U8` and `I16`, so the other tags are upper case
-// to match.
-#[allow(clippy::upper_case_acronyms)]
+#[expect(
+    clippy::upper_case_acronyms,
+    reason = "the width tags are spelled `U8` and `I16`, so the other tags are upper case to match"
+)]
 enum Tag {
     END = 0x00,
 

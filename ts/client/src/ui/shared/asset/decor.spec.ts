@@ -47,6 +47,20 @@ export function of_Decor(val: number): Decor | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_Decor(val: Decor): string {
+  switch (val) {
+    case DECOR_TREE:
+      return "tree";
+    case DECOR_BOAT:
+      return "boat";
+    case DECOR_CAR:
+      return "car";
+    case DECOR_TRAIN:
+      return "train";
+  }
+}
+
 /** The decors' ids, in the table's order. */
 export const DECORS: readonly number[] = [1024, 1025, 1026, 1027];
 

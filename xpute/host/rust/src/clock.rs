@@ -1,9 +1,10 @@
 // xpute-host/clock.rs
 
-//! The clocks the host serves the guest (wit/clocks/monotonic-clock.wit,
-//! wit/clocks/system-clock.wit), in nanoseconds, as clock.ts: the monotonic one
-//! from the host's start, its waits on its runtime's timers (runtime.rs
-//! `after`), and the system clock from the Unix epoch.
+//! The clocks the host implements for the guest
+//! (wit/clocks/monotonic-clock.wit, wit/clocks/system-clock.wit), in
+//! nanoseconds, as clock.ts: the monotonic one from the host's start, its waits
+//! on its runtime's timers (runtime.rs `after`), and the system clock from the
+//! Unix epoch.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -62,7 +63,7 @@ impl system_clock::Host for System {
 }
 
 /// Mounts the clocks on `side`.
-pub fn serve(side: &'static Side) {
+pub fn mount(side: &'static Side) {
     monotonic_clock::mount(
         side,
         Rc::new(Monotonic {

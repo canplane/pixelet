@@ -1,12 +1,11 @@
-// @pxl/build/console.ts
+// @pxl/shader/console.ts
 
 /**
- * The dev server's half of a device's remote console (the app's
- * remote-console.ts). What a page posts to `/__console` is printed where the
- * server's own output goes and appended to `log`, so that a phone on a tunnel
- * can be read without a debugger attached. Each dev server mounts it at that
- * path: Metro's (the app's metro.config.ts) and the shader probe's
- * (tool/shader).
+ * The probe's dev server's half of a device's remote console
+ * (remote-console.ts). What the page posts to `/__console` is printed where
+ * the server's own output goes and appended to `log`, so that a phone on a
+ * tunnel can be read without a debugger attached. vite.config.ts mounts it at
+ * that path.
  */
 
 import { appendFileSync } from "node:fs";

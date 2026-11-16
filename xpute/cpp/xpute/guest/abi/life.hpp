@@ -75,7 +75,7 @@ class Object_ final : public _rt::Object {
     std::unique_ptr<Guest> implementation_;
 };
 
-// Serves `implementation` under the interface's handle.
+// Mounts `implementation` under the interface's handle.
 inline void mount(std::unique_ptr<Guest> implementation) {
     _rt::mount_named(HANDLE, std::make_unique<Object_>(std::move(implementation)));
 }

@@ -15,7 +15,7 @@ fn matches_record() {
                 got.to_bits(),
                 v.f64(&format!("{k}.{name}")).to_bits(),
                 "{k}.{name}({x}, {s}) = {got}"
-            )
+            );
         };
         assert_eq!(
             approx_eq(x, x + s * 1e-6, None),

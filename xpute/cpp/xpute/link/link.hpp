@@ -4,24 +4,25 @@
 // Whatever is called is an object, called by its methods under a handle: an
 // interface's named handle, the hash of its name (`frame.json5` `NAMED`), or
 // a resource's, named by a URI, a tuple of tokens, and opened by the root's
-// `open` to a handle the serving side issues. A frame is one method called:
-// its tag the request, unique among the sender's pending ones, its command
-// the handle, the method and a `RES` bit (`frame.hpp`), its packet the args
-// in the Canonical ABI's layout (`cabi.hpp`). A frame crosses one way through
-// one function, `link_out` from the guest and `link_in` into it, and each
-// crossing returns at once what the method came to: its result, or
+// `open` to a handle the implementing side issues. A frame is one method
+// called: its tag the request, unique among the sender's pending ones, its
+// command the handle, the method and a `RES` bit (`frame.hpp`), its packet
+// the args in the Canonical ABI's layout (`cabi.hpp`). A frame crosses one
+// way through one function, `link_out` from the guest and `link_in` into it,
+// and each crossing returns at once what the method came to: its result, or
 // EINPROGRESS for one that answers later, by a frame marked `RES` with the
 // request's tag. So each side has the same ways:
 //
 // - `call` takes what the crossing returns, for a method that always answers
 //   at once, and stops as a bug on EINPROGRESS;
 // - `send` hands it to its answer, and an `async func` is sent;
-// - `mount_named` serves an interface under its named handle, and `mount`
-//   puts the opener of an interface's resources the side serves under a
-//   URI's leading tokens, the longest matching winning; `open` and `drop` reach the root's
-//   open and a handle's drop on the other side;
+// - `mount_named` mounts an interface's implementation under its named
+//   handle, and `mount` puts the opener of an interface's resources the side
+//   implements under a URI's leading tokens, the longest matching winning;
+//   `open` and `drop` reach the root's open and a handle's drop on the other
+//   side;
 // - `cancel` cancels a request sent and pending (the root's `CANCEL`), and
-//   `on_cancel` puts what runs if a request the side serves is canceled.
+//   `on_cancel` puts what runs if a request the side answers is canceled.
 //
 // The link holds these on both ends:
 //
@@ -124,7 +125,7 @@ struct Reply {
     Data data = std::nullopt;
 };
 
-// An object a side serves: given a method, the request's tag, for a later
+// An object a side implements: given a method, the request's tag, for a later
 // answer (`task_return`), and the args, it answers.
 class Object {
   public:
@@ -216,11 +217,11 @@ class Side {
     // objects are the resources of the interface of the named handle `h`.
     void mount(Handle h, std::vector<Token> prefix, Opener open);
 
-    // Serves `o` under its interface's named handle `h`, which the other
+    // Mounts `o` under its interface's named handle `h`, which the other
     // side calls with no open.
     void mount_named(Handle h, std::unique_ptr<Object> o);
 
-    // Serves `o` under a handle issued for it, which a method answers for
+    // Adds `o` under a handle issued for it, which a method answers for
     // the other side to call `o` by: a resource a function returns.
     Handle add(std::unique_ptr<Object> o) { return objects_.add(std::move(o)); }
 
@@ -244,7 +245,7 @@ class Side {
     // its answer still comes, and is heard as any other (`CANCEL`).
     void cancel(Tag t);
 
-    // Puts `stop` as how the request `t` this side serves stops if it is
+    // Puts `stop` as how the request `t` this side answers stops if it is
     // canceled (`Return::on_cancel`).
     void on_cancel(Tag t, std::function<void()> stop);
 
@@ -271,7 +272,7 @@ class Side {
         std::optional<std::vector<std::uint8_t>> data;
     };
 
-    Reply serve(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args);
+    Reply run(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args);
     Result<Handle> opened(std::optional<std::span<const std::uint8_t>> args);
     Tag tag() noexcept;
     Result<void> lay(std::uint64_t at, Frame words, const Args &pkt);
@@ -290,13 +291,13 @@ class Side {
     // The openers, each with the named handle of the interface whose
     // resources it opens, by the URI's leading tokens.
     std::vector<std::tuple<Handle, std::vector<Token>, Opener>> mounts_;
-    // The objects this side serves, by the handles it issued.
+    // The objects this side implements, by the handles it issued.
     Table<std::unique_ptr<Object>> objects_;
-    // The interfaces this side serves, by their named handles (`NAMED`).
+    // The interfaces this side implements, by their named handles (`NAMED`).
     std::map<Handle, std::unique_ptr<Object>> named_;
     // The answers of the sent requests that answer later, by tag.
     std::map<Tag, Answer> pending_;
-    // How each request this side serves stops if its caller cancels it, by
+    // How each request this side answers stops if its caller cancels it, by
     // tag, until it answers.
     std::map<Tag, std::function<void()>> cancels_;
     // The answers due, run after the work at hand.

@@ -1,6 +1,6 @@
 // @xpute/runtime-web/worker.calls.test.ts
 
-/** A function without `async` the UI serves across its port refuses to
+/** A function without `async` the UI implements across its port refuses to
  * start, naming its interface, and the guest is never entered (worker.ts
  * `enter`), as xpute-runtime-native link.calls.test.rs holds a device's. */
 
@@ -9,10 +9,11 @@ import assert from "node:assert/strict";
 
 import { Side } from "@xpute/link";
 import { NAMED } from "@xpute/link/link.ts";
-import type { Trap } from "./message.ts";
+import { LEVEL_ERROR } from "@xpute/host/abi/log/log.enum.ts";
+import type { Log, Trap } from "./message.ts";
 import { run } from "./worker.ts";
 
-test("a function without async served by the UI refuses to start, naming its interface, and the guest is never entered", () => {
+test("a function without async implemented by the UI refuses to start, naming its interface, and the guest is never entered", () => {
   const told: unknown[] = [];
   vi.stubGlobal("postMessage", (m: unknown) => told.push(m));
   let entered = false;
@@ -25,14 +26,14 @@ test("a function without async served by the UI refuses to start, naming its int
     },
     boot: () => {},
   };
-  // An interface the UI serves across the port, one of whose methods
+  // An interface the UI implements across the port, one of whose methods
   // answers at once.
   const called = (NAMED | 0x30) >>> 0;
   const { port1, port2 } = new MessageChannel();
   run(
     g,
     {
-      servers: [],
+      mounts: [],
       imports: [["called", called]],
       calls: [[called, 0]],
       taker: { give() {}, take() {} },
@@ -41,10 +42,14 @@ test("a function without async served by the UI refuses to start, naming its int
   );
   port1.close();
   port2.close();
-  const trap: Trap = {
-    kind: "trap",
-    err: "a function without async is served by the UI: called",
+  const err = "a function without async is implemented by the UI: called";
+  const written: Log = {
+    kind: "log",
+    level: LEVEL_ERROR,
+    context: "link",
+    message: `trapped: ${err}`,
   };
-  assert.deepEqual(told, [trap]);
+  const trap: Trap = { kind: "trap", err };
+  assert.deepEqual(told, [written, trap]);
   assert.equal(entered, false);
 });

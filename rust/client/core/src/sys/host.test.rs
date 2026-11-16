@@ -1,10 +1,11 @@
 // pxl-core/sys/host.test.rs
 //
-// The host the core's tests run against: the other side of the link, laid
-// as the guest's init lays it on a host. It serves the monotonic clock's `now`
-// at the time a test sets (`set_clock`) and what a test mounts (`mount`), and
-// answers a request later as a test says (`answer`). A call of an interface
-// nothing mounts answers no-entry, and of the clock's other methods ENOSYS.
+// The host the core's tests run against: the other side of the link, laid as
+// the guest's init lays it on a host. It implements the monotonic clock's
+// `now` at the time a test sets (`set_clock`) and what a test mounts
+// (`mount`), and answers a request later as a test says (`answer`). A call of
+// an interface nothing mounts answers no-entry, and of the clock's other
+// methods ENOSYS.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -28,7 +29,7 @@ thread_local! {
     static NOW_NS: Cell<u64> = const { Cell::new(0) };
 }
 
-/// The guest's import, served by this side.
+/// The guest's import, implemented by this side.
 #[unsafe(no_mangle)]
 extern "C" fn link_out(at: u64) -> i32 {
     SIDE.with(|s| s.recv(at))
@@ -74,7 +75,7 @@ pub(crate) fn set_clock(ms: f64) {
     NOW_NS.set(duration(ms));
 }
 
-/// Serves `o` under the named handle `h`.
+/// Mounts `o` under the named handle `h`.
 pub(crate) fn mount(h: Handle, o: Rc<dyn Object>) {
     lay();
     SIDE.with(|s| s.mount_named(h, o));

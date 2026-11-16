@@ -9,10 +9,11 @@ import assert from "node:assert/strict";
 
 import { Side, uri } from "@xpute/link";
 import { NAMED } from "@xpute/link/link.ts";
-import type { Trap } from "./message.ts";
+import { LEVEL_ERROR } from "@xpute/host/abi/log/log.enum.ts";
+import type { Log, Trap } from "./message.ts";
 import { run } from "./worker.ts";
 
-test("a world importing what no server mounts refuses to start, naming each, and the guest is never entered", () => {
+test("a world importing what has no implementation refuses to start, naming each, and the guest is never entered", () => {
   const told: unknown[] = [];
   vi.stubGlobal("postMessage", (m: unknown) => told.push(m));
   let entered = false;
@@ -32,7 +33,7 @@ test("a world importing what no server mounts refuses to start, naming each, and
   run(
     g,
     {
-      servers: [
+      mounts: [
         (s) => s.mount_named(named, { call: () => 0, drop() {} }),
         (s) =>
           s.mount(opened, uri("opened"), () => ({ call: () => 0, drop() {} })),
@@ -50,10 +51,14 @@ test("a world importing what no server mounts refuses to start, naming each, and
   );
   port1.close();
   port2.close();
-  const trap: Trap = {
-    kind: "trap",
-    err: "no server mounts missing, missing-too",
+  const err = "no implementation of missing, missing-too";
+  const written: Log = {
+    kind: "log",
+    level: LEVEL_ERROR,
+    context: "link",
+    message: `trapped: ${err}`,
   };
-  assert.deepEqual(told, [trap]);
+  const trap: Trap = { kind: "trap", err };
+  assert.deepEqual(told, [written, trap]);
   assert.equal(entered, false);
 });

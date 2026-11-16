@@ -1,6 +1,6 @@
 package xpute:fs@0.1.0;
 
-// The files a guest opens, which its host serves.
+// The files a guest opens, which its host implements.
 
 world imports {
   import file;

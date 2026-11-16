@@ -4,29 +4,24 @@
  * A page's core and the host's link to it run in a worker of their own, so
  * that the core holds up none of the UI's events. The page sends, in one
  * message, its kept entries, the core's module, the UI's port, and the named
- * handles and prefixes of what the UI serves; the worker instantiates the
+ * handles and prefixes of what the UI implements; the worker instantiates the
  * module with a link laid over it (@xpute/runtime-web `instantiate`) and
- * runs the core on it from the servers listed here (@xpute/runtime-web
- * `run`): what the host serves, the core's files and GPU among them, the
+ * runs the core on it from the mounts listed here (@xpute/runtime-web
+ * `run`): what the host implements, the core's files and GPU among them, the
  * UI's stand-ins across the port, the canvases the UI gives going to the
  * GPU. The files are here, so the source is declared here too.
  */
 
 import { type Side, sender } from "@xpute/link";
-import { serve_clock, serve_stop } from "@xpute/host";
-import {
-  forward_console,
-  type Instantiate,
-  instantiate,
-  run,
-} from "@xpute/runtime-web";
-import { serve_vsync, WebGpu } from "@pxl/gpu/host";
+import { mount_clock, mount_stop } from "@xpute/host";
+import { type Instantiate, instantiate, run } from "@xpute/runtime-web";
+import { mount_vsync, WebGpu } from "@pxl/gpu/host";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
 import { CALLS } from "@/abi/calls.ts";
 import { set_online } from "@/service/origin/online.ts";
-import { serve_files } from "@/service/sys/fs/file.ts";
-import { serve_objects } from "@/service/sys/fs/object.ts";
+import { mount_files } from "@/service/sys/fs/file.ts";
+import { mount_objects } from "@/service/sys/fs/object.ts";
 import {
   type Declaration,
   declare_source,
@@ -36,7 +31,7 @@ import {
   watch_source,
 } from "@/service/sys/fs/source.ts";
 import { set_storage } from "@/service/sys/fs/storage.ts";
-import { serve_text } from "@/service/core/text.ts";
+import { mount_text } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
 
 /** What the page's start sends the worker beside the core's instantiation
@@ -61,10 +56,6 @@ export interface KeepReport {
 }
 
 const tell = (m: SourceReport | KeepReport) => postMessage(m);
-
-// What the worker writes to its console goes to the page's lines too, where a
-// tool driving the page reads them (service/platform/log.web.ts).
-forward_console();
 
 onmessage = ({ data: m }: MessageEvent<Instantiate & Kept>) => {
   keep(m.entries);
@@ -105,14 +96,14 @@ async function boot(m: Instantiate): Promise<void> {
   run(
     instance,
     {
-      servers: [
-        serve_stop,
-        serve_clock,
-        serve_vsync,
-        () => gpu.serve(),
-        (s) => serve_text(s, s),
-        (s) => serve_files(s, s),
-        (s) => serve_objects(s, s),
+      mounts: [
+        mount_stop,
+        mount_clock,
+        mount_vsync,
+        () => gpu.mount(),
+        (s) => mount_text(s, s),
+        (s) => mount_files(s, s),
+        (s) => mount_objects(s, s),
       ],
       imports: IMPORTS,
       calls: CALLS,

@@ -4,7 +4,7 @@ import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
 
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
-import { DEVICE_READY, GET_DEVICE, HANDLE } from "../../link/src/abi/gpu.ts";
+import { DEVICE_READY, GET_DEVICE, HANDLE } from "./abi/gpu.ts";
 import { Lift, Lower } from "@xpute/link/cabi.ts";
 import type { LinkObject, Side, Tag } from "@xpute/link";
 import { type GpuReport, WebGpu } from "./web.ts";
@@ -35,7 +35,7 @@ async function ready(nav: object): Promise<GpuReport[]> {
     link as unknown as Side,
     { power: "high-performance", required_feats: [], optional_feats: [] },
     { frame_latency: 2, upload_chunk_sz: 1 << 16 },
-  ).serve();
+  ).mount();
   const reply = named.get(HANDLE)!.call(GET_DEVICE, 0, null);
   assert.ok(typeof reply !== "number" && reply.data !== null);
   const out = new Uint8Array(4);

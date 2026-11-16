@@ -1,8 +1,8 @@
 // cpp/dev/guest.cpp
 
 // The smallest guest, which `make wasm` links over the amalgamation as a
-// module, as a program's guest is linked (Makefile `MODULE_FLAGS`). It serves
-// nothing, and its entries start and end with nothing to do.
+// module, as a program's guest is linked (Makefile `MODULE_FLAGS`). It
+// implements nothing, and its entries start and end with nothing to do.
 
 #include "xpute.hpp"
 

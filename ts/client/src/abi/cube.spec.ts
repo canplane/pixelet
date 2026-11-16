@@ -44,6 +44,18 @@ export function of_Sentinel(val: number): Sentinel | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_Sentinel(val: Sentinel): string {
+  switch (val) {
+    case SENTINEL_VOID:
+      return "void";
+    case SENTINEL_UNKNOWN:
+      return "unknown";
+    case SENTINEL_AIR:
+      return "air";
+  }
+}
+
 /** The ground: one byte a cell, its asset id, a ground cube numbered in
  * the order OpenStreetMap Carto paints.
  * `transport` marks a way: decor faces along it and no pier stands on it.
@@ -642,6 +654,128 @@ export function of_Ground(val: number): Ground | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_Ground(val: Ground): string {
+  switch (val) {
+    case GROUND_LAND:
+      return "land";
+    case GROUND_BARE_GROUND:
+      return "bare_ground";
+    case GROUND_SAND:
+      return "sand";
+    case GROUND_BEACH:
+      return "beach";
+    case GROUND_HEATH:
+      return "heath";
+    case GROUND_SCRUB:
+      return "scrub";
+    case GROUND_GRASS:
+      return "grass";
+    case GROUND_PARK:
+      return "park";
+    case GROUND_LEISURE:
+      return "leisure";
+    case GROUND_PITCH:
+      return "pitch";
+    case GROUND_FOREST:
+      return "forest";
+    case GROUND_ORCHARD:
+      return "orchard";
+    case GROUND_ALLOTMENTS:
+      return "allotments";
+    case GROUND_FARMLAND:
+      return "farmland";
+    case GROUND_FARMYARD:
+      return "farmyard";
+    case GROUND_CAMPSITE:
+      return "campsite";
+    case GROUND_CEMETERY:
+      return "cemetery";
+    case GROUND_RESIDENTIAL:
+      return "residential";
+    case GROUND_GARAGES:
+      return "garages";
+    case GROUND_RETAIL:
+      return "retail";
+    case GROUND_COMMERCIAL:
+      return "commercial";
+    case GROUND_INDUSTRIAL:
+      return "industrial";
+    case GROUND_POWER:
+      return "power";
+    case GROUND_LANDFILL:
+      return "landfill";
+    case GROUND_QUARRY:
+      return "quarry";
+    case GROUND_SOCIETAL_AMENITIES:
+      return "societal_amenities";
+    case GROUND_PLACE_OF_WORSHIP:
+      return "place_of_worship";
+    case GROUND_TRANSPORTATION_AREA:
+      return "transportation_area";
+    case GROUND_PARKING:
+      return "parking";
+    case GROUND_APRON:
+      return "apron";
+    case GROUND_GLACIER:
+      return "glacier";
+    case GROUND_WATER:
+      return "water";
+    case GROUND_DAM:
+      return "dam";
+    case GROUND_BREAKWATER:
+      return "breakwater";
+    case GROUND_BUILDING:
+      return "building";
+    case GROUND_BUILDING_MAJOR:
+      return "building_major";
+    case GROUND_FOOTWAY:
+      return "footway";
+    case GROUND_CYCLEWAY:
+      return "cycleway";
+    case GROUND_BRIDLEWAY:
+      return "bridleway";
+    case GROUND_TRACK:
+      return "track";
+    case GROUND_PEDESTRIAN:
+      return "pedestrian";
+    case GROUND_LIVING_STREET:
+      return "living_street";
+    case GROUND_RESIDENTIAL_ROAD:
+      return "residential_road";
+    case GROUND_ROAD:
+      return "road";
+    case GROUND_SECONDARY:
+      return "secondary";
+    case GROUND_PRIMARY:
+      return "primary";
+    case GROUND_TRUNK:
+      return "trunk";
+    case GROUND_MOTORWAY:
+      return "motorway";
+    case GROUND_PLATFORM:
+      return "platform";
+    case GROUND_TRAM:
+      return "tram";
+    case GROUND_LIGHT_RAIL:
+      return "light_rail";
+    case GROUND_SUBWAY:
+      return "subway";
+    case GROUND_MONORAIL:
+      return "monorail";
+    case GROUND_RAIL:
+      return "rail";
+    case GROUND_AEROWAY:
+      return "aeroway";
+    case GROUND_SOIL:
+      return "soil";
+    case GROUND_SANDSTONE:
+      return "sandstone";
+    case GROUND_STONE:
+      return "stone";
+  }
+}
+
 /** What only an object can be: past a byte, so no ground cell holds it. An
  * object's value is a u16 whose byte range is the ground's. */
 export const object = [
@@ -773,4 +907,40 @@ export function of_Object(val: number): Object | null {
     val === OBJECT_PINK
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_Object(val: Object): string {
+  switch (val) {
+    case OBJECT_WHITE:
+      return "white";
+    case OBJECT_GREY:
+      return "grey";
+    case OBJECT_DARK_GREY:
+      return "dark_grey";
+    case OBJECT_BLACK:
+      return "black";
+    case OBJECT_RED:
+      return "red";
+    case OBJECT_ORANGE:
+      return "orange";
+    case OBJECT_BROWN:
+      return "brown";
+    case OBJECT_YELLOW:
+      return "yellow";
+    case OBJECT_GREEN:
+      return "green";
+    case OBJECT_DARK_GREEN:
+      return "dark_green";
+    case OBJECT_CYAN:
+      return "cyan";
+    case OBJECT_BLUE:
+      return "blue";
+    case OBJECT_VIOLET:
+      return "violet";
+    case OBJECT_MAGENTA:
+      return "magenta";
+    case OBJECT_PINK:
+      return "pink";
+  }
 }

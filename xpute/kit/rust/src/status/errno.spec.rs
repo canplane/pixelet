@@ -423,188 +423,72 @@ impl Errno {
             Errno::ENOTRECOVERABLE => Kind::Internal,
         }
     }
-}
 
-pub mod errno {
-    pub mod ok {
-        pub const TEXT: &str = "Success";
-    }
-    pub mod eperm {
-        pub const TEXT: &str = "Operation not permitted";
-    }
-    pub mod enoent {
-        pub const TEXT: &str = "No such file or directory / entry not found";
-    }
-    pub mod esrch {
-        pub const TEXT: &str = "No such process";
-    }
-    pub mod eintr {
-        pub const TEXT: &str = "Interrupted system call";
-    }
-    pub mod eio {
-        pub const TEXT: &str = "I/O error";
-    }
-    pub mod enxio {
-        pub const TEXT: &str = "No such device or address";
-    }
-    pub mod e2big {
-        pub const TEXT: &str = "Argument list too long / object too large for fixed local cap";
-    }
-    pub mod enoexec {
-        pub const TEXT: &str = "Exec format error";
-    }
-    pub mod ebadf {
-        pub const TEXT: &str = "Bad file descriptor / bad handle";
-    }
-    pub mod echild {
-        pub const TEXT: &str = "No child processes";
-    }
-    pub mod eagain {
-        pub const TEXT: &str = "Try again / Resource temporarily unavailable";
-    }
-    pub mod enomem {
-        pub const TEXT: &str = "Out of memory";
-    }
-    pub mod eacces {
-        pub const TEXT: &str = "Permission denied";
-    }
-    pub mod efault {
-        pub const TEXT: &str = "Bad address";
-    }
-    pub mod ebusy {
-        pub const TEXT: &str = "Device or resource busy";
-    }
-    pub mod eexist {
-        pub const TEXT: &str = "File exists / duplicate bind";
-    }
-    pub mod exdev {
-        pub const TEXT: &str = "Cross-device link";
-    }
-    pub mod enodev {
-        pub const TEXT: &str = "No such device";
-    }
-    pub mod enotdir {
-        pub const TEXT: &str = "Not a directory";
-    }
-    pub mod eisdir {
-        pub const TEXT: &str = "Is a directory";
-    }
-    pub mod einval {
-        pub const TEXT: &str = "Invalid argument";
-    }
-    pub mod enfile {
-        pub const TEXT: &str = "File table overflow (system-wide)";
-    }
-    pub mod emfile {
-        pub const TEXT: &str = "Too many open files (process)";
-    }
-    pub mod enotty {
-        pub const TEXT: &str = "Not a tty";
-    }
-    pub mod efbig {
-        pub const TEXT: &str = "File too large / payload too large";
-    }
-    pub mod enospc {
-        pub const TEXT: &str = "No space left on device / local mailbox full";
-    }
-    pub mod espipe {
-        pub const TEXT: &str = "Illegal seek";
-    }
-    pub mod erofs {
-        pub const TEXT: &str = "Read-only file system";
-    }
-    pub mod emlink {
-        pub const TEXT: &str = "Too many links";
-    }
-    pub mod epipe {
-        pub const TEXT: &str = "Broken pipe";
-    }
-    pub mod edom {
-        pub const TEXT: &str = "Math argument out of domain";
-    }
-    pub mod erange {
-        pub const TEXT: &str = "Math result not representable";
-    }
-    pub mod enosys {
-        pub const TEXT: &str = "Function not implemented";
-    }
-    pub mod eproto {
-        pub const TEXT: &str = "Protocol error";
-    }
-    pub mod ebadmsg {
-        pub const TEXT: &str = "Bad message (protocol/frame/payload invalid)";
-    }
-    pub mod eoverflow {
-        pub const TEXT: &str = "Value too large for target type / overflow";
-    }
-    pub mod emsgsize {
-        pub const TEXT: &str = "Message too long / packet too large";
-    }
-    pub mod enotsup {
-        pub const TEXT: &str = "Operation not supported";
-    }
-    pub mod eilseq {
-        pub const TEXT: &str = "Illegal byte sequence (decode/encoding failure)";
-    }
-    pub mod eaddrinuse {
-        pub const TEXT: &str = "Address already in use";
-    }
-    pub mod eaddrnotavail {
-        pub const TEXT: &str = "Cannot assign requested address";
-    }
-    pub mod enetdown {
-        pub const TEXT: &str = "Network is down";
-    }
-    pub mod enetunreach {
-        pub const TEXT: &str = "Network is unreachable";
-    }
-    pub mod enetreset {
-        pub const TEXT: &str = "Network dropped connection because of reset";
-    }
-    pub mod econnaborted {
-        pub const TEXT: &str = "Software caused connection abort";
-    }
-    pub mod econnreset {
-        pub const TEXT: &str = "Connection reset by peer";
-    }
-    pub mod enobufs {
-        pub const TEXT: &str = "No buffer space available";
-    }
-    pub mod eisconn {
-        pub const TEXT: &str = "Transport endpoint is already connected";
-    }
-    pub mod enotconn {
-        pub const TEXT: &str = "Transport endpoint is not connected";
-    }
-    pub mod eshutdown {
-        pub const TEXT: &str = "Cannot send after transport endpoint shutdown";
-    }
-    pub mod etoomanyrefs {
-        pub const TEXT: &str = "Too many references";
-    }
-    pub mod etimedout {
-        pub const TEXT: &str = "Connection timed out";
-    }
-    pub mod econnrefused {
-        pub const TEXT: &str = "Connection refused";
-    }
-    pub mod ehostdown {
-        pub const TEXT: &str = "Host is down";
-    }
-    pub mod ehostunreach {
-        pub const TEXT: &str = "No route to host";
-    }
-    pub mod ealready {
-        pub const TEXT: &str = "Operation already in progress";
-    }
-    pub mod einprogress {
-        pub const TEXT: &str = "Operation now in progress";
-    }
-    pub mod ecanceled {
-        pub const TEXT: &str = "Operation canceled";
-    }
-    pub mod enotrecoverable {
-        pub const TEXT: &str =
-            "State not recoverable: an invariant the code stands on does not hold";
+    /// The member's `text`.
+    pub const fn text(self) -> &'static str {
+        match self {
+            Errno::OK => "Success",
+            Errno::EPERM => "Operation not permitted",
+            Errno::ENOENT => "No such file or directory / entry not found",
+            Errno::ESRCH => "No such process",
+            Errno::EINTR => "Interrupted system call",
+            Errno::EIO => "I/O error",
+            Errno::ENXIO => "No such device or address",
+            Errno::E2BIG => "Argument list too long / object too large for fixed local cap",
+            Errno::ENOEXEC => "Exec format error",
+            Errno::EBADF => "Bad file descriptor / bad handle",
+            Errno::ECHILD => "No child processes",
+            Errno::EAGAIN => "Try again / Resource temporarily unavailable",
+            Errno::ENOMEM => "Out of memory",
+            Errno::EACCES => "Permission denied",
+            Errno::EFAULT => "Bad address",
+            Errno::EBUSY => "Device or resource busy",
+            Errno::EEXIST => "File exists / duplicate bind",
+            Errno::EXDEV => "Cross-device link",
+            Errno::ENODEV => "No such device",
+            Errno::ENOTDIR => "Not a directory",
+            Errno::EISDIR => "Is a directory",
+            Errno::EINVAL => "Invalid argument",
+            Errno::ENFILE => "File table overflow (system-wide)",
+            Errno::EMFILE => "Too many open files (process)",
+            Errno::ENOTTY => "Not a tty",
+            Errno::EFBIG => "File too large / payload too large",
+            Errno::ENOSPC => "No space left on device / local mailbox full",
+            Errno::ESPIPE => "Illegal seek",
+            Errno::EROFS => "Read-only file system",
+            Errno::EMLINK => "Too many links",
+            Errno::EPIPE => "Broken pipe",
+            Errno::EDOM => "Math argument out of domain",
+            Errno::ERANGE => "Math result not representable",
+            Errno::ENOSYS => "Function not implemented",
+            Errno::EPROTO => "Protocol error",
+            Errno::EBADMSG => "Bad message (protocol/frame/payload invalid)",
+            Errno::EOVERFLOW => "Value too large for target type / overflow",
+            Errno::EMSGSIZE => "Message too long / packet too large",
+            Errno::ENOTSUP => "Operation not supported",
+            Errno::EILSEQ => "Illegal byte sequence (decode/encoding failure)",
+            Errno::EADDRINUSE => "Address already in use",
+            Errno::EADDRNOTAVAIL => "Cannot assign requested address",
+            Errno::ENETDOWN => "Network is down",
+            Errno::ENETUNREACH => "Network is unreachable",
+            Errno::ENETRESET => "Network dropped connection because of reset",
+            Errno::ECONNABORTED => "Software caused connection abort",
+            Errno::ECONNRESET => "Connection reset by peer",
+            Errno::ENOBUFS => "No buffer space available",
+            Errno::EISCONN => "Transport endpoint is already connected",
+            Errno::ENOTCONN => "Transport endpoint is not connected",
+            Errno::ESHUTDOWN => "Cannot send after transport endpoint shutdown",
+            Errno::ETOOMANYREFS => "Too many references",
+            Errno::ETIMEDOUT => "Connection timed out",
+            Errno::ECONNREFUSED => "Connection refused",
+            Errno::EHOSTDOWN => "Host is down",
+            Errno::EHOSTUNREACH => "No route to host",
+            Errno::EALREADY => "Operation already in progress",
+            Errno::EINPROGRESS => "Operation now in progress",
+            Errno::ECANCELED => "Operation canceled",
+            Errno::ENOTRECOVERABLE => {
+                "State not recoverable: an invariant the code stands on does not hold"
+            }
+        }
     }
 }

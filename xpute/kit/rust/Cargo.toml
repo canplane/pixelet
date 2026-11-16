@@ -21,3 +21,6 @@ std = []
 [dev-dependencies]
 hex.workspace = true
 xpute-golden.workspace = true
+
+[lints]
+workspace = true

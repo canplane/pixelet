@@ -7,22 +7,22 @@
 //! and what the UI hears is batched and handed over on one notify (`take`),
 //! as a page's port posts.
 //!
-//! What the UI serves is mounted before the guest boots: its named
-//! interfaces under their handles, and an opener at each prefix it serves
-//! (`serve`). Every method of them is an `async func`, which the runtime
+//! What the UI implements is mounted before the guest boots: its named
+//! interfaces under their handles, and an opener at each prefix it implements
+//! (`mount`). Every method of them is an `async func`, which the runtime
 //! holds as it starts (link.rs `init`): the UI answers each later (lib.rs
 //! `answer`), and a cancel of it is told to the UI, which answers ECANCELED
-//! once it has stopped. The guest's end issues the handle of an object the
-//! UI serves as the guest opens it, by the opener of the prefix that
-//! matched, and the UI serves it under that handle.
+//! once it has stopped. The guest's end issues the handle of an object the UI
+//! implements as the guest opens it, by the opener of the prefix that
+//! matched, and the UI holds it under that handle.
 //!
 //! A batch is messages, each an XTP packet laid after its length (a u32,
 //! then four bytes so the packet starts on a word), its first field its
 //! kind:
 //!
 //! - 0 `(tag, result, data)`: the answer to the UI's request `tag`;
-//! - 2 `(h, m, tag, pkt)`: a method of an object the UI serves, which the UI
-//!   answers by `tag`;
+//! - 2 `(h, m, tag, pkt)`: a method of an object the UI implements, which the
+//!   UI answers by `tag`;
 //! - 3 `(h, k, uri)`: open the object at `uri`, a lowered `list<token>`,
 //!   under `h`, by the UI's opener of its `k`th prefix;
 //! - 4 `(tag)`: the guest canceled the request `tag`;
@@ -31,18 +31,18 @@
 //! where data, pkt and uri are a packet's bytes or nil.
 //!
 //! The UI's connection is a handle: each start attaches a new UI on the same
-//! runtime, as a reload's (`accept`), which serves what the first did, and
-//! answers its handle, which each of its posts, answers and takes names. One
-//! UI is attached at a time; a new one drops the last, and with it, on the
-//! guest's thread, what the last owned under its handle (`Ui`): the requests
-//! it owed are answered ECANCELED, and the guest's objects it opened dropped
-//! on the guest, by the link's own drop, so the guest's load starts again;
-//! each object it serves the guest answers ECANCELED until the guest drops
-//! it; then the guest is told the new UI attached (wit/life/life.wit
-//! `attached`). Nothing an old UI sent that the guest's thread has not run
-//! when a new one attaches reaches the guest, its methods and its answers
-//! alike, as an old JavaScript runtime may still send while a reload makes
-//! the new one; the UI's tags cross as they are.
+//! runtime, as a reload's (`accept`), which implements what the first did,
+//! and answers its handle, which each of its posts, answers and takes names.
+//! One UI is attached at a time; a new one drops the last, and with it, on
+//! the guest's thread, what the last owned under its handle (`Ui`): the
+//! requests it owed are answered ECANCELED, and the guest's objects it opened
+//! dropped on the guest, by the link's own drop, so the guest's load starts
+//! again; each object it implements for the guest answers ECANCELED until the
+//! guest drops it; then the guest is told the new UI attached
+//! (wit/life/life.wit `attached`). Nothing an old UI sent that the guest's
+//! thread has not run when a new one attaches reaches the guest, its methods
+//! and its answers alike, as an old JavaScript runtime may still send while a
+//! reload makes the new one; the UI's tags cross as they are.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -254,11 +254,11 @@ fn lowered(uri: &[Token]) -> Vec<u8> {
     buf
 }
 
-/// Mounts what the UI serves: its named interfaces under their handles, and
-/// an opener at each of its `prefixes`, in its order, for its interface, and
-/// attaches the first UI before the
-/// guest's first entry may call them (`attach`).
-pub(crate) fn serve(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>) {
+/// Mounts what the UI implements: its named interfaces under their handles,
+/// and an opener at each of its `prefixes`, in its order, for its interface,
+/// and attaches the first UI before the guest's first entry may call them
+/// (`attach`).
+pub(crate) fn mount(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>) {
     attach();
     for &h in named {
         side().mount_named(h, Rc::new(Named { h }));
@@ -318,7 +318,7 @@ pub(crate) fn recv(u: Handle, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
     side().send(h, m, pkt, Some(Box::new(answer)));
 }
 
-/// The answer of the UI of the handle `u` to the request `tag` it serves,
+/// The answer of the UI of the handle `u` to the request `tag` it owes,
 /// refused, as `recv` refuses a method, where that UI is not the one
 /// attached, and where it does not owe the request; a dropped UI's requests
 /// its drop answers.

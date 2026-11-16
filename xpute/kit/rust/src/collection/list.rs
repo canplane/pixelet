@@ -101,7 +101,7 @@ impl<T, const N: usize> List<T, N> {
             core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(
                 self.slots.as_mut_ptr().cast::<T>(),
                 len,
-            ))
+            ));
         };
     }
 }
@@ -163,7 +163,7 @@ impl<T, const N: usize> Drop for IntoIter<T, N> {
             core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(
                 self.list.slots.as_mut_ptr().cast::<T>().add(at),
                 len - at,
-            ))
+            ));
         };
     }
 }

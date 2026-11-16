@@ -33,3 +33,21 @@ export function of_ErrorCode(val: number): ErrorCode | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_ErrorCode(val: ErrorCode): string {
+  switch (val) {
+    case ERROR_CODE_WOULD_BLOCK:
+      return "WouldBlock";
+    case ERROR_CODE_BAD_DESCRIPTOR:
+      return "BadDescriptor";
+    case ERROR_CODE_BUSY:
+      return "Busy";
+    case ERROR_CODE_TOO_LONG:
+      return "TooLong";
+    case ERROR_CODE_NOT_PERMITTED:
+      return "NotPermitted";
+    case ERROR_CODE_INSUFFICIENT_MEMORY:
+      return "InsufficientMemory";
+  }
+}

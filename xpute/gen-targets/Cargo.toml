@@ -10,3 +10,6 @@ path = "src/lib.rs"
 
 [dependencies]
 xpute-gen.workspace = true
+
+[lints]
+workspace = true

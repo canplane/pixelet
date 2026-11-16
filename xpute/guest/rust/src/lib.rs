@@ -17,9 +17,9 @@ pub mod stop;
 pub mod wait;
 
 /// Defines the guest's three exports (link/wit/types.wit), over frames of
-/// `cap` bytes, with `boot` mounting what the guest serves and opening what it
-/// calls, and `enter` and `end` starting and ending each entry. From its init
-/// on, the guest's failures are its own (stop.rs `hook`).
+/// `cap` bytes, with `boot` mounting what the guest implements and opening
+/// what it calls, and `enter` and `end` starting and ending each entry. From
+/// its init on, the guest's failures are its own (stop.rs `hook`).
 #[macro_export]
 macro_rules! link {
     ($cap:expr, $boot:expr, $enter:expr, $end:expr) => {

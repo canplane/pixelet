@@ -1,7 +1,7 @@
 // xpute-runtime-native/link.calls.test.rs
 
-//! A function without `async` the UI serves across its crossing refuses to
-//! start, naming its interface, and the guest is never entered (link.rs
+//! A function without `async` the UI implements across its crossing refuses
+//! to start, naming its interface, and the guest is never entered (link.rs
 //! `init`).
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,20 +24,20 @@ xpute_guest::link!(
     || false
 );
 
-/// An interface the UI serves, one of whose methods answers at once.
+/// An interface the UI implements, one of whose methods answers at once.
 const CALLED: Handle = NAMED | 0x30;
 
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: Vec::new(),
+        mounts: Vec::new(),
         imports: &[("called", CALLED)],
         calls: &[(CALLED, 0)],
     }
 }
 
 #[test]
-fn call_served_by_ui_refused() {
+fn call_implemented_by_ui_refused() {
     let ui = app::start(boot, &[CALLED]);
     let mut messages = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
@@ -45,7 +45,7 @@ fn call_served_by_ui_refused() {
     assert_eq!(
         app::exits(),
         [Exit::Trap(
-            "a function without async is served by the UI: called".into()
+            "a function without async is implemented by the UI: called".into()
         )]
     );
     assert!(

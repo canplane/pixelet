@@ -1,6 +1,6 @@
 package pxl:gpu@0.1.0;
 
-// The GPU, which the host serves: it runs the stream's records
+// The GPU, which the host implements: it runs the stream's records
 // (spec/gpu/api.json5) on a device, which a guest takes from
 // `get-device`.
 interface gpu {

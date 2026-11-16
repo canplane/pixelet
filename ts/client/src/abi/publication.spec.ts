@@ -29,6 +29,20 @@ export function of_BaseKind(val: number): BaseKind | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_BaseKind(val: BaseKind): string {
+  switch (val) {
+    case BASE_KIND_TERRAIN:
+      return "terrain";
+    case BASE_KIND_PLACE:
+      return "place";
+    case BASE_KIND_DIVISION:
+      return "division";
+    case BASE_KIND_EARTH:
+      return "earth";
+  }
+}
+
 /** The format each bake writes now, which a published name begins with.
  * It is bumped by a change to how the client reads a tile, or to what a
  * tile guarantees it.

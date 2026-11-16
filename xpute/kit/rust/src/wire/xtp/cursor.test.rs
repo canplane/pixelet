@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::wire::xtp::encode::{TreeEncoder, TreeEncoderConfig};
+use crate::wire::xtp::spec::ALIGN;
 use crate::wire::xtp::spec::{NodeValue, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView};
 use xpute_golden::Golden;
@@ -177,13 +178,13 @@ fn matches_typescript() {
             refused(v.s(&format!("{k}.pkt"))),
             v.s(&format!("{k}.read")),
             "{k}"
-        )
+        );
     });
     for (j, n) in [0x7ffffff9u32, 0xfffffff8, 0xfffffff9]
         .into_iter()
         .enumerate()
     {
-        let got = match crate::wire::xtp::spec::ALIGN(n, 8) {
+        let got = match ALIGN(n, 8) {
             Ok(a) => format!("ok:{a}"),
             Err(e) => format!("errno:{}", e.errnum as i32),
         };

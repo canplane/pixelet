@@ -17,8 +17,8 @@
 // (OPS), the memory address is a u64 on every platform (link/wit/types.wit `lent`), written as
 // two words, its low word first.
 
-/// The URI a guest that draws serves its surface under (spec/gpu/wit/surface.wit `surface`),
-/// which its host opens.
+/// The URI a guest that draws implements its surface under
+/// (spec/gpu/wit/surface.wit `surface`), which its host opens.
 pub const SURFACE_URI: &[&str] = &["pxl:gpu", "surface"];
 
 /// The value of an optional field that is unset, such as an absent index or handle.
@@ -346,7 +346,7 @@ pub const OPS: [OpAddr; 9] = [
 /// counts: first before STATUS, as it writes the rest of the block, and afterwards with
 /// release each time a count changes. The guest loads them with acquire once STATUS reads
 /// READY, and draws a frame only while the unfinished frames are below the block's frame
-/// latency; both hosts hold a frame to that rule (pxl-gpu-link `admits`).
+/// latency (pxl-gpu-guest `admit::frame`).
 pub mod device {
     pub const LIMITS_AT: usize = 0;
     pub const FEATS_AT: usize = 31;

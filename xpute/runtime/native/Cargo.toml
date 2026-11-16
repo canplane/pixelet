@@ -17,7 +17,7 @@ xpute-kit.workspace = true
 # The contract's pure types, shared rather than copied: a frame's words, a
 # URI's tokens and the guest's memory (remote.rs, native.rs).
 xpute-link.workspace = true
-# The host the runtime runs: its end of the link, the bindings served there,
+# The host the runtime runs: its end of the link, the bindings mounted there,
 # and what it needs of the runtime, which the runtime gives it (native.rs
 # `run`).
 xpute-host.workspace = true
@@ -62,3 +62,6 @@ path = "src/link.init.test.rs"
 [[test]]
 name = "link-calls"
 path = "src/link.calls.test.rs"
+
+[lints]
+workspace = true

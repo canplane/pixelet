@@ -37,3 +37,23 @@ export function of_ErrorCode(val: number): ErrorCode | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_ErrorCode(val: ErrorCode): string {
+  switch (val) {
+    case ERROR_CODE_NO_ENTRY:
+      return "NoEntry";
+    case ERROR_CODE_IO:
+      return "Io";
+    case ERROR_CODE_READ_ONLY:
+      return "ReadOnly";
+    case ERROR_CODE_ACCESS:
+      return "Access";
+    case ERROR_CODE_BAD_MESSAGE:
+      return "BadMessage";
+    case ERROR_CODE_REMOTE_UNREACHABLE:
+      return "RemoteUnreachable";
+    case ERROR_CODE_NO_OBJECT:
+      return "NoObject";
+  }
+}

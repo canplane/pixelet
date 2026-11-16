@@ -1,7 +1,7 @@
 package pxl:gpu@0.1.0;
 
-// A surface the GPU draws on, which the guest serves: the side that holds the
-// canvas opens one at ("pxl:gpu", "surface"), gives the host the canvas
+// A surface the GPU draws on, which the guest implements: the side that holds
+// the canvas opens one at ("pxl:gpu", "surface"), gives the host the canvas
 // beside the link under the surface's handle, and drops it to close it.
 interface surface {
   resource surface {

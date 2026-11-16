@@ -1,8 +1,8 @@
 // @xpute/host/runtime.ts
 
 /** What the host needs of the runtime it runs in, which the runtime
- * implements and gives it once, before it mounts any server (`init`), as a
- * device's runtime gives xpute-host its own (runtime.rs `Runtime`):
+ * implements and gives it once, before it mounts any implementation (`init`),
+ * as a device's runtime gives xpute-host its own (runtime.rs `Runtime`):
  * where the guest's stop is reported, and where a log record is written. */
 
 import { bug } from "@xpute/kit/status/bug.ts";
@@ -14,9 +14,9 @@ import type { i32, u32, u64 } from "@xpute/kit/abi/word.ts";
 import type { Level } from "./abi/log/log.enum.ts";
 
 /** The report of a broken invariant before the guest stops: the guest's
- * (wit/stop/stop.wit), which the host that serves the stop hands its runtime
- * (stop.ts), or the host's own failure, which its runtime reports itself, as
- * a native host's is (xpute-host runtime.rs `Stop`). A panic or a
+ * (wit/stop/stop.wit), which the host that implements the stop hands its
+ * runtime (stop.ts), or the host's own failure, which its runtime reports
+ * itself, as a native host's is (xpute-host runtime.rs `Stop`). A panic or a
  * throw the language raised carries its own message; a bug carries none. */
 export interface Stop {
   errnum: i32;

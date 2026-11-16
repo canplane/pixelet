@@ -20,3 +20,6 @@ xpute-kit.workspace = true
 # (link/spec/golden), the record's bytes read back as hex.
 xpute-golden.workspace = true
 hex.workspace = true
+
+[lints]
+workspace = true

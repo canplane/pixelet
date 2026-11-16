@@ -2,16 +2,15 @@
 
 /**
  * What the boot does alike on a page (boot.web.ts) and a device
- * (boot.native.ts): it mounts the interfaces the UI serves the core before the
- * core starts, and moves where the boot stands as the core answers and the
- * world arrives. The UI only reads where the boot stands (service/sys/boot.ts).
+ * (boot.native.ts): it mounts the interfaces the UI implements for the core
+ * before the core starts, and moves where the boot stands as the core answers
+ * and the world arrives. The UI only reads where the boot stands
+ * (service/sys/boot.ts).
  */
 
 import { type End, sender } from "@xpute/link";
 import { type Snapshot } from "@/abi/overlay.ts";
 import { set_online } from "@/service/origin/online.ts";
-import { log } from "@/service/platform/log.ts";
-import { stop_code } from "@/service/sys/abort.ts";
 import {
   boot_state,
   set_boot,
@@ -35,7 +34,7 @@ import {
 } from "@/service/core/sensor.ts";
 import { listen } from "@/service/platform/sensor-listener.ts";
 import * as visibility from "@/service/platform/visibility.ts";
-import { cur, serve_overlay, watch_snapshot } from "@/service/core/overlay.ts";
+import { cur, mount_overlay, watch_snapshot } from "@/service/core/overlay.ts";
 import * as online from "@/service/platform/online.ts";
 
 /** Whether the world has arrived, or nothing of it will show: every pipeline
@@ -45,11 +44,11 @@ function loaded(s: Snapshot): boolean {
   return s.renderer_progress === 1 && (s.pivot.ground_shown || s.pivot.outside);
 }
 
-/** Makes `ui` the UI's end and mounts on it the interfaces the UI serves,
- * before the core boots. */
-export function serve_ui(ui: End): void {
+/** Makes `ui` the UI's end and mounts on it the interfaces the UI
+ * implements, before the core boots. */
+export function mount_ui(ui: End): void {
   set_ui(sender(ui));
-  serve_overlay(ui);
+  mount_overlay(ui);
 }
 
 /** Moves the started core's boot on as what it waits on comes: LOADING once a
@@ -87,9 +86,9 @@ export function start_client(): void {
   visibility.watch(sensors_visibility);
 }
 
-/** The core trapped, with `err` as its runtime tells it, whether before its
- * first entry ended or after: its turns end, and the boot with them. */
-export function trapped(err: string): void {
-  log(`[core] stopped${stop_code() ? ` (${stop_code()})` : ""}: ${err}`);
+/** The core trapped, whether before its first entry ended or after: its
+ * turns end, and the boot with them. What stopped it is its runtime's to
+ * write. */
+export function trapped(): void {
   set_boot(BOOT_TERMINATED);
 }

@@ -146,8 +146,11 @@ public class XputeModule: Module {
       return XputeModule.text(err, len)
     }
 
-    Function("log") { (line: String) in
-      FileHandle.standardOutput.write(Data((line + "\n").utf8))
+    // Each string crosses as its UTF-8 bytes, without the NUL.
+    Function("log") { (level: UInt32, context: String, message: String) in
+      let context = Array(context.utf8CString.dropLast())
+      let message = Array(message.utf8CString.dropLast())
+      xpute_log(level, context, context.count, message, message.count)
     }
   }
 }

@@ -12,3 +12,6 @@ path = "src/lib.rs"
 # A record that is missing or does not parse is a bug, said as the kit says one.
 [dependencies]
 xpute-kit = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true

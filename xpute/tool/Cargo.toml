@@ -20,3 +20,6 @@ xpute-link-gen.workspace = true
 # xpute declares its targets.
 xpute-gen-targets.workspace = true
 serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

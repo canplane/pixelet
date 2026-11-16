@@ -3,8 +3,8 @@
 /**
  * A page runs the core in a worker of its own (worker.ts), and reaches it
  * across a message port. The UI opens its end of the worker, hears
- * the core's stop, its trap and the GPU's state, mounts what it serves and
- * starts the core here (@xpute/runtime-web `open_ui`, `start`), as a
+ * the core's stop, its trap and the GPU's state, mounts what it implements
+ * and starts the core here (@xpute/runtime-web `open_ui`, `start`), as a
  * device's UI does its runtime's (boot.native.ts). The worker holds the
  * files, keeps a copy of the page's storage that it writes back here, and
  * tells the page the source's state. Where the boot stands is moved as on a
@@ -21,13 +21,13 @@ import {
   trap_on,
 } from "@xpute/runtime-web";
 import { BUILD_ID } from "@/build.ts";
-import { log } from "@/service/platform/log.ts";
 import { stopped } from "@/service/sys/abort.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
 import { mirror_source } from "@/service/sys/fs/source.ts";
 import { is_storage_key } from "@/service/sys/fs/storage.ts";
 import * as storage from "@/service/platform/storage.ts";
-import { serve_ui, start_client, trapped } from "@/runtime/ui.ts";
+import { tell_drive } from "@/service/platform/drive.ts";
+import { mount_ui, start_client, trapped } from "@/runtime/ui.ts";
 import type { KeepReport, Kept, SourceReport } from "@/runtime/worker.ts";
 
 /** The module is served beside the page, from the app's public/, where
@@ -52,8 +52,11 @@ export function boot(): void {
   message_on<GpuReport>("gpu", (m) => set_gpu(GPU_STATE[m.state]));
   message_on<SourceReport>("source", (m) => mirror_source(m.state, m.decl));
   message_on<KeepReport>("keep", (m) => storage.set(m.key, m.val));
-  message_on<Log>("log", (m) => log(`[worker] ${m.text}`));
-  serve_ui(ui);
+  // The worker writes its runtime's records itself; a build made for
+  // measuring keeps them for the tool that drives the page as well.
+  if (__PERF_DRIVE__)
+    message_on<Log>("log", (m) => tell_drive(`[${m.context}] ${m.message}`));
+  mount_ui(ui);
   // A worker cannot read the page's kept entries, so they go with the core's
   // instantiation.
   const { module, init } = source();

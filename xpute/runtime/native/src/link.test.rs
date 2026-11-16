@@ -32,8 +32,8 @@ impl Object for Nothing {
     }
 }
 
-/// An interface served under its handle, one whose resources an opener
-/// serves, and two no server mounts.
+/// An interface implemented under its handle, one whose resources an opener
+/// opens, and two with no implementation.
 const NAMED_ONE: Handle = NAMED | 0x30;
 const OPENED: Handle = NAMED | 0x31;
 const MISSING: Handle = NAMED | 0x32;
@@ -42,7 +42,7 @@ const MISSING_TOO: Handle = NAMED | 0x33;
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![
+        mounts: vec![
             Box::new(|side| side.mount_named(NAMED_ONE, Rc::new(Nothing))),
             Box::new(|side| side.mount(OPENED, uri(&["opened"]), |_, _| Err(Errno::ENOENT))),
         ],
@@ -56,17 +56,19 @@ fn boot(_: std::path::PathBuf) -> Boot {
     }
 }
 
-/// A world importing what no server mounts refuses to start, naming each,
+/// A world importing what has no implementation refuses to start, naming each,
 /// and the guest is never entered.
 #[test]
-fn unserved_import_refused() {
+fn unimplemented_import_refused() {
     let ui = app::start(boot, &[]);
     let mut messages = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
     assert_eq!(app::answer_to(ui, 1, &mut messages), Errno::EPIPE as i64);
     assert_eq!(
         app::exits(),
-        [Exit::Trap("no server mounts missing, missing-too".into())]
+        [Exit::Trap(
+            "no implementation of missing, missing-too".into()
+        )]
     );
     assert!(
         !ENTERED.load(Ordering::Relaxed),

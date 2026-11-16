@@ -11,11 +11,11 @@ draws with, not all of WebGPU.
 ## Its interfaces
 
 The GPU is declared in WIT as xpute's packages are, as `pxl:gpu`
-(`spec/gpu/wit/`), and its bindings are written by pixelet's
-`cargo spec` over xpute's own packages, before the core's, which take them.
-The guest imports `gpu`, which runs the records it lends and gives it a
-device, and `vsync`, which answers at the display's next frame, and serves
-`surface`, which the UI opens to draw on.
+(`spec/gpu/wit/`), and its bindings are written by pixelet's `cargo spec` over
+xpute's own packages, before the core's, which take them. The guest imports
+`gpu`, which runs the records it lends and gives it a device, and `vsync`, which
+answers at the display's next frame, and implements `surface`, which the UI
+opens to draw on.
 
 ## The stream
 
@@ -29,12 +29,12 @@ completion the stream asked for lands as a **fence**, a word only the host
 writes, set to the guest's **ticket** with release, so a late answer to a
 dropped request never matches.
 
-Both hosts admit a frame by one rule: the guest draws only while fewer of its
-frames are unfinished than its frame latency (`pxl_gpu_guest::admit::frame`),
-which the program sets in its host's `GpuConfig` and the host writes beside
-its count in the device's block, so taking a surface's texture never blocks.
-What a surface shows is lent by the UI beside the link, under the handle of a
-surface the guest serves.
+A frame is admitted by one rule: the guest draws only while fewer of its frames
+are unfinished than its frame latency (`pxl_gpu_guest::admit::frame`), which the
+program sets in its host's `GpuConfig` and the host writes beside its count in
+the device's block, so taking a surface's texture never blocks. What a surface
+shows is lent by the UI beside the link, under the handle of a surface the guest
+implements.
 
 ## Its parts
 
@@ -42,20 +42,19 @@ The Rust is three crates here, and the TypeScript one package, `@pxl/gpu`
 (`ts/gpu/`), whose `host` and `expo` folders stand on its `link`, neither
 naming the other.
 
-- `link` (`pxl-gpu-link`, and `ts/gpu/link`, `@pxl/gpu/link`) is what both
-  sides take: the stream's words, a handle's slot, a frame's admission and the
-  program's settings (`GpuAsk`, `GpuConfig`), with the host's TypeScript
-  bindings.
+- `link` (`pxl-gpu-link`, and `ts/gpu/link`, `@pxl/gpu/link`) is what both sides
+  take: the stream's words, a handle's slot and the program's settings
+  (`GpuAsk`, `GpuConfig`).
 - `guest` (`pxl-gpu-guest`) is the guest's encoder of WebGPU's calls into the
   stream, with its bindings.
 - `host` (`pxl-gpu-host`) runs the stream on wgpu on a device, with its
-  bindings, served on the side `xpute-runtime-native` makes. It opens the
-  device when the guest asks, keeps its compiled pipelines in the app's
-  caches, and exports its C ABI by `native_abi!`, which pxl-runtime expands.
-  It draws with a fork of wgpu ([wgpu-fork.md](wgpu-fork.md)).
-- `ts/gpu/host` (`@pxl/gpu/host`) runs it on the browser's WebGPU in the
-  page's worker (`WebGpu`), takes the canvas the UI gives beside the link,
-  and posts its state to the page (`GpuReport`).
+  bindings, mounted on the side `xpute-runtime-native` makes. It opens the
+  device when the guest asks, keeps its compiled pipelines in the app's caches,
+  and exports its C ABI by `native_abi!`, which pxl-runtime expands. It draws
+  with a fork of wgpu ([wgpu-fork.md](wgpu-fork.md)).
+- `ts/gpu/host` (`@pxl/gpu/host`) runs it on the browser's WebGPU in the page's
+  worker (`WebGpu`), with its bindings, takes the canvas the UI gives beside the
+  link, and posts its state to the page (`GpuReport`).
 - `ts/gpu/expo` (`@pxl/gpu/expo`) is the device's module: the view the
   guest's surface draws into (`SurfaceView`), the display's frames, and what
   the host has of a GPU as it changes, the state now first to a UI that

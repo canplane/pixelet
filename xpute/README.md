@@ -1,15 +1,15 @@
 # xpute
 
 xpute is a foreign function interface for the compiled part of a program. The
-program's **guest**, its compiled code, and xpute's **host**, which serves it,
-meet in three things: a calling convention of one host function and three guest
-exports, which pass frames laid in the guest's memory; bindings that a generator
-writes for both ends from the program's interfaces in WIT, as WIT's tools do;
-and the entry, the only time the guest runs, when its host enters it. The guest
-owns nothing but its memory. xpute declares the few interfaces every guest
-shares with its host, its clocks, its files, its stop, its log and its app's
-life, and the host implements the clocks, the stop and the log. Everything else
-belongs to the **program**, and it travels over the same link, whose frames
+program's **guest**, its compiled code, and xpute's **host**, which implements
+its imports, meet in three things: a calling convention of one host function and
+three guest exports, which pass frames laid in the guest's memory; bindings that
+a generator writes for both ends from the program's interfaces in WIT, as WIT's
+tools do; and the entry, the only time the guest runs, when its host enters it.
+The guest owns nothing but its memory. xpute declares the few interfaces every
+guest shares with its host, its clocks, its files, its stop, its log and its
+app's life, and the host implements the clocks, the stop and the log. Everything
+else belongs to the **program**, and it travels over the same link, whose frames
 xpute delivers and does not interpret. A program may bring plugins of its own
 beside the runtime, a GPU for one.
 
@@ -62,16 +62,16 @@ A program built on xpute has three parts.
 - The **guest** is the program's compiled code, linked with xpute's guest
   library into one image. It runs only inside an entry, and everything it says
   to the world it writes into its memory.
-- The **host** serves the guest the clocks, the stop and the log,
-  `@xpute/host` in TypeScript and `xpute-host` in Rust, and a plugin the
-  program brings serves beside it. It runs in a runtime, the platform's
-  environment that runs the guest and enters it: `@xpute/runtime-web` in a
-  page's worker, and on a device `xpute-runtime-native`, on a thread of its
-  own, which the Expo module `@xpute/expo` starts.
+- The **host** implements the guest's clocks, stop and log, `@xpute/host` in
+  TypeScript and `xpute-host` in Rust, and a plugin the program brings
+  implements its own beside it. It runs in a runtime, the platform's environment
+  that runs the guest and enters it: `@xpute/runtime-web` in a page's worker,
+  and on a device `xpute-runtime-native`, on a thread of its own, which the Expo
+  module `@xpute/expo` starts.
 - The **program** is everything else the app decides: its interfaces and what
-  their methods do, and its UI, which calls and serves the guest by the same
-  bindings from another thread, carried to the guest's end by the runtime: over
-  a page's MessagePort, and the native module on a device.
+  their methods do, and its UI, which calls the guest and implements its imports
+  by the same bindings from another thread, carried to the guest's end by the
+  runtime: over a page's MessagePort, and the native module on a device.
 
 ```text
   ┌────────────────────────────────────────────────────────────────┐
@@ -84,7 +84,7 @@ A program built on xpute has three parts.
               │ a frame for the guest           ▼ a frame it sends
   ┌───────────┴─────────────────────────────────┴──────────────────┐
   │ the host's link: enters the guest, and routes each frame by    │
-  │ the handle in its command to the object served under it        │
+  │ the handle in its command to the object under it               │
   └───────────┬─────────────────────────────────┬──────────────────┘
               │ the host's own                  │ the program's
     the clocks, the stop,                   its objects, its files
@@ -99,23 +99,25 @@ A program takes xpute by writing four things, each over the part whose README
 says how.
 
 - **Its interfaces**, in WIT, as xpute declares its own under `wit/`. Its
-  guest's world says which the guest serves, its exports, and which it calls,
-  its imports. `xpute-link-gen` ([link/gen](./link/gen/README.md)) writes
+  guest's world says which the guest implements, its exports, and which it
+  calls, its imports. `xpute-link-gen` ([link/gen](./link/gen/README.md)) writes
   their bindings in Rust, TypeScript and C++, and for the host the lists
   `IMPORTS` and `CALLS`.
 - **Its guest**, whose three exports one macro defines from a frame's cap, a
-  boot that mounts what the guest serves, and what starts and ends each entry:
-  `link!` in Rust ([guest/rust](./guest/rust/README.md)), and `XPUTE_LINK` in
-  C++, which takes xpute's library as two files ([cpp](./cpp/README.md)).
-- **Its host**, as a list of servers, each mounting what it serves, with
-  `IMPORTS` and `CALLS`, from which the runtime starts the guest by the steps
-  [ARCHITECTURE.md](./ARCHITECTURE.md) gives in "The sides": a page's worker
-  runs it on `@xpute/runtime-web` ([runtime/web](./runtime/web/README.md)),
-  and a device links it, with the guest, into one Rust crate over
-  `xpute-runtime-native` ([runtime/native](./runtime/native/README.md)).
-- **Its UI**, which opens its end of the runtime, mounts on it what it serves,
-  starts the guest and then calls it by the same bindings: on a page through
-  `@xpute/runtime-web`, and on a device through `@xpute/expo`
+  boot that mounts what the guest implements, and what starts and ends each
+  entry: `link!` in Rust ([guest/rust](./guest/rust/README.md)), and
+  `XPUTE_LINK` in C++, which takes xpute's library as two files
+  ([cpp](./cpp/README.md)).
+- **Its host**, as a list of mounts, each mounting implementations of some of
+  the guest's imports, with `IMPORTS` and `CALLS`, from which the runtime starts
+  the guest by the steps [ARCHITECTURE.md](./ARCHITECTURE.md) gives in "The
+  sides": a page's worker runs it on `@xpute/runtime-web`
+  ([runtime/web](./runtime/web/README.md)), and a device links it, with the
+  guest, into one Rust crate over `xpute-runtime-native`
+  ([runtime/native](./runtime/native/README.md)).
+- **Its UI**, which opens its end of the runtime, mounts on it what it
+  implements, starts the guest and then calls it by the same bindings: on a page
+  through `@xpute/runtime-web`, and on a device through `@xpute/expo`
   ([expo](./expo/README.md)).
 
 A plugin is a package of the program's own in WIT, whose bindings are written

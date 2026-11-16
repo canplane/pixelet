@@ -15,26 +15,27 @@ use std::thread::ThreadId;
 use crate::log::log;
 use crate::{event_loop, listener, remote};
 use xpute_host::abi::log::Level;
-use xpute_host::runtime::{Runtime, Stop};
+use xpute_host::runtime::{self, Runtime, Stop};
 use xpute_kit::status::bug::{OrBug, XputeBug};
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::strerror;
 use xpute_link::abi::types::Token;
 use xpute_link::{Handle, Lift, Method, Side, load_uri};
 
 use crate::link::{self, side};
 
-/// What serves the guest some of its imports: it mounts them on the host's
-/// side the runtime gives it, on the guest's thread.
-pub type Server = Box<dyn FnOnce(&'static Side) + Send>;
+/// What mounts the implementations of some of the guest's imports on the
+/// host's side the runtime gives it, on the guest's thread.
+pub type Mount = Box<dyn FnOnce(&'static Side) + Send>;
 
 /// What a program starts its guest with: the stack its thread takes, its
-/// servers, in no order, since none depends on another; the interfaces its
+/// mounts, in no order, since none depends on another; the interfaces its
 /// guest's world imports (the bindings' `IMPORTS`); and the methods they
 /// hold that answer at once, xpute's and a plugin's among them (the
-/// bindings' `CALLS`), which the UI may not serve.
+/// bindings' `CALLS`), which the UI may not implement.
 pub struct Boot {
     pub stack_sz: usize,
-    pub servers: Vec<Server>,
+    pub mounts: Vec<Mount>,
     pub imports: &'static [(&'static str, Handle)],
     pub calls: &'static [(Handle, Method)],
 }
@@ -59,8 +60,8 @@ static STARTED: std::sync::Once = std::sync::Once::new();
 /// Starts the program's runtime (`xpute_start`): `named` and `prefixes` the
 /// UI's, and the caches' directory. The runtime starts once a process
 /// (`run`), and each call attaches a new UI to it (`remote::accept`), as a
-/// reload's, which serves what the first did, and whose attach the guest is
-/// told. It answers the new UI's handle, which the UI's posts, answers and
+/// reload's, which implements what the first did, and whose attach the guest
+/// is told. It answers the new UI's handle, which the UI's posts, answers and
 /// takes name.
 pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: PathBuf) -> u32 {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
@@ -69,8 +70,8 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
     ui
 }
 
-/// The guest's thread, the one that mounts what the host serves and enters
-/// the guest, which the runtime names as it starts it (`run`).
+/// The guest's thread, the one that mounts the host's implementations and
+/// enters the guest, which the runtime names as it starts it (`run`).
 static GUEST_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
 /// Whether this is the guest's thread, where the link's state is.
@@ -81,21 +82,22 @@ fn on_guest_thread() -> bool {
 /// Starts the guest on a thread of its own, as @xpute/runtime-web worker.ts
 /// `run` does on a page: names the thread the guest's, gives the host what it
 /// needs of the runtime (xpute-host runtime.rs `Runtime`), and once a failure
-/// of the host's is a trap (`hook`), mounts each server on the host's side it
-/// makes (`link::side`), then what the UI serves (`remote::serve`), enters
-/// the guest, which an import no server mounts and a function without
-/// `async` served by the UI refuse (`link::init`), and runs the loop for
-/// the guest's life. The guest is told each UI attached by `remote::accept`. A failure of the host's anywhere on this thread traps
-/// the link and ends only the step it was in, boot's or the loop's turn: a
-/// trapped guest is entered no more, and the UI's methods are answered
-/// EPIPE; what boot made due or completed is not left waiting.
+/// of the host's is a trap (`hook`), runs each mount on the host's side it
+/// makes (`link::side`), then mounts what the UI implements
+/// (`remote::mount`), enters the guest, which an import with no
+/// implementation and a function without `async` the UI implements refuse
+/// (`link::init`), and runs the loop for the guest's life. The guest is told
+/// each UI attached by `remote::accept`. A failure of the host's anywhere on
+/// this thread traps the link and ends only the step it was in, boot's or the
+/// loop's turn: a trapped guest is entered no more, and the UI's methods are
+/// answered EPIPE; what boot made due or completed is not left waiting.
 fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
     let spawned = std::thread::Builder::new()
         .name("xpute guest".into())
         .stack_size(boot.stack_sz)
         .spawn(move || {
             GUEST_THREAD.get_or_init(|| std::thread::current().id());
-            xpute_host::runtime::init(Runtime {
+            runtime::init(Runtime {
                 post: event_loop::post_task,
                 after: event_loop::after,
                 clear: event_loop::clear,
@@ -104,8 +106,8 @@ fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
             });
             hook();
             caught(|| {
-                for s in boot.servers {
-                    s(side());
+                for m in boot.mounts {
+                    m(side());
                 }
                 let over: Vec<Handle> = named
                     .iter()
@@ -113,7 +115,7 @@ fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
                     .copied()
                     .filter(|h| boot.calls.iter().any(|(c, _)| c == h))
                     .collect();
-                remote::serve(&named, prefixes);
+                remote::mount(&named, prefixes);
                 link::init(boot.imports, &over);
             });
             loop {
@@ -139,7 +141,11 @@ fn tell_stop(context: &str, s: Stop) {
         context,
         &format!(
             "stopped: {} at {}:{} ({}, {}){message}",
-            s.errnum, s.file, s.line, s.n1, s.n2
+            strerror(s.errnum),
+            s.file,
+            s.line,
+            s.n1,
+            s.n2
         ),
     );
     listener::tell_stop(s);
@@ -219,15 +225,22 @@ fn hook() {
     }));
 }
 
+/// The text of the `len` bytes of UTF-8 at `at`.
+///
+/// # Safety
+/// `at` is `len` readable bytes.
+pub unsafe fn text(at: *const u8, len: usize) -> String {
+    // SAFETY: the caller's.
+    String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).into_owned()
+}
+
 /// A directory the app names by the `len` bytes of UTF-8 at `at`.
 ///
 /// # Safety
 /// `at` is `len` readable bytes.
 pub unsafe fn dir(at: *const u8, len: usize) -> PathBuf {
     // SAFETY: the caller's.
-    PathBuf::from(
-        String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).into_owned(),
-    )
+    PathBuf::from(unsafe { text(at, len) })
 }
 
 /// `len` bytes at `at`, or none where `at` is null.
@@ -382,6 +395,27 @@ macro_rules! native_abi {
         #[unsafe(no_mangle)]
         pub extern "C" fn xpute_life(shown: i32) {
             $crate::life(shown != 0);
+        }
+
+        /// # Safety
+        /// `context` is `context_len` readable bytes, and `message`
+        /// `message_len`.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn xpute_log(
+            level: u32,
+            context: *const u8,
+            context_len: usize,
+            message: *const u8,
+            message_len: usize,
+        ) {
+            // SAFETY: the caller's.
+            let (context, message) = unsafe {
+                (
+                    $crate::native::text(context, context_len),
+                    $crate::native::text(message, message_len),
+                )
+            };
+            $crate::log(level, &context, &message);
         }
 
         #[cfg(target_os = "android")]

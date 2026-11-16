@@ -52,12 +52,12 @@ file to its default's exports.
 
 ## The boot
 
-The boot brings the client up from the bottom: it mounts what the UI serves the
-core, starts the core where its platform runs it, and moves where the boot
-stands as the core answers, a GPU and the world's source come and the first
+The boot brings the client up from the bottom: it mounts what the UI implements
+for the core, starts the core where its platform runs it, and moves where the
+boot stands as the core answers, a GPU and the world's source come and the first
 snapshots arrive, which is alike on both platforms (`runtime/ui.ts`). The UI
-only reads that state, through the services, and shows a cover over
-the world until the view is first drawn (`ui/feature/cover/`).
+only reads that state, through the services, and shows a cover over the world
+until the view is first drawn (`ui/feature/cover/`).
 
 ## The app's ABI
 

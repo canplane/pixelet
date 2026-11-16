@@ -10,10 +10,10 @@ import {
 } from "@xpute/kit/status/errno.spec.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
+  type Callee,
   type Handle,
   type LinkObject,
   type Method,
-  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -34,7 +34,7 @@ export interface Host {
 
 /** The object over `implementation`. */
 function object(
-  l: Pick<Serving, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "on_cancel">,
   implementation: Host,
 ): LinkObject {
   return {
@@ -75,9 +75,9 @@ function object(
   };
 }
 
-/** Serves `implementation` under the interface's handle. */
+/** Mounts `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Serving, "mount_named" | "task_return" | "on_cancel">,
+  l: Pick<Callee, "mount_named" | "task_return" | "on_cancel">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(l, implementation));

@@ -2,11 +2,11 @@
 
 /** The worker's half of the UI's crossing, as xpute-runtime-native remote.rs
  * is a device's: the runtime stands in for the UI on the guest's link, what
- * the UI serves mounted on the guest's end as stand-ins that post each
+ * the UI implements mounted on the guest's end as stand-ins that post each
  * method to the UI across its port, each answered later by its tag, and what
  * the UI calls put on the guest's end and answered back (message.ts). The
- * guest's end issues the handle of an object the UI serves as the guest
- * opens it, and the UI serves it under that handle (page.ts). The UI
+ * guest's end issues the handle of an object the UI implements as the guest
+ * opens it, and the UI holds it under that handle (page.ts). The UI
  * attaches as its port does, and its port is its connection for the
  * worker's life: a page's worker dies with the page, so a reloaded page
  * meets a new worker and link over a new port, and no UI is dropped here,
@@ -46,7 +46,7 @@ export interface Taker {
 }
 
 /** Attaches the UI across `port` to `link`, the guest's end: the interfaces
- * the UI serves mounted under their `named` handles, an opener at each of
+ * the UI implements mounted under their `named` handles, an opener at each of
  * its `prefixes`, for its interface, and what the UI gives beside its calls
  * to `taker`. */
 export function attach(

@@ -132,6 +132,16 @@ export function of_Group(val: number): Group | null {
   return val === GROUP_PERSON || val === GROUP_PET ? val : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_Group(val: Group): string {
+  switch (val) {
+    case GROUP_PERSON:
+      return "person";
+    case GROUP_PET:
+      return "pet";
+  }
+}
+
 /** The clip a character stands in, "idle", by its index in both packs' animations. */
 export const IDLE_CLIP = 1 as number;
 
@@ -144,4 +154,14 @@ export const GENDER_MALE = 1;
 /** The member `val` is, or null for a number no member has. */
 export function of_Gender(val: number): Gender | null {
   return val === GENDER_FEMALE || val === GENDER_MALE ? val : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_Gender(val: Gender): string {
+  switch (val) {
+    case GENDER_FEMALE:
+      return "female";
+    case GENDER_MALE:
+      return "male";
+  }
 }

@@ -26,7 +26,7 @@ export {
   type Reply,
   ROOT,
   type Sender,
-  type Serving,
+  type Callee,
   Side,
   store_uri,
   type Tag,

@@ -1,8 +1,9 @@
 // xpute-guest/stop.rs
 
 //! The guest's report of its own failures to the host, by the stop the host
-//! serves (wit/stop/stop.wit), as cpp/xpute/guest/stop.hpp is a C++ guest's:
-//! a bug's errno, place and numbers, or a panic's place and its own message.
+//! implements (wit/stop/stop.wit), as cpp/xpute/guest/stop.hpp is a C++
+//! guest's: a bug's errno, place and numbers, or a panic's place and its own
+//! message.
 
 use xpute_kit::status::bug;
 use xpute_kit::status::errno::Errno;

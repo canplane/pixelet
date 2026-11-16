@@ -5,34 +5,34 @@
 // strings.
 //
 // Whatever is called is an object, under a handle. A singleton interface's is
-// named: `frame.json5`'s `NAMED` bit and the hash of its package and its
-// name, ("xpute:clocks", "monotonic-clock"), which the generator writes on
-// both sides, so it is called with no open. A resource's the side that serves
+// named: `frame.json5`'s `NAMED` bit and the hash of its package and its name,
+// ("xpute:clocks", "monotonic-clock"), which the generator writes on both
+// sides, so it is called with no open. A resource's the side that implements
 // it issues, opened by a URI: a tuple of tokens, each an s32 or a string, as a
-// file's are the program's path tokens; or answered by a function that
-// returns it. A frame's command carries the handle, the method's number and
-// the `RES` bit (31): the handle in bits 8..30, the method in bits 0..7. A
-// method's number is its place in its interface, in declaration order: a
-// singleton interface's functions, or one resource's methods.
+// file's are the program's path tokens; or answered by a function that returns
+// it. A frame's command carries the handle, the method's number and the `RES`
+// bit (31): the handle in bits 8..30, the method in bits 0..7. A method's
+// number is its place in its interface, in declaration order: a singleton
+// interface's functions, or one resource's methods.
 //
 // The root, handle 0, has two methods. `open(uri) -> handle`, number 0, the
-// serving side answers at once from the opener mounted at the URI's longest
-// matching leading tokens. An open is pipelined, so a missing file opens, and
-// its first method with a result answers `no-entry`. `cancel(tag)`, number 1, cancels a
-// call the sender has pending (`frame.json5` `CANCEL`). Every handle has a
-// drop, method 0xFF, as the component model's resource drop, which takes no
-// result and lets the object go; a
-// resource whose end must report a result keeps its own method for it, as a
-// file's `close`.
+// implementing side answers at once from the opener mounted at the URI's
+// longest matching leading tokens. An open is pipelined, so a missing file
+// opens, and its first method with a result answers `no-entry`. `cancel(tag)`,
+// number 1, cancels a call the sender has pending (`frame.json5` `CANCEL`).
+// Every handle has a drop, method 0xFF, as the component model's resource
+// drop, which takes no result and lets the object go; a resource whose end
+// must report a result keeps its own method for it, as a file's `close`.
 //
 // A guest has three exports. `link_init` lays the link and answers its layout,
 // the inbox and a frame's cap, and runs nothing of the program. `link_boot` is
-// the guest's first entry: the program's boot mounts what it serves, and only
-// then does the entry start. An interface is called by its named handle with no
-// open (`frame.json5` `NAMED`), so a bug in a boot is reported through the stop
-// at once. `link_in` enters the guest with the frame laid in its inbox. The
-// host calls init, reads the layout, then boot, so every entry comes from a
-// host that knows the cap. A trap out of any export stops the guest for good.
+// the guest's first entry: the program's boot mounts its implementations, and
+// only then does the entry start. An interface is called by its named handle
+// with no open (`frame.json5` `NAMED`), so a bug in a boot is reported through
+// the stop at once. `link_in` enters the guest with the frame laid in its
+// inbox. The host calls init, reads the layout, then boot, so every entry
+// comes from a host that knows the cap. A trap out of any export stops the
+// guest for good.
 //
 // A method that may answer later is an `async func`, and is sent; any other
 // always answers at once. An `async func` always answers later, with
