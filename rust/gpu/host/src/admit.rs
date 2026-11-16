@@ -39,20 +39,29 @@ impl GpuHost {
             .on_submitted_work_done(FrameGuard::count(&self.unfinished_cnt));
     }
 
-    /// Writes the uncaptured errors and the unfinished frames into the
-    /// device's block (spec `DEVICE`), as a page's host does. It runs at each
-    /// `poll`, after the queue's callbacks that end frames have run.
-    pub(super) fn tell_counts(&self) {
-        if let Some(addr) = self.block {
-            mem::store_release(
-                addr + 4 * device::ERRORS_AT as u64,
-                self.error_cnt.load(Ordering::Relaxed),
-            );
-            mem::store_release(
-                addr + 4 * device::UNFINISHED_AT as u64,
-                self.unfinished_cnt.load(Ordering::Relaxed),
-            );
-        }
+    /// Writes the uncaptured errors, the unfinished frames and the belt's
+    /// free chunks into the device's block (spec `DEVICE`), as a page's host
+    /// does. It runs after each run and at each `poll`, after the queue's
+    /// callbacks that end frames and give chunks back have run. It says
+    /// whether more chunks are free than the block last said, which wakes a
+    /// guest whose writes wait for room (spec `DEVICE`).
+    pub(super) fn tell_counts(&self) -> bool {
+        let Some(addr) = self.block else {
+            return false;
+        };
+        mem::store_release(
+            addr + 4 * device::ERRORS_AT as u64,
+            self.error_cnt.load(Ordering::Relaxed),
+        );
+        mem::store_release(
+            addr + 4 * device::UNFINISHED_AT as u64,
+            self.unfinished_cnt.load(Ordering::Relaxed),
+        );
+        let free = addr + 4 * device::FREE_CHUNKS_AT as u64;
+        let was = mem::load_acquire(free);
+        let now = self.belt.free_cnt();
+        mem::store_release(free, now);
+        now > was
     }
 
     /// Shows each surface's texture that the last run drew.

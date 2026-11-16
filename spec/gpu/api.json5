@@ -30,6 +30,16 @@
     $type: "u32",
     $description: "The length in words of one entry of a bind group (BIND_GROUP).",
   },
+  ROOM_ALIGNMENT: {
+    $value: 16,
+    $type: "u32",
+    $description: "Each room of a host's staging belt begins at a multiple of this (pxl-gpu-link `pack`): a\nmapping's alignment (8), and the largest texel block a copy into a texture takes from a\nbuffer, whose offset is a multiple of the block's size.",
+  },
+  ROW_ALIGNMENT: {
+    $value: 256,
+    $type: "u32",
+    $description: "A copy between a buffer and a texture steps the buffer's rows by a multiple of this\n(WebGPU's `COPY_BYTES_PER_ROW_ALIGNMENT`), so a texture's write is staged with its rows padded\nto it (pxl-gpu-link `pack`).",
+  },
   op: {
     $type: "u32",
     $description: "The ops, numbered from 1; an op of 0 ends a stream.",
@@ -268,7 +278,7 @@
     ],
   },
   DEVICE: {
-    $description: "The words of the device block, which the guest lends the host to write (spec/gpu/wit/gpu.wit\n`device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its\nfeatures (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32\nbits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are\nnanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the\nformat SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then\nthe frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames\nmay be unfinished at once, at least one), then the count of uncaptured errors, then the\ncount of unfinished frames, then STATUS, the last, which the host stores with release\nafter the rest. The uncaptured errors are the errors the device raised that no error\nscope caught. The unfinished frames are the frames the\nguest has drawn whose work the queue has not yet done. Only the host writes the two\ncounts: first before STATUS, as it writes the rest of the block, and afterwards with\nrelease each time a count changes. The guest loads them with acquire once STATUS reads\nREADY, and draws a frame only while the unfinished frames are below the block's frame\nlatency (pxl-gpu-guest `admit::frame`).",
+    $description: "The words of the device block, which the guest lends the host to write (spec/gpu/wit/gpu.wit\n`device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its\nfeatures (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32\nbits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are\nnanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the\nformat SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then\nthe frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames\nmay be unfinished at once, at least one), then the count of uncaptured errors, then the\ncount of unfinished frames, then the count of free chunks, then STATUS, the last, which\nthe host stores with release after the rest. The uncaptured errors are the errors the\ndevice raised that no error scope caught. The unfinished frames are the frames the guest\nhas drawn whose work the queue has not yet done. The free chunks are the chunks of the\nhost's staging belt that are mapped and hold nothing. Only the host writes the three\ncounts: first before STATUS, as it writes the rest of the block, and afterwards with\nrelease each time a count changes, what a run changes before the run is answered. It\nwakes the guest (spec/gpu/wit/gpu.wit `device.settled`) as more chunks are free than it\nlast wrote. The guest loads them with acquire once STATUS reads READY, flushes its stream\nwhile STATUS is READY (pxl-gpu-guest `admit::flush`), admits the writes that may wait only\nas far as the free chunks hold (pxl-gpu-guest stream.rs `stage`), and draws a frame only\nwhere it may flush and the unfinished frames are below the block's frame latency\n(pxl-gpu-guest `admit::frame`).",
     $extensions: { xpute: { packed: true } },
     LIMITS_AT: { $value: ["LIMIT_NAME"] },
     FEATS_AT: { $value: ["FEATURE_NAME", "bit"] },
@@ -277,6 +287,7 @@
     LATENCY_AT: { $value: 1 },
     ERRORS_AT: { $value: 1 },
     UNFINISHED_AT: { $value: 1 },
+    FREE_CHUNKS_AT: { $value: 1 },
     STATUS_AT: { $value: 1 },
   },
   STATUS: {

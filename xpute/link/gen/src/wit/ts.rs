@@ -247,9 +247,27 @@ impl Gen<'_> {
             String::new()
         };
         let refusal_of = self.ts_use(link, "refusal_of", false);
+        // A request's tag is read where a method answers later, the args
+        // where one takes any, and the writer of the answer where one
+        // answers a value at once; each other is named unread, as Rust's is.
+        let mut answers = false;
+        for f in &o.methods {
+            answers |= !is_async(f) && self.ret(f)?.is_some();
+        }
+        let tag = if o.methods.iter().any(|f| is_async(f)) {
+            "tag"
+        } else {
+            "_tag"
+        };
+        let args = if o.methods.iter().any(|f| params(f).next().is_some()) {
+            "args"
+        } else {
+            "_args"
+        };
+        let ret = if answers { "ret" } else { "_ret" };
         let _ = writeln!(
             out,
-            "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{",
+            "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, {tag}, {args}, {ret}) {{\n      try {{\n        switch (m) {{",
             if o.resource { "export " } else { "" },
             self.ts_use(link, "LinkObject", true)
         );
@@ -259,9 +277,8 @@ impl Gen<'_> {
             let mut loads = ps
                 .iter()
                 .zip(&offs)
-                .map(|((_, kd), at)| self.ts_load("r_", &at.to_string(), kd))
+                .map(|((_, kd), at)| self.ts_load("args", &at.to_string(), kd))
                 .collect::<Result<Vec<_>, String>>()?;
-            let takes_args = !loads.is_empty();
             if is_async(f) {
                 loads.push("stop.signal".into());
             }
@@ -271,6 +288,7 @@ impl Gen<'_> {
                 loads.join(", ")
             );
             let rk = self.ret(f)?;
+            // A later answer's value, written as its frame is laid.
             let data = match &rk {
                 None => "null".to_string(),
                 Some(k) => format!(
@@ -279,16 +297,17 @@ impl Gen<'_> {
                     self.ts_store("w", "0", "v", k)?
                 ),
             };
+            // A value at once, written in the frame its args came in.
+            let put = match &rk {
+                None => String::new(),
+                Some(k) => format!(
+                    "ret.start({});\n            {}\n            ",
+                    self.ts_layout(k)?.0,
+                    self.ts_store("ret", "0", "v", k)?
+                ),
+            };
             let c = method_const(o, f, ts_given);
             let _ = writeln!(out, "          case {c}: {{");
-            if takes_args {
-                let _ = writeln!(
-                    out,
-                    "            if (args === null) return {};\n            const r_ = new {}(args);",
-                    self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false),
-                    self.ts_use(self.cabi_ts, "Lift", false)
-                );
-            }
             if let Some(k @ Kind::Result(ok, err)) = &rk {
                 let ce = self.ts_use(link, "ComponentError", false);
                 let ty = self.ts_ty(k);
@@ -308,7 +327,7 @@ impl Gen<'_> {
                     };
                     let _ = writeln!(
                         out,
-                        "            let v: {ty};\n            try {{\n              {set}\n            }} catch (e) {{\n              if (!(e instanceof {ce})) throw e;\n              v = {tag_err};\n            }}\n            return {{ result: 0, data: {data} }};\n          }}"
+                        "            let v: {ty};\n            try {{\n              {set}\n            }} catch (e) {{\n              if (!(e instanceof {ce})) throw e;\n              v = {tag_err};\n            }}\n            {put}return 0;\n          }}"
                     );
                 }
             } else if is_async(f) {
@@ -326,7 +345,7 @@ impl Gen<'_> {
             } else {
                 let _ = writeln!(
                     out,
-                    "            const v = {call};\n            return {{ result: 0, data: {data} }};\n          }}"
+                    "            const v = {call};\n            {put}return 0;\n          }}"
                 );
             }
         }

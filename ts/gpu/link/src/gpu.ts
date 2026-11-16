@@ -29,8 +29,10 @@ export interface GpuConfig {
    * DEVICE), which the guest admits frames by (pxl-gpu-guest
    * `admit::frame`); a page's browser paces the frames themselves. */
   frame_latency: u32;
-  /** The size of one chunk that buffer writes are staged through, as large
-   * as one frame's writes; a larger write is staged across several chunks. */
+  /** The size of one chunk that buffer and texture writes are staged
+   * through, of a belt that starts with one chunk more than the frame
+   * latency, as large as one frame's writes; a larger write is staged across
+   * several chunks. */
   upload_chunk_sz: u32;
 }
 

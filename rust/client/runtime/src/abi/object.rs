@@ -15,53 +15,45 @@ pub trait Host {
 struct _Object(&'static _rt::Side, _rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 APPLY => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let batch = _rt::Lent::load(r_, 0)?;
+                    let batch = _rt::Lent::load(args_, 0)?;
                     let side_ = self.0;
                     self.1.apply(
                         batch,
                         _rt::Return::new(
                             Box::new(move |stop| side_.on_cancel(tag_, stop)),
-                            Box::new(move |got| {
-                                let reply = match got {
-                                    Ok(v) => _rt::Reply {
-                                        result: 0,
-                                        data: Some((
+                            Box::new(move |got| match got {
+                                Ok(v) => {
+                                    side_.task_return(
+                                        tag_,
+                                        0,
+                                        _rt::Packet::Args(Some((
                                             2,
-                                            Box::new(move |w: &mut _rt::Lower| match &v {
+                                            &|w: &mut _rt::Lower| match &v {
                                                 Ok(_) => {}
                                                 Err(v) => {
                                                     w.u8(0, 1);
                                                     w.u8(1, *v as u8);
                                                 }
-                                            }),
-                                        )),
-                                    },
-                                    Err(e) => _rt::Reply::from(e as i32),
-                                };
-                                side_.task_return(
-                                    tag_,
-                                    reply.result,
-                                    _rt::Packet::Args(
-                                        reply
-                                            .data
-                                            .as_ref()
-                                            .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
-                                    ),
-                                );
+                                            },
+                                        ))),
+                                    );
+                                }
+                                Err(e) => {
+                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                }
                             }),
                         ),
                     );
-                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
+                    _rt::Errno::EINPROGRESS as i32
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -75,7 +67,5 @@ mod _rt {
     pub(super) use xpute_host::abi::fs::types::ErrorCode;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{
-        Handle, Lift, Lower, Method, Object, Packet, Reply, Return, Side, Tag,
-    };
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag};
 }

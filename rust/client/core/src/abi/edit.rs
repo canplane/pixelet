@@ -56,53 +56,49 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let mut run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 HOLD => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let tool = r_
+                    let tool = args_
                         .case(0, 3)
                         .and_then(|v| Tool::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let val = r_.u32(4)?;
-                    let scale_step = r_.i32(8)?;
+                    let val = args_.u32(4)?;
+                    let scale_step = args_.i32(8)?;
                     match self.0.hold(tool, val, scale_step) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 MARKER_TEXT => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let text = r_.str(0).map(str::to_owned)?;
+                    let text = args_.str(0).map(str::to_owned)?;
                     match self.0.marker_text(text) {
-                        Ok(v) => _rt::Reply {
-                            result: 0,
-                            data: Some((
-                                2,
-                                Box::new(move |w: &mut _rt::Lower| match &v {
-                                    Ok(_) => {}
-                                    Err(v) => {
-                                        w.u8(0, 1);
-                                        w.u8(1, *v as u8);
-                                    }
-                                }),
-                            )),
-                        },
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(v) => {
+                            ret_.start(2);
+                            match &v {
+                                Ok(_) => {}
+                                Err(v) => {
+                                    ret_.u8(0, 1);
+                                    ret_.u8(1, *v as u8);
+                                }
+                            }
+                            0
+                        }
+                        Err(e) => e as i32,
                     }
                 }
                 MARKER_CANCEL => match self.0.marker_cancel() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
                 MARKER_COMMIT => match self.0.marker_commit() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -115,5 +111,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

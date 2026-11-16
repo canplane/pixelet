@@ -10,7 +10,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 /// The byte at `at`, as a pointer.
-fn ptr(at: u64) -> *mut u8 {
+pub(crate) fn ptr(at: u64) -> *mut u8 {
     core::ptr::with_exposed_provenance_mut(usize::try_from(at).ok().or_bug(Errno::EFAULT))
 }
 

@@ -26,10 +26,26 @@
 //!
 //! While a run is out the stream is not free (`is_free`), and the guest
 //! writes no records: what it would have recorded waits for a later frame.
+//! A guest flushes only while the host admits a flush; until then the
+//! records stay in the stream, which is free, and the frames that would add
+//! to them are refused, a frame being admitted only where a flush is.
+//!
+//! A record that writes a buffer or a texture is staged on the host's belt
+//! (`stage`): the stream lays out its staged writes as the host will
+//! (pxl-gpu-link `Pack`), from a fresh chunk at each flush and at each record
+//! where the host submits what it staged, so its writer can count the chunks
+//! they take against the device block's free chunks. A staged write is one
+//! that cannot wait, inside a transaction or outside one, and is recorded
+//! however few chunks are free: a host short of them makes one more for the
+//! run, and lets it go once it is back (pxl-gpu-host belt.rs). A writer that
+//! may wait asks for the room first (`write_buffer_from`). The free chunks
+//! only rise while the stream is the guest's, as the host takes chunks only
+//! as it runs records.
 
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 
+use pxl_gpu_link::pack::Pack;
 use xpute_kit::status::errno::Errno;
 
 use crate::abi::gpu;
@@ -46,13 +62,14 @@ pub const fn rec_words(args: usize, bytes: Option<usize>) -> usize {
         }
 }
 
-/// A mark says whether a transaction is open, where it began, and whether a
-/// record that did not fit has dropped it.
-#[derive(Clone, Copy, PartialEq)]
+/// A mark says whether a transaction is open, where it began and how its
+/// staged writes stood then, and whether a record that did not fit has
+/// dropped it.
+#[derive(Clone, Copy)]
 enum Mark {
     Off,
-    Open(usize),
-    Spilled(usize),
+    Open(usize, Pack),
+    Spilled(usize, Pack),
 }
 
 /// A run of the stream's records, out to the host's `gpu.run`.
@@ -69,15 +86,21 @@ pub struct Stream {
     buf: Buf,
     cap: usize,
     mark: Mark,
+    /// How the writes staged since the last flush lie on the host's belt.
+    pack: Pack,
+    chunk_sz: u64,
 }
 
 impl Stream {
-    /// A stream of `cap` words.
-    pub fn new(cap: usize) -> Stream {
+    /// A stream of `cap` words, for a host whose belt's chunks are
+    /// `chunk_sz` bytes (pxl-gpu-link `GpuConfig::upload_chunk_sz`).
+    pub fn new(cap: usize, chunk_sz: u64) -> Stream {
         Stream {
             buf: Buf::Free(Vec::with_capacity(cap)),
             cap,
             mark: Mark::Off,
+            pack: Pack::new(chunk_sz),
+            chunk_sz,
         }
     }
 
@@ -87,6 +110,11 @@ impl Stream {
             Buf::Free(words) => words.len(),
             Buf::Out(_) => 0,
         }
+    }
+
+    /// Whether no records were recorded since the last flush.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn left(&self) -> usize {
@@ -109,13 +137,24 @@ impl Stream {
     /// (spec/gpu/wit/gpu.wit), called by its named handle. A stream that
     /// recorded none, or that a run still holds, sends nothing.
     pub fn flush(&mut self) {
-        if self.len() == 0 || !self.is_free() {
+        if self.is_empty() || !self.is_free() {
             return;
         }
         if let Buf::Free(words) = &mut self.buf {
             let words = core::mem::take(words);
             self.buf = Buf::Out(Box::pin(gpu::run(words)));
         }
+        self.pack = Pack::new(self.chunk_sz);
+    }
+
+    /// Drops the records recorded since the last flush, which name objects
+    /// of a device that is gone.
+    pub fn clear(&mut self) {
+        if let Buf::Free(words) = &mut self.buf {
+            words.clear();
+        }
+        self.mark = Mark::Off;
+        self.pack = Pack::new(self.chunk_sz);
     }
 
     /// `fits` says whether records of `bytes` bytes fit with
@@ -148,17 +187,59 @@ impl Stream {
     /// reserved after it until `commit` is refused. Outside a transaction, a
     /// record that does not fit is a bug.
     pub fn begin(&mut self) {
-        self.mark = Mark::Open(self.len());
+        self.mark = Mark::Open(self.len(), self.pack);
     }
 
     /// Answers false when the transaction did not fit, and the stream is then
     /// as it was at `begin`.
     pub fn commit(&mut self) -> bool {
         let mark = core::mem::replace(&mut self.mark, Mark::Off);
-        if let (Mark::Spilled(at), Buf::Free(words)) = (mark, &mut self.buf) {
+        let Mark::Spilled(at, pack) = mark else {
+            return true;
+        };
+        if let Buf::Free(words) = &mut self.buf {
             words.truncate(at);
         }
-        !matches!(mark, Mark::Spilled(_))
+        self.pack = pack;
+        false
+    }
+
+    /// Drops an open transaction, as a record that did not fit does.
+    fn spill(&mut self) {
+        if let Mark::Open(at, pack) = self.mark {
+            self.mark = Mark::Spilled(at, pack);
+        }
+    }
+
+    /// Lays out a staged write on the stream's staged writes, which `place`
+    /// says, and answers whether it is recorded: always, but in a transaction
+    /// already dropped. A staged write is one that cannot wait, inside a
+    /// transaction or outside one, and a host short of chunks for it makes
+    /// one more; a writer that may wait asks for the belt's room first.
+    pub fn stage(&mut self, place: impl FnOnce(&mut Pack)) -> bool {
+        if matches!(self.mark, Mark::Spilled(..)) {
+            return false;
+        }
+        place(&mut self.pack);
+        true
+    }
+
+    /// The records from here on are run after the host submitted what it
+    /// staged before them, so the next staged write begins a fresh chunk.
+    pub fn submit(&mut self) {
+        self.pack.submit();
+    }
+
+    /// The size of a chunk of the host's belt.
+    pub fn chunk_sz(&self) -> u64 {
+        self.chunk_sz
+    }
+
+    /// How the writes staged since the last flush lie on the host's belt, for
+    /// a writer to lay out more after them and ask whether they fit the free
+    /// chunks.
+    pub fn pack(&self) -> Pack {
+        self.pack
     }
 
     /// A record of `n` words for its writer to fill, or none when it no
@@ -166,9 +247,9 @@ impl Stream {
     #[track_caller]
     pub fn reserve(&mut self, op: u32, n: usize) -> Option<&mut [u32]> {
         match self.mark {
-            Mark::Spilled(_) => return None,
-            Mark::Open(at) if self.left() < (2 + n) * WORD => {
-                self.mark = Mark::Spilled(at);
+            Mark::Spilled(..) => return None,
+            Mark::Open(..) if self.left() < (2 + n) * WORD => {
+                self.spill();
                 return None;
             }
             _ => {}

@@ -303,7 +303,7 @@ fn side_trait(o: &Obj, side: &str) -> String {
 /// The names the Rust bindings give beside WIT names, those the runtime
 /// module `_rt` holds, and the prelude's they name bare. A WIT name that
 /// meets one takes `_`, as wit-bindgen's `Guest_` does.
-const RS_GIVEN: [&str; 33] = [
+const RS_GIVEN: [&str; 32] = [
     "HANDLE",
     "IMPORTS",
     "CALLS",
@@ -321,7 +321,6 @@ const RS_GIVEN: [&str; 33] = [
     "Method",
     "Object",
     "Rc",
-    "Reply",
     "Return",
     "Tag",
     "Box",

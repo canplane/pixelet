@@ -9,7 +9,7 @@ import {
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { Lift, type Lower } from "@xpute/link/cabi.ts";
+import type { Lift, Lower } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   type Handle,
@@ -194,14 +194,12 @@ function object(
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, args, _ret) {
       try {
         switch (m) {
           case SHOW: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.show(load_Snapshot(r_, 0), stop.signal).then(
+            implementation.show(load_Snapshot(args, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -209,10 +207,8 @@ function object(
             return ERRNO_EINPROGRESS;
           }
           case DRAFT: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.draft(r_.str(0), stop.signal).then(
+            implementation.draft(args.str(0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -220,10 +216,8 @@ function object(
             return ERRNO_EINPROGRESS;
           }
           case VIEW: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.view(r_.f64(0), r_.f64(8), stop.signal).then(
+            implementation.view(args.f64(0), args.f64(8), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );

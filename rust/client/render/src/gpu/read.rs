@@ -2,7 +2,7 @@
 
 //! What a stage last read, so a frame that reads the same input keeps what the stage made.
 
-use crate::gpu::api::{Gpu, bytes, room, write_buffer_sz};
+use crate::gpu::api::{Gpu, bytes, need, room};
 
 /// A stage's whole input as it last read it, byte for byte. What a stage makes is a function
 /// of its input alone, so a frame that reads the same input keeps what the stage made: the
@@ -98,10 +98,10 @@ impl SlotMirror {
             if self.slots.is_empty() {
                 return false;
             }
-            let need: usize = runs(&self.slots)
-                .map(|(a, b)| write_buffer_sz(&now[a as usize * unit..b as usize * unit]))
-                .sum();
-            if room(need) {
+            let runs_need = runs(&self.slots).fold(need(), |n, (a, b)| {
+                n.write_buf(&now[a as usize * unit..b as usize * unit])
+            });
+            if room(runs_need) {
                 for (a, b) in runs(&self.slots) {
                     let (a, b) = (a as usize * unit, b as usize * unit);
                     g.write_buf(buf, a as u32, &now[a..b]);

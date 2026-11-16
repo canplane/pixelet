@@ -20,14 +20,20 @@
  * runtime outlives its UI and keeps the guest's stop and its trap.
  */
 
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EINPROGRESS,
+  ERRNO_EMSGSIZE,
+} from "@xpute/kit/status/errno.spec.ts";
 import {
   type Answered,
   CANCEL,
   DROP,
   End,
   type Handle,
+  Lift,
+  Lower,
   type Method,
   type Packet,
   pkt_of,
@@ -81,31 +87,48 @@ const ui = new (class extends End {
   }
 })();
 
+/** No packet. */
+const NONE = new Uint8Array(0);
+
+/** The reader of each packet the worker posts, and the writer of the answer
+ * the UI's end gives at once, which holds no value: every method the UI
+ * implements is an `async func` (worker.ts `enter`), so a value written there
+ * is past its room, EMSGSIZE. */
+const args = new Lift(NONE);
+const ret = new Lower(NONE, 0);
+
+/** Hands the UI's end the frame the worker posted, its packet `pkt`, and
+ * answers what the end answers (`End.input`). */
+function input(
+  tag: Tag,
+  h: Handle,
+  m: Method,
+  res: boolean,
+  result: i32,
+  pkt: U8Array | null,
+): i32 {
+  const p = pkt ?? NONE;
+  args.reset(p.buffer, p.byteOffset, p.length);
+  ret.reset(NONE.buffer, 0, 0);
+  return ui.input(tag, h, m, res, result, args, ret);
+}
+
 /** What the worker posts on the UI's port, by its kind, handed to the UI's
- * end: a method's reply at once goes back as a later answer, and the guest's
- * cancel and drop are the link's own. */
+ * end: a method's result at once goes back as a later answer, and the
+ * guest's cancel and drop are the link's own. */
 const HEAR: {
   [K in ToPage["kind"]]: (m: Extract<ToPage, { kind: K }>) => void;
 } = {
   request: (m) => {
-    const reply = ui.input(m.tag, m.h, m.m, false, 0, m.pkt);
-    if (reply === ERRNO_EINPROGRESS) return;
-    const { result, data } =
-      typeof reply === "number" ? { result: reply, data: null } : reply;
-    ui.task_return(m.tag, result, data);
+    const result = input(m.tag, m.h, m.m, false, 0, m.pkt);
+    if (result === ERRNO_EINPROGRESS) return;
+    ui.task_return(m.tag, ret.finish() < 0 ? ERRNO_EMSGSIZE : result);
   },
-  answer: (m) => void ui.input(m.tag, ROOT, 0, true, m.result, m.pkt),
+  answer: (m) => void input(m.tag, ROOT, 0, true, m.result, m.pkt),
   open: (m) => ui.open_at(m.k, m.h, m.uri),
   cancel: (m) =>
-    void ui.input(
-      0,
-      ROOT,
-      CANCEL,
-      false,
-      0,
-      pkt_of([4, (w) => w.u32(0, m.tag)]),
-    ),
-  drop: (m) => void ui.input(0, m.h, DROP, false, 0, null),
+    void input(0, ROOT, CANCEL, false, 0, pkt_of([4, (w) => w.u32(0, m.tag)])),
+  drop: (m) => void input(0, m.h, DROP, false, 0, null),
 };
 
 /** Opens the guest's module worker at `url`, and the UI's end over one port

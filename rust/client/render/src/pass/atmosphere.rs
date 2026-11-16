@@ -35,8 +35,9 @@ use crate::frame::shader::word::{
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    Entry, Format, Gpu, Layout, Load, RenderContext, buf_entry, buffer_usage, bytes, pass_desc,
-    result, room, sampler_entry, signaled, texture_usage, view_entry, word_sz, write_texture_sz,
+    Entry, Format, Gpu, Layout, Load, RenderContext, buf_entry, buffer_usage, bytes, need,
+    note_retry, pass_desc, result, room, sampler_entry, signaled, texture_usage, view_entry,
+    word_sz,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
@@ -473,7 +474,9 @@ impl Atmosphere {
     ) -> bool {
         let (texture, mut came) = (self.earth_tiles.0, false);
         upload(&mut |layer, texels| {
-            if !room(write_texture_sz(texels)) {
+            let tile = need().write_texture(TILE_CELLS, TILE_CELLS, texels);
+            if !room(tile) {
+                note_retry(tile);
                 return false;
             }
             g.write_texture(texture, layer, TILE_CELLS, TILE_CELLS, texels);

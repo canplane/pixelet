@@ -5,7 +5,7 @@
 import { type Level, of_Level } from "./log.enum.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { Lift } from "@xpute/link/cabi.ts";
+import type { Lift } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   type Handle,
@@ -33,13 +33,11 @@ export interface Host {
 /** The object over `implementation`. */
 function object(implementation: Host): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, _tag, args, _ret) {
       try {
         switch (m) {
           case LOG: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
-            implementation.log(load_Level(r_, 0), r_.str(4), r_.str(12));
+            implementation.log(load_Level(args, 0), args.str(4), args.str(12));
             return 0;
           }
           default:

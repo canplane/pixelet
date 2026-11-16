@@ -2,6 +2,7 @@
 //
 // GENERATED from spec/gpu/wit (xpute-link-gen wit.rs)
 
+import type { u64 } from "@xpute/kit/abi/word.ts";
 import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
@@ -21,7 +22,7 @@ export const HANDLE: Handle = 0x51cb2a;
 export const NEXT: Method = 0;
 
 export interface Host {
-  next(signal_: AbortSignal): Promise<void>;
+  next(signal_: AbortSignal): Promise<u64>;
 }
 
 /** The object over `implementation`. */
@@ -30,13 +31,19 @@ function object(
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, _args, _ret) {
       try {
         switch (m) {
           case NEXT: {
             const stop = new AbortController();
             implementation.next(stop.signal).then(
-              () => l.task_return(tag, 0, null),
+              (v) =>
+                l.task_return(tag, 0, [
+                  8,
+                  (w) => {
+                    w.u64(0, v);
+                  },
+                ]),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());

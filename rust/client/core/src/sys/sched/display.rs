@@ -1,8 +1,12 @@
 // pxl-core/sys/sched/display.rs
 
 //! The display's interval, measured from pxl-gpu-guest's vsync answers: the gaps
-//! between vsyncs armed back to back, read at their low quartile, so a late
-//! answer and the early one after it do not move it.
+//! between the frame starts they answer, of vsyncs armed back to back, read at
+//! their low quartile, so a late answer and the early one after it do not move
+//! it. A gap across a frame that ran past a vsync is a whole number of
+//! intervals, which the low quartile reads past while more than a quarter of
+//! the gaps are one; a vsync armed after the core stood idle is not back to
+//! back with the one before (`idle`).
 
 use pxl_global::Global;
 
@@ -11,7 +15,7 @@ const GAP_CAP: usize = 16;
 
 #[derive(Default)]
 struct Display {
-    /// The last vsync's answer, while vsyncs are armed back to back.
+    /// The last vsync's frame start, while vsyncs are armed back to back.
     at: Option<f64>,
     /// The last gaps, oldest first once the ring has wrapped, and how many
     /// were seen.
@@ -25,7 +29,7 @@ fn display() -> &'static mut Display {
     DISPLAY.get(Display::default)
 }
 
-/// A vsync answered at `at`.
+/// A vsync answered the frame start `at`.
 pub(crate) fn answered(at: f64) {
     let d = display();
     if let Some(last) = d.at {

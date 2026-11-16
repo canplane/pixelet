@@ -12,7 +12,7 @@ use xpute_kit::collection::list::List;
 
 use super::RayPass;
 use crate::frame::shader::floor;
-use crate::gpu::api::{Gpu, buffer_usage, bytes, release, room, write_buffer_sz};
+use crate::gpu::api::{Gpu, buffer_usage, bytes, need, note_retry, release, room};
 
 /// What a frame hands of the terrain: `upload` offers the writer each brick
 /// the core filled, and `pool` is how many words the ways' pool must hold
@@ -147,8 +147,15 @@ impl RayPass {
         gb.grow(g, ground.pool);
         gb.bricks.clear();
         (ground.upload)(&mut |q| {
-            let recs = 2 + q.run.len();
-            if gb.bricks.len() == FRAME_BRICK_CAP as usize || !room(recs * write_buffer_sz(&[])) {
+            let all = q.run.iter().fold(
+                need().upload_buf(bytes(q.words)).upload_buf(bytes(q.folds)),
+                |n, &(_, w)| n.upload_buf(bytes(w)),
+            );
+            if gb.bricks.len() == FRAME_BRICK_CAP as usize {
+                return false;
+            }
+            if !room(all) {
+                note_retry(all);
                 return false;
             }
             g.upload_buf(gb.ground, q.slot * BRICK_SZ, bytes(q.words));

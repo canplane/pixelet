@@ -14,6 +14,10 @@ namespace xpute::guest::clock {
 // The time in ms, which never runs backward; only differences mean anything.
 double now() noexcept;
 
+// A mark of the monotonic clock in ms, on `now`'s line: a time the host
+// answers, as a display's frame start.
+double ms(std::uint64_t mark) noexcept;
+
 // `ms` as a duration the monotonic clock waits for, rounded up.
 std::uint64_t duration(double ms) noexcept;
 

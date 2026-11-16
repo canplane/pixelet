@@ -103,7 +103,9 @@ pub struct GpuHost {
     /// This is the address where the guest asked for the device's block.
     block: Option<u64>,
     /// wgpu's device-lost callback sets this, on whatever thread wgpu calls it,
-    /// and nothing clears it: a host runs one device (`lost`).
+    /// and so does `lose`, where the belt has no chunk for a write or a
+    /// chunk's mapping was refused; nothing clears it: a host runs one device
+    /// (`lost`).
     device_lost: Arc<AtomicBool>,
     /// This counts the uncaptured errors the device raised. wgpu's handler adds
     /// to it, on whatever thread wgpu calls it, and `tell_counts` writes it.
@@ -128,8 +130,8 @@ pub struct GpuHost {
     unfinished_cnt: Arc<AtomicU32>,
     frame_latency: u32,
     present_mode: wgpu::PresentMode,
-    /// Every buffer write is staged through the belt and copied by
-    /// `uploads`, which is submitted ahead of what follows.
+    /// Every buffer and texture write is staged through the belt and copied
+    /// by `uploads`, which is submitted ahead of what follows.
     /// `Queue::write_buffer` would make a new Metal buffer for each write.
     belt: Belt,
     uploads: Option<wgpu::CommandEncoder>,
@@ -160,12 +162,7 @@ impl GpuHost {
         let lost = device_lost.clone();
         device.set_device_lost_callback(move |reason, message| {
             if reason == wgpu::DeviceLostReason::Unknown {
-                log(
-                    Level::Warn,
-                    "gpu",
-                    &format!("device lost ({reason:?}): {message}"),
-                );
-                lost.store(true, Ordering::Release);
+                lose_device(&lost, &format!("device lost ({reason:?}): {message}"));
                 wake();
             }
         });
@@ -214,11 +211,21 @@ impl GpuHost {
         &self.device
     }
 
-    /// This says whether the system lost the device. The host is then
+    /// This says whether the system lost the device, or a chunk of the belt
+    /// had its mapping refused, which is a lost device too. The host is then
     /// spent: once a `poll` has told the guest, its owner lets it go and opens
     /// a device anew, as a page asks for a new device.
     pub fn lost(&self) -> bool {
-        self.device_lost.load(Ordering::Acquire)
+        self.device_lost.load(Ordering::Acquire) || self.belt.is_gone()
+    }
+
+    /// Holds the device as lost where a write finds an upload chunk's mapping
+    /// gone, which any loss may take away, or the chunk it needs not made, or
+    /// where a chunk's mapping was refused, as wgpu's device-lost callback
+    /// holds it (`lose_device`): no further record runs, and the next `poll`
+    /// tells the guest (@pxl/gpu/host host.ts `_lose`).
+    fn lose(&self) {
+        lose_device(&self.device_lost, CHUNK_GONE);
     }
 
     /// Forgets every object of the device that went, and tells the guest in
@@ -236,23 +243,42 @@ impl GpuHost {
     /// Writes into `mem` what the device has answered since the last
     /// poll. Call it on the thread that runs the stream. After a loss it
     /// writes only the block's `LOST` `STATUS`: every object and pending
-    /// request goes with the device. It says whether a request was answered.
+    /// request goes with the device. It says whether a request was answered,
+    /// or chunks of the belt came free (`tell_counts`).
     pub fn poll(&mut self) -> bool {
+        if self.belt.is_gone() {
+            self.lose();
+        }
         if self.lost() {
             self.on_lost();
             return false;
         }
         let _ = self.device.poll(wgpu::PollType::Poll);
-        self.tell_counts();
+        let freed = self.tell_counts();
         let waited = self.waiting();
         self.pending.retain(Pending::poll);
         self.land_images();
         self.land_pipelines();
-        self.waiting() != waited
+        freed || self.waiting() != waited
     }
 
     fn waiting(&self) -> usize {
         self.pending.len() + self.decoding.len() + self.making.len()
+    }
+}
+
+/// What a host says where its belt has no chunk for a write, a mapping gone
+/// or refused or a chunk not made, as a page's host says it (@pxl/gpu/host
+/// host.ts `CHUNK_GONE`).
+const CHUNK_GONE: &str = "device lost: an upload chunk is gone or cannot be made";
+
+/// Holds the device as lost on `device_lost`, and says `why` the first time:
+/// the one place a loss is said, the system's (`GpuHost::new`) and the belt's
+/// (`GpuHost::lose`) alike, as a page's host says it (@pxl/gpu/host host.ts
+/// `_lose`).
+fn lose_device(device_lost: &AtomicBool, why: &str) {
+    if !device_lost.swap(true, Ordering::AcqRel) {
+        log(Level::Warn, "gpu", why);
     }
 }
 

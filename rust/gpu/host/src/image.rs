@@ -107,6 +107,9 @@ impl GpuHost {
                 height: image.height,
                 depth_or_array_layers: 1,
             };
+            // The host places an image it decoded itself, as a page's
+            // `copyExternalImageToTexture` does: no write of the guest's, so
+            // it takes nothing of the belt, whose chunks the guest counts.
             self.queue
                 .write_texture(d.to.info(), &image.rgba, layout, size);
             signal(d.word, d.ticket, Some(result::OK));

@@ -10,7 +10,7 @@ import {
 } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
-import { Lift } from "@xpute/link/cabi.ts";
+import type { Lift } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   ComponentError,
@@ -51,14 +51,12 @@ function object(
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, args, ret) {
       try {
         switch (m) {
           case RUN: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.run(load_Lent(r_, 0), stop.signal).then(
+            implementation.run(load_Lent(args, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -67,15 +65,9 @@ function object(
           }
           case GET_DEVICE: {
             const v = implementation.get_device();
-            return {
-              result: 0,
-              data: [
-                4,
-                (w) => {
-                  w.u32(0, v);
-                },
-              ],
-            };
+            ret.start(4);
+            ret.u32(0, v);
+            return 0;
           }
           default:
             return ERRNO_ENOSYS;
@@ -109,14 +101,12 @@ export function device(
   implementation: HostDevice,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, args, _ret) {
       try {
         switch (m) {
           case DEVICE_LOST: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.lost(load_Lent(r_, 0), stop.signal).then(
+            implementation.lost(load_Lent(args, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );

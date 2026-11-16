@@ -23,6 +23,7 @@ use pxl_gpu_link::enums::{
     StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType,
     TextureViewDimension, VertexFormat, VertexStepMode,
 };
+use pxl_gpu_link::pack::Pack;
 use pxl_gpu_link::spec;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -38,6 +39,7 @@ use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::group::BUFS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::track::Tracker;
+use crate::spec::api::device::UPLOAD_CHUNK_SZ;
 use crate::spec::api::{record, stream};
 use crate::spec::span::GpuSpanName;
 
@@ -661,6 +663,8 @@ struct State {
     /// the host holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
+    /// The retry that writes put off are due, until a frame is asked for it (`take_retry`).
+    retry: Option<Retry>,
     /// What each pass's calls are held to as they are encoded (gpu/track.rs).
     track: Tracker,
 }
@@ -695,7 +699,7 @@ pub fn install(bytes: u32) {
     // SAFETY: all-zero bytes are an encoder that has made nothing (pxl-gpu-guest encode).
     let encoder = unsafe { Box::<Encoder<OBJECT_CAP>>::new_zeroed().assume_init() };
     STATE.set(Some(State::over(
-        Stream::new(bytes as usize / WORD),
+        Stream::new(bytes as usize / WORD, u64::from(UPLOAD_CHUNK_SZ)),
         Box::leak(encoder),
     )));
 }
@@ -745,6 +749,7 @@ impl State {
             lost: false,
             ranges: Vec::new(),
             ranges_out: Vec::new(),
+            retry: None,
             track: Tracker::default(),
         }
     }
@@ -861,6 +866,22 @@ pub fn device_block() -> DeviceBlock {
     }
 }
 
+/// Takes in the timed spans' read that landed (`take_stamps`) where the read taken before was
+/// reported (`Gpu::take_stamps_complete`). It runs in each entry, where the core reads what the
+/// GPU did (pxl-core link.rs `end`), and as a frame is submitted, so no frame is drawn for a
+/// read and a still scene misses none.
+pub fn take_reads() {
+    if let Some(s) = STATE.get(|| None).as_mut() {
+        take_landed(s);
+    }
+}
+
+fn take_landed(s: &mut State) {
+    if s.stamps_complete.is_none() {
+        s.stamps_complete = take_stamps(s);
+    }
+}
+
 /// Takes in the ticks of the earliest-asked read that is out, if its fence says they landed.
 /// It sets each span's own time and the busy time, frees the read for another frame to ask,
 /// and returns which read it took. A read that was refused is freed and measures nothing. One
@@ -943,9 +964,13 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     Some(r)
 }
 
-/// The device was lost with every object on it, so the handles start over.
+/// The device was lost with every object on it, so the handles start over, and the records
+/// not yet flushed, which name those objects, go with them.
 pub fn on_device_lost() {
     if let Some(s) = STATE.get(|| None).as_mut() {
+        s.stream.clear();
+        s.ranges.clear();
+        s.retry = None;
         // SAFETY: the encoder's own bytes; zeroed, it has made nothing.
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.device_out, s.device, s.stamps) = (false, None, None);
@@ -957,15 +982,20 @@ pub fn on_device_lost() {
     }
 }
 
-/// Hands the frame's records to the host, and with them the ranges they name
-/// (`in_flight`).
+/// Hands the records to the host, and with them the ranges they name (`in_flight`), while
+/// the host admits a flush (pxl-gpu-guest `admit::flush`), which is while the device is ready;
+/// until then the records stay in the stream.
 pub fn gpu_flush() {
-    if let Some(s) = STATE.get(|| None).as_mut() {
-        if s.stream.is_free() {
-            core::mem::swap(&mut s.ranges_out, &mut s.ranges);
-            s.ranges.clear();
-        }
+    if let Some(s) = STATE.get(|| None).as_mut()
+        && s.stream.is_free()
+        && admit::flush()
+    {
+        core::mem::swap(&mut s.ranges_out, &mut s.ranges);
+        s.ranges.clear();
         s.stream.flush();
+        if let Some(Retry::Stream) = s.retry {
+            s.retry = Some(Retry::Run);
+        }
     }
 }
 
@@ -1031,25 +1061,139 @@ pub fn frame_commit() -> bool {
     committed
 }
 
-/// The stream bytes a write takes, as its writer measures them. A caller sums them over the
-/// writes it makes together and asks `room` before making them.
-pub use pxl_gpu_guest::encode::call::{write_buffer_sz, write_texture_sz};
 use pxl_spec::asset;
 
-/// The stream bytes a shader module of `code` takes (`Gpu::shader`). Its maker asks `room`
-/// for them before making it.
-pub fn shader_sz(code: &str) -> usize {
-    Encoder::<OBJECT_CAP>::shader_module_sz(code)
+/// The room that refused writes put off, which a retry waits for (`take_retry`).
+#[derive(Clone, Copy)]
+enum Retry {
+    /// The stream's, its records not yet handed to the host.
+    Stream,
+    /// The stream's, its records handed to the host: back once the host answers the run.
+    Run,
+    /// The belt's: back once more chunks are free than this, the block's free chunks less those
+    /// the stream's records then took.
+    Belt(u32),
 }
 
-/// Whether records of `bytes` in all (`write_buffer_sz`, `write_texture_sz`,
-/// `shader_sz`) fit the stream while leaving `stream::RESERVE` for records that cannot
-/// wait.
-pub fn room(bytes: usize) -> bool {
+/// What records take of the stream and of the host's staging belt, from where the stream
+/// stands (`need`): a caller adds each record it makes together, measured as its writer makes
+/// it, and asks `room` before making them.
+#[derive(Clone, Copy)]
+pub struct Need {
+    bytes: usize,
+    pack: Pack,
+}
+
+/// No records yet, from where the stream stands.
+pub fn need() -> Need {
+    STATE.get(|| None).as_ref().map_or(
+        Need {
+            bytes: 0,
+            pack: Pack::new(u64::from(UPLOAD_CHUNK_SZ)),
+        },
+        |s| Need::of(&s.stream),
+    )
+}
+
+impl Need {
+    /// No records yet, from where `stream` stands.
+    fn of(stream: &Stream) -> Need {
+        Need {
+            bytes: 0,
+            pack: stream.pack(),
+        }
+    }
+
+    /// `Gpu::write_buf`'s record.
+    pub fn write_buf(mut self, bytes: &[u8]) -> Need {
+        self.bytes += call::write_buffer_sz(bytes);
+        call::write_buffer_pack(&mut self.pack, bytes);
+        self
+    }
+
+    /// `Gpu::upload_buf`'s record.
+    pub fn upload_buf(mut self, bytes: &[u8]) -> Need {
+        self.bytes += call::write_buffer_at_sz();
+        call::write_buffer_pack(&mut self.pack, bytes);
+        self
+    }
+
+    /// `Gpu::write_texture`'s record.
+    pub fn write_texture(mut self, width: u32, height: u32, bytes: &[u8]) -> Need {
+        let (layout, size) = texture_layout(width, height);
+        self.bytes += call::write_texture_sz(bytes);
+        call::write_texture_pack(&mut self.pack, layout, size);
+        self
+    }
+
+    /// `Gpu::shader`'s record.
+    pub fn shader(mut self, code: &str) -> Need {
+        self.bytes += Encoder::<OBJECT_CAP>::shader_module_sz(code);
+        self
+    }
+}
+
+/// Whether the records `need` measures, writes that may wait, fit the stream, leaving
+/// `stream::RESERVE` of it for records that cannot wait, and the belt's free chunks
+/// (pxl-gpu-guest `admit::free_chunk_cnt`). A write that cannot wait needs no room of the
+/// belt: a host short of chunks makes one more for it. A writer that puts its writes off where
+/// they do not fit notes the retry they are due (`note_retry`).
+pub fn room(need: Need) -> bool {
     STATE
         .get(|| None)
         .as_ref()
-        .is_some_and(|s| s.stream.fits(bytes, stream::RESERVE as usize))
+        .is_some_and(|s| refusal(&s.stream, need).is_none())
+}
+
+/// Which room refuses the records `need` measures on `stream`, none where both have room
+/// (`room`).
+fn refusal(stream: &Stream, need: Need) -> Option<Retry> {
+    if !stream.fits(need.bytes, stream::RESERVE as usize) {
+        return Some(Retry::Stream);
+    }
+    let free = admit::free_chunk_cnt();
+    (!need.pack.fits(free)).then(|| Retry::Belt(free.saturating_sub(stream.pack().chunk_cnt())))
+}
+
+/// Notes that writes `need` measures, which their writer puts off, are due a retry once the
+/// room that refused them is back (`take_retry`). The first retry noted stands until taken.
+pub fn note_retry(need: Need) {
+    if let Some(s) = STATE.get(|| None).as_mut() {
+        note(s, need);
+    }
+}
+
+/// A refusal by an empty stream's room is no retry: no run will free that room, and the
+/// writes are refused again as they come.
+fn note(s: &mut State, need: Need) {
+    match (s.retry, refusal(&s.stream, need)) {
+        (None, Some(Retry::Stream)) if s.stream.is_empty() => {}
+        (None, Some(r)) => s.retry = Some(r),
+        _ => {}
+    }
+}
+
+/// Whether the room a retry was noted for is back, which the core asks a frame for (pxl-core
+/// link.rs `end`). It answers so once a retry.
+pub fn take_retry() -> bool {
+    let Some(s) = STATE.get(|| None).as_mut() else {
+        return false;
+    };
+    let due = match s.retry {
+        Some(Retry::Run) => s.stream.is_free(),
+        Some(Retry::Belt(n)) => admit::free_chunk_cnt() > n,
+        Some(Retry::Stream) | None => false,
+    };
+    if due {
+        s.retry = None;
+    }
+    due
+}
+
+/// The layout and the size of a write of the whole first mip of a layer, four bytes a texel
+/// (`Gpu::write_texture`, `Need::write_texture`).
+const fn texture_layout(width: u32, height: u32) -> ([u32; 2], [u32; 3]) {
+    ([width * 4, height], [width, height, 1])
 }
 
 /// An object's handle. Inside a frame, the encoder makes none where the frame no longer fits,
@@ -1564,6 +1708,22 @@ impl Gpu {
         call::write_buffer(&mut self.s().stream, id, off, bytes);
     }
 
+    /// `write_buf` for a write that may wait (pxl-gpu-guest `call::write_buffer_from`): from
+    /// byte `from` of `bytes`, as far as the stream and the belt have room while leaving
+    /// `stream::RESERVE` of the stream (`room`), and answers how far the bytes are written. The
+    /// rest is put off, and due a retry (`note_retry`).
+    pub fn write_buf_from(&self, id: Id, off: u32, bytes: &[u8], from: usize) -> usize {
+        let s = self.s();
+        let done = call::write_buffer_from(&mut s.stream, id, off, bytes, from, |stream, part| {
+            refusal(stream, Need::of(stream).write_buf(part)).is_none()
+        });
+        let next = &bytes[done..bytes.len().min(done + s.stream.chunk_sz() as usize)];
+        if !next.is_empty() {
+            note(s, Need::of(&s.stream).write_buf(next));
+        }
+        done
+    }
+
     /// Writes `bytes` into buffer `id` in one record however large. The host reads the
     /// bytes where they lie when it runs the frame. They are the host's from the frame's
     /// flush until it hands the stream back (pxl-gpu-guest stream.rs), so their owner
@@ -1577,11 +1737,12 @@ impl Gpu {
 
     /// Writes the whole first mip of `layer`, four bytes a texel.
     pub fn write_texture(&self, id: Id, layer: u32, width: u32, height: u32, bytes: &[u8]) {
+        let (layout, size) = texture_layout(width, height);
         call::write_texture(
             &mut self.s().stream,
             &place(id, [0, 0, layer]),
-            [width * 4, height],
-            [width, height, 1],
+            layout,
+            size,
             bytes,
         );
     }
@@ -1872,7 +2033,7 @@ impl Gpu {
     /// the ticket once it lands. Returns the read this frame's spans come back in.
     pub fn submit_frame(&self, encoder: Id) -> Option<usize> {
         let s = self.s();
-        s.stamps_complete = take_stamps(s);
+        take_landed(s);
         let free = (0..READ_CAP).find(|&r| s.stamps_out[r] == 0);
         let passes = s.stamp_cnt;
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, passes != 0) else {
@@ -1997,10 +2158,10 @@ impl Gpu {
         self.s().gpu_busy_ms
     }
 
-    /// The read that the frame just submitted took in, if it took one. The span times were
-    /// measured from that read.
-    pub fn stamps_complete(&self) -> Option<usize> {
-        self.s().stamps_complete
+    /// The read taken in since a frame last reported one (`take_reads`), for this frame to
+    /// report. The span times were measured from that read.
+    pub fn take_stamps_complete(&self) -> Option<usize> {
+        self.s().stamps_complete.take()
     }
 
     /// Zeroes `size` bytes of buffer `id` from `at`, in order among `encoder`'s commands.

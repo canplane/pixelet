@@ -237,10 +237,10 @@ function enter(
     trap(side, `a function without async is implemented by the UI: ${over}`);
     return false;
   }
-  const at = g.init();
+  const at = side.crossed(g.init);
   if (side.trapped()) return false;
   side.set_layout(at);
-  g.boot();
+  side.crossed(g.boot);
   return !side.trapped();
 }
 

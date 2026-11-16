@@ -60,6 +60,7 @@ async function replay(): Promise<void> {
       device,
       () => mem,
       () => {},
+      () => {},
       { frame_latency: 2, upload_chunk_sz: 1 << 16 },
     );
     const turns: string[] = [];

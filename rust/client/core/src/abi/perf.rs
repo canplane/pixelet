@@ -27,84 +27,68 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let mut run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 START => match self.0.start() {
-                    Ok(v) => _rt::Reply {
-                        result: 0,
-                        data: Some((
-                            2,
-                            Box::new(move |w: &mut _rt::Lower| match &v {
-                                Ok(_) => {}
-                                Err(v) => {
-                                    w.u8(0, 1);
-                                    w.u8(1, *v as u8);
-                                }
-                            }),
-                        )),
-                    },
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(v) => {
+                        ret_.start(2);
+                        match &v {
+                            Ok(_) => {}
+                            Err(v) => {
+                                ret_.u8(0, 1);
+                                ret_.u8(1, *v as u8);
+                            }
+                        }
+                        0
+                    }
+                    Err(e) => e as i32,
                 },
                 STOP => match self.0.stop() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
                 STATS => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let window_ms = r_.case(0, 2).and_then(|d| {
+                    let window_ms = args_.case(0, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(8).map(Some)
+                            args_.f64(8).map(Some)
                         }
                     })?;
                     match self.0.stats(window_ms) {
-                        Ok(v) => _rt::Reply {
-                            result: 0,
-                            data: Some((
-                                8,
-                                Box::new(move |w: &mut _rt::Lower| {
-                                    w.arr(0, &v);
-                                }),
-                            )),
-                        },
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(v) => {
+                            ret_.start(8);
+                            ret_.arr(0, &v);
+                            0
+                        }
+                        Err(e) => e as i32,
                     }
                 }
                 TABLE => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let table = r_.u32(0)?;
-                    let from = r_.u32(4)?;
+                    let table = args_.u32(0)?;
+                    let from = args_.u32(4)?;
                     match self.0.table(table, from) {
-                        Ok(v) => _rt::Reply {
-                            result: 0,
-                            data: Some((
-                                8,
-                                Box::new(move |w: &mut _rt::Lower| {
-                                    w.arr(0, &v);
-                                }),
-                            )),
-                        },
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(v) => {
+                            ret_.start(8);
+                            ret_.arr(0, &v);
+                            0
+                        }
+                        Err(e) => e as i32,
                     }
                 }
                 STRTAB => match self.0.strtab() {
-                    Ok(v) => _rt::Reply {
-                        result: 0,
-                        data: Some((
-                            8,
-                            Box::new(move |w: &mut _rt::Lower| {
-                                w.arr(0, &v);
-                            }),
-                        )),
-                    },
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(v) => {
+                        ret_.start(8);
+                        ret_.arr(0, &v);
+                        0
+                    }
+                    Err(e) => e as i32,
                 },
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -117,5 +101,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

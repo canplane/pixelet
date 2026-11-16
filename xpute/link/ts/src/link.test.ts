@@ -7,7 +7,7 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_EMSGSIZE,
 } from "@xpute/kit/status/errno.spec.ts";
-import { type Frame, HDR_SZ, lay, read } from "./frame.ts";
+import { type Frame, frame, HDR_SZ, lay, read } from "./frame.ts";
 import { LAYOUT } from "./frame.spec.ts";
 import { CANCEL, NAMED, ROOT, Side, type Tag } from "./link.ts";
 import { Table } from "./resource.ts";
@@ -37,18 +37,19 @@ function link(): {
   const side = new Side({
     mem,
     in: () => {
-      frames.push(read(view, INBOX));
+      frames.push(read(view, INBOX, frame()));
       return 0;
     },
   });
   side.mount_named(INTERFACE, {
-    call(m, tag) {
-      if (m === 0) return { result: 0, data: [4, (w) => w.u32(0, 7)] };
+    call(m, tag, _args, ret) {
       if (m === 1) {
         later = tag;
         return ERRNO_EINPROGRESS;
       }
-      return { result: 0, data: [CAP, () => {}] };
+      ret.start(m === 0 ? 4 : CAP);
+      if (m === 0) ret.u32(0, 7);
+      return 0;
     },
     drop() {},
   });
@@ -72,7 +73,7 @@ test("the answer a side lays in the frame its request came in is marked RES and 
       pkt_len: 0,
     });
     assert.equal(out(BigInt(OUTBOX)), result);
-    const f = read(view, OUTBOX);
+    const f = read(view, OUTBOX, frame());
     assert.deepEqual(
       [f.res, f.tag, f.handle, f.method, f.result],
       [true, tag, INTERFACE, method, result],

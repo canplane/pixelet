@@ -20,10 +20,11 @@ class PxlGpuModule : Module() {
   private val hear = { s: String -> sendEvent("onState", mapOf("state" to s)) }
 
   /** This tells the GPU's host of each display frame (`Gpu.vsync`), from the
-   * main thread's Choreographer. */
+   * main thread's Choreographer, with how long ago the frame started:
+   * `frameTimeNanos` is on `System.nanoTime()`'s clock. */
   private val vsync = object : Choreographer.FrameCallback {
     override fun doFrame(frameTimeNanos: Long) {
-      Gpu.vsync()
+      Gpu.vsync(System.nanoTime() - frameTimeNanos)
       Choreographer.getInstance().postFrameCallback(this)
     }
   }

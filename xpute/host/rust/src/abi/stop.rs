@@ -23,32 +23,31 @@ pub trait Host {
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 STOPPED => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let errnum = r_.i32(0)?;
-                    let file = r_.str(4).map(str::to_owned)?;
-                    let line = r_.u32(12)?;
-                    let n1 = r_.u64(16)?;
-                    let n2 = r_.u64(24)?;
-                    let message = r_.case(32, 2).and_then(|d| {
+                    let errnum = args_.i32(0)?;
+                    let file = args_.str(4).map(str::to_owned)?;
+                    let line = args_.u32(12)?;
+                    let n1 = args_.u64(16)?;
+                    let n2 = args_.u64(24)?;
+                    let message = args_.case(32, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.str(36).map(str::to_owned).map(Some)
+                            args_.str(36).map(str::to_owned).map(Some)
                         }
                     })?;
                     match self.0.stopped(errnum, file, line, n1, n2, message) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -60,7 +59,7 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Side, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag};
 }
 
 /// The interfaces the world imports, each `(name, handle)`, which are

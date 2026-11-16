@@ -38,14 +38,22 @@ concept Number = (std::integral<T> && !std::same_as<T, bool>) || std::floating_p
 template <class T>
 concept Scalar = Number<T> || std::same_as<T, bool>;
 
-// Writes a packet into the bytes it is given: its fixed part first, then the
-// bytes of its strings and lists past it.
+// Writes a packet into the bytes it is given: its fixed part first
+// (`start`), then the bytes of its strings and lists past it. A writer
+// nothing was written by answers 0, no packet.
 class Lower {
   public:
+    // A writer over `buf`, nothing written there yet.
+    explicit Lower(std::span<std::uint8_t> buf) noexcept : buf_(buf), end_(0), overflow_(false) {}
+
     // A packet of a fixed part `fixed_sz` long, zeroed, in `buf`.
-    Lower(std::span<std::uint8_t> buf, std::size_t fixed_sz) noexcept
-        : buf_(buf), end_(fixed_sz), overflow_(fixed_sz > buf.size()) {
+    Lower(std::span<std::uint8_t> buf, std::size_t fixed_sz) noexcept : Lower(buf) { start(fixed_sz); }
+
+    // Starts the packet with a fixed part `fixed_sz` long, zeroed.
+    void start(std::size_t fixed_sz) noexcept {
+        overflow_ = fixed_sz > buf_.size();
         if (!overflow_) std::memset(buf_.data(), 0, fixed_sz);
+        end_ = fixed_sz;
     }
 
     template <Scalar T> void put(std::size_t at, T v) noexcept {
@@ -104,6 +112,12 @@ class Lower {
 class Lift {
   public:
     explicit Lift(std::span<const std::uint8_t> pkt) noexcept : pkt_(pkt) {}
+
+    // The packet's bytes, or none for no packet.
+    std::optional<std::span<const std::uint8_t>> pkt() const noexcept {
+        if (pkt_.empty()) return std::nullopt;
+        return pkt_;
+    }
 
     // A bool reads 0 as false and any other byte as true, as the ABI lifts
     // it.

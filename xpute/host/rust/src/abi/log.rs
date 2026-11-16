@@ -63,25 +63,24 @@ pub trait Host {
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 LOG => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let level = r_
+                    let level = args_
                         .case(0, 6)
                         .and_then(|v| Level::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let context = r_.str(4).map(str::to_owned)?;
-                    let message = r_.str(12).map(str::to_owned)?;
+                    let context = args_.str(4).map(str::to_owned)?;
+                    let message = args_.str(12).map(str::to_owned)?;
                     match self.0.log(level, context, message) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -93,7 +92,7 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Side, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag};
 }
 
 /// The interfaces the world imports, each `(name, handle)`, which are

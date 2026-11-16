@@ -84,7 +84,24 @@ void Side::on_cancel(Tag t, std::function<void()> stop) {
 
 void Side::task_return(Tag t, std::int32_t result, const Data &data) {
     cancels_.erase(t);
-    out(t, ROOT, 0, true, result, data);
+    if (!crossing_) {
+        out(t, ROOT, 0, true, result, data);
+        return;
+    }
+    if (!data) {
+        completions_.push_back(Completion{t, result, std::nullopt});
+        return;
+    }
+    std::vector<std::uint8_t> buf(layout().cap - HDR_SZ);
+    Lower w(buf, data->fixed_sz);
+    data->write(w);
+    Result<std::size_t> n = w.finish();
+    if (!n) {
+        completions_.push_back(Completion{t, status(n.error().errnum), std::nullopt});
+        return;
+    }
+    buf.resize(*n);
+    completions_.push_back(Completion{t, result, std::move(buf)});
 }
 
 std::int32_t Side::recv(std::uint64_t at) {
@@ -99,20 +116,34 @@ std::int32_t Side::recv(std::uint64_t at) {
         }
         return 0;
     }
-    Reply reply = pkt ? run(f.handle, f.method, f.tag, *pkt) : Reply{status(pkt.error().errnum)};
-    // The args are read: the answer goes in the frame they came in.
+    // The args and the answer lie in the frame's packet, the answer written
+    // once the args are read.
+    Lower w(mem::bytes(at + HDR_SZ, cap - HDR_SZ));
     Frame words = f;
     words.res = true;
-    words.result = reply.result;
+    words.result = pkt ? run(f.handle, f.method, f.tag, Lift((*pkt).value_or(std::span<const std::uint8_t>{})), w)
+                       : status(pkt.error().errnum);
     // An answer past the cap is refused as a later one is (`out`).
-    if (Result<void> laid = lay(at, words, reply.data); !laid) {
-        words.result = status(laid.error().errnum);
-        ensure(lay(at, words, std::nullopt).ok(), Errno::emsgsize);
-    }
+    Result<std::size_t> n = w.finish();
+    words.pkt_len = n ? static_cast<std::uint32_t>(*n) : 0;
+    if (!n) words.result = status(n.error().errnum);
+    words.lay(at);
     return words.result;
 }
 
 void Side::run_due() {
+    while (!completions_.empty()) {
+        Completion c = std::move(completions_.front());
+        completions_.pop_front();
+        Args pkt;
+        if (c.pkt) {
+            const std::vector<std::uint8_t> &bytes = *c.pkt;
+            pkt = Packet{bytes.size(), [&bytes](Lower &w) {
+                             for (std::size_t k = 0; k < bytes.size(); k++) w.put<std::uint8_t>(k, bytes[k]);
+                         }};
+        }
+        out(c.tag, ROOT, 0, true, c.result, pkt);
+    }
     while (!due_.empty()) {
         Due d = std::move(due_.front());
         due_.pop_front();
@@ -120,43 +151,41 @@ void Side::run_due() {
     }
 }
 
-Reply Side::run(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args) {
+std::int32_t Side::run(Handle h, Method m, Tag tag, Lift args, Lower &ret) {
     if (h == ROOT && m == OPEN) {
         Result<Handle> o = opened(args);
-        if (!o) return Reply{status(o.error().errnum)};
-        return Reply{0, Packet{4, [issued = *o](Lower &w) { w.put<std::uint32_t>(0, issued); }}};
+        if (!o) return status(o.error().errnum);
+        ret.start(4);
+        ret.put<std::uint32_t>(0, *o);
+        return 0;
     }
     if (h == ROOT && m == CANCEL) {
-        if (!args) return Reply{status(Errno::ebadmsg)};
-        Lift r(*args);
-        Tag t = r.get<std::uint32_t>(0);
-        if (!r.finish()) return Reply{status(Errno::ebadmsg)};
+        Tag t = args.get<std::uint32_t>(0);
+        if (!args.finish()) return status(Errno::ebadmsg);
         if (auto it = cancels_.find(t); it != cancels_.end()) {
             std::function<void()> stop = std::move(it->second);
             cancels_.erase(it);
             stop();
         }
-        return Reply{0};
+        return 0;
     }
-    if (m == DROP) return Reply{objects_.remove(h) ? 0 : status(Errno::ebadf)};
+    if (m == DROP) return objects_.remove(h) ? 0 : status(Errno::ebadf);
     // A named handle no interface is mounted under is no object there; an
     // issued one no longer held is a bad handle. Nothing drops an object
     // during its call: the host's drop comes only in an entry of its own.
     if ((h & NAMED) != 0) {
         auto it = named_.find(h);
-        if (it == named_.end()) return Reply{status(Errno::enoent)};
-        return it->second->call(m, tag, args);
+        if (it == named_.end()) return status(Errno::enoent);
+        return it->second->call(m, tag, args, ret);
     }
     std::unique_ptr<Object> *o = objects_.get(h);
-    if (o == nullptr) return Reply{status(Errno::ebadf)};
-    return (*o)->call(m, tag, args);
+    if (o == nullptr) return status(Errno::ebadf);
+    return (*o)->call(m, tag, args, ret);
 }
 
-Result<Handle> Side::opened(std::optional<std::span<const std::uint8_t>> args) {
-    if (!args) return make_error(Errno::ebadmsg);
-    Lift r(*args);
-    std::vector<Token> uri = load_uri(r, 0);
-    if (Result<void> read = r.finish(); !read) return read.error();
+Result<Handle> Side::opened(Lift &args) {
+    std::vector<Token> uri = load_uri(args, 0);
+    if (Result<void> read = args.finish(); !read) return read.error();
     // The longest matching mount wins, the first mounted of those as long.
     const Opener *open = nullptr;
     std::size_t longest = 0;

@@ -19,20 +19,29 @@ use super::word::WordCursor;
 use pxl_gpu_link::enums::{
     BufferBindingType, CanvasAlphaMode, CullMode, LoadOp, QueryType, StoreOp, TextureSampleType,
 };
-use pxl_gpu_link::spec::{NONE, SURFACE_PREFERRED, device, op, status};
+use pxl_gpu_link::spec::{NONE, ROW_ALIGNMENT, SURFACE_PREFERRED, device, op, status};
 
 impl GpuHost {
     /// Runs the records the guest lent, `len` bytes at `at` (spec/gpu/wit/gpu.wit
     /// `run`), which stay lent until the run is answered. A frame they drew
-    /// counts as unfinished before the guest can ask to draw another.
+    /// counts as unfinished, and the block says so with the chunks the run
+    /// took, before the guest can ask to draw another or flush again. Once
+    /// the device is lost no further record runs, and the run counts for
+    /// nothing.
     pub fn run(&mut self, at: u64, len: u32) {
         self.execute(at, len);
-        if core::mem::take(&mut self.drew) {
+        let drew = core::mem::take(&mut self.drew);
+        if self.lost() {
+            return;
+        }
+        if drew {
             self.count_frame();
         }
+        self.tell_counts();
     }
 
-    /// Runs the records at `at`, each an op, a count n and n words.
+    /// Runs the records at `at`, each an op, a count n and n words, until the
+    /// device is lost.
     fn execute(&mut self, at: u64, len: u32) {
         let words = len / 4;
         let mut k = 0;
@@ -42,7 +51,7 @@ impl GpuHost {
             |a| unsafe { mem::word(a) },
             |a, n| unsafe { mem::read(a, n) },
         );
-        while k + 2 <= words {
+        while k + 2 <= words && !self.lost() {
             let code = word(at + 4 * u64::from(k));
             let n = word(at + 4 * u64::from(k + 1));
             let mut scratch = core::mem::take(&mut self.scratch);
@@ -61,7 +70,7 @@ impl GpuHost {
         }
         // The run's staged writes reach the queue with the run, as a page's
         // host submits its own.
-        if self.uploads.is_some() {
+        if self.uploads.is_some() && !self.lost() {
             self.submit(core::iter::empty());
         }
     }
@@ -111,55 +120,108 @@ impl GpuHost {
 
     /// Stages `bytes` through the belt, a chunk's room at a time, and copies
     /// them into the buffer ahead of what follows. No bytes write nothing, as
-    /// in WebGPU.
+    /// in WebGPU. Where the belt has no chunk for it, a mapping gone or a
+    /// chunk not made, the device is held as lost (`lose`) and the write goes
+    /// with it.
     pub(super) fn write(&mut self, id: u32, offset: u64, bytes: &[u8]) {
         let buffer = self.buffer(id).clone();
         let mut at = 0;
         while at < bytes.len() {
-            let Some((chunk, chunk_at, n)) = self.stage((bytes.len() - at) as u64) else {
-                return;
+            let Some((chunk, chunk_at, n)) = self.belt.take((bytes.len() - at) as u64, 1) else {
+                return self.lose();
             };
-            let piece = &bytes[at..at + n as usize];
-            chunk
-                .get_mapped_range_mut(chunk_at..chunk_at + n)
-                .expect("an upload chunk taken free is mapped")
-                .copy_from_slice(piece);
-            let encoder = self.uploads.get_or_insert_with(|| {
-                self.device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
-            });
-            encoder.copy_buffer_to_buffer(&chunk, chunk_at, &buffer, offset + at as u64, n);
+            let Ok(mut range) = chunk.get_mapped_range_mut(chunk_at..chunk_at + n) else {
+                return self.lose();
+            };
+            range.copy_from_slice(&bytes[at..at + n as usize]);
+            drop(range);
+            self.uploads()
+                .copy_buffer_to_buffer(&chunk, chunk_at, &buffer, offset + at as u64, n);
             at += n as usize;
         }
     }
 
-    /// This takes the belt's room for the next `want` bytes of a write. Where
-    /// every chunk is taken, it submits the writes so far and waits on the
-    /// queue until a chunk is back, as a driver's staging ring waits for the
-    /// GPU. It must wait: a write record has no refusal, and its bytes are the
-    /// host's only while the records run (spec/gpu/wit/gpu.wit `run`), so
-    /// they are staged before the record returns. It answers none only where
-    /// the device is gone and its chunks' mappings were refused; the write is
-    /// then lost with everything else the loss ends.
-    fn stage(&mut self, want: u64) -> Option<(wgpu::Buffer, u64, u64)> {
-        loop {
-            if let Some(room) = self.belt.take(want) {
-                return Some(room);
-            }
-            if self.uploads.is_some() {
-                self.submit(core::iter::empty());
-            }
-            if !self.belt.is_returning() {
-                return None;
-            }
-            if self
-                .device
-                .poll(wgpu::PollType::wait_indefinitely())
-                .is_err()
-            {
-                return None;
+    /// Stages a texture write through the belt, as `write` stages a
+    /// buffer's, and copies it into the texture ahead of what follows:
+    /// `size` texels at `place`, read from `bytes` as `layout` says (its bytes
+    /// per row and rows per image, a row being a row of texel blocks). Each
+    /// image goes a band of whole rows at a time, each row padded to the
+    /// copy's row alignment (spec `ROW_ALIGNMENT`), as a page's
+    /// host stages it (@pxl/gpu/host host.ts `_write_texture`). An empty
+    /// `size` writes nothing, as in WebGPU, and any other has bytes per row
+    /// (pxl-gpu-guest `call::write_texture`).
+    fn write_texture(
+        &mut self,
+        place: &OwnedTexture,
+        layout: [u32; 2],
+        size: wgpu::Extent3d,
+        bytes: &[u8],
+    ) {
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            return;
+        }
+        let [row_sz, rows_per_image] = layout.map(|w| w as usize);
+        let block_height = place.texture.format().block_dimensions().1;
+        let rows = size.height.div_ceil(block_height);
+        let stride = (row_sz as u64).next_multiple_of(u64::from(ROW_ALIGNMENT));
+        for z in 0..size.depth_or_array_layers {
+            let mut row = 0;
+            while row < rows {
+                let Some((chunk, chunk_at, n)) =
+                    self.belt.take(u64::from(rows - row) * stride, stride)
+                else {
+                    return self.lose();
+                };
+                let Ok(mut range) = chunk.get_mapped_range_mut(chunk_at..chunk_at + n) else {
+                    return self.lose();
+                };
+                let band = (n / stride) as u32;
+                for j in 0..band as usize {
+                    let from = (z as usize * rows_per_image + row as usize + j) * row_sz;
+                    let src = bytes.get(from..).unwrap_or_default();
+                    let src = &src[..src.len().min(row_sz)];
+                    let to = j * stride as usize;
+                    range.slice(to..to + src.len()).copy_from_slice(src);
+                }
+                drop(range);
+                let origin = wgpu::Origin3d {
+                    x: place.origin.x,
+                    y: place.origin.y + row * block_height,
+                    z: place.origin.z + z,
+                };
+                self.uploads().copy_buffer_to_texture(
+                    wgpu::TexelCopyBufferInfo {
+                        buffer: &chunk,
+                        layout: wgpu::TexelCopyBufferLayout {
+                            offset: chunk_at,
+                            bytes_per_row: Some(stride as u32),
+                            rows_per_image: Some(band),
+                        },
+                    },
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &place.texture,
+                        mip_level: place.mip_level,
+                        origin,
+                        aspect: place.aspect,
+                    },
+                    wgpu::Extent3d {
+                        width: size.width,
+                        height: (band * block_height).min(size.height - row * block_height),
+                        depth_or_array_layers: 1,
+                    },
+                );
+                row += band;
             }
         }
+    }
+
+    /// The encoder the staged writes are copied by, submitted ahead of what
+    /// follows.
+    fn uploads(&mut self) -> &mut wgpu::CommandEncoder {
+        let device = &self.device;
+        self.uploads.get_or_insert_with(|| {
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        })
     }
 
     /// Lets the object at `id` go. The writes staged so far reach the queue
@@ -521,21 +583,16 @@ impl GpuHost {
             }
             op::WRITE_TEXTURE | op::WRITE_TEXTURE_AT => {
                 let place = self.texture_place(r);
-                let layout = wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(r.u()),
-                    rows_per_image: Some(r.u()),
-                };
+                let layout = [r.u(), r.u()];
                 let size = Self::extent(r);
-                if code == op::WRITE_TEXTURE {
-                    let bytes = r.bytes();
-                    self.queue.write_texture(place.info(), bytes, layout, size);
+                let bytes = if code == op::WRITE_TEXTURE {
+                    r.bytes()
                 } else {
                     let (addr, n) = (r.addr(), r.u());
                     // SAFETY: bytes the guest lent with the records.
-                    let bytes = unsafe { mem::read(addr, n) };
-                    self.queue.write_texture(place.info(), bytes, layout, size);
-                }
+                    unsafe { mem::read(addr, n) }
+                };
+                self.write_texture(&place, layout, size, bytes);
             }
             op::COPY_EXTERNAL_IMAGE => {
                 let to = self.texture_place(r);

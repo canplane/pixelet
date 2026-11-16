@@ -38,25 +38,21 @@ pub trait Host {
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, _: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, _: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let mut run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 NOW => match self.0.now() {
-                    Ok(v) => _rt::Reply {
-                        result: 0,
-                        data: Some((
-                            Instant::SZ,
-                            Box::new(move |w: &mut _rt::Lower| {
-                                v.store(w, 0);
-                            }),
-                        )),
-                    },
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(v) => {
+                        ret_.start(Instant::SZ);
+                        v.store(ret_, 0);
+                        0
+                    }
+                    Err(e) => e as i32,
                 },
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -68,5 +64,5 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Side, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag};
 }

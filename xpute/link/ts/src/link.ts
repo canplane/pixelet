@@ -62,7 +62,7 @@ import {
   TOKEN_ALIGN,
   TOKEN_SZ,
 } from "./abi/types.ts";
-import { lay, read, HDR_SZ } from "./frame.ts";
+import { type Frame, frame, lay, read, HDR_SZ } from "./frame.ts";
 import { CANCEL, DROP, LAYOUT, NAMED, OPEN, ROOT } from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
 
@@ -77,11 +77,15 @@ export type Imports = readonly (readonly [string, Handle])[];
 export { CANCEL, DROP, NAMED, OPEN, ROOT };
 
 /** An object a side implements: given a method, the request's tag, for a
- * later answer (`task_return`), and the args, it answers; and it is told its
- * drop once the other side drops its handle, as a Rust object is dropped
- * (xpute-link `link.rs` `Object`). */
+ * later answer (`task_return`), its args (`args`, empty for none) and the
+ * writer of its answer's value (`ret`), it answers its result, a status; and
+ * it is told its drop once the other side drops its handle, as a Rust object
+ * is dropped (xpute-link `link.rs` `Object`). The reader and the writer are
+ * over the frame the request came in, the side's own for the crossing alone,
+ * so a method that answers a value writes it once its args are read, starting
+ * the packet (`Lower.start`), and one that writes none answers no packet. */
 export interface LinkObject {
-  call(m: Method, tag: Tag, args: U8Array | null): i32 | Reply;
+  call(m: Method, tag: Tag, args: Lift, ret: Lower): i32;
   drop(): void;
 }
 
@@ -91,13 +95,6 @@ export type Opener = (uri: readonly Token[], h: Handle) => LinkObject;
 /** A method's args, or its return data: its fixed part's size, and what
  * writes it (`Lower`). Null is no packet (xpute-link link.rs `Args`). */
 export type Args = readonly [u32, (w: Lower) => void] | null;
-
-/** What a method answers: its result, a status, and its return data, its
- * value, written once its args are read. */
-export interface Reply {
-  result: i32;
-  data: Args;
-}
 
 /** What hears a sent method's answer: its result, and a copy of its return
  * data, which it owns. */
@@ -229,7 +226,10 @@ export interface Memory {
  * crosses to the other end is its transport's (`_out`), which an end over it
  * implements, and the transport hands the end each frame from the other end
  * (`input`): the guest's boxes and the crossing into it (`Side`), or a
- * runtime's transport to a UI on another thread. */
+ * runtime's transport to a UI on another thread. A later answer this end
+ * gives while it is crossing (`crossed`) is written then and carried after
+ * the work at hand, as the answers to what it sent are, so the other end is
+ * never entered inside its own crossing. */
 export abstract class End implements Callee {
   /** The openers, each with the named handle of the interface whose
    * resources it opens, by the URI's leading tokens. */
@@ -248,6 +248,11 @@ export abstract class End implements Callee {
   private _next: Tag = 0;
   /** Whether the link is trapped (`trap`). */
   private _trapped = false;
+  /** Whether this end is crossing: control is on the other end. */
+  private _crossing = false;
+  /** The later answers given while crossing, each its request, result and
+   * packet, written, carried after the work at hand (`task_return`). */
+  private readonly _completions: [Tag, i32, U8Array | null][] = [];
 
   /** Carries a frame to the other end, a request or a later answer, with
    * the packet `pkt`, and answers what the method came to there: its result
@@ -277,6 +282,18 @@ export abstract class End implements Callee {
   /** Whether the link is trapped (`trap`). */
   trapped(): boolean {
     return this._trapped;
+  }
+
+  /** Runs `f`, a crossing of this end's own to the other end (a frame
+   * carried, or the guest's init and boot), as crossing. */
+  crossed<T>(f: () => T): T {
+    const was = this._crossing;
+    this._crossing = true;
+    try {
+      return f();
+    } finally {
+      this._crossing = was;
+    }
   }
 
   /** Puts `open` as the opener of the URIs that start with `prefix`, whose
@@ -343,10 +360,27 @@ export abstract class End implements Callee {
 
   /** Answers the request `t`, whose method answered EINPROGRESS, with
    * `result` and its return data, as the component model's `task.return`. A
-   * later answer is found by its tag alone. */
+   * later answer is found by its tag alone. While this end is crossing, its
+   * packet is written now and carried after the work at hand (`_run_due`),
+   * as xpute-link `link.rs` `Side::task_return` holds it; one past the cap is
+   * answered EMSGSIZE with no data, as one carried at once is. */
   task_return(t: Tag, result: i32, data: Packet = null): void {
     this._cancels.delete(t);
-    this._carry(t, ROOT, 0, true, result, data);
+    if (!this._crossing) {
+      this._carry(t, ROOT, 0, true, result, data);
+      return;
+    }
+    const cnt = this._completions.push([t, result, pkt_of(data)]);
+    if (cnt === 1) queueMicrotask(() => this._run_due());
+  }
+
+  /** Carries the later answers given while crossing, in the order they were
+   * given, those given meanwhile too (xpute-link `link.rs` `Side::run_due`). */
+  private _run_due(): void {
+    for (let c = this._completions.shift(); c; c = this._completions.shift()) {
+      const [t, result, pkt] = c;
+      this._carry(t, ROOT, 0, true, result, pkt);
+    }
   }
 
   /** Calls `m` of `h`, which answers at once: its result, and its return
@@ -383,29 +417,31 @@ export abstract class End implements Callee {
   /** The frame the transport brought from the other end: a later answer, to
    * this end's request, heard after the work at hand with a copy of its
    * data, answering 0; or a method, to an object this end implements, answering
-   * its reply, which the transport carries back where it is not EINPROGRESS:
-   * the root's open or cancel, a drop, or an object's method. `args` are the
-   * receiver's for the crossing alone. */
+   * its result, which the transport carries back with what `ret` holds where
+   * it is not EINPROGRESS: the root's open or cancel, a drop, or an object's
+   * method. `args` reads the frame's packet and `ret` writes its answer's, as
+   * `LinkObject.call` has them. */
   input(
     tag: Tag,
     h: Handle,
     m: Method,
     res: boolean,
     result: i32,
-    args: U8Array | null,
-  ): i32 | Reply {
+    args: Lift,
+    ret: Lower,
+  ): i32 {
     if (res) {
       const a = this._pending.get(tag);
       this._pending.delete(tag);
-      const data = args && args.slice();
+      const pkt = args.pkt();
+      const data = pkt && pkt.slice();
       if (a !== undefined) queueMicrotask(() => a(result, data));
       return 0;
     }
-    if (h === ROOT && m === OPEN) return this._opened(args);
+    if (h === ROOT && m === OPEN) return this._opened(args, ret);
     if (h === ROOT && m === CANCEL) {
       try {
-        if (args === null) return ERRNO_EBADMSG;
-        const t = new Lift(args).u32(0);
+        const t = args.u32(0);
         const stop = this._cancels.get(t);
         this._cancels.delete(t);
         stop?.();
@@ -424,10 +460,10 @@ export abstract class End implements Callee {
     // issued one no longer held is a bad handle.
     if ((h & NAMED) !== 0) {
       const o = this._named.get(h);
-      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
+      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args, ret);
     }
     const o = this._objects.get(h);
-    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args);
+    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args, ret);
   }
 
   /** The opener of `uri`'s longest matching mount, if one matches. */
@@ -447,11 +483,10 @@ export abstract class End implements Callee {
    * matching mount, under a handle issued for it, and answers the handle; or
    * ENOENT where no mount matches, or the opener's refusal, the handle given
    * back. */
-  private _opened(args: U8Array | null): i32 | Reply {
-    if (args === null) return ERRNO_EBADMSG;
+  private _opened(args: Lift, ret: Lower): i32 {
     let uri: Token[];
     try {
-      uri = load_uri(new Lift(args), 0);
+      uri = load_uri(args, 0);
     } catch (e) {
       return refusal_of(e);
     }
@@ -464,7 +499,9 @@ export abstract class End implements Callee {
       this._objects.remove(h);
       return refusal_of(e);
     }
-    return { result: 0, data: [4, (w) => w.u32(0, h)] };
+    ret.start(4);
+    ret.u32(0, h);
+    return 0;
   }
 
   /** The next request's tag: a counter that wraps, past every tag still
@@ -505,15 +542,35 @@ export interface Guest {
  * frames it lays in the guest's inbox, crossing by `link_in`, and takes from
  * the guest's outbox at its import (`recv`), by the layout the guest laid
  * (`set_layout`); and the guest's memory, where what it lends is read in
- * place. */
+ * place. A crossing makes nothing of its own: the side keeps a view of the
+ * guest's memory, made again only where the memory's buffer is another, as
+ * it is once the memory grows (`_renew`), and the frames, the reader and the
+ * writers it reads and lays them with. */
 export class Side extends End implements Memory {
   private readonly _guest: Guest;
   private _inbox = 0;
   private _cap = 0;
+  /** The guest's memory as last read, and the views over it (`_renew`). */
+  private _buf: ArrayBuffer | null = null;
+  private _view!: DataView;
+  private _u8!: U8Array;
+  /** The frame the guest laid at its import (`recv`), the reader of its args
+   * and the writer of its answer; and the frame this side lays in the
+   * guest's inbox and reads its answer from (`_out`), and the writer of its
+   * packet. Each end has its own, as the guest's import is taken inside the
+   * crossing `_out` makes. */
+  private readonly _outbox_frame = frame();
+  private readonly _outbox_args = new Lift(new Uint8Array(0));
+  private readonly _outbox_ret = new Lower(new Uint8Array(0), 0);
+  private readonly _inbox_frame = frame();
+  private readonly _inbox_pkt = new Lower(new Uint8Array(0), 0);
+  /** The crossing into the guest with the frame laid in its inbox. */
+  private readonly _in: () => i32;
 
   constructor(guest: Guest) {
     super();
     this._guest = guest;
+    this._in = () => guest.in();
   }
 
   /** Reads the link's layout the guest laid at `at`, an address, a u64
@@ -538,35 +595,43 @@ export class Side extends End implements Memory {
 
   /** The frame the guest laid at `at`, at its import: a later answer, heard
    * with no data where its packet is past the cap, or a method, its answer
-   * laid in the frame it came in. A request's packet past the cap is
+   * written in the frame it came in. A request's packet past the cap is
    * refused, EBADMSG; an answer past it EMSGSIZE (xpute-link `link.rs`
    * `Side::recv`). */
   recv(at: u64): i32 {
     const off = Number(at);
-    const f = read(new DataView(this._guest.mem), off);
-    const args =
-      f.pkt_len === 0
-        ? null
-        : HDR_SZ + f.pkt_len > this._cap
-          ? ERRNO_EBADMSG
-          : this._bytes(off + HDR_SZ, f.pkt_len);
-    if (f.res) {
-      const data = typeof args === "number" ? null : args;
-      return this.input(f.tag, f.handle, f.method, true, f.result, data) as i32;
-    }
-    const reply =
-      typeof args === "number"
-        ? args
-        : this.input(f.tag, f.handle, f.method, false, f.result, args);
-    // The args are read: the answer goes in the frame they came in.
-    const { result, data } =
-      typeof reply === "number" ? { result: reply, data: null } : reply;
+    this._renew();
+    const f = read(this._view, off, this._outbox_frame);
+    const fits = HDR_SZ + f.pkt_len <= this._cap;
+    const r = this._outbox_args;
+    const w = this._outbox_ret;
+    r.reset(this._u8.buffer, off + HDR_SZ, fits ? f.pkt_len : 0);
+    w.reset(this._u8.buffer, off + HDR_SZ, this._cap - HDR_SZ);
+    if (f.res)
+      return this.input(f.tag, f.handle, f.method, true, f.result, r, w);
+    f.result = fits
+      ? this.input(f.tag, f.handle, f.method, false, f.result, r, w)
+      : ERRNO_EBADMSG;
+    f.res = true;
+    f.pkt_len = w.finish();
     // An answer past the cap is refused as a later one is (`_out`).
-    if (this._lay(off, f.tag, f.handle, f.method, true, result, data) !== 0) {
-      this._lay(off, f.tag, f.handle, f.method, true, ERRNO_EMSGSIZE, null);
-      return ERRNO_EMSGSIZE;
+    if (f.pkt_len < 0) {
+      f.result = ERRNO_EMSGSIZE;
+      f.pkt_len = 0;
     }
-    return result;
+    this._renew();
+    lay(this._view, off, f);
+    return f.result;
+  }
+
+  /** Makes the views of the guest's memory again where its buffer is
+   * another than the one they were made over. */
+  private _renew(): void {
+    const mem = this._guest.mem;
+    if (mem === this._buf) return;
+    this._buf = mem;
+    this._view = new DataView(mem);
+    this._u8 = new Uint8Array(mem);
   }
 
   /** The `len` bytes at `off` in the guest's memory. */
@@ -574,32 +639,27 @@ export class Side extends End implements Memory {
     return new Uint8Array(this._guest.mem, off, len);
   }
 
-  /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
-   * or EMSGSIZE, laying nothing, where the packet is past the cap
-   * (xpute-link link.rs `Side::lay`). */
-  private _lay(
-    at: number,
-    tag: Tag,
-    handle: Handle,
-    method: Method,
-    res: boolean,
-    result: i32,
-    args: Packet,
-  ): i32 {
-    const bytes = new Uint8Array(this._guest.mem, at, this._cap);
-    const view = new DataView(this._guest.mem, at, this._cap);
+  /** Lays a frame at `at` in the guest's memory: its words, and the packet
+   * `pkt`, whose length it takes into `words`; 0, or EMSGSIZE, laying
+   * nothing, where the packet is past the cap (xpute-link link.rs
+   * `Side::lay`). */
+  private _lay(at: number, words: Frame, pkt: Packet): i32 {
+    this._renew();
     let pkt_len = 0;
-    if (args instanceof Uint8Array) {
-      if (HDR_SZ + args.length > this._cap) return ERRNO_EMSGSIZE;
-      bytes.set(args, HDR_SZ);
-      pkt_len = args.length;
-    } else if (args !== null) {
-      const w = new Lower(bytes.subarray(HDR_SZ), args[0]);
-      args[1](w);
+    if (pkt instanceof Uint8Array) {
+      if (HDR_SZ + pkt.length > this._cap) return ERRNO_EMSGSIZE;
+      this._u8.set(pkt, at + HDR_SZ);
+      pkt_len = pkt.length;
+    } else if (pkt !== null) {
+      const w = this._inbox_pkt;
+      w.reset(this._u8.buffer, at + HDR_SZ, this._cap - HDR_SZ);
+      w.start(pkt[0]);
+      pkt[1](w);
       pkt_len = w.finish();
       if (pkt_len < 0) return ERRNO_EMSGSIZE;
     }
-    lay(view, 0, { tag, res, handle, method, result, pkt_len });
+    words.pkt_len = pkt_len;
+    lay(this._view, at, words);
     return 0;
   }
 
@@ -618,15 +678,23 @@ export class Side extends End implements Memory {
     result: i32,
     args: Packet,
   ): Answered {
-    if (this._lay(this._inbox, tag, h, m, res, result, args) !== 0) {
+    const f = this._inbox_frame;
+    f.tag = tag;
+    f.res = res;
+    f.handle = h;
+    f.method = m;
+    f.result = result;
+    if (this._lay(this._inbox, f, args) !== 0) {
       if (!res) {
         if (!(args instanceof Uint8Array)) bug(ERRNO_EMSGSIZE);
         return { result: ERRNO_EMSGSIZE, data: null };
       }
-      this._lay(this._inbox, tag, h, m, res, ERRNO_EMSGSIZE, null);
+      f.result = ERRNO_EMSGSIZE;
+      this._lay(this._inbox, f, null);
     }
-    const answered = this._guest.in();
-    const f = read(new DataView(this._guest.mem), this._inbox);
+    const answered = this.crossed(this._in);
+    this._renew();
+    read(this._view, this._inbox, f);
     const data =
       f.res && !res && f.pkt_len > 0
         ? this._bytes(this._inbox + HDR_SZ, f.pkt_len)

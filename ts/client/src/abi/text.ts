@@ -2,9 +2,8 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
-import { Lift } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   type Handle,
@@ -38,39 +37,29 @@ export interface Host {
 /** The object over `implementation`. */
 function object(implementation: Host): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, _tag, args, ret) {
       try {
         switch (m) {
           case WIDTH: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const v = implementation.width(
-              r_.u32(0),
-              r_.f64(8),
-              load_Lent(r_, 16),
+              args.u32(0),
+              args.f64(8),
+              load_Lent(args, 16),
             );
-            return {
-              result: 0,
-              data: [
-                8,
-                (w) => {
-                  w.f64(0, v);
-                },
-              ],
-            };
+            ret.start(8);
+            ret.f64(0, v);
+            return 0;
           }
           case RASTER: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             implementation.raster(
-              r_.u32(0),
-              r_.f64(8),
-              r_.u32(16),
-              load_Lent(r_, 24),
-              r_.u32(40),
-              r_.u32(44),
-              r_.f64(48),
-              load_Lent(r_, 56),
+              args.u32(0),
+              args.f64(8),
+              args.u32(16),
+              load_Lent(args, 24),
+              args.u32(40),
+              args.u32(44),
+              args.f64(48),
+              load_Lent(args, 56),
             );
             return 0;
           }

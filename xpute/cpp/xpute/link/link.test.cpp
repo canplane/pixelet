@@ -33,13 +33,14 @@ constexpr std::int32_t status(Errno e) noexcept {
 
 class Implementation : public Object {
   public:
-    Reply call(Method m, Tag tag, std::optional<std::span<const std::uint8_t>>) override {
-        if (m == 0) return Reply{0, Packet{4, [](Lower &w) { w.put<std::uint32_t>(0, 7); }}};
+    std::int32_t call(Method m, Tag tag, Lift, Lower &ret) override {
         if (m == 1) {
             later = tag;
-            return Reply{status(Errno::einprogress)};
+            return status(Errno::einprogress);
         }
-        return Reply{0, Packet{CAP, [](Lower &) {}}};
+        ret.start(m == 0 ? 4 : CAP);
+        if (m == 0) ret.put<std::uint32_t>(0, 7);
+        return 0;
     }
 };
 

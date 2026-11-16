@@ -48,7 +48,7 @@ type Declaration = (&'static str, &'static str);
 const ERROR: Declaration = ("::xpute", "xpute/kit/status/error.hpp");
 /// The link's packet writer and reader.
 const CABI: Declaration = ("::xpute::link", "xpute/link/cabi.hpp");
-/// The link's own items: a handle, a method, an object and its reply.
+/// The link's own items: a handle, a method and an object.
 const LINK: Declaration = ("::xpute::link", "xpute/link/link.hpp");
 /// The coroutine an async call answers.
 const WAIT: Declaration = ("::xpute::link", "xpute/link/wait.hpp");
@@ -209,13 +209,10 @@ impl Header<'_> {
         )
     }
 
-    /// The reply of the errno `e`, an expression of `Errno`.
+    /// The result of the errno `e`, an expression of `Errno`.
     fn refusal(&self, e: &str) -> String {
         self.include("cstdint");
-        format!(
-            "{}{{static_cast<std::int32_t>({e})}}",
-            self.rt_use(LINK, "Reply")
-        )
+        format!("static_cast<std::int32_t>({e})")
     }
 
     /// A discriminant's C++ type, of `n` cases.
@@ -655,13 +652,29 @@ impl Header<'_> {
         })
     }
 
-    /// The reply of `x_`, a method's `Result` that holds its value, of `k`.
-    fn reply(&self, k: &Option<Kind>) -> Result<String, String> {
-        let reply = self.rt_use(LINK, "Reply");
+    /// The C++ that writes the value `x_` holds, a method's `Result` of `k`
+    /// that holds one, as its answer at once, in the frame its args came in
+    /// (`ret_`): none for no value.
+    fn put(&self, k: &Option<Kind>) -> Result<String, String> {
         Ok(match k {
-            None => format!("{reply}{{0}}"),
+            None => String::new(),
             Some(k) => format!(
-                "{reply}{{0, {}{{{}, [v_ = std::move(*x_)]({} &w_) {{ {} }}}}}}",
+                "const auto &v_ = *x_;\n            ret_.start({});\n            {}\n            ",
+                self.layout(k)?.0,
+                self.store("ret_", "0", "v_", k)?
+            ),
+        })
+    }
+
+    /// The C++ that answers `x_`, an async method's `Result` of `k`, later:
+    /// its refusal, or its value written as the answer's frame is laid.
+    fn task_return(&self, k: &Option<Kind>) -> Result<String, String> {
+        let task_return = self.rt_use(GUEST_LINK, "task_return");
+        let refusal = self.refusal("x_.error().errnum");
+        Ok(match k {
+            None => format!("{task_return}(tag_, x_ ? 0 : {refusal}, std::nullopt);"),
+            Some(k) => format!(
+                "if (!x_) return {task_return}(tag_, {refusal}, std::nullopt);\n                const auto &v_ = *x_;\n                {task_return}(tag_, 0, {}{{{}, [&]({} &w_) {{ {} }}}});",
                 self.rt_use(LINK, "Packet"),
                 self.layout(k)?.0,
                 self.rt_use(CABI, "Lower"),
@@ -737,26 +750,19 @@ impl Header<'_> {
                 );
             }
         }
-        let (reply, method, tag) = (
-            self.rt_use(LINK, "Reply"),
-            self.rt_use(LINK, "Method"),
-            self.rt_use(LINK, "Tag"),
-        );
+        let (method, tag) = (self.rt_use(LINK, "Method"), self.rt_use(LINK, "Tag"));
         let _ = writeln!(
             out,
-            "}};\n\nclass {obj} final : public {} {{\n  public:\n    explicit {obj}(std::unique_ptr<{t}> implementation) noexcept : implementation_(std::move(implementation)) {{}}\n\n    {reply} call({method} m_, [[maybe_unused]] {tag} tag_, [[maybe_unused]] std::optional<std::span<const std::uint8_t>> args_) override {{\n        switch (m_) {{",
-            self.rt_use(LINK, "Object")
+            "}};\n\nclass {obj} final : public {} {{\n  public:\n    explicit {obj}(std::unique_ptr<{t}> implementation) noexcept : implementation_(std::move(implementation)) {{}}\n\n    std::int32_t call({method} m_, [[maybe_unused]] {tag} tag_, [[maybe_unused]] {} args_, [[maybe_unused]] {} &ret_) override {{\n        switch (m_) {{",
+            self.rt_use(LINK, "Object"),
+            self.rt_use(CABI, "Lift"),
+            self.rt_use(CABI, "Lower")
         );
         for f in &o.methods {
             let ps = self.kinds(f)?;
             let _ = writeln!(out, "        case {}: {{", method_const(o, f, given));
             if !ps.is_empty() {
                 let ebadmsg = self.refusal(&format!("{}::ebadmsg", self.rt_use(ERROR, "Errno")));
-                let _ = writeln!(
-                    out,
-                    "            if (!args_) return {ebadmsg};\n            {} r_(*args_);",
-                    self.rt_use(CABI, "Lift")
-                );
                 let (offs, _) = self
                     .g
                     .tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
@@ -765,10 +771,10 @@ impl Header<'_> {
                         out,
                         "            {} {n} = {};",
                         self.ty(k)?,
-                        self.load("r_", &at.to_string(), k)?
+                        self.load("args_", &at.to_string(), k)?
                     );
                 }
-                let _ = writeln!(out, "            if (!r_.finish()) return {ebadmsg};");
+                let _ = writeln!(out, "            if (!args_.finish()) return {ebadmsg};");
             }
             let args: Vec<String> = ps
                 .iter()
@@ -788,27 +794,26 @@ impl Header<'_> {
                 let args: String = args.iter().map(|a| format!("{a}, ")).collect();
                 let _ = writeln!(
                     out,
-                    "            implementation_->{m}({args}{}<{ret}>(tag_, {}, [tag_]({} x_) {{\n                {reply} reply_ = x_ ? {} : {refusal};\n                {}(tag_, reply_.result, std::move(reply_.data));\n            }}));\n            return {reply}{{{}}};\n        }}",
+                    "            implementation_->{m}({args}{}<{ret}>(tag_, {}, [tag_]({} x_) {{\n                {}\n            }}));\n            return {};\n        }}",
                     self.rt_use(LINK, "Return"),
                     self.rt_use(GUEST_LINK, "on_cancel"),
                     self.result(&rk)?,
-                    self.reply(&rk)?,
-                    self.rt_use(GUEST_LINK, "task_return"),
+                    self.task_return(&rk)?,
                     self.errno("einprogress")
                 );
             } else {
                 let _ = writeln!(
                     out,
-                    "            {} x_ = implementation_->{m}({});\n            if (!x_) return {refusal};\n            return {};\n        }}",
+                    "            {} x_ = implementation_->{m}({});\n            if (!x_) return {refusal};\n            {}return 0;\n        }}",
                     self.result(&rk)?,
                     args.join(", "),
-                    self.reply(&rk)?
+                    self.put(&rk)?
                 );
             }
         }
         let _ = writeln!(
             out,
-            "        default:\n            return {reply}{{{}}};\n        }}\n    }}\n\n  private:\n    std::unique_ptr<{t}> implementation_;\n}};\n",
+            "        default:\n            return {};\n        }}\n    }}\n\n  private:\n    std::unique_ptr<{t}> implementation_;\n}};\n",
             self.errno("enosys")
         );
         if o.resource {

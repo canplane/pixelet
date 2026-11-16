@@ -4,11 +4,9 @@
 
 import type { u64 } from "@xpute/kit/abi/word.ts";
 import {
-  ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
-import { Lift } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   type Handle,
@@ -38,26 +36,18 @@ function object(
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, args, ret) {
       try {
         switch (m) {
           case NOW: {
             const v = implementation.now();
-            return {
-              result: 0,
-              data: [
-                8,
-                (w) => {
-                  w.u64(0, v);
-                },
-              ],
-            };
+            ret.start(8);
+            ret.u64(0, v);
+            return 0;
           }
           case WAIT_FOR: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.wait_for(r_.u64(0), stop.signal).then(
+            implementation.wait_for(args.u64(0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );

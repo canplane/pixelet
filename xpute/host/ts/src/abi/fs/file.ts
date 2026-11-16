@@ -4,12 +4,10 @@
 
 import type { ErrorCode } from "./types.enum.ts";
 import {
-  ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
-import { Lift } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   ComponentError,
@@ -48,7 +46,7 @@ export function file(
   implementation: HostFile,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, args, _ret) {
       try {
         switch (m) {
           case FILE_SIZE: {
@@ -91,10 +89,8 @@ export function file(
             return ERRNO_EINPROGRESS;
           }
           case FILE_READ: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.read(load_Lent(r_, 0), stop.signal).then(
+            implementation.read(load_Lent(args, 0), stop.signal).then(
               (x) => {
                 const v = { tag: "ok", val: x } as
                   { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
@@ -132,10 +128,8 @@ export function file(
             return ERRNO_EINPROGRESS;
           }
           case FILE_WRITE: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.write(load_Lent(r_, 0), stop.signal).then(
+            implementation.write(load_Lent(args, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );

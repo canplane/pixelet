@@ -43,6 +43,7 @@ int32_t pxl_gpu_surface_bind(uint32_t handle, void *window);
 // returns once the window is let go, so nothing draws into it after.
 void pxl_gpu_surface_unbind(uint32_t handle);
 
-// Tells the host of a display frame, from the platform's display link on any
-// thread; it answers the guest's waiting `vsync.next`.
-void pxl_gpu_vsync(void);
+// Tells the host of a display frame, which started `age_ns` nanoseconds ago,
+// from the platform's display link on any thread; it answers the guest's
+// waiting `vsync.next` with the frame's start.
+void pxl_gpu_vsync(uint64_t age_ns);

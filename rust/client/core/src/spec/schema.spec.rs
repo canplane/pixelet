@@ -160,15 +160,17 @@ impl AoMode {
 /// How many device pixels the world is drawn at to a CSS pixel, and the rate
 /// frames go at.
 ///
-///   auto  — a frame each whole number of vsync intervals, to RATE_MIN_HZ;
+///   auto  — a frame each whole number of vsync intervals, from RATE_MAX_HZ
+///           to RATE_MIN_HZ;
 ///           the display's pixels, stepped down to a share of them, while
 ///           moving frames' GPU time runs over their budget — the frame's
 ///           target interval — and back up once the step above would fit, a
 ///           budget control as congestion control is
 ///           (rust/client/core/src/domain/scene/resolution.rs).
-///   fixed — the display's, at its rate, whatever the frames cost.
+///   fixed — the display's, at its rate to RATE_MAX_HZ, whatever the frames
+///           cost.
 ///   low   — half the display's each way, auto's floor (RES_MIN), at the
-///           display's rate.
+///           display's rate to RATE_MAX_HZ.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum ResMode {

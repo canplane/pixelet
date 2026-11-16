@@ -36,12 +36,13 @@ async function ready(nav: object): Promise<GpuReport[]> {
     { power: "high-performance", required_feats: [], optional_feats: [] },
     { frame_latency: 2, upload_chunk_sz: 1 << 16 },
   ).mount();
-  const reply = named.get(HANDLE)!.call(GET_DEVICE, 0, null);
-  assert.ok(typeof reply !== "number" && reply.data !== null);
+  const none = new Lift(new Uint8Array(0));
   const out = new Uint8Array(4);
-  reply.data[1](new Lower(out, 4));
+  const ret = new Lower(out, 0);
+  assert.equal(named.get(HANDLE)!.call(GET_DEVICE, 0, none, ret), 0);
+  assert.equal(ret.finish(), 4);
   const device = added[new Lift(out).u32(0) - 1]!;
-  assert.equal(device.call(DEVICE_READY, 7, null), ERRNO_EINPROGRESS);
+  assert.equal(device.call(DEVICE_READY, 7, none, ret), ERRNO_EINPROGRESS);
   assert.equal(await answered.promise, 7);
   return posted;
 }

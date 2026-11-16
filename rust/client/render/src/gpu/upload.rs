@@ -8,7 +8,7 @@ use xpute_kit::abi::word::{join64, split64};
 use xpute_link::mem;
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
-use crate::gpu::api::{Gpu, Layout, buf_entry, buffer_usage, release, room, write_buffer_sz};
+use crate::gpu::api::{Gpu, Layout, buf_entry, buffer_usage, need, note_retry, release, room};
 use crate::gpu::draw;
 
 const EMPTY: u32 = 0;
@@ -31,6 +31,9 @@ pub struct UploadTable {
     vertex_cnt: &'static mut [u32],
     idx_cnt: &'static mut [u32],
     buf: &'static mut [u32],
+    /// How many of the upload's bytes its buffer holds: all once the upload is on the device,
+    /// fewer while it is put a chunk at a time (`put`).
+    resident_sz: &'static mut [u32],
     group: &'static mut [u32],
     /// The most the owners can hold live (pxl-core link/layout.rs `LIVE_UPLOAD_CAP`).
     live: u32,
@@ -52,8 +55,8 @@ fn mem(at: u64, n: u32) -> &'static [u8] {
 }
 
 /// The table's columns, in words a slot: handle, address (two), length, the vertex and index
-/// counts, buffer and group.
-const UPLOAD_COLUMN_CNT: usize = 8;
+/// counts, buffer, the bytes written and group.
+const UPLOAD_COLUMN_CNT: usize = 9;
 
 /// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_sz`).
 pub const fn uploads_sz(live: usize) -> u32 {
@@ -77,6 +80,7 @@ pub fn set_uploads(room: &'static mut [u32], live: usize) {
         vertex_cnt: column(1),
         idx_cnt: column(1),
         buf: column(1),
+        resident_sz: column(1),
         group: column(1),
         live: live as u32,
         cnt: 0,
@@ -101,44 +105,56 @@ impl UploadTable {
         self.at[2 * i..2 * i + 2].copy_from_slice(&split64(at));
     }
 
+    /// Whether upload `i` is on the device whole, which is when a reader may name its buffer.
+    fn is_resident(&self, i: usize) -> bool {
+        self.buf[i] != 0 && self.resident_sz[i] == self.len[i] & !3
+    }
+
     pub(crate) fn lose(&mut self) {
         self.buf.fill(0);
+        self.resident_sz.fill(0);
         self.group.fill(0);
         self.missing = self.cnt;
         self.layout = None;
     }
 
-    /// Puts the missing uploads back on the device, as far as the frame's stream has room.
+    /// Puts the missing uploads back on the device, as far as the stream and the belt have
+    /// room.
     pub(crate) fn restore(&mut self, g: &Gpu) {
         if self.missing == 0 {
             return;
         }
         for i in 0..self.handle.len() {
-            if self.handle[i] != EMPTY && self.buf[i] == 0 && !self.put(g, i) {
+            if self.handle[i] != EMPTY && !self.is_resident(i) && !self.put(g, i) {
                 return;
             }
         }
     }
 
-    /// Puts upload `i` on the device. Returns false, and leaves it missing, when the frame's
-    /// stream has no room.
+    /// Puts upload `i` on the device, a write that may wait (`Gpu::write_buf_from`): as much
+    /// of it as the stream and the belt have room for, going on from there the next time.
+    /// Returns whether it is on the device whole; until then no reader names its buffer
+    /// (`is_resident`).
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(write_buffer_sz(mem(self.addr(i), self.len[i] & !3))) {
+        if self.buf[i] == 0 {
+            // The buffer is also copied from, so the marks keep each upload they read as the
+            // last frame drew it (pass/mark.rs `CopyCache::keep`).
+            self.buf[i] = g.buf(
+                buf_size(self.len[i]),
+                buffer_usage::VERTEX
+                    | buffer_usage::INDEX
+                    | buffer_usage::STORAGE
+                    | buffer_usage::COPY_DST
+                    | buffer_usage::COPY_SRC,
+            );
+            (self.resident_sz[i], self.group[i]) = (0, 0);
+        }
+        let bytes = mem(self.addr(i), self.len[i] & !3);
+        self.resident_sz[i] =
+            g.write_buf_from(self.buf[i], 0, bytes, self.resident_sz[i] as usize) as u32;
+        if !self.is_resident(i) {
             return false;
         }
-        // The buffer is also copied from, so the marks keep each upload they read as the
-        // last frame drew it (pass/mark.rs `CopyCache::keep`).
-        let buf = g.buf(
-            buf_size(self.len[i]),
-            buffer_usage::VERTEX
-                | buffer_usage::INDEX
-                | buffer_usage::STORAGE
-                | buffer_usage::COPY_DST
-                | buffer_usage::COPY_SRC,
-        );
-        g.write_buf(buf, 0, mem(self.addr(i), self.len[i] & !3));
-        self.buf[i] = buf;
-        self.group[i] = 0;
         self.missing -= 1;
         true
     }
@@ -161,7 +177,7 @@ impl UploadTable {
     /// device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle)
-            .filter(|&i| self.buf[i] != 0)
+            .filter(|&i| self.is_resident(i))
             .map(|i| (self.buf[i], self.vertex_cnt[i], self.idx_cnt[i]))
     }
 
@@ -188,6 +204,7 @@ impl UploadTable {
         self.vertex_cnt[i] = vertex_cnt;
         self.idx_cnt[i] = idx_cnt;
         self.buf[i] = 0;
+        self.resident_sz[i] = 0;
         self.group[i] = 0;
         self.cnt += 1;
         self.bytes += buf_size(len) as u64;
@@ -198,17 +215,24 @@ impl UploadTable {
     }
 
     /// Writes the changed range of `handle`'s upload. When the frame's stream has no room, the
-    /// buffer is released and the upload is put again whole once there is room.
+    /// buffer is released and the upload is put again whole once there is room. An upload
+    /// still being put is put again from its start.
     pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u64, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.set_addr(i, at);
-        let (Some(g), buf @ 1..) = (g, self.buf[i]) else {
+        if !self.is_resident(i) {
+            self.resident_sz[i] = 0;
+            return;
+        }
+        let (Some(g), buf) = (g, self.buf[i]) else {
             return;
         };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(write_buffer_sz(mem(at + u64::from(from), bytes))) {
+        let range = need().write_buf(mem(at + u64::from(from), bytes));
+        if room(range) {
             g.write_buf(buf, from, mem(at + u64::from(from), bytes));
         } else {
+            note_retry(range);
             release(self.group[i]);
             release(buf);
             (self.buf[i], self.group[i]) = (0, 0);
@@ -221,7 +245,7 @@ impl UploadTable {
             return;
         };
         release(self.group[i]);
-        if self.buf[i] == 0 {
+        if !self.is_resident(i) {
             self.missing = self.missing.saturating_sub(1);
         }
         release(self.buf[i]);
@@ -251,6 +275,7 @@ impl UploadTable {
                     self.vertex_cnt[i] = self.vertex_cnt[j];
                     self.idx_cnt[i] = self.idx_cnt[j];
                     self.buf[i] = self.buf[j];
+                    self.resident_sz[i] = self.resident_sz[j];
                     self.group[i] = self.group[j];
                     i = j;
                     break;
@@ -263,7 +288,7 @@ impl UploadTable {
     /// and the impostors' instances, the characters' palettes and the zones' boxes are read
     /// through it.
     pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
-        let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
+        let i = self.find(handle).filter(|&i| self.is_resident(i))?;
         if self.group[i] == 0 {
             let id = g.bind_group(
                 self.layout(g),
@@ -284,7 +309,7 @@ impl UploadTable {
     /// what a copy of it needs.
     pub fn buf_of(&self, handle: u32) -> Option<(u32, u32)> {
         self.find(handle)
-            .filter(|&i| self.buf[i] != 0)
+            .filter(|&i| self.is_resident(i))
             .map(|i| (self.buf[i], buf_size(self.len[i])))
     }
 

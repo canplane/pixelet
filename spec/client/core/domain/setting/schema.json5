@@ -3,7 +3,7 @@
   RES_MODE: {
     $value: { auto: 0, fixed: 1, low: 2 },
     $type: "u32",
-    $description: "How many device pixels the world is drawn at to a CSS pixel, and the rate\nframes go at.\n\n  auto  — a frame each whole number of vsync intervals, to RATE_MIN_HZ;\n          the display's pixels, stepped down to a share of them, while\n          moving frames' GPU time runs over their budget — the frame's\n          target interval — and back up once the step above would fit, a\n          budget control as congestion control is\n          (rust/client/core/src/domain/scene/resolution.rs).\n  fixed — the display's, at its rate, whatever the frames cost.\n  low   — half the display's each way, auto's floor (RES_MIN), at the\n          display's rate.",
+    $description: "How many device pixels the world is drawn at to a CSS pixel, and the rate\nframes go at.\n\n  auto  — a frame each whole number of vsync intervals, from RATE_MAX_HZ\n          to RATE_MIN_HZ;\n          the display's pixels, stepped down to a share of them, while\n          moving frames' GPU time runs over their budget — the frame's\n          target interval — and back up once the step above would fit, a\n          budget control as congestion control is\n          (rust/client/core/src/domain/scene/resolution.rs).\n  fixed — the display's, at its rate to RATE_MAX_HZ, whatever the frames\n          cost.\n  low   — half the display's each way, auto's floor (RES_MIN), at the\n          display's rate to RATE_MAX_HZ.",
   },
   CAMERA_MODE: {
     $value: { orbit: 0, first_person: 1 },

@@ -51,9 +51,12 @@ export const device = {
    * (`Surface::get_default_config`): one frame's lag behind the input, with the
    * GPU kept busy while the next is drawn. */
   FRAME_LATENCY: 2 as number,
-  /** The chunk the host stages buffer writes in, each mapped once and reused: a
-   * mesh, the largest write a frame makes, is about a MiB, and a larger write
-   * takes a chunk of its own. */
+  /** The chunk the host stages buffer and texture writes in, each mapped once and
+   * reused, the belt holding one more than FRAME_LATENCY: a mesh, the largest write
+   * a frame makes, is about a MiB. A larger write goes on across chunks. The core
+   * admits a write that may wait only as far as the belt's free chunks hold
+   * (pxl-gpu-guest stream.rs `stage`); for one that cannot wait, a host short of
+   * chunks makes one more for the run and lets it go once it is back. */
   UPLOAD_CHUNK_SZ: 1048576 as number,
   /** WebGPU's power preference, which the device is asked with (pxl-gpu-link and
    * @pxl/gpu/link `GpuAsk`, pxl-gpu-host `Ask::of`). */

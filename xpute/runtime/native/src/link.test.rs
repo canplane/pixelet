@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use xpute_kit::status::errno::Errno;
-use xpute_link::{Handle, Method, NAMED, OPEN, Object, ROOT, Reply, Tag, uri};
+use xpute_link::{Handle, Lift, Lower, Method, NAMED, OPEN, Object, ROOT, Tag, uri};
 use xpute_runtime_native::native::Boot;
 
 #[path = "app.test.rs"]
@@ -27,8 +27,8 @@ xpute_guest::link!(
 struct Nothing;
 
 impl Object for Nothing {
-    fn call(&self, _: Method, _: Tag, _: Option<&[u8]>) -> Reply {
-        Reply::from(0)
+    fn call(&self, _: Method, _: Tag, _: Lift, _: &mut Lower) -> i32 {
+        0
     }
 }
 

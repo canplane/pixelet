@@ -1,6 +1,7 @@
 // pxl-core/domain/scene/resolution.test.rs
 
 use super::*;
+use crate::domain::setting::settings_mut;
 
 /// A window's sample, its per-pixel part and its rest each given as a share
 /// of the window's budget.
@@ -313,4 +314,18 @@ fn untimed_scale_alone() {
     }
     assert_eq!(windows(&mut k, over, settle + 10, false), 0);
     assert_eq!(k.step, param::RES_STEP_CNT);
+}
+
+/// A frame's budget is its target interval, never less than one interval at
+/// `RATE_MAX_HZ`: two intervals at 120 Hz, and one at `RATE_MAX_HZ` at 90 Hz,
+/// at 60 Hz and before the display is measured.
+#[test]
+fn the_budget_is_the_target_to_the_cap() {
+    settings_mut().res = ResMode::Auto;
+    let cap_ms = 1000.0 / param::RATE_MAX_HZ;
+    assert_eq!(budget(1000.0 / 120.0), 2.0 * (1000.0 / 120.0), "120 Hz");
+    for hz in [90.0, 60.0] {
+        assert_eq!(budget(1000.0 / hz), cap_ms, "{hz} Hz");
+    }
+    assert_eq!(budget(0.0), cap_ms, "not measured");
 }

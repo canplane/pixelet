@@ -34,22 +34,26 @@ export interface Frame {
   pkt_len: u32;
 }
 
-/** The frame laid at `at`. */
-export function read(v: DataView, at: u32): Frame {
-  const word = (k: u32): u32 => v.getUint32(at + 4 * k, true);
-  const cmd = word(CMD);
-  return {
-    tag: word(TAG),
-    res: (cmd & RES) !== 0,
-    handle: (cmd & ~RES) >>> METHOD_BITS,
-    method: cmd & ((1 << METHOD_BITS) - 1),
-    result: word(RESULT) | 0,
-    pkt_len: word(PKT),
-  };
+/** A frame of zero words, for `read` to fill. */
+export function frame(): Frame {
+  return { tag: 0, res: false, handle: 0, method: 0, result: 0, pkt_len: 0 };
+}
+
+/** Reads the frame laid at `at` into `f`, and answers it. A side reads each
+ * frame into one it keeps, so a crossing makes no object. */
+export function read(v: DataView<ArrayBufferLike>, at: u32, f: Frame): Frame {
+  const cmd = v.getUint32(at + 4 * CMD, true);
+  f.tag = v.getUint32(at + 4 * TAG, true);
+  f.res = (cmd & RES) !== 0;
+  f.handle = (cmd & ~RES) >>> METHOD_BITS;
+  f.method = cmd & ((1 << METHOD_BITS) - 1);
+  f.result = v.getUint32(at + 4 * RESULT, true) | 0;
+  f.pkt_len = v.getUint32(at + 4 * PKT, true);
+  return f;
 }
 
 /** Lays the frame's words at `at`. */
-export function lay(v: DataView, at: u32, f: Frame): void {
+export function lay(v: DataView<ArrayBufferLike>, at: u32, f: Frame): void {
   v.setUint32(at + 4 * TAG, f.tag, true);
   v.setUint32(
     at + 4 * CMD,

@@ -14,7 +14,8 @@
 //!
 //! `auto` is a budget controller, in the manner of congestion control. Its
 //! budget is the frame's target interval, a whole number of the display's
-//! measured intervals, which `auto`'s frame rate sets apart (rate.rs). Its
+//! measured intervals, which `auto`'s frame rate sets apart (rate.rs), and
+//! never less than one interval at `RATE_MAX_HZ` (`budget`). Its
 //! knob, the scale, saves only the work done once for each drawn pixel
 //! (span.json5 `GPU_SPAN_PER_PX`). The camera grid's cells, the samples, the light's
 //! passes over its map's texels, the finish and the markers cost the same at
@@ -30,9 +31,10 @@ use pxl_render::gpu::surface::{Surface, surfaces};
 use pxl_render::renderer::GpuRead;
 use pxl_render::spec::api::surface_role;
 
-/// The budget, in ms, of a frame at the frame rate's target interval.
+/// The budget, in ms, of a frame: its target interval (rate.rs), and never
+/// less than one interval at `RATE_MAX_HZ`.
 fn budget(display_ms: f64) -> f64 {
-    f64::from(rate::interval()) * display_ms
+    rate::target_ms(display_ms).max(1000.0 / param::RATE_MAX_HZ)
 }
 
 /// The judge's sample of a frame's cost, in ms. `px_ms` is the time the scale
@@ -306,10 +308,7 @@ pub(crate) fn load(pace: Pace, gpu: Option<GpuRead>) {
         k.restart();
     } else if pace.motion == Motion::Start {
         k.restart();
-    } else if pace.motion == Motion::Moving
-        && pace.display_ms > 0.0
-        && s.render_px() == (s.width, s.height)
-    {
+    } else if pace.motion == Motion::Moving && s.render_px() == (s.width, s.height) {
         let px = f64::from(s.width) * f64::from(s.height);
         let timed = api::device().is_some_and(|d| d.timestamps);
         let cost = if timed {

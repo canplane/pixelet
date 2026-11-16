@@ -1,8 +1,12 @@
 // @pxl/gpu/host/src/vsync.ts
 
 /** The display's vsync the host implements for the guest beside its GPU
- * (spec/gpu/wit/vsync.wit), on the platform's animation frames. */
+ * (spec/gpu/wit/vsync.wit), on the platform's animation frames. A frame's
+ * start is the animation frame's timestamp, which lies on the line of
+ * `performance.now()` in the same scope, the monotonic clock's (@xpute/host
+ * clock.ts `mark`). */
 
+import { mark } from "@xpute/host";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Side } from "@xpute/link/link.ts";
@@ -14,7 +18,7 @@ export function mount_vsync(side: Side): void {
     // the clock's does.
     next: (signal) =>
       new Promise((done, fail) => {
-        const frame = requestAnimationFrame(() => done());
+        const frame = requestAnimationFrame((at) => done(mark(at)));
         signal.addEventListener("abort", () => {
           cancelAnimationFrame(frame);
           fail(new XputeError(ERRNO_ECANCELED));

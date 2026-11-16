@@ -10,6 +10,8 @@
 //! the one copy. A packet that does not hold what its type says is refused
 //! (EBADMSG), where the ABI traps.
 
+use core::marker::PhantomData;
+
 use xpute_kit::status::errno::Errno;
 
 /// A number a list holds, whose bytes, every one set, are its value
@@ -22,34 +24,68 @@ macro_rules! number {
 }
 number!(u8 i8 u16 i16 u32 i32 u64 i64 f32 f64);
 
-/// Writes a packet into the bytes it is given: its fixed part first, then the
-/// bytes of its strings and lists past it. A packet past the bytes it is
-/// given spoils, and `finish` answers EMSGSIZE.
+/// Writes a packet into the bytes it is given: its fixed part first
+/// (`start`), then the bytes of its strings and lists past it. A packet past
+/// the bytes it is given spoils, and `finish` answers EMSGSIZE; a writer
+/// nothing was written by answers 0, no packet. It holds its bytes by
+/// address, as a reader does (`Lift`), so a side can hand an object the
+/// reader of a frame's args and the writer of its answer over the same bytes,
+/// the answer written once the args are read.
 pub struct Lower<'a> {
-    buf: &'a mut [u8],
+    at: *mut u8,
+    cap: usize,
     end: usize,
     overflow: bool,
+    _buf: PhantomData<&'a mut [u8]>,
 }
 
 impl<'a> Lower<'a> {
     /// A packet of a fixed part `fixed_sz` long, zeroed, in `buf`.
     pub fn new(buf: &'a mut [u8], fixed_sz: usize) -> Lower<'a> {
-        let overflow = fixed_sz > buf.len();
-        if !overflow {
-            buf[..fixed_sz].fill(0);
-        }
+        // SAFETY: `buf`'s bytes, which the writer borrows.
+        let mut w = unsafe { Lower::from_raw_parts(buf.as_mut_ptr(), buf.len()) };
+        w.start(fixed_sz);
+        w
+    }
+
+    /// A writer over the `cap` bytes at `at`, nothing written there yet.
+    ///
+    /// # Safety
+    /// The bytes are writable for `'a`, and nothing but this writer and a
+    /// reader over them (`Lift::from_raw_parts`) touches them meanwhile.
+    pub unsafe fn from_raw_parts(at: *mut u8, cap: usize) -> Lower<'a> {
         Lower {
-            buf,
-            end: fixed_sz,
-            overflow,
+            at,
+            cap,
+            end: 0,
+            overflow: false,
+            _buf: PhantomData,
         }
     }
 
-    fn put<const N: usize>(&mut self, at: usize, b: [u8; N]) {
-        match self.buf.get_mut(at..at + N) {
-            Some(out) if !self.overflow => out.copy_from_slice(&b),
-            _ => self.overflow = true,
+    /// Starts the packet with a fixed part `fixed_sz` long, zeroed.
+    pub fn start(&mut self, fixed_sz: usize) {
+        self.overflow = fixed_sz > self.cap;
+        if !self.overflow {
+            // SAFETY: within the writer's bytes, as just checked.
+            unsafe { self.at.write_bytes(0, fixed_sz) };
         }
+        self.end = fixed_sz;
+    }
+
+    /// Copies `b` to `at`, within the writer's bytes, as the caller checked;
+    /// `b` may lie in them.
+    fn copy(&mut self, at: usize, b: &[u8]) {
+        // SAFETY: the caller's; the copy may overlap.
+        unsafe { core::ptr::copy(b.as_ptr(), self.at.add(at), b.len()) };
+    }
+
+    fn put<const N: usize>(&mut self, at: usize, b: [u8; N]) {
+        if self.overflow || at.checked_add(N).is_none_or(|end| end > self.cap) {
+            self.overflow = true;
+            return;
+        }
+        self.copy(at, &b);
     }
 
     pub fn bool(&mut self, at: usize, v: bool) {
@@ -103,11 +139,12 @@ impl<'a> Lower<'a> {
     pub fn list(&mut self, at: usize, len: usize, sz: usize, align: usize) -> Option<usize> {
         let base = self.end.next_multiple_of(align);
         let end = base + len * sz;
-        if self.overflow || end > self.buf.len() {
+        if self.overflow || end > self.cap {
             self.overflow = true;
             return None;
         }
-        self.buf[self.end..end].fill(0);
+        // SAFETY: within the writer's bytes, as just checked.
+        unsafe { self.at.add(self.end).write_bytes(0, end - self.end) };
         self.end = end;
         self.u32(at, base as u32);
         self.u32(at + 4, len as u32);
@@ -121,7 +158,7 @@ impl<'a> Lower<'a> {
         // SAFETY: a number's bytes are all set (`Number`).
         let bytes = unsafe { core::slice::from_raw_parts(v.as_ptr().cast::<u8>(), size_of_val(v)) };
         if let Some(base) = self.list(at, v.len(), sz, sz) {
-            self.buf[base..base + bytes.len()].copy_from_slice(bytes);
+            self.copy(base, bytes);
         }
     }
 
@@ -140,22 +177,54 @@ impl<'a> Lower<'a> {
 }
 
 /// Reads a packet's values where its type says they lie, refusing EBADMSG
-/// what lies past the packet, a misaligned list, or a string not UTF-8.
+/// what lies past the packet, a misaligned list, or a string not UTF-8. It
+/// holds its packet by address, as a writer does (`Lower`).
 #[derive(Clone, Copy)]
 pub struct Lift<'a> {
-    pkt: &'a [u8],
+    at: *const u8,
+    len: usize,
+    _pkt: PhantomData<&'a [u8]>,
 }
 
 impl<'a> Lift<'a> {
     pub fn new(pkt: &'a [u8]) -> Lift<'a> {
-        Lift { pkt }
+        // SAFETY: `pkt`'s bytes, which the reader borrows.
+        unsafe { Lift::from_raw_parts(pkt.as_ptr(), pkt.len()) }
+    }
+
+    /// A reader of the `len` bytes at `at`.
+    ///
+    /// # Safety
+    /// The bytes are readable for `'a`, and nothing writes them while a value
+    /// read from them lives, but a writer over them (`Lower::from_raw_parts`) once the
+    /// reading is done.
+    pub unsafe fn from_raw_parts(at: *const u8, len: usize) -> Lift<'a> {
+        Lift {
+            at,
+            len,
+            _pkt: PhantomData,
+        }
+    }
+
+    /// The packet's bytes, or none for no packet.
+    pub fn pkt(&self) -> Option<&'a [u8]> {
+        // SAFETY: the reader's bytes (`from_raw_parts`).
+        (self.len != 0).then(|| unsafe { core::slice::from_raw_parts(self.at, self.len) })
+    }
+
+    /// The `len` bytes at `at`, which the caller checked lie in the packet.
+    fn slice(&self, at: usize, len: usize) -> &'a [u8] {
+        // SAFETY: the caller's, and the reader's bytes (`from_raw_parts`).
+        unsafe { core::slice::from_raw_parts(self.at.add(at), len) }
     }
 
     fn get<const N: usize>(&self, at: usize) -> Result<[u8; N], Errno> {
-        self.pkt
-            .get(at..at + N)
-            .and_then(|b| b.try_into().ok())
-            .ok_or(Errno::EBADMSG)
+        if at.checked_add(N).is_none_or(|end| end > self.len) {
+            return Err(Errno::EBADMSG);
+        }
+        let mut b = [0; N];
+        b.copy_from_slice(self.slice(at, N));
+        Ok(b)
     }
 
     /// A bool: 0 is false and any other byte true, as the ABI lifts it.
@@ -226,7 +295,7 @@ impl<'a> Lift<'a> {
         let fits = len
             .checked_mul(sz)
             .and_then(|n| n.checked_add(base))
-            .is_some_and(|end| end <= self.pkt.len());
+            .is_some_and(|end| end <= self.len);
         if !base.is_multiple_of(align) || !fits {
             return Err(Errno::EBADMSG);
         }
@@ -240,13 +309,13 @@ impl<'a> Lift<'a> {
         let mut v = vec![T::default(); len];
         // SAFETY: any bytes are a number's (`Number`), and `v` holds `len * sz`.
         let out = unsafe { core::slice::from_raw_parts_mut(v.as_mut_ptr().cast::<u8>(), len * sz) };
-        out.copy_from_slice(&self.pkt[base..base + len * sz]);
+        out.copy_from_slice(self.slice(base, len * sz));
         Ok(v)
     }
 
     fn bytes(&self, at: usize) -> Result<&'a [u8], Errno> {
         let (base, len) = self.list(at, 1, 1)?;
-        Ok(&self.pkt[base..base + len])
+        Ok(self.slice(base, len))
     }
 
     pub fn str(&self, at: usize) -> Result<&'a str, Errno> {

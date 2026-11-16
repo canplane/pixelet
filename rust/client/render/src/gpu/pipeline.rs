@@ -15,7 +15,7 @@ use crate::frame::shader::record::{
     COMPUTE_CNT, HDR, PIPELINE_CNT, SHADER_CNT, compute, compute_layout, pipeline as rec_of, src,
 };
 use crate::gpu::api::{
-    Format, Gpu, Layout, MASKED_DEPTH, Stencil, WORLD_COLOR, room, shader_sz, signaled,
+    Format, Gpu, Layout, MASKED_DEPTH, Stencil, WORLD_COLOR, need, room, signaled,
 };
 use crate::spec::api::stream;
 
@@ -89,7 +89,7 @@ impl PipelineCache {
         while self.modules_made < SHADER_CNT {
             let code = src(self.modules_made);
             let past = frame_sz.is_some_and(|b: usize| b + code.len() > stream::MODULE_SZ as usize);
-            if past || !room(shader_sz(code)) {
+            if past || !room(need().shader(code)) {
                 break;
             }
             self.modules[self.modules_made as usize] = g.shader(code);

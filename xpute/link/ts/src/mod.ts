@@ -23,7 +23,6 @@ export {
   refusal_of,
   ComponentError,
   type Ref,
-  type Reply,
   ROOT,
   type Sender,
   type Callee,

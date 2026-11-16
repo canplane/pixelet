@@ -173,10 +173,10 @@ impl Counter {
         self.copying = self.frame;
     }
 
-    /// Keeps the counts whose mapping landed, and asks to map the copy the
-    /// last frame made. It runs once the frame that encoded that copy was
-    /// submitted, as a buffer maps only what a submitted copy wrote into it.
-    pub(super) fn back(&mut self, g: &Gpu) {
+    /// Keeps the counts whose mapping landed, for the next frame's record
+    /// (`take`). It runs in each entry the counts may land in (pxl-render
+    /// `renderer::take_reads`) and in `back`.
+    pub(super) fn land(&mut self) {
         // SAFETY: the mapping's fence, boxed in place; the host stores into it only atomically.
         let signaled = unsafe { signaled(core::ptr::addr_of!(self.mapping[0]), self.ticket) };
         if self.mapped && signaled {
@@ -201,7 +201,15 @@ impl Counter {
                 });
             }
         }
-        if self.copied && !self.mapped && signaled {
+    }
+
+    /// Keeps the counts that landed (`land`), and asks to map the copy the
+    /// last frame made where no mapping is out. It runs once the frame that
+    /// encoded that copy was submitted, as a buffer maps only what a
+    /// submitted copy wrote into it.
+    pub(super) fn back(&mut self, g: &Gpu) {
+        self.land();
+        if self.copied && !self.mapped {
             (self.copied, self.mapped) = (false, true);
             let addr = mem::addr(&*self.read_cnts);
             self.ticket = self.ticket.wrapping_add(1);

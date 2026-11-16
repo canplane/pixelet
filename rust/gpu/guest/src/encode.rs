@@ -24,6 +24,7 @@ use pxl_gpu_link::enums::{
     TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat,
     VertexStepMode,
 };
+use pxl_gpu_link::pack::Pack;
 use pxl_gpu_link::spec::{BindingKind, NONE, ResourceKind, SURFACE_PREFERRED, op};
 use xpute_kit::abi::word::split64;
 
@@ -924,6 +925,7 @@ impl<const N: usize> Gpu<N> {
             s.word(encoders.len() as u32);
             encoders.iter().for_each(|e| s.word(*e));
         });
+        stream.submit();
         encoders.iter().for_each(|e| {
             self.release(*e);
         });
@@ -933,6 +935,9 @@ impl<const N: usize> Gpu<N> {
     pub fn destroy(&mut self, stream: &mut Stream, id: Id) {
         if self.release(id) {
             emit(stream, op::DESTROY, &|s| s.word(id));
+            // A host submits its staged writes before a buffer or a texture
+            // goes; the stream counts so at every object.
+            stream.submit();
         }
     }
 
@@ -959,10 +964,45 @@ pub mod call {
         s.bytes(bytes);
     }
 
+    /// Writes `bytes` into `buffer` at `offset`, the bytes copied into the
+    /// stream. A write is staged on the host's belt (stream.rs `stage`) as
+    /// one that cannot wait, the host making a chunk more for the run where
+    /// it has none free. `write_buffer_at`, `write_texture` and
+    /// `write_texture_at` take the same.
     pub fn write_buffer(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
-        emit(stream, op::WRITE_BUFFER, &|s| {
-            buffer_write(s, buffer, offset, bytes);
-        })
+        stream.stage(|p| write_buffer_pack(p, bytes))
+            && emit(stream, op::WRITE_BUFFER, &|s| {
+                buffer_write(s, buffer, offset, bytes);
+            })
+    }
+
+    /// Writes `bytes` into `buffer` at `offset` from byte `from` of them, a
+    /// write that may wait: in records of at most one chunk of the host's
+    /// belt each, as long as `fits` admits the next, and answers how far the
+    /// bytes are written. Its writer calls it again from there as chunks come
+    /// free, until every byte is written, and reads the buffer only then: the
+    /// records reach the host in the stream's order, so a reader recorded
+    /// after the last one reads the whole write, and none reads a part of it.
+    /// Outside a transaction only.
+    pub fn write_buffer_from(
+        stream: &mut Stream,
+        buffer: Id,
+        offset: u32,
+        bytes: &[u8],
+        from: usize,
+        fits: impl Fn(&Stream, &[u8]) -> bool,
+    ) -> usize {
+        let part = stream.chunk_sz() as usize;
+        let mut done = from;
+        while done < bytes.len() {
+            let next = &bytes[done..bytes.len().min(done + part)];
+            if !fits(stream, next) {
+                break;
+            }
+            write_buffer(stream, buffer, offset + done as u32, next);
+            done += next.len();
+        }
+        done
     }
 
     /// This is the room `write_buffer` takes of a stream, for `Stream::fits`,
@@ -971,14 +1011,36 @@ pub mod call {
         rec_sz(&|s| buffer_write(s, 0, 0, bytes))
     }
 
+    /// How `write_buffer`'s bytes lie on the host's belt (pxl-gpu-link
+    /// `Pack`), for the record and for a writer asking for its room;
+    /// `write_buffer_at`'s lie alike.
+    pub fn write_buffer_pack(pack: &mut Pack, bytes: &[u8]) {
+        pack.buffer(bytes.len() as u64);
+    }
+
     /// This is `write_buffer`, but the record names the bytes where they lie in
     /// the guest's memory, and the host reads them there as it runs the
     /// stream. The guest leaves them unchanged until the stream is handed back
     /// (stream.rs).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
+        stream.stage(|p| write_buffer_pack(p, bytes))
+            && emit(stream, op::WRITE_BUFFER_AT, &|s| {
+                buffer_write_at(s, buffer, offset, bytes);
+            })
+    }
+
+    fn buffer_write_at(s: &mut dyn Sink, buffer: Id, offset: u32, bytes: &[u8]) {
         let (at, len) = mem::span(bytes);
         let [lo, hi] = split64(at);
-        words(stream, op::WRITE_BUFFER_AT, &[buffer, offset, lo, hi, len])
+        [buffer, offset, lo, hi, len]
+            .into_iter()
+            .for_each(|w| s.word(w));
+    }
+
+    /// This is the room `write_buffer_at` takes of a stream, whatever its
+    /// bytes.
+    pub fn write_buffer_at_sz() -> usize {
+        rec_sz(&|s| buffer_write_at(s, 0, 0, &[]))
     }
 
     fn texture_write(s: &mut dyn Sink, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3]) {
@@ -987,7 +1049,12 @@ pub mod call {
         extent(s, size);
     }
 
-    /// `layout` holds the bytes per row and the rows per image.
+    /// Writes `size` texels of `bytes` at `place`, staged as `write_buffer`
+    /// says. `layout` holds the bytes per row and the rows per image, a row
+    /// being a row of texel blocks. The bytes per row are the rows' stride in
+    /// `bytes`, never 0 where `size` is not empty, though WebGPU may leave
+    /// them unset for one row; a write of an empty `size` writes nothing.
+    /// `write_texture_at` takes the same.
     pub fn write_texture(
         stream: &mut Stream,
         place: &TexelCopyTexture,
@@ -995,10 +1062,11 @@ pub mod call {
         size: [u32; 3],
         bytes: &[u8],
     ) -> bool {
-        emit(stream, op::WRITE_TEXTURE, &|s| {
-            texture_write(s, place, layout, size);
-            s.bytes(bytes);
-        })
+        stream.stage(|p| write_texture_pack(p, layout, size))
+            && emit(stream, op::WRITE_TEXTURE, &|s| {
+                texture_write(s, place, layout, size);
+                s.bytes(bytes);
+            })
     }
 
     /// This is `write_buffer_sz` for a texture. The room depends on the
@@ -1016,6 +1084,13 @@ pub mod call {
         })
     }
 
+    /// How `write_texture`'s bytes lie on the host's belt (pxl-gpu-link
+    /// `Pack`), for the record and for a writer asking for its room;
+    /// `write_texture_at`'s lie alike.
+    pub fn write_texture_pack(pack: &mut Pack, layout: [u32; 2], size: [u32; 3]) {
+        pack.texture(u64::from(layout[0]), size);
+    }
+
     pub fn write_texture_at(
         stream: &mut Stream,
         place: &TexelCopyTexture,
@@ -1025,10 +1100,11 @@ pub mod call {
     ) -> bool {
         let (at, len) = mem::span(bytes);
         let [lo, hi] = split64(at);
-        emit(stream, op::WRITE_TEXTURE_AT, &|s| {
-            texture_write(s, place, layout, size);
-            [lo, hi, len].into_iter().for_each(|w| s.word(w));
-        })
+        stream.stage(|p| write_texture_pack(p, layout, size))
+            && emit(stream, op::WRITE_TEXTURE_AT, &|s| {
+                texture_write(s, place, layout, size);
+                [lo, hi, len].into_iter().for_each(|w| s.word(w));
+            })
     }
 
     /// Decodes an encoded image (PNG, JPEG or WebP) from the guest's memory
@@ -1339,10 +1415,13 @@ pub mod call {
     }
 
     /// Asks the host to store `ticket` at `fence` once the work submitted
-    /// before is done (spec `RESULT`).
+    /// before is done (spec `RESULT`). The host submits its staged writes
+    /// first.
     pub fn queue_done(stream: &mut Stream, fence: &u32, ticket: u32) -> bool {
         let [lo, hi] = split64(mem::addr(fence));
-        words(stream, op::QUEUE_DONE, &[lo, hi, ticket])
+        let sent = words(stream, op::QUEUE_DONE, &[lo, hi, ticket]);
+        stream.submit();
+        sent
     }
 
     /// `format` None asks for the format the host's surface prefers.

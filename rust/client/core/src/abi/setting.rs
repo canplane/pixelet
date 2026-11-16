@@ -15,34 +15,31 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let mut run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 SET => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let key = r_.u32(0)?;
-                    let val = r_.u32(4)?;
+                    let key = args_.u32(0)?;
+                    let val = args_.u32(4)?;
                     match self.0.set(key, val) {
-                        Ok(v) => _rt::Reply {
-                            result: 0,
-                            data: Some((
-                                2,
-                                Box::new(move |w: &mut _rt::Lower| match &v {
-                                    Ok(_) => {}
-                                    Err(v) => {
-                                        w.u8(0, 1);
-                                        w.u8(1, *v as u8);
-                                    }
-                                }),
-                            )),
-                        },
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(v) => {
+                            ret_.start(2);
+                            match &v {
+                                Ok(_) => {}
+                                Err(v) => {
+                                    ret_.u8(0, 1);
+                                    ret_.u8(1, *v as u8);
+                                }
+                            }
+                            0
+                        }
+                        Err(e) => e as i32,
                     }
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -55,5 +52,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

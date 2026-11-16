@@ -13,8 +13,8 @@ use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shelf::PAD;
 use crate::gpu::api::{
-    Format, Gpu, Load, buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry,
-    texture_usage, view_entry, write_buffer_sz, write_texture_sz,
+    Format, Gpu, Load, buf_entry, buffer_usage, bytes, need, note_retry, pass_desc, place, room,
+    sampler_entry, texture_usage, view_entry,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::text::{Raster, TextOf};
@@ -318,13 +318,14 @@ impl AtlasPainter {
         let instance_bytes = bytes(shapes.as_flattened());
         let px = rasters
             .iter()
-            .map(|r| r.px)
-            .chain(icons.iter().map(Vec::as_slice));
-        if !room(
-            px.map(write_texture_sz).sum::<usize>()
-                + write_buffer_sz(bytes(&size_bytes))
-                + write_buffer_sz(instance_bytes),
-        ) {
+            .map(|r| (r.width, r.height, r.px))
+            .chain(icons.iter().map(|px| (SYMBOL_PX, SYMBOL_PX, px.as_slice())));
+        let all = px
+            .fold(need(), |n, (w, h, px)| n.write_texture(w, h, px))
+            .write_buf(bytes(&size_bytes))
+            .write_buf(instance_bytes);
+        if !room(all) {
+            note_retry(all);
             return None;
         }
         let lines = g.texture(
