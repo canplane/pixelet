@@ -65,7 +65,9 @@ fn is_claim(key: u32) -> bool {
 }
 
 /// How many times a walk reads a claim not yet named again before it gives up keeping the
-/// node. The walk that claimed the slot names its claim right after.
+/// node. The walk that claimed the slot names its claim right after. The count is bounded
+/// because WGSL promises no progress between invocations, so an open spin could hang; running
+/// out only misses a keep, never keeps a wrong node (pxl-engine node_cache.rs).
 const CLAIM_READS = 8u;
 
 /// The stamp of an entry that its key keeps at `zooms` (`key_zooms`) under `tag`: a hash of its

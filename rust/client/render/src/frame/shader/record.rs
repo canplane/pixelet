@@ -25,10 +25,10 @@ pub const COMPUTE_CELL: u32 = 9;
 /// (`SHADER_LIGHT_MARK_DRAWS`).
 pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 10;
 /// The eye's holes' queue (pxl-engine `ray::QUEUE_LANE_CNT`) runs five compute pipelines: its first
-/// and second walks over the node cache (`COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED`), the asks of the
-/// nodes each of those walks was parked at (`COMPUTE_QUEUE_ASK`, `COMPUTE_QUEUE_ASK_PARKED`),
-/// and its last walk, which asks the world (`COMPUTE_QUEUE_LAST`). The two asks serve every
-/// run's queue (ask_run.wgsl).
+/// and second walks over the node cache (`COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED`, each over a
+/// shader of its own), the asks of the nodes each of those walks was parked at
+/// (`COMPUTE_QUEUE_ASK`, `COMPUTE_QUEUE_ASK_PARKED`), and its last walk, which asks the world
+/// (`COMPUTE_QUEUE_LAST`). The two asks serve every run's queue (ask_run.wgsl).
 pub const COMPUTE_QUEUE_ASK: u32 = 11;
 pub const COMPUTE_FORGET: u32 = 12;
 /// The last walk of the eye's samples (`SHADER_QUEUE_LAST_SAMPLES`).
@@ -83,16 +83,16 @@ pub const COMPUTE_LIGHT_REC_HITS: u32 = 46;
 /// (light_propagate.wgsl `light_damage_cs`).
 pub const COMPUTE_LIGHT_DAMAGE: u32 = 47;
 /// The rest of the samples' runs, the eye's and the light's: the second walk over the node
-/// cache alone (`SHADER_QUEUE_SAMPLES`).
+/// cache alone (`SHADER_QUEUE_SAMPLES_PARKED`, `SHADER_QUEUE_LIGHT_SAMPLES_PARKED`).
 pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 48;
 pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 49;
 /// The rest of the beam rays' runs, the eye's and the light's: the second walk over the node
-/// cache alone (`SHADER_QUEUE_CORNERS`).
+/// cache alone (`SHADER_QUEUE_CORNERS_PARKED`, `SHADER_QUEUE_LIGHT_CORNERS_PARKED`).
 pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 50;
 pub const COMPUTE_QUEUE_LIGHT_CORNERS_PARKED: u32 = 51;
 /// The holes' queue's walks for the light's map (`SHADER_QUEUE_LIGHT`,
-/// `SHADER_QUEUE_LAST_LIGHT`), as `COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED` and
-/// `COMPUTE_QUEUE_LAST` are the eye's.
+/// `SHADER_QUEUE_LIGHT_PARKED`, `SHADER_QUEUE_LAST_LIGHT`), as `COMPUTE_QUEUE`,
+/// `COMPUTE_QUEUE_PARKED` and `COMPUTE_QUEUE_LAST` are the eye's.
 pub const COMPUTE_QUEUE_LIGHT: u32 = 52;
 pub const COMPUTE_QUEUE_LIGHT_PARKED: u32 = 53;
 pub const COMPUTE_QUEUE_LAST_LIGHT: u32 = 54;
@@ -133,7 +133,7 @@ pub const fn compute(id: u32) -> (u32, &'static str, &'static Layout) {
         COMPUTE_ATMOS_FROXEL => (SHADER_ATMOS_FROXEL, "froxel_cs", &FROXEL_LAYOUT),
         COMPUTE_QUEUE_CORNERS => (SHADER_QUEUE_CORNERS, "queue_cs", &LATTICE_WALK_LAYOUT),
         COMPUTE_QUEUE_CORNERS_PARKED => (
-            SHADER_QUEUE_CORNERS,
+            SHADER_QUEUE_CORNERS_PARKED,
             "queue_parked_cs",
             &LATTICE_WALK_LAYOUT,
         ),
@@ -196,7 +196,7 @@ pub const fn compute(id: u32) -> (u32, &'static str, &'static Layout) {
             &LIGHT_LATTICE_WALK_LAYOUT,
         ),
         COMPUTE_QUEUE_LIGHT_CORNERS_PARKED => (
-            SHADER_QUEUE_LIGHT_CORNERS,
+            SHADER_QUEUE_LIGHT_CORNERS_PARKED,
             "queue_parked_cs",
             &LIGHT_LATTICE_WALK_LAYOUT,
         ),
@@ -213,7 +213,7 @@ pub const fn compute(id: u32) -> (u32, &'static str, &'static Layout) {
         ),
         COMPUTE_QUEUE_SAMPLES => (SHADER_QUEUE_SAMPLES, "queue_cs", &LATTICE_WALK_LAYOUT),
         COMPUTE_QUEUE_SAMPLES_PARKED => (
-            SHADER_QUEUE_SAMPLES,
+            SHADER_QUEUE_SAMPLES_PARKED,
             "queue_parked_cs",
             &LATTICE_WALK_LAYOUT,
         ),
@@ -223,14 +223,14 @@ pub const fn compute(id: u32) -> (u32, &'static str, &'static Layout) {
             "queue_last_cs",
             &LATTICE_LAST_LAYOUT,
         ),
-        COMPUTE_QUEUE_PARKED => (SHADER_QUEUE, "queue_parked_cs", &QUEUE_LAYOUT),
+        COMPUTE_QUEUE_PARKED => (SHADER_QUEUE_PARKED, "queue_parked_cs", &QUEUE_LAYOUT),
         COMPUTE_QUEUE_LIGHT_SAMPLES => (
             SHADER_QUEUE_LIGHT_SAMPLES,
             "queue_cs",
             &LIGHT_LATTICE_WALK_LAYOUT,
         ),
         COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED => (
-            SHADER_QUEUE_LIGHT_SAMPLES,
+            SHADER_QUEUE_LIGHT_SAMPLES_PARKED,
             "queue_parked_cs",
             &LIGHT_LATTICE_WALK_LAYOUT,
         ),
@@ -244,7 +244,11 @@ pub const fn compute(id: u32) -> (u32, &'static str, &'static Layout) {
         COMPUTE_LIGHT_REC_DRAW => (SHADER_REC_DRAW, "light_rec_draw_cs", &REC_LAYOUT),
         COMPUTE_LIGHT_REC_HITS => (SHADER_LIGHT_REC_HITS, "rec_hits_cs", &LIGHT_REC_HITS_LAYOUT),
         COMPUTE_QUEUE_LIGHT => (SHADER_QUEUE_LIGHT, "queue_cs", &LIGHT_QUEUE_LAYOUT),
-        COMPUTE_QUEUE_LIGHT_PARKED => (SHADER_QUEUE_LIGHT, "queue_parked_cs", &LIGHT_QUEUE_LAYOUT),
+        COMPUTE_QUEUE_LIGHT_PARKED => (
+            SHADER_QUEUE_LIGHT_PARKED,
+            "queue_parked_cs",
+            &LIGHT_QUEUE_LAYOUT,
+        ),
         COMPUTE_QUEUE_LAST_LIGHT => (
             SHADER_QUEUE_LAST_LIGHT,
             "queue_last_cs",

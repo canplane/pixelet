@@ -91,6 +91,15 @@ The line runs between the world's state and its drawing:
   the light's passes read: its gap is whole texels summed in integers, times
   one word the host rounds (`light::band_texels2`, `W_BAND_SCALE`;
   tests/light.rs `every_pass_bands_a_tile_alike`).
+
+  > Since 2026-11-16: the user ruled that a level of detail need not agree
+  > across pipelines. The eye's zoom, which the walks ask (walk_node.wgsl
+  > `ask_range`) and record_draw.wgsl works out again for an entry's freshness
+  > (record.wgsl `asked_near`), stays in floats in each: a node within an ulp
+  > of a zoom's edge is drawn a zoom off, or walked again, while the eye stands
+  > there. What must hold is that freshness is worked out from the node and the
+  > eye alone, so no drawn result feeds it back; where agreeing costs nothing it
+  > may agree, but no frame's time is spent on it.
 - **What an edit lands on is decided once and shared as cells.** A click or
   an edit resolves to integer cells (Morton, zoom) on the machine where it is
   made, and those cells, not the pointer, go to the others; no machine casts

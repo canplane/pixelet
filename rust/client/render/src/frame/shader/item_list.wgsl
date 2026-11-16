@@ -6,17 +6,18 @@
 // it take only those. A run parks no more items than it has, so the list's room is the run's
 // count of items (`item_cnt`), and every count read here is held to it.
 
-/// The next item for a walk over the node cache to take: of the run's, or, in the `parked`
-/// walk, of those the first parked. It is `NONE` past the list.
-fn next_item(parked: bool) -> u32 {
-  if (parked) {
-    return parked_item(take_below(QUEUE_NEXT_PARKED, in_cap(load(QUEUE_PARKED), item_cnt())));
-  }
+/// The next of the run's items for the first walk to take. It is `NONE` past the list.
+fn next_item() -> u32 {
   let k = take_below(QUEUE_NEXT, item_cnt());
   if (k == NONE) {
     return NONE;
   }
   return item_at(k);
+}
+
+/// The next item the first walk parked for the second walk to take. It is `NONE` past the list.
+fn next_parked() -> u32 {
+  return parked_item(take_below(QUEUE_NEXT_PARKED, in_cap(load(QUEUE_PARKED), item_cnt())));
 }
 
 /// The next parked item for the last walk, the one that asks the world, to take. It is `NONE`

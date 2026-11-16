@@ -31,19 +31,21 @@ fn hole_px(item: u32) -> vec2<u32> {
   return hole_at(item);
 }
 
-/// The next item for a walk over the node cache to take, or `NONE` where it takes no more. The
-/// first walk takes the observer's holes, and the `parked` takes the rays the first parked.
-/// Each count is held to its list's room.
-fn next_item(parked: bool) -> u32 {
-  if (parked) {
-    return parked_item(take_below(QUEUE_NEXT_PARKED, in_cap(load(QUEUE_PARKED), POOL_CAP)));
-  }
+/// The next of the observer's holes for the first walk to take, or `NONE` where it takes no
+/// more. The count is held to the list's room.
+fn next_item() -> u32 {
   let at = holes_at();
   let k = take_below(QUEUE_NEXT, in_cap(beams[at], holes_cap()));
   if (k == NONE) {
     return NONE;
   }
   return beams[at + 1u + k];
+}
+
+/// The next ray the first walk parked for the second walk to take, or `NONE` where it takes no
+/// more. The count is held to the pool's room.
+fn next_parked() -> u32 {
+  return parked_item(take_below(QUEUE_NEXT_PARKED, in_cap(load(QUEUE_PARKED), POOL_CAP)));
 }
 
 /// Place `k` in the pool as an item, or `NONE`.

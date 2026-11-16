@@ -43,10 +43,10 @@ open -g -a Safari http://127.0.0.1:<port>/probe.html
   again and probe the rest with `?only=`.
 - A module's or a pipeline's line without `ok`, and `[probe] device lost`, is a
   refusal.
-- A module's name starts with its number (`70-queue_walk`). `?only=<prefix>,…`
-  probes the names that start so. `?bisect=<name>` finds the line a device
-  refuses, `?from=` and `?to=` narrowing it. `?src=<end of a path>` probes a
-  shader recorded under an experiment of `doc/`.
+- A module's name starts with its number (`70-queue_walk.first`).
+  `?only=<prefix>,…` probes the names that start so. `?bisect=<name>` finds the
+  line a device refuses, `?from=` and `?to=` narrowing it. `?src=<end of a
+  path>` probes a shader recorded under an experiment of `doc/`.
 - Stop the server when it has ended.
 
 ## The S23
