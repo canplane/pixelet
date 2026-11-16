@@ -3,7 +3,7 @@
 // This is the C ABI of xpute's runtime linked into the app beside its guest,
 // for an app in C, Objective-C or Swift; the app's native library exports it
 // (xpute-runtime-native `native_abi!`). The runtime runs on the guest's
-// thread, its event loop running the guest's link, and carries the UI's calls
+// thread, its event loop serving the guest's link, and carries the UI's calls
 // to it: the UI's methods on the guest's objects (`xpute_post`), its answers
 // to the methods of the objects it implements (`xpute_answer`), and a batch of
 // what the runtime sends the UI, handed over on a notify (`xpute_take`). Every

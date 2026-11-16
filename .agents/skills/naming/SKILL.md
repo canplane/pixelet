@@ -84,7 +84,6 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
   | a frame's word naming its target handle and method | its `cmd` | vec, vector, opcode |
   | a function of an interface the other side implements (the UI calls the core's exports, the guest its imports) | a method | command, hostcall, system call, hypercall |
-  | what a side does with an interface whose methods the other side calls over the link (the guest its exports, the host and the UI the imports) | it implements it, its implementation; what installs one on the link is `mount` (`mount_text`, `Mount`) | serve, server |
   | a method answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant` (`Quadrant::new`) | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |

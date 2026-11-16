@@ -14,9 +14,11 @@ floating-point contraction (`-std=c++20 -fno-exceptions -fno-rtti
 -ffp-contract=off`). A fused multiply-add rounds once where Rust and
 JavaScript round twice, so contraction would part the C++'s math from theirs.
 
-A failed check of libc++'s is a bug on every target: `xpute.hpp` opens by
-defining libc++'s `_LIBCPP_VERBOSE_ABORT`, so a file includes it before any
-other header, or is compiled with `-include xpute.hpp`.
+A failed check in libc++'s headers is a bug on every target: `xpute.hpp`
+opens by defining libc++'s `_LIBCPP_VERBOSE_ABORT`, so a file includes it
+before any other header, or is compiled with `-include xpute.hpp`. A failed
+check inside libc++'s compiled library is a bug in a module and aborts a
+native guest's process.
 
 ## The guest's exports
 

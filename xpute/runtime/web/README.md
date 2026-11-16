@@ -42,8 +42,8 @@ run(link, {
 ```
 
 Each log record the worker writes is told the page too (`Log`), which writes
-nothing of it again. The host reads the guest's memory through a view made at each access, so
-a growth of the module's memory detaches nothing.
+nothing of it again. The host reads the guest's memory through a view made at
+each access, so a growth of the module's memory detaches nothing.
 
 ## The page
 

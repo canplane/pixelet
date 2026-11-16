@@ -2,9 +2,9 @@
 
 //! What both of the GPU's sides take: the stream's words, each op's and the
 //! enumerations they carry (`spec`, `enums`, from spec/gpu/), the
-//! addresses a stream's records hold (`addr`), a handle's slot (`handle`), what a
-//! guest asks of its GPU (`GpuAsk`) and the settings its program chooses for the GPU's host (`GpuConfig`), as
-//! @pxl/gpu/link has them.
+//! addresses a stream's records hold (`addr`), a handle's slot (`handle`),
+//! what a guest asks of its GPU (`GpuAsk`) and the settings its program
+//! chooses for the GPU's host (`GpuConfig`), as @pxl/gpu/link has them.
 
 #[path = "api.spec.rs"]
 pub mod spec;
