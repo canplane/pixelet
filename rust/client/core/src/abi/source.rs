@@ -20,27 +20,26 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 DECLARE => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let min_zoom = r_.u32(0)?;
-                    let formats = r_.arr::<u32>(4)?;
-                    let shards = r_.list(12, 8, 4).and_then(|(b, n)| {
+                    let min_zoom = args_.u32(0)?;
+                    let formats = args_.arr::<u32>(4)?;
+                    let shards = args_.list(12, 8, 4).and_then(|(b, n)| {
                         (0..n)
-                            .map(|i| r_.str(b + i * 8).map(str::to_owned))
+                            .map(|i| args_.str(b + i * 8).map(str::to_owned))
                             .collect::<Result<Vec<_>, _rt::Errno>>()
                     })?;
                     match self.0.declare(min_zoom, formats, shards) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -53,5 +52,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

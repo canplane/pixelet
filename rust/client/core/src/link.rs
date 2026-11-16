@@ -12,10 +12,12 @@ mod export;
 mod gpu;
 pub mod layout;
 mod life;
+mod param;
 
 use crate::abi;
 use crate::domain::layer::object::repository;
 use crate::domain::scene::character::surface::character_surface_close;
+use crate::domain::scene::rate;
 use crate::domain::setting::{on_settings_set_aside, settings_open};
 use crate::domain::view::demand;
 use crate::frame;
@@ -90,17 +92,20 @@ pub fn boot() {
     frame::boot();
 }
 
-/// Starts an entry (xpute-guest link `boot`, `recv`): its budget.
+/// Starts an entry (xpute-guest link `boot`, `recv`): its budget, on the
+/// frame's target interval (rate.rs).
 pub fn enter() {
-    sched::begin();
+    let (_, target_ms) = rate::pace_ms();
+    sched::begin(target_ms);
 }
 
 /// Ends an entry, as xpute's link runs it once the due answers have run, and
 /// again until it leaves no work (xpute-guest link `leave`). Each run reads
 /// what the GPU did, polls the core's tasks, and answers that work is left
 /// while one is ready. With none ready, it hands the request scheduler's
-/// events on, arms the next pump, flushes the GPU's stream and posts to the
-/// UI what changed, and answers whether any of that readied a task.
+/// events on, arms the next pump, flushes the GPU's stream where the host
+/// admits a flush and posts to the UI what changed, and answers whether any of
+/// that readied a task.
 pub fn end() -> bool {
     // A device loss, which the host wrote into the device's block, is read
     // before the tasks run.
@@ -108,11 +113,16 @@ pub fn end() -> bool {
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
-    // The device finished an image or a pipeline, and a frame must take it
-    // in.
-    if renderer::complete() {
+    // The device finished an image, a pipeline or the atmosphere's measures,
+    // and a frame must take it in, or the room a write put off waits for is
+    // back. Both are taken, each once. A read the profiler takes is taken
+    // here, and asks for no frame.
+    let complete = renderer::complete();
+    let retry = api::take_retry();
+    if complete || retry {
         invalidate();
     }
+    renderer::take_reads();
     executor::poll();
     if executor::pending() {
         return true;

@@ -15,7 +15,11 @@ constexpr double NS_PER_MS = 1e6;
 }
 
 double now() noexcept {
-    return static_cast<double>(or_bug(abi::clocks::monotonic_clock::now(), Errno::eproto)) / NS_PER_MS;
+    return ms(or_bug(abi::clocks::monotonic_clock::now(), Errno::eproto));
+}
+
+double ms(abi::clocks::monotonic_clock::Mark mark) noexcept {
+    return static_cast<double>(mark) / NS_PER_MS;
 }
 
 std::uint64_t duration(double ms) noexcept {

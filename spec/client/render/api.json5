@@ -32,7 +32,7 @@
     },
     UPLOAD_CHUNK_SZ: {
       $value: 1048576,
-      $description: "The chunk the host stages buffer writes in, each mapped once and reused: a\nmesh, the largest write a frame makes, is about a MiB, and a larger write\ntakes a chunk of its own.",
+      $description: "The chunk the host stages buffer and texture writes in, each mapped once and\nreused, the belt holding one more than FRAME_LATENCY: a mesh, the largest write\na frame makes, is about a MiB. A larger write goes on across chunks. The core\nadmits a write that may wait only as far as the belt's free chunks hold\n(pxl-gpu-guest stream.rs `stage`); for one that cannot wait, a host short of\nchunks makes one more for the run and lets it go once it is back.",
     },
     POWER: {
       $value: "high-performance",

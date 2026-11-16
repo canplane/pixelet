@@ -9,13 +9,14 @@ import ExpoModulesCore
 import QuartzCore
 
 /// This tells the GPU's host of each display frame (`pxl_gpu_vsync`), from a
-/// display link on the main thread.
+/// display link on the main thread, with how long ago the frame started: the
+/// link's `timestamp` is on `CACurrentMediaTime()`'s clock.
 final class Vsync: NSObject {
   private var link: CADisplayLink?
 
   func start() {
     DispatchQueue.main.async {
-      self.link = CADisplayLink(target: self, selector: #selector(self.frame))
+      self.link = CADisplayLink(target: self, selector: #selector(self.frame(_:)))
       self.link?.add(to: .main, forMode: .common)
     }
   }
@@ -27,8 +28,8 @@ final class Vsync: NSObject {
     }
   }
 
-  @objc private func frame() {
-    pxl_gpu_vsync()
+  @objc private func frame(_ link: CADisplayLink) {
+    pxl_gpu_vsync(UInt64(max(0, (CACurrentMediaTime() - link.timestamp) * 1e9)))
   }
 }
 

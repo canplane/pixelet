@@ -65,7 +65,7 @@ use pxl_gpu_guest::abi::vsync;
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::clock::now;
+use xpute_guest::clock::{self, now};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -281,7 +281,7 @@ pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
 }
 
 static REFUSED: Global<Refused> = Global::new();
-/// When the last frame ran, and whether it moved.
+/// When the last drawn frame started, its vsync's mark, and whether it moved.
 static LAST: Global<Option<(f64, bool)>> = Global::new();
 
 /// The frames that did not run since boot, by why (`frame_task`): the GPU
@@ -298,10 +298,14 @@ pub(crate) fn refused_frames() -> Refused {
 
 /// The frame runs as one task because its parts must run in order, and
 /// nothing may rely on the order in which the executor runs tasks. It waits
-/// until a frame is asked for, then for vsyncs, each measuring the display
-/// (sys/sched/display.rs), until the frame's target interval (rate.rs) has
-/// passed since the last frame, within half a display interval, and runs the
-/// world's frame.
+/// until a frame is asked for, then for vsyncs, each answering its frame's
+/// start, which measures the display (sys/sched/display.rs), until one is due
+/// by the frame's target interval since the last frame's start, run or
+/// refused (rate.rs `is_due`). That start begins the frame's budget
+/// (sys/sched.rs `begin_frame`), and the world's frame runs; once it has run,
+/// the entry's tasks get their share (`end_frame`). A gap across a frame that
+/// ran past a vsync is a whole number of the display's intervals, which the
+/// display's low quartile reads past; a wait for an ask is not back to back.
 #[embassy_executor::task]
 async fn frame_task() {
     loop {
@@ -309,19 +313,15 @@ async fn frame_task() {
             display::idle();
         }
         sched::invalidated().await;
-        loop {
-            vsync::next().await.or_bug(Errno::EPROTO);
-            let at = now();
+        let (at, display_ms, target_ms) = loop {
+            let at = clock::ms(vsync::next().await.or_bug(Errno::EPROTO));
             display::answered(at);
-            let display_ms = display::interval_ms();
-            let target_ms = f64::from(rate::interval()) * display_ms;
-            if LAST
-                .get(|| None)
-                .is_none_or(|(last, _)| at - last >= target_ms - display_ms / 2.0)
-            {
-                break;
+            let (display_ms, target_ms) = rate::pace_ms();
+            if rate::is_due(at - sched::frame_at(), (display_ms, target_ms)) {
+                break (at, display_ms, target_ms);
             }
-        }
+        };
+        sched::begin_frame(at, target_ms);
         // A frame whose stream the host still holds, or that the GPU cannot
         // take without blocking (`pxl_gpu_guest::admit::frame`), does not
         // run, is counted by why, and asks for the next, so the renderer is
@@ -339,20 +339,23 @@ async fn frame_task() {
             invalidate();
             continue;
         }
-        run();
+        run(at, display_ms, target_ms);
+        sched::end_frame();
         clipmap::fill_share();
     }
 }
 
-/// Runs the world's frame in its order: the effects, the tick, the requests'
-/// pump and the stage. It steps the world by the time since the last frame,
-/// and the frame is moving where it asked for the next. The frame rate then
-/// judges a moving frame that does not start motion by its gap and its cost,
-/// the GPU's busy time where a read timed it and the frame's own.
-fn run() -> TickReport {
+/// Runs the world's frame, which started at `at`, paced on a display interval
+/// of `display_ms` to a target of `target_ms`, in its order: the effects, the
+/// tick, the requests' pump and the stage. It steps the world by the gap since
+/// the last drawn frame's start, and the frame is moving where it asked for
+/// the next. The frame rate then judges a moving frame that does not start
+/// motion by its gap and its cost, the GPU's busy time where a read timed it
+/// and the frame's own.
+fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
     let t0 = now();
     let last = *LAST.get(|| None);
-    let gap_ms = last.map_or(0.0, |(at, _)| t0 - at);
+    let gap_ms = last.map_or(0.0, |(last_at, _)| at - last_at);
     let delta = gap_ms / 1000.0;
     set_credit_cnt(CREDIT_CNT);
     text_drop_unread();
@@ -368,7 +371,6 @@ fn run() -> TickReport {
     request::declare(Stream::Asset, loader::load_wants());
     pump();
     let moving = sched::is_invalid();
-    let display_ms = display::interval_ms();
     let pace = Pace {
         gap_ms,
         display_ms,
@@ -389,14 +391,15 @@ fn run() -> TickReport {
     set_renderer_frame(&frame);
     perf_frame(CpuSample {
         tick: report,
+        gap_ms,
         refresh_ms: display_ms,
-        paced_ms: gap_ms,
+        paced_ms: target_ms,
         settled: !moving,
         effects_ms,
         effects,
         stage_ms: end - after_tick,
     });
-    LAST.set(Some((t0, moving)));
+    LAST.set(Some((at, moving)));
     report
 }
 

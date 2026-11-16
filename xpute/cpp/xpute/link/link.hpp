@@ -115,22 +115,21 @@ struct Packet {
 // A method's args. None is no packet.
 using Args = std::optional<Packet>;
 
-// Return data, owned until it is written. None is no packet.
+// A later answer's return data, written as its frame is laid. None is no
+// packet.
 using Data = std::optional<Packet>;
 
-// What a method answers: its result, a status, and its return data, its
-// value, written once its args are read.
-struct Reply {
-    std::int32_t result;
-    Data data = std::nullopt;
-};
-
 // An object a side implements: given a method, the request's tag, for a later
-// answer (`task_return`), and the args, it answers.
+// answer (`task_return`), its args (`args`, empty for none) and the writer of
+// its answer's value (`ret`), it answers its result, a status (link.ts
+// `LinkObject`). The reader and the writer are over the frame the request
+// came in, so a method that answers a value writes it once its args are
+// read, starting the packet (`Lower::start`), and one that writes none
+// answers no packet.
 class Object {
   public:
     virtual ~Object() = default;
-    virtual Reply call(Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args) = 0;
+    virtual std::int32_t call(Method m, Tag tag, Lift args, Lower &ret) = 0;
 };
 
 // What hears a sent method's answer: its result, and a copy of its return
@@ -188,7 +187,9 @@ struct Layout {
 // its own box and crosses by its own function: the guest lays in its outbox
 // and crosses by `link_out`. It takes the other side's frame where that side
 // laid it (`recv`), and runs the answers due when its owner says the work at
-// hand is done (`run_due`): the guest as an entry ends.
+// hand is done (`run_due`): the guest as an entry ends. A later answer this
+// side gives while it is crossing is written then and laid with the answers
+// due, as xpute-link `link.rs` `Side` holds it.
 class Side {
   public:
     Side(std::uint64_t (*out_box)(Layout), std::int32_t (*cross)(std::uint64_t)) noexcept : out_box_(out_box), cross_(cross) {}
@@ -251,18 +252,22 @@ class Side {
 
     // Answers the request `t`, whose method answered EINPROGRESS, with
     // `result` and its return data, as the component model's `task.return`.
-    // A later answer is found by its tag alone.
+    // A later answer is found by its tag alone. While this side is crossing,
+    // its packet is written now and laid after the work at hand (`run_due`);
+    // a packet past the cap is answered EMSGSIZE with no data, as one laid at
+    // once is.
     void task_return(Tag t, std::int32_t result, const Data &data);
 
     // The frame the other side laid at `at`: a later answer, made due, or a
     // method, run by its object, its answer laid in the frame it came in.
     std::int32_t recv(std::uint64_t at);
 
-    // Runs the answers due, those made due while they run too.
+    // Lays the later answers given while crossing, then runs the answers
+    // due, those made due while they run too.
     void run_due();
 
     // Whether an answer is due.
-    bool has_due() const noexcept { return !due_.empty(); }
+    bool has_due() const noexcept { return !due_.empty() || !completions_.empty(); }
 
   private:
     // An answer due: what hears it, its result and its return data.
@@ -272,8 +277,16 @@ class Side {
         std::optional<std::vector<std::uint8_t>> data;
     };
 
-    Reply run(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args);
-    Result<Handle> opened(std::optional<std::span<const std::uint8_t>> args);
+    // A later answer given while this side is crossing: its request, result
+    // and packet, written.
+    struct Completion {
+        Tag tag;
+        std::int32_t result;
+        std::optional<std::vector<std::uint8_t>> pkt;
+    };
+
+    std::int32_t run(Handle h, Method m, Tag tag, Lift args, Lower &ret);
+    Result<Handle> opened(Lift &args);
     Tag tag() noexcept;
     Result<void> lay(std::uint64_t at, Frame words, const Args &pkt);
     std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> out(Tag tag, Handle h, Method m, bool res, std::int32_t result, const Args &pkt);
@@ -302,6 +315,8 @@ class Side {
     std::map<Tag, std::function<void()>> cancels_;
     // The answers due, run after the work at hand.
     std::deque<Due> due_;
+    // The later answers given while crossing, laid after the work at hand.
+    std::deque<Completion> completions_;
 };
 
 // The URI of names alone, as a resource's (package, resource).

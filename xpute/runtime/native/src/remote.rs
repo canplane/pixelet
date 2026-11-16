@@ -55,9 +55,7 @@ use xpute_kit::wire::xtp::{MAX_PKT_SZ, PacketWriter};
 use xpute_link::abi::types::Token;
 use xpute_link::frame::HDR_SZ;
 use xpute_link::resource::Table;
-use xpute_link::{
-    DROP, Handle, Lift, Lower, Method, OPEN, Object, Packet, ROOT, Reply, Tag, store_uri,
-};
+use xpute_link::{DROP, Handle, Lift, Lower, Method, OPEN, Object, Packet, ROOT, Tag, store_uri};
 
 use crate::event_loop::post_task;
 use crate::life;
@@ -181,14 +179,14 @@ fn tell(ui: Handle, cnt: u32, write: impl Fn(&mut PacketWriter)) {
 
 /// Sends `ui` the method `m` of its object `h`, which it answers later by
 /// `tag`, and tells it the guest's cancel of it.
-fn forward(ui: &Ui, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+fn forward(ui: &Ui, h: Handle, m: Method, tag: Tag, args: Lift) -> i32 {
     let u = ui.h;
     tell(u, 5, |w| {
         w.u32(Some(2))
             .u32(Some(h))
             .u32(Some(m))
             .u32(Some(tag))
-            .array::<u8>(args);
+            .array::<u8>(args.pkt());
     });
     ui.pending.borrow_mut().insert(tag);
     side().on_cancel(
@@ -199,7 +197,7 @@ fn forward(ui: &Ui, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Repl
             });
         }),
     );
-    Reply::from(Errno::EINPROGRESS as i32)
+    Errno::EINPROGRESS as i32
 }
 
 /// What stands for one of the UI's named interfaces on the link: each method
@@ -209,7 +207,7 @@ struct Named {
 }
 
 impl Object for Named {
-    fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+    fn call(&self, m: Method, tag: Tag, args: Lift, _: &mut Lower) -> i32 {
         let ui = ui().or_bug(Errno::ENOTCONN);
         forward(&ui, self.h, m, tag, args)
     }
@@ -225,10 +223,10 @@ struct Opened {
 }
 
 impl Object for Opened {
-    fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+    fn call(&self, m: Method, tag: Tag, args: Lift, _: &mut Lower) -> i32 {
         match self.ui.upgrade() {
             Some(ui) => forward(&ui, self.h, m, tag, args),
-            None => Reply::from(Errno::ECANCELED as i32),
+            None => Errno::ECANCELED as i32,
         }
     }
 }

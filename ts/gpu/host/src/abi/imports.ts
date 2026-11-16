@@ -9,5 +9,6 @@ import type { Handle } from "@xpute/link/link.ts";
  * handle, one of resources alone by an opener at a prefix. */
 export const IMPORTS: readonly (readonly [string, Handle])[] = [
   ["pxl:gpu/gpu", 0x54bd98],
+  ["xpute:clocks/monotonic-clock", 0x73f703],
   ["pxl:gpu/vsync", 0x51cb2a],
 ];

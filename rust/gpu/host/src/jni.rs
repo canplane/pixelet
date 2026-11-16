@@ -52,7 +52,8 @@ pub unsafe fn bind(
 /// String)` hear the host's state from the thread that tells it, attached to
 /// the VM for good as a daemon (`native::state_on`), `state(): String?`, the
 /// host's state now (`native::state`), `surfaceBind(handle: Int, surface:
-/// Surface): Int` (`bind`), `surfaceUnbind(handle: Int)` and `vsync()`.
+/// Surface): Int` (`bind`), `surfaceUnbind(handle: Int)` and `vsync(ageNs:
+/// Long)`.
 #[macro_export]
 macro_rules! jni_abi {
     ($($jni:tt)+) => {
@@ -137,8 +138,9 @@ macro_rules! jni_abi {
         extern "system" fn Java_me_plei_pixelet_gpu_Gpu_vsync(
             _env: *mut $crate::jni::sys::JNIEnv,
             _this: $crate::jni::sys::jobject,
+            age_ns: $crate::jni::sys::jlong,
         ) {
-            pxl_gpu_vsync();
+            pxl_gpu_vsync(age_ns.max(0) as u64);
         }
     };
 }

@@ -4,12 +4,10 @@
 
 import type { ErrorCode } from "@xpute/host/abi/fs/types.enum.ts";
 import {
-  ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
-import { Lift } from "@xpute/link/cabi.ts";
 import {
   type Callee,
   ComponentError,
@@ -35,14 +33,12 @@ function object(
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, tag, args, _ret) {
       try {
         switch (m) {
           case APPLY: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             const stop = new AbortController();
-            implementation.apply(load_Lent(r_, 0), stop.signal).then(
+            implementation.apply(load_Lent(args, 0), stop.signal).then(
               () => {
                 const v = { tag: "ok" } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };

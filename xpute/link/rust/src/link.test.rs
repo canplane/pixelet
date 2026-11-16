@@ -23,20 +23,21 @@ struct Implementation {
 }
 
 impl Object for Implementation {
-    fn call(&self, m: Method, tag: Tag, _: Option<&[u8]>) -> Reply {
+    fn call(&self, m: Method, tag: Tag, _: Lift, ret: &mut Lower) -> i32 {
         match m {
-            0 => Reply {
-                result: 0,
-                data: Some((4, Box::new(|w: &mut Lower| w.u32(0, 7)))),
-            },
+            0 => {
+                ret.start(4);
+                ret.u32(0, 7);
+                0
+            }
             1 => {
                 self.later.set(Some(tag));
-                Reply::from(Errno::EINPROGRESS as i32)
+                Errno::EINPROGRESS as i32
             }
-            _ => Reply {
-                result: 0,
-                data: Some((CAP as usize, Box::new(|_: &mut Lower| {}))),
-            },
+            _ => {
+                ret.start(CAP as usize);
+                0
+            }
         }
     }
 }

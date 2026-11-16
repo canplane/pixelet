@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use xpute_guest::abi::life;
 use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
-use xpute_link::{Handle, Method, NAMED, OPEN, Object, ROOT, Reply, Tag, uri};
+use xpute_link::{Handle, Lift, Lower, Method, NAMED, OPEN, Object, ROOT, Tag, uri};
 use xpute_runtime_native::listener;
 use xpute_runtime_native::native::Boot;
 
@@ -56,8 +56,8 @@ impl life::Guest for Guest {
 struct Obj;
 
 impl Object for Obj {
-    fn call(&self, _: Method, _: Tag, _: Option<&[u8]>) -> Reply {
-        Reply::from(0)
+    fn call(&self, _: Method, _: Tag, _: Lift, _: &mut Lower) -> i32 {
+        0
     }
 }
 

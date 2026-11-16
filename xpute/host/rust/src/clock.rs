@@ -4,10 +4,12 @@
 //! (wit/clocks/monotonic-clock.wit, wit/clocks/system-clock.wit), in
 //! nanoseconds, as clock.ts: the monotonic one from the host's start, its waits
 //! on its runtime's timers (runtime.rs `after`), and the system clock from the
-//! Unix epoch.
+//! Unix epoch. A platform's timestamp of an event takes its mark on the
+//! monotonic clock by `mark`, as a page's does by clock.ts's.
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use xpute_kit::status::errno::Errno;
@@ -18,14 +20,19 @@ use crate::abi::clocks::system_clock::{self, Instant as SystemInstant};
 use crate::runtime::runtime;
 
 /// Where the monotonic time counts from, as a page's `performance.now()`
-/// counts from its time origin.
-struct Monotonic {
-    origin: Instant,
+/// counts from its time origin: the host's first mount of the clocks.
+static ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+/// The monotonic clock's mark of `at`, in nanoseconds from `ORIGIN`.
+pub fn mark(at: Instant) -> u64 {
+    at.saturating_duration_since(*ORIGIN).as_nanos() as u64
 }
+
+struct Monotonic;
 
 impl monotonic_clock::Host for Monotonic {
     fn now(&self) -> Result<u64, Errno> {
-        Ok(self.origin.elapsed().as_nanos() as u64)
+        Ok(mark(Instant::now()))
     }
 
     /// Answers once `how_long` has passed; 0, at the loop's next pass. A wait
@@ -64,11 +71,7 @@ impl system_clock::Host for System {
 
 /// Mounts the clocks on `side`.
 pub fn mount(side: &'static Side) {
-    monotonic_clock::mount(
-        side,
-        Rc::new(Monotonic {
-            origin: Instant::now(),
-        }),
-    );
+    LazyLock::force(&ORIGIN);
+    monotonic_clock::mount(side, Rc::new(Monotonic));
     system_clock::mount(side, Rc::new(System));
 }

@@ -3,8 +3,9 @@
 //! What both of the GPU's sides take: the stream's words, each op's and the
 //! enumerations they carry (`spec`, `enums`, from spec/gpu/), the
 //! addresses a stream's records hold (`addr`), a handle's slot (`handle`),
-//! what a guest asks of its GPU (`GpuAsk`) and the settings its program
-//! chooses for the GPU's host (`GpuConfig`), as @pxl/gpu/link has them.
+//! how a host's staging belt packs a run's writes (`pack`), what a guest
+//! asks of its GPU (`GpuAsk`) and the settings its program chooses for the
+//! GPU's host (`GpuConfig`), as @pxl/gpu/link has them.
 
 #[path = "api.spec.rs"]
 pub mod spec;
@@ -14,6 +15,7 @@ pub mod enums;
 
 pub mod addr;
 pub mod handle;
+pub mod pack;
 
 /// This is what a guest asks of its GPU, as its program's data spec says, by
 /// WebGPU's names: the power preference, the features the device must have,
@@ -40,8 +42,9 @@ pub struct GpuConfig {
     /// (pxl-gpu-guest `admit::frame`), and a device's surface queues as
     /// many.
     pub frame_latency: u32,
-    /// This is the size of one chunk that buffer writes are staged through.
-    /// Choose it as large as one frame's writes; a larger write is staged
-    /// across several chunks.
+    /// This is the size of one chunk that buffer and texture writes are
+    /// staged through, of a belt that starts with one chunk more than the
+    /// frame latency. Choose it as large as one frame's writes; a larger
+    /// write is staged across several chunks.
     pub upload_chunk_sz: u32,
 }

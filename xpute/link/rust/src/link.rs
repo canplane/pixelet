@@ -79,9 +79,14 @@ pub type Method = u32;
 pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT, layout};
 
 /// An object a side implements: given a method, the request's tag, for a
-/// later answer (`task_return`), and the args, it answers.
+/// later answer (`task_return`), its args (`args`, empty for none) and the
+/// writer of its answer's value (`ret`), it answers its result, a status
+/// (link.ts `LinkObject`). The reader and the writer are over the frame the
+/// request came in, so a method that answers a value writes it once its args
+/// are read, starting the packet (`Lower::start`), and one that writes none
+/// answers no packet.
 pub trait Object {
-    fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply;
+    fn call(&self, m: Method, tag: Tag, args: Lift, ret: &mut Lower) -> i32;
 }
 
 /// How a request a side answers stops if its caller cancels it (`CANCEL`).
@@ -117,23 +122,6 @@ impl<T> Return<T> {
 
 /// What opens the object a URI names, given the handle it is issued.
 type Opener = dyn Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno>;
-
-/// What a method answers: its result, a status, and its return data, its
-/// value, written once its args are read.
-pub struct Reply {
-    pub result: i32,
-    pub data: Data,
-}
-
-impl From<i32> for Reply {
-    fn from(result: i32) -> Reply {
-        Reply { result, data: None }
-    }
-}
-
-/// Return data, owned until it is written: its fixed part's size, and what
-/// writes it (`Lower`). None is no packet.
-pub type Data = Option<(usize, Box<dyn Fn(&mut Lower)>)>;
 
 /// What hears a sent method's answer: its result, and a copy of its return
 /// data, which it owns.
@@ -201,9 +189,9 @@ type Prefix = (Handle, Vec<Token>, Rc<Opener>);
 /// crosses by `link_in`. It takes the other side's frame where that side laid
 /// it (`recv`), and runs the answers due when its owner says the work at hand
 /// is done (`run_due`): the guest as an entry ends, the host after each piece
-/// of work. A later answer this side gives while it is crossing, which only a
-/// host's thread can give as a page's microtasks never do, is written then
-/// and laid with the answers due.
+/// of work. A later answer this side gives while it is crossing is written
+/// then and laid with the answers due, as link.ts `End` and the C++ `Side`
+/// hold it.
 pub struct Side {
     layout: Cell<Option<Layout>>,
     /// The box this side lays its frames in.
@@ -417,7 +405,9 @@ impl Side {
     }
 
     /// The frame the other side laid at `at`: a later answer, made due, or a
-    /// method, run by its object, its answer laid in the frame it came in.
+    /// method, run by its object, its answer written in the frame it came in.
+    /// A request's packet past the cap is refused, EBADMSG; an answer past it
+    /// EMSGSIZE (link.ts `Side.recv`).
     pub fn recv(&self, at: u64) -> i32 {
         let cap = self.layout().cap;
         let f = Frame::at(at);
@@ -430,33 +420,38 @@ impl Side {
             }
             return 0;
         }
-        let reply = match pkt {
-            Ok(args) => self.run(f.handle, f.method, f.tag, args),
-            Err(e) => Reply::from(e as i32),
-        };
-        // The args are read: the answer goes in the frame they came in.
-        let data = reply
-            .data
-            .as_ref()
-            .map(|(n, w)| (*n, &**w as &dyn Fn(&mut Lower)));
-        let words = Frame {
-            res: true,
-            result: reply.result,
-            ..f
+        // The args and the answer lie in the frame's packet, read and written
+        // by address, the answer once the args are read.
+        let pkt_at = at + u64::from(HDR_SZ);
+        // SAFETY: the frame's bytes past its words, which only this side
+        // touches while it answers.
+        let mut w = unsafe { Lower::from_raw_parts(mem::ptr(pkt_at), (cap - HDR_SZ) as usize) };
+        let result = match pkt {
+            Ok(p) => {
+                let len = p.map_or(0, <[u8]>::len);
+                // SAFETY: as the writer's.
+                let args = unsafe { Lift::from_raw_parts(mem::ptr(pkt_at), len) };
+                self.run(f.handle, f.method, f.tag, args, &mut w)
+            }
+            Err(e) => e as i32,
         };
         // An answer past the cap is refused as a later one is (`out`).
-        match self.lay(at, words, Packet::Args(data)) {
-            Ok(()) => reply.result,
-            Err(e) => {
-                let refused = Frame {
-                    result: e as i32,
-                    ..words
-                };
-                self.lay(at, refused, Packet::Args(None))
-                    .or_bug(Errno::EMSGSIZE);
-                e as i32
-            }
-        }
+        let words = match w.finish() {
+            Ok(n) => Frame {
+                res: true,
+                result,
+                pkt_len: n as u32,
+                ..f
+            },
+            Err(e) => Frame {
+                res: true,
+                result: e as i32,
+                pkt_len: 0,
+                ..f
+            },
+        };
+        words.lay(at);
+        words.result
     }
 
     /// Lays the later answers given while crossing, then runs the answers
@@ -485,41 +480,42 @@ impl Side {
     }
 
     /// Runs `m` of `h`: the root's open or cancel, a drop, or an object's
-    /// method.
-    fn run(&self, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+    /// method (`Object::call`).
+    fn run(&self, h: Handle, m: Method, tag: Tag, args: Lift, ret: &mut Lower) -> i32 {
         match (h, m) {
             (ROOT, OPEN) => match self.opened(args) {
-                Ok(h) => Reply {
-                    result: 0,
-                    data: Some((4, Box::new(move |w: &mut Lower| w.u32(0, h)))),
-                },
-                Err(e) => Reply::from(e as i32),
+                Ok(h) => {
+                    ret.start(4);
+                    ret.u32(0, h);
+                    0
+                }
+                Err(e) => e as i32,
             },
-            (ROOT, CANCEL) => match args.ok_or(Errno::EBADMSG).and_then(|p| Lift::new(p).u32(0)) {
+            (ROOT, CANCEL) => match args.u32(0) {
                 Ok(t) => {
                     let stop = self.cancels.borrow_mut().remove(&t);
                     if let Some(stop) = stop {
                         stop();
                     }
-                    Reply::from(0)
+                    0
                 }
-                Err(e) => Reply::from(e as i32),
+                Err(e) => e as i32,
             },
             (_, DROP) => match self.objects.borrow_mut().remove(h) {
-                Some(_) => Reply::from(0),
-                None => Reply::from(Errno::EBADF as i32),
+                Some(_) => 0,
+                None => Errno::EBADF as i32,
             },
             // A named handle no interface is mounted under is no object
             // there; an issued one no longer held is a bad handle.
             _ if h & NAMED != 0 => {
                 let o = self.named.borrow().get(&h).cloned();
-                o.map_or(Reply::from(Errno::ENOENT as i32), |o| o.call(m, tag, args))
+                o.map_or(Errno::ENOENT as i32, |o| o.call(m, tag, args, ret))
             }
             _ => {
                 let o = self.objects.borrow().get(h).cloned();
                 match o {
-                    Some(o) => o.call(m, tag, args),
-                    None => Reply::from(Errno::EBADF as i32),
+                    Some(o) => o.call(m, tag, args, ret),
+                    None => Errno::EBADF as i32,
                 }
             }
         }
@@ -527,8 +523,8 @@ impl Side {
 
     /// Opens the object the args' URI names, by the opener of its longest
     /// matching mount, and issues its handle.
-    fn opened(&self, args: Option<&[u8]>) -> Result<Handle, Errno> {
-        let uri = load_uri(Lift::new(args.ok_or(Errno::EBADMSG)?), 0)?;
+    fn opened(&self, args: Lift) -> Result<Handle, Errno> {
+        let uri = load_uri(args, 0)?;
         let open = self
             .mounts
             .borrow()

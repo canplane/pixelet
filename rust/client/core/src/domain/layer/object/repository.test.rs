@@ -9,7 +9,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::{key_of, key_of_name};
 use xpute_golden::Golden;
 use xpute_link::abi::types::Lent;
-use xpute_link::{Lift, Method, Object, Reply, Tag, mem};
+use xpute_link::{Lift, Lower, Method, Object, Tag, mem};
 
 use super::*;
 use crate::sys::host::{answer, mount, set_clock};
@@ -267,14 +267,14 @@ thread_local! {
 struct Source;
 
 impl Object for Source {
-    fn call(&self, m: Method, t: Tag, args: Option<&[u8]>) -> Reply {
+    fn call(&self, m: Method, t: Tag, args: Lift, _: &mut Lower) -> i32 {
         assert_eq!(m, object::APPLY);
-        let lent = Lent::load(Lift::new(args.unwrap()), 0).unwrap();
+        let lent = Lent::load(args, 0).unwrap();
         // SAFETY: the batch the guest lent until the answer.
         let batch = unsafe { mem::read(lent.at, lent.len) };
         let writes = decode_writes(format::OBJECT_EDIT, batch).unwrap();
         SENT.set(Some((t, writes.len())));
-        Reply::from(Errno::EINPROGRESS as i32)
+        Errno::EINPROGRESS as i32
     }
 }
 

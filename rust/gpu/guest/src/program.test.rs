@@ -20,6 +20,7 @@ use std::fmt::Write as _;
 
 use pxl_gpu_link::addr;
 use pxl_gpu_link::enums::*;
+use pxl_gpu_link::pack::Pack;
 use pxl_gpu_link::spec::{buffer_usage as B, color_write, shader_stage as S, texture_usage as T};
 use xpute_golden::Golden;
 use xpute_link::mem;
@@ -48,6 +49,11 @@ const READBACK_AT: usize = 49152;
 
 /// The stream's words: as many as fit before the input.
 const STREAM_WORDS: usize = (INPUT_AT - RECS_AT) / 4;
+
+/// The host's belt: its chunks' size, and the frame latency, one chunk fewer
+/// than the belt holds.
+const CHUNK_SZ: u64 = 1 << 16;
+const FRAME_LATENCY: u32 = 2;
 
 /// The image `sampled_image` copies in: a 4×4 PNG.
 const IMAGE: &str = "89504e470d0a1a0a0000000d4948445200000004000000040806000000a9f19e7e0000003649444154789c55ca310d00300805d14f82809a685217adb35644e5302009073091c070cbcb311c3e6c22e3a31f15e8ddd50ed22d0d02f857163979b639650000000049454e44ae426082";
@@ -147,7 +153,9 @@ fn take(s: &mut Stream) -> Vec<u32> {
     let Buf::Free(words) = &mut s.buf else {
         panic!("the stream is out");
     };
-    core::mem::take(words)
+    let words = core::mem::take(words);
+    s.pack = Pack::new(CHUNK_SZ);
+    words
 }
 
 /// A program's turns, each its records with their addresses relative to the
@@ -173,7 +181,7 @@ fn run(p: &Program, mut gpu: Option<&mut pxl_gpu_host::GpuHost>, poll: &dyn Fn()
     };
     let block_at = mem::addr(&words[0]);
     let mut turns = Vec::new();
-    let mut stream = Stream::new(STREAM_WORDS);
+    let mut stream = Stream::new(STREAM_WORDS, CHUNK_SZ);
     (p.encode)(
         &mut Encoder::new(),
         &mut stream,
@@ -253,8 +261,8 @@ fn write() {
             pxl_gpu_host::Config {
                 preferred_format: wgpu::TextureFormat::Bgra8Unorm,
                 configure_at: pxl_gpu_host::ConfigureAt::Here,
-                frame_latency: 2,
-                upload_chunk_sz: 1 << 16,
+                frame_latency: FRAME_LATENCY,
+                upload_chunk_sz: CHUNK_SZ,
                 present_mode: wgpu::PresentMode::Fifo,
             },
             None,

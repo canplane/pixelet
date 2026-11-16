@@ -73,12 +73,15 @@ pub(crate) struct FrameSample {
     /// The interval from this frame to the next. It is not the world's step,
     /// which is capped at `MAX_STEP_S`.
     pub interval_ms: f64,
-    /// The display's measured interval (sys/sched/display.rs), and the gap
-    /// since the last frame, which the frame was paced at (frame.rs `run`).
+    /// The display's interval as the frame's pacing takes it
+    /// (domain/scene/rate.rs `display_ms`), and the frame's target interval,
+    /// which it was paced at (`target_ms`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     /// 1 when the frame asked for no next one.
     pub settled: f64,
+    /// The frame's entry's deadline, in ms from the entry's start
+    /// (sys/sched.rs `deadline_ms`).
     pub budget_ms: f64,
     /// The frame's measured parts.
     pub effects_ms: f64,
@@ -243,7 +246,7 @@ words!(WorstFrame, worst::WORDS,
 pub(crate) const GPU_SPAN_CNT: usize = GpuSpanName::ALL.len();
 pub(crate) const EFFECT_CNT: usize = EffectName::ALL.len();
 
-/// Whether the tick ran past the entry's budget.
+/// Whether the tick ran past its entry's deadline.
 pub(crate) fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms
 }

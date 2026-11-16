@@ -10,8 +10,13 @@
 //!   armed, by the timer task's one `monotonic-clock.wait-for` of xpute's, its
 //!   delay rounded up; an earlier time asked meanwhile arms the task again,
 //!   and the wait it lets go answers no one.
-//! - Each entry has a budget, from its start (`begin`, link.rs `enter`): `spent`
-//!   reads it, `run` spends it on a list once one item has done work, and
+//! - Each entry has a deadline (`Budget`): what the last frame's budget leaves
+//!   of it, and at least the content's share of that budget from the entry's
+//!   start (`begin`, link.rs `enter`). A frame takes the deadline again from
+//!   its own start (`begin_frame`), the visible phase leaves the content's
+//!   share unspent (`reserve`), and once the frame has run, what is left of
+//!   the entry gets that share from then on (`end_frame`). `spent` reads the
+//!   deadline, `run` spends it on a list once one item has done work, and
 //!   `yield_if_spent` leaves the entry once it is spent.
 
 pub(crate) mod display;
@@ -29,7 +34,7 @@ use xpute_guest::clock::{duration, now};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::sched::param::BUDGET_MS;
+use crate::sys::sched::param::{CONTENT_SHARE, MARGIN_SHARE};
 
 struct Sched {
     /// Whether a frame is asked for, and the frame task's waker.
@@ -39,8 +44,7 @@ struct Sched {
     /// task's waker.
     earliest: f64,
     timer_waker: Option<Waker>,
-    /// The entry's deadline.
-    deadline: f64,
+    budget: Budget,
 }
 
 static SCHED: Global<Sched> = Global::new();
@@ -51,7 +55,7 @@ fn sched() -> &'static mut Sched {
         frame_waker: None,
         earliest: f64::INFINITY,
         timer_waker: None,
-        deadline: f64::INFINITY,
+        budget: Budget::NONE,
     })
 }
 
@@ -130,13 +134,96 @@ async fn timer() {
     }
 }
 
-/// Starts the entry's budget.
-pub(crate) fn begin() {
-    sched().deadline = now() + BUDGET_MS;
+/// The entry's deadline, by one rule: with a frame's budget of `frame_ms`,
+/// the last frame's target interval less `MARGIN_SHARE`, it is what that
+/// budget leaves from the last frame's start, and at least `CONTENT_SHARE` of
+/// it from the entry's start, or from the frame's end once a frame has run.
+/// While `reserved`, the visible phase's, it ends `CONTENT_SHARE` of the
+/// budget sooner.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Budget {
+    /// When the entry started.
+    entry_at: f64,
+    /// When the last frame started, run or refused; -infinity before any.
+    frame_at: f64,
+    /// The frame's budget, in ms.
+    frame_ms: f64,
+    deadline: f64,
+    reserved: bool,
+}
+
+impl Budget {
+    /// No entry has started and no frame.
+    const NONE: Budget = Budget {
+        entry_at: 0.0,
+        frame_at: f64::NEG_INFINITY,
+        frame_ms: 0.0,
+        deadline: f64::INFINITY,
+        reserved: false,
+    };
+
+    fn begin(&mut self, entry_at: f64, target_ms: f64) {
+        self.entry_at = entry_at;
+        self.frame_ms = target_ms * (1.0 - MARGIN_SHARE);
+        self.deadline_from(entry_at);
+    }
+
+    fn begin_frame(&mut self, at: f64, target_ms: f64) {
+        self.frame_at = at;
+        self.frame_ms = target_ms * (1.0 - MARGIN_SHARE);
+        self.deadline_from(self.entry_at);
+    }
+
+    /// Takes the deadline by the rule, the content's share counted from
+    /// `from`.
+    fn deadline_from(&mut self, from: f64) {
+        self.deadline = (self.frame_at + self.frame_ms).max(from + CONTENT_SHARE * self.frame_ms);
+    }
+
+    /// When the budget is spent.
+    fn end(&self) -> f64 {
+        match self.reserved {
+            true => self.deadline - CONTENT_SHARE * self.frame_ms,
+            false => self.deadline,
+        }
+    }
+}
+
+/// Starts the entry's budget, on a frame target interval of `target_ms`.
+pub(crate) fn begin(target_ms: f64) {
+    sched().budget.begin(now(), target_ms);
+}
+
+/// A frame starts at `at`, on a target interval of `target_ms`, run or
+/// refused: the entry's deadline is taken again from it.
+pub(crate) fn begin_frame(at: f64, target_ms: f64) {
+    sched().budget.begin_frame(at, target_ms);
+}
+
+/// The frame has run: what is left of the entry gets the content's share
+/// from now, however far the frame ran past its deadline.
+pub(crate) fn end_frame() {
+    sched().budget.deadline_from(now());
+}
+
+/// When the last frame started, run or refused; -infinity before any.
+pub(crate) fn frame_at() -> f64 {
+    sched().budget.frame_at
+}
+
+/// Holds the content's share of the frame's budget back while `on`.
+pub(crate) fn reserve(on: bool) {
+    sched().budget.reserved = on;
+}
+
+/// The entry's deadline, in ms from its start.
+pub(crate) fn deadline_ms() -> f64 {
+    let b = sched().budget;
+    b.deadline - b.entry_at
 }
 
 pub(crate) fn spent() -> bool {
-    now() >= sched().deadline
+    now() >= sched().budget.end()
 }
 
 /// What `run` came to: the items it stepped, and whether the budget stopped
@@ -171,3 +258,7 @@ pub(crate) async fn yield_if_spent() {
         _ = wait_for(0).await;
     }
 }
+
+#[cfg(test)]
+#[path = "sched.test.rs"]
+mod test;

@@ -12,6 +12,7 @@
 
 #include "xpute/guest/link.hpp"
 #include "xpute/kit/status/error.hpp"
+#include "xpute/link/cabi.hpp"
 #include "xpute/link/link.hpp"
 
 namespace xpute::abi::life {
@@ -21,9 +22,10 @@ using ::xpute::Errno;
 using ::xpute::Result;
 using ::xpute::guest::mount_named;
 using ::xpute::link::Handle;
+using ::xpute::link::Lift;
+using ::xpute::link::Lower;
 using ::xpute::link::Method;
 using ::xpute::link::Object;
-using ::xpute::link::Reply;
 using ::xpute::link::Tag;
 } // namespace _rt
 
@@ -49,25 +51,25 @@ class Object_ final : public _rt::Object {
   public:
     explicit Object_(std::unique_ptr<Guest> implementation) noexcept : implementation_(std::move(implementation)) {}
 
-    _rt::Reply call(_rt::Method m_, [[maybe_unused]] _rt::Tag tag_, [[maybe_unused]] std::optional<std::span<const std::uint8_t>> args_) override {
+    std::int32_t call(_rt::Method m_, [[maybe_unused]] _rt::Tag tag_, [[maybe_unused]] _rt::Lift args_, [[maybe_unused]] _rt::Lower &ret_) override {
         switch (m_) {
         case HIDDEN: {
             _rt::Result<void> x_ = implementation_->hidden();
-            if (!x_) return _rt::Reply{static_cast<std::int32_t>(x_.error().errnum)};
-            return _rt::Reply{0};
+            if (!x_) return static_cast<std::int32_t>(x_.error().errnum);
+            return 0;
         }
         case SHOWN: {
             _rt::Result<void> x_ = implementation_->shown();
-            if (!x_) return _rt::Reply{static_cast<std::int32_t>(x_.error().errnum)};
-            return _rt::Reply{0};
+            if (!x_) return static_cast<std::int32_t>(x_.error().errnum);
+            return 0;
         }
         case ATTACHED: {
             _rt::Result<void> x_ = implementation_->attached();
-            if (!x_) return _rt::Reply{static_cast<std::int32_t>(x_.error().errnum)};
-            return _rt::Reply{0};
+            if (!x_) return static_cast<std::int32_t>(x_.error().errnum);
+            return 0;
         }
         default:
-            return _rt::Reply{static_cast<std::int32_t>(_rt::Errno::enosys)};
+            return static_cast<std::int32_t>(_rt::Errno::enosys);
         }
     }
 

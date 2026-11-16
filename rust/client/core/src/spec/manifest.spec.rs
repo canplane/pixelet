@@ -11,7 +11,7 @@
 /// grows it, so a full heap stops the core: the stack, the module's data, the fixed ranges, then the
 /// heap (sys/heap.rs).
 ///
-/// `fixed_sz`: the fixed ranges, `.fixed` (link/layout.rs), 147.68 MiB, which the compiler holds
+/// `fixed_sz`: the fixed ranges, `.fixed` (link/layout.rs), 147.71 MiB, which the compiler holds
 /// the ranges' sum under. In a module it begins on the page past the module's data, and on a
 /// device at the block's base; the heap begins on the page past it (sys/heap.rs).
 ///
@@ -21,7 +21,7 @@
 /// it at compile time (link/layout.rs `HEAP_FLOWS_SZ`).
 pub mod mem {
     pub const SZ: u32 = 536870912;
-    pub const FIXED_SZ: u32 = 154849280;
+    pub const FIXED_SZ: u32 = 154882048;
     pub const MIN_HEAP_SZ: u32 = 268435456;
 }
 

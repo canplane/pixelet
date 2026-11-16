@@ -18,8 +18,6 @@ import type { u32, u64 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
-import { log } from "@xpute/host";
-import { LEVEL_WARN } from "@xpute/host/abi/log/log.enum.ts";
 import * as gpu from "./abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "./abi/gpu.enum.ts";
 import {
@@ -132,23 +130,21 @@ export class WebGpu {
       this.report("missing");
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
-    const r = new GpuHost(
+    // A device the host holds as lost has written LOST into the block, and
+    // is let go; the guest asks for a device again.
+    const r: GpuHost = new GpuHost(
       d,
       () => this.side.mem,
       () => this.tell(this.settled),
+      () => {
+        if (this.host !== r) return;
+        this.host = null;
+        this.block = null;
+        this.tell(this.lost);
+        this.report("waiting");
+      },
       this.cfg,
     );
-    d.lost.then((info) => {
-      // Nothing here destroys the device, so every loss is the browser's;
-      // the host has written LOST into the block.
-      log(LEVEL_WARN, "gpu", `device lost (${info.reason}): ${info.message}`);
-      if (this.host !== r) return;
-      this.host = null;
-      this.block = null;
-      // The guest asks for a device again.
-      this.tell(this.lost);
-      this.report("waiting");
-    });
     this.canvases.forEach((canvas, handle) =>
       r.bind(handle, canvas.getContext("webgpu")!),
     );

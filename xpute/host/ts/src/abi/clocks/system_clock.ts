@@ -46,20 +46,14 @@ export interface Host {
 /** The object over `implementation`. */
 function object(implementation: Host): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, _tag, _args, ret) {
       try {
         switch (m) {
           case NOW: {
             const v = implementation.now();
-            return {
-              result: 0,
-              data: [
-                INSTANT_SZ,
-                (w) => {
-                  store_Instant(w, 0, v);
-                },
-              ],
-            };
+            ret.start(INSTANT_SZ);
+            store_Instant(ret, 0, v);
+            return 0;
           }
           default:
             return ERRNO_ENOSYS;

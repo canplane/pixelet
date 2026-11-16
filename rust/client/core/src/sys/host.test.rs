@@ -15,7 +15,7 @@ use xpute_guest::clock::duration;
 use xpute_guest::link::{init, recv};
 use xpute_kit::status::errno::Errno;
 use xpute_link::frame::HDR_SZ;
-use xpute_link::{Handle, Layout, Method, Object, Packet, Reply, Side, Tag};
+use xpute_link::{Handle, Layout, Lift, Lower, Method, Object, Packet, Side, Tag};
 
 use crate::sys::heap::Heap;
 
@@ -43,16 +43,14 @@ static HEAP: Heap = Heap;
 struct Clock;
 
 impl Object for Clock {
-    fn call(&self, m: Method, _: Tag, _: Option<&[u8]>) -> Reply {
+    fn call(&self, m: Method, _: Tag, _: Lift, ret: &mut Lower) -> i32 {
         match m {
             NOW => {
-                let ns = NOW_NS.get();
-                Reply {
-                    result: 0,
-                    data: Some((8, Box::new(move |w| w.u64(0, ns)))),
-                }
+                ret.start(8);
+                ret.u64(0, NOW_NS.get());
+                0
             }
-            _ => Reply::from(Errno::ENOSYS as i32),
+            _ => Errno::ENOSYS as i32,
         }
     }
 }

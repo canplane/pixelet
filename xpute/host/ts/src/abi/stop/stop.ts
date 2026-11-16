@@ -3,8 +3,7 @@
 // GENERATED from wit/stop (xpute-link-gen wit.rs)
 
 import type { u64 } from "@xpute/kit/abi/word.ts";
-import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
-import { Lift } from "@xpute/link/cabi.ts";
+import { ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import {
   type Callee,
   type Handle,
@@ -33,19 +32,17 @@ export interface Host {
 /** The object over `implementation`. */
 function object(implementation: Host): LinkObject {
   return {
-    call(m, tag, args) {
+    call(m, _tag, args, _ret) {
       try {
         switch (m) {
           case STOPPED: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
             implementation.stopped(
-              r_.i32(0),
-              r_.str(4),
-              r_.u32(12),
-              r_.u64(16),
-              r_.u64(24),
-              r_.case(32, 2) === 0 ? null : r_.str(36),
+              args.i32(0),
+              args.str(4),
+              args.u32(12),
+              args.u64(16),
+              args.u64(24),
+              args.case(32, 2) === 0 ? null : args.str(36),
             );
             return 0;
           }

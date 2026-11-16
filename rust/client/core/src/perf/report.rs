@@ -111,9 +111,12 @@ fn peaks(h: &HeapStat) -> RecordingSection {
 /// A frame's own measures (frame.rs `run`).
 pub(crate) struct CpuSample {
     pub tick: TickReport,
-    /// The display's measured interval, and the gap since the last frame,
-    /// which closes the interval before this one and which this frame was
-    /// paced at.
+    /// The gap since the last frame, which closes the interval before this
+    /// one.
+    pub gap_ms: f64,
+    /// The display's interval as the frame's pacing takes it
+    /// (domain/scene/rate.rs `display_ms`), and the frame's target interval,
+    /// which it was paced at (`target_ms`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     /// Whether this frame asked for no next one.
@@ -171,6 +174,6 @@ pub(crate) fn perf_frame(t: CpuSample) {
             perf_ms: own_ms,
             ..rec
         },
-        t.paced_ms,
+        t.gap_ms,
     );
 }

@@ -26,6 +26,7 @@ import { bug } from "@xpute/kit/status/bug.ts";
 import {
   ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
+  ERRNO_EMSGSIZE,
 } from "@xpute/kit/status/errno.spec.ts";
 import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
@@ -36,6 +37,7 @@ import {
   type Handle,
   Lift,
   load_uri,
+  Lower,
   type Memory,
   type Method,
   type Packet,
@@ -77,13 +79,39 @@ const ui = new (class extends End implements Memory {
   }
 })();
 
+/** No packet. */
+const NONE = new Uint8Array(0);
+
+/** The reader of each packet the runtime sends, and the writer of the answer
+ * the UI's end gives at once, which holds no value: every method the UI
+ * implements is an `async func` (xpute-runtime-native link.rs `init`), so a
+ * value written there is past its room, EMSGSIZE. */
+const args = new Lift(NONE);
+const ret = new Lower(NONE, 0);
+
+/** Hands the UI's end the frame the runtime sent, its packet `pkt`, and
+ * answers what the end answers (`End.input`). */
+function input(
+  tag: Tag,
+  h: Handle,
+  m: Method,
+  res: boolean,
+  result: i32,
+  pkt: U8Array | null,
+): i32 {
+  const p = pkt ?? NONE;
+  args.reset(p.buffer, p.byteOffset, p.length);
+  ret.reset(NONE.buffer, 0, 0);
+  return ui.input(tag, h, m, res, result, args, ret);
+}
+
 /** Each message of a batch by its kind, its first field
- * (xpute-runtime-native remote.rs), handed to the UI's end: a method's reply
- * at once goes back as a later answer, and the guest's cancel and drop are
- * the link's own. */
+ * (xpute-runtime-native remote.rs), handed to the UI's end: a method's
+ * result at once goes back as a later answer, and the guest's cancel and
+ * drop are the link's own. */
 const HEAR: Readonly<Record<u32, (f: BranchCursor) => void>> = {
   0: (f) =>
-    void ui.input(
+    void input(
       f.get<u32>(1),
       ROOT,
       0,
@@ -93,7 +121,7 @@ const HEAR: Readonly<Record<u32, (f: BranchCursor) => void>> = {
     ),
   2: (f) => {
     const tag = f.get<u32>(3);
-    const reply = ui.input(
+    const result = input(
       tag,
       f.get<u32>(1),
       f.get<u32>(2),
@@ -101,10 +129,8 @@ const HEAR: Readonly<Record<u32, (f: BranchCursor) => void>> = {
       0,
       f.get<U8Array | null>(4),
     );
-    if (reply === ERRNO_EINPROGRESS) return;
-    const { result, data } =
-      typeof reply === "number" ? { result: reply, data: null } : reply;
-    ui.task_return(tag, result, data);
+    if (result === ERRNO_EINPROGRESS) return;
+    ui.task_return(tag, ret.finish() < 0 ? ERRNO_EMSGSIZE : result);
   },
   3: (f) =>
     ui.open_at(
@@ -114,9 +140,9 @@ const HEAR: Readonly<Record<u32, (f: BranchCursor) => void>> = {
     ),
   4: (f) => {
     const tag = f.get<u32>(1);
-    ui.input(0, ROOT, CANCEL, false, 0, pkt_of([4, (w) => w.u32(0, tag)]));
+    input(0, ROOT, CANCEL, false, 0, pkt_of([4, (w) => w.u32(0, tag)]));
   },
-  5: (f) => void ui.input(0, f.get<u32>(1), DROP, false, 0, null),
+  5: (f) => void input(0, f.get<u32>(1), DROP, false, 0, null),
 };
 
 /** A message's header: its packet's length, a u32, and four bytes more, so

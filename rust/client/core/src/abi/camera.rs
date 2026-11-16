@@ -53,36 +53,34 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 TRACK => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let tracking = r_
+                    let tracking = args_
                         .case(0, 3)
                         .and_then(|v| Tracking::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     match self.0.track(tracking) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 NORTH_UP => match self.0.north_up() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
                 GOTO => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let lon = r_.f64(0)?;
-                    let lat = r_.f64(8)?;
+                    let lon = args_.f64(0)?;
+                    let lat = args_.f64(8)?;
                     match self.0.goto(lon, lat) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -95,5 +93,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

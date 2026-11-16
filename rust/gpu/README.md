@@ -29,12 +29,22 @@ completion the stream asked for lands as a **fence**, a word only the host
 writes, set to the guest's **ticket** with release, so a late answer to a
 dropped request never matches.
 
-A frame is admitted by one rule: the guest draws only while fewer of its frames
-are unfinished than its frame latency (`pxl_gpu_guest::admit::frame`), which the
-program sets in its host's `GpuConfig` and the host writes beside its count in
-the device's block, so taking a surface's texture never blocks. What a surface
-shows is lent by the UI beside the link, under the handle of a surface the guest
-implements.
+What the host holds is admitted by one rule each, in the device's block. The
+guest hands the host its records while the device is ready
+(`pxl_gpu_guest::admit::flush`). The hosts pack the writes a run stages
+into the chunks of a staging belt by one rule (`pxl_gpu_link::pack`), and a
+write that may wait enters the stream only where the belt has room for it,
+the host waking the guest as chunks come free again. A write that cannot wait
+is recorded however few are free; a host short of chunks makes one more for
+the run and lets it go once it is back, so neither host waits inside a record
+and the belt returns to its size. The guest draws a frame only where it may
+hand the records and fewer of its frames are unfinished than its frame latency
+(`pxl_gpu_guest::admit::frame`), which the program sets in its host's
+`GpuConfig` and the host writes beside its count, so taking a surface's texture
+never blocks.
+
+What a surface shows is lent by the UI beside the link, under the handle of a
+surface the guest implements.
 
 ## Its parts
 

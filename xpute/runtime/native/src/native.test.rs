@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use xpute_kit::status::errno::Errno;
-use xpute_link::{Handle, Method, NAMED, OPEN, Object, ROOT, Reply, Tag};
+use xpute_link::{Handle, Lift, Lower, Method, NAMED, OPEN, Object, ROOT, Tag};
 use xpute_runtime_native::native::Boot;
 
 #[path = "app.test.rs"]
@@ -22,7 +22,7 @@ const RELAY: Handle = NAMED | 0x21;
 struct Fail;
 
 impl Object for Fail {
-    fn call(&self, _: Method, _: Tag, _: Option<&[u8]>) -> Reply {
+    fn call(&self, _: Method, _: Tag, _: Lift, _: &mut Lower) -> i32 {
         panic!("the host fails");
     }
 }
@@ -30,8 +30,8 @@ impl Object for Fail {
 struct Relay;
 
 impl Object for Relay {
-    fn call(&self, _: Method, _: Tag, _: Option<&[u8]>) -> Reply {
-        Reply::from(link::call(FAIL, 0, None).0)
+    fn call(&self, _: Method, _: Tag, _: Lift, _: &mut Lower) -> i32 {
+        link::call(FAIL, 0, None).0
     }
 }
 

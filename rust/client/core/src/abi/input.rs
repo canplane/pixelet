@@ -129,73 +129,68 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 POINTER => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let phase = r_
+                    let phase = args_
                         .case(0, 5)
                         .and_then(|v| PointerPhase::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let touch = r_.bool(1)?;
-                    let id = r_.i32(4)?;
-                    let drag = r_
+                    let touch = args_.bool(1)?;
+                    let id = args_.i32(4)?;
+                    let drag = args_
                         .case(8, 3)
                         .and_then(|v| Drag::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let x = r_.f64(16)?;
-                    let y = r_.f64(24)?;
+                    let x = args_.f64(16)?;
+                    let y = args_.f64(24)?;
                     match self.0.pointer(phase, touch, id, drag, x, y) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 WHEEL => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let delta_y = r_.f64(0)?;
+                    let delta_y = args_.f64(0)?;
                     match self.0.wheel(delta_y) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 PINCH => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let scale = r_.f64(0)?;
+                    let scale = args_.f64(0)?;
                     match self.0.pinch(scale) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 MOVE => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let x = r_.i32(0)?;
-                    let y = r_.i32(4)?;
+                    let x = args_.i32(0)?;
+                    let y = args_.i32(4)?;
                     match self.0.r#move(x, y) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 XR_POSE => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let x = r_.f64(0)?;
-                    let y = r_.f64(8)?;
-                    let z = r_.f64(16)?;
-                    let qx = r_.f64(24)?;
-                    let qy = r_.f64(32)?;
-                    let qz = r_.f64(40)?;
-                    let qw = r_.f64(48)?;
+                    let x = args_.f64(0)?;
+                    let y = args_.f64(8)?;
+                    let z = args_.f64(16)?;
+                    let qx = args_.f64(24)?;
+                    let qy = args_.f64(32)?;
+                    let qz = args_.f64(40)?;
+                    let qw = args_.f64(48)?;
                     match self.0.xr_pose(x, y, z, qx, qy, qz, qw) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 XR_POSE_END => match self.0.xr_pose_end() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -208,5 +203,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

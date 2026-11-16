@@ -38,6 +38,16 @@ export const BINDING_ENTRY_WORDS = 6 as number;
 /** The length in words of one entry of a bind group (BIND_GROUP). */
 export const RESOURCE_ENTRY_WORDS = 5 as number;
 
+/** Each room of a host's staging belt begins at a multiple of this (pxl-gpu-link `pack`): a
+ * mapping's alignment (8), and the largest texel block a copy into a texture takes from a
+ * buffer, whose offset is a multiple of the block's size. */
+export const ROOM_ALIGNMENT = 16 as number;
+
+/** A copy between a buffer and a texture steps the buffer's rows by a multiple of this
+ * (WebGPU's `COPY_BYTES_PER_ROW_ALIGNMENT`), so a texture's write is staged with its rows padded
+ * to it (pxl-gpu-link `pack`). */
+export const ROW_ALIGNMENT = 256 as number;
+
 /** The ops, numbered from 1; an op of 0 ends a stream. */
 export const op = {
   /** id, size, usage (BUFFER_USAGE), mapped at creation (0 or 1). */
@@ -320,14 +330,19 @@ export const OPS = [
  * format SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then
  * the frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames
  * may be unfinished at once, at least one), then the count of uncaptured errors, then the
- * count of unfinished frames, then STATUS, the last, which the host stores with release
- * after the rest. The uncaptured errors are the errors the device raised that no error
- * scope caught. The unfinished frames are the frames the
- * guest has drawn whose work the queue has not yet done. Only the host writes the two
+ * count of unfinished frames, then the count of free chunks, then STATUS, the last, which
+ * the host stores with release after the rest. The uncaptured errors are the errors the
+ * device raised that no error scope caught. The unfinished frames are the frames the guest
+ * has drawn whose work the queue has not yet done. The free chunks are the chunks of the
+ * host's staging belt that are mapped and hold nothing. Only the host writes the three
  * counts: first before STATUS, as it writes the rest of the block, and afterwards with
- * release each time a count changes. The guest loads them with acquire once STATUS reads
- * READY, and draws a frame only while the unfinished frames are below the block's frame
- * latency (pxl-gpu-guest `admit::frame`). */
+ * release each time a count changes, what a run changes before the run is answered. It
+ * wakes the guest (spec/gpu/wit/gpu.wit `device.settled`) as more chunks are free than it
+ * last wrote. The guest loads them with acquire once STATUS reads READY, flushes its stream
+ * while STATUS is READY (pxl-gpu-guest `admit::flush`), admits the writes that may wait only
+ * as far as the free chunks hold (pxl-gpu-guest stream.rs `stage`), and draws a frame only
+ * where it may flush and the unfinished frames are below the block's frame latency
+ * (pxl-gpu-guest `admit::frame`). */
 export const DEVICE = {
   LIMITS_AT: 0 as number,
   FEATS_AT: 31 as number,
@@ -336,8 +351,9 @@ export const DEVICE = {
   LATENCY_AT: 34 as number,
   ERRORS_AT: 35 as number,
   UNFINISHED_AT: 36 as number,
-  STATUS_AT: 37 as number,
-  WORDS: 38 as number,
+  FREE_CHUNKS_AT: 37 as number,
+  STATUS_AT: 38 as number,
+  WORDS: 39 as number,
 } as const;
 
 /** The last word of the DEVICE block: what the host knows of the device. Only the

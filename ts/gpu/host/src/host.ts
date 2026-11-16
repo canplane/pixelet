@@ -18,6 +18,7 @@ import {
   NONE,
   op,
   RESULT,
+  ROW_ALIGNMENT,
   STATUS,
   SURFACE_PREFERRED,
   DEVICE,
@@ -25,7 +26,7 @@ import {
 import { type GpuConfig } from "../../link/src/mod.ts";
 import { handle_slot } from "../../link/src/handle.ts";
 import { log } from "@xpute/host";
-import { LEVEL_ERROR } from "@xpute/host/abi/log/log.enum.ts";
+import { LEVEL_ERROR, LEVEL_WARN } from "@xpute/host/abi/log/log.enum.ts";
 import { Belt } from "./belt.ts";
 import {
   ADDRESS_MODES,
@@ -96,6 +97,20 @@ function place(): Place {
     origin: [0, 0, 0],
     aspect: "all",
   };
+}
+
+/** What a host says where its belt has no chunk for a write, a mapping gone
+ * or refused or a chunk not made, as a device's host says it (pxl-gpu-host
+ * lib.rs `CHUNK_GONE`). */
+const CHUNK_GONE = "device lost: an upload chunk is gone or cannot be made";
+
+/** The texel rows one row of `format`'s blocks covers, as wgpu's
+ * `TextureFormat::block_dimensions` gives it: an ASTC format's own, four for
+ * the BC, ETC2 and EAC formats, and one for every other. */
+function block_height_of(format: GPUTextureFormat): number {
+  const astc = /^astc-\d+x(\d+)/.exec(format);
+  if (astc) return Number(astc[1]);
+  return /^(bc|etc2|eac)/.test(format) ? 4 : 1;
 }
 
 /** This is what the guest asked of a surface, whether or not a canvas is bound
@@ -183,11 +198,6 @@ export class GpuHost {
     bytesPerRow: 0,
     rowsPerImage: 0,
   };
-  private readonly _layout: GPUTexelCopyBufferLayout = {
-    offset: 0,
-    bytesPerRow: 0,
-    rowsPerImage: 0,
-  };
   private readonly _size: number[] = [0, 0, 0];
   /** These are a pass's dictionaries, refilled the same way: its descriptors,
    * its color attachments (as many as any pass has had), its depth attachment
@@ -217,38 +227,54 @@ export class GpuHost {
   private _unfinished_cnt = 0;
   /** This run's stream has taken a surface's texture. */
   private _drew = false;
+  /** The device is lost, as the browser said or as a write found the belt's
+   * mappings gone (`_lose`); nothing clears it, and no further record runs. */
+  private _lost = false;
 
-  /** Every buffer write is staged through the belt and copied by `_uploads`,
-   * which is submitted ahead of what follows, as a device's host stages its
-   * writes. */
+  /** Every buffer and texture write is staged through the belt and copied by
+   * `_uploads`, which is submitted ahead of what follows, as a device's host
+   * stages its writes. */
   private readonly _belt: Belt;
   private _uploads: GPUCommandEncoder | null = null;
 
   private readonly _device: GPUDevice;
   private readonly _mem: () => ArrayBufferLike;
   private readonly _wake: () => void;
+  private readonly _drop: () => void;
   private readonly _frame_latency: u32;
 
   /** `wake` tells the guest a completion landed (spec/gpu/wit/gpu.wit
-   * `device.settled`), and that the device was lost. `cfg` is the program's
+   * `device.settled`), that chunks of the belt came free, and
+   * that the device was lost; `drop` lets the host go
+   * once the device is lost, after the guest is told. `cfg` is the program's
    * (@pxl/gpu/link `GpuConfig`). */
   constructor(
     device: GPUDevice,
     mem: () => ArrayBufferLike,
     wake: () => void,
+    drop: () => void,
     cfg: GpuConfig,
   ) {
     this._device = device;
     this._mem = mem;
     this._wake = wake;
+    this._drop = drop;
     this._frame_latency = cfg.frame_latency;
-    this._belt = new Belt(device, cfg.upload_chunk_sz);
-    // Nothing here destroys the device, so every loss is the browser's. The
-    // guest is told of it in its block.
-    device.lost.then(() => {
-      this._on_lost();
-      this._wake();
-    });
+    // The belt starts with a device's chunks, one more than the frame
+    // latency (pxl-gpu-host lib.rs `GpuHost::new`).
+    this._belt = new Belt(
+      device,
+      cfg.upload_chunk_sz,
+      cfg.frame_latency + 1,
+      (ok) => {
+        if (!ok) this._lose(CHUNK_GONE);
+        else if (this._tell_counts()) this._wake();
+      },
+    );
+    // Nothing here destroys the device, so every loss is the browser's.
+    device.lost.then((info) =>
+      this._lose(`device lost (${info.reason}): ${info.message}`),
+    );
     // An error no scope caught is logged and counted.
     device.addEventListener("uncapturederror", (e) => {
       log(LEVEL_ERROR, "gpu", e.error.message);
@@ -297,20 +323,42 @@ export class GpuHost {
     }
   }
 
+  /** Holds the device as lost, as the browser said, as a write found an
+   * upload chunk's mapping gone, which any loss may take away, or the chunk
+   * it needs not made, or as a chunk's mapping was refused (pxl-gpu-host
+   * lib.rs `lose`): no further record runs, the guest is told in its block
+   * and woken, and the host is let go. */
+  private _lose(why: string): void {
+    if (this._lost) return;
+    this._lost = true;
+    log(LEVEL_WARN, "gpu", why);
+    this._on_lost();
+    this._wake();
+    this._drop();
+  }
+
   /** Runs the records `words` the guest lent. A frame they drew counts as
-   * unfinished until the queue has done the work submitted with it. */
+   * unfinished until the queue has done the work submitted with it, and the
+   * block says so with the chunks the run took before the run is answered.
+   * Once the device is lost no further record runs, and the run counts for
+   * nothing. */
   run(words: U32Array): void {
     let r: WordCursor | undefined;
     this._drew = false;
     each_rec(words, (code, w, a) => {
+      if (this._lost) return;
       r ??= new WordCursor(w);
       r.at = a;
       this._record(code, r);
     });
+    if (this._lost) return;
     // The run's staged writes reach the queue with the run, as
     // `writeBuffer`'s would.
     if (this._uploads) this._submit([]);
-    if (!this._drew) return;
+    if (!this._drew) {
+      this._tell_counts();
+      return;
+    }
     this._unfinished_cnt++;
     this._tell_counts();
     this._device.queue.onSubmittedWorkDone().then(() => {
@@ -321,7 +369,9 @@ export class GpuHost {
 
   /** Stages `n` bytes of `src` from `src_at` through the belt, a chunk's room
    * at a time, and copies them into `buffer` at `offset` ahead of what
-   * follows. No bytes write nothing, as in WebGPU. */
+   * follows. No bytes write nothing, as in WebGPU. Where the belt has no
+   * chunk for it, a mapping gone or a chunk not made, the device is held as
+   * lost (`_lose`) and the write goes with it. */
   private _write(
     buffer: GPUBuffer,
     offset: u32,
@@ -330,7 +380,8 @@ export class GpuHost {
     n: u32,
   ): void {
     for (let done = 0; done < n;) {
-      const room = this._belt.take(n - done);
+      const room = this._belt.take(n - done, 1);
+      if (!room) return this._lose(CHUNK_GONE);
       room.bytes.set(new Uint8Array(src, src_at + done, room.n), room.at);
       this._uploads ??= this._device.createCommandEncoder();
       this._uploads.copyBufferToBuffer(
@@ -341,6 +392,56 @@ export class GpuHost {
         room.n,
       );
       done += room.n;
+    }
+  }
+
+  /** Stages a texture write through the belt, as `_write` stages a buffer's,
+   * and copies it into the texture ahead of what follows: `size` texels at
+   * `place`, read from `bytes` by its bytes per row `row_sz` and its
+   * `rows_per_image`, a row being a row of texel blocks. Each image goes a
+   * band of whole rows at a time, each row padded to the copy's row
+   * alignment, as a device's host stages it (pxl-gpu-host run.rs
+   * `write_texture`). An empty `size` writes nothing, as in WebGPU, and any
+   * other has bytes per row (pxl-gpu-guest `call::write_texture`). */
+  private _write_texture(
+    place: Place,
+    row_sz: u32,
+    rows_per_image: u32,
+    size: number[],
+    bytes: Uint8Array,
+  ): void {
+    if (size[0] === 0 || size[1] === 0 || size[2] === 0) return;
+    const block_height = block_height_of(place.texture.format);
+    const rows = Math.ceil(size[1] / block_height);
+    const stride = Math.ceil(row_sz / ROW_ALIGNMENT) * ROW_ALIGNMENT;
+    const [from, to] = [this._buffer_info, this._places[1]];
+    to.texture = place.texture;
+    to.mipLevel = place.mipLevel;
+    to.aspect = place.aspect;
+    to.origin[0] = place.origin[0];
+    for (let z = 0; z < size[2]; z++) {
+      for (let row = 0; row < rows;) {
+        const room = this._belt.take((rows - row) * stride, stride);
+        if (!room) return this._lose(CHUNK_GONE);
+        const band = room.n / stride;
+        for (let j = 0; j < band; j++) {
+          const at = (z * rows_per_image + row + j) * row_sz;
+          room.bytes.set(bytes.subarray(at, at + row_sz), room.at + j * stride);
+        }
+        from.buffer = room.chunk;
+        from.offset = room.at;
+        from.bytesPerRow = stride;
+        from.rowsPerImage = band;
+        to.origin[1] = place.origin[1] + row * block_height;
+        to.origin[2] = place.origin[2] + z;
+        this._uploads ??= this._device.createCommandEncoder();
+        this._uploads.copyBufferToTexture(from, to, [
+          size[0],
+          Math.min(band * block_height, size[1] - row * block_height),
+          1,
+        ]);
+        row += band;
+      }
     }
   }
 
@@ -391,10 +492,12 @@ export class GpuHost {
     Atomics.store(out, DEVICE.STATUS_AT, STATUS.READY);
   }
 
-  /** Stores the uncaptured errors and the unfinished frames with release
-   * into the device's block (spec DEVICE). */
-  private _tell_counts(): void {
-    if (this._block === undefined) return;
+  /** Stores the uncaptured errors, the unfinished frames and the belt's free
+   * chunks with release into the device's block (spec DEVICE). It says
+   * whether more chunks are free than the block last said, which wakes a
+   * guest whose writes wait for room (pxl-gpu-host admit.rs `tell_counts`). */
+  private _tell_counts(): boolean {
+    if (this._block === undefined) return false;
     const block = new Uint32Array(
       this._mem(),
       Number(this._block),
@@ -402,6 +505,10 @@ export class GpuHost {
     );
     Atomics.store(block, DEVICE.ERRORS_AT, this._error_cnt);
     Atomics.store(block, DEVICE.UNFINISHED_AT, this._unfinished_cnt);
+    const was = Atomics.load(block, DEVICE.FREE_CHUNKS_AT);
+    const now = this._belt.free_cnt();
+    Atomics.store(block, DEVICE.FREE_CHUNKS_AT, now);
+    return now > was;
   }
 
   private _put(id: u32, o: GpuObject): void {
@@ -903,25 +1010,19 @@ export class GpuHost {
       case op.WRITE_TEXTURE:
       case op.WRITE_TEXTURE_AT: {
         const place = this._texturePlace(r, this._places[0]);
-        const layout = this._layout;
-        layout.bytesPerRow = r.u();
-        layout.rowsPerImage = r.u();
+        const [row_sz, rows_per_image] = [r.u(), r.u()];
         const size = this._extent(r);
         // The bytes are read where they lie: in the record after their count
         // for WRITE_TEXTURE, or at an address in the guest's memory for
-        // WRITE_TEXTURE_AT. The layout's offset says where.
-        let data: ArrayBuffer;
+        // WRITE_TEXTURE_AT.
+        let bytes: Uint8Array;
         if (code === op.WRITE_TEXTURE) {
-          const n = r.u();
-          data = r.w.buffer as ArrayBuffer;
-          layout.offset = r.w.byteOffset + 4 * r.at;
-          r.skip(Math.ceil(n / 4));
+          bytes = r.bytes();
         } else {
-          data = this._mem() as ArrayBuffer;
-          layout.offset = Number(r.addr());
-          r.skip(1);
+          const at = Number(r.addr());
+          bytes = new Uint8Array(this._mem(), at, r.u());
         }
-        d.queue.writeTexture(place, data, layout, size);
+        this._write_texture(place, row_sz, rows_per_image, size, bytes);
         return;
       }
       case op.COPY_EXTERNAL_IMAGE: {
@@ -939,6 +1040,10 @@ export class GpuHost {
         }).then(
           (source) => {
             if (this._objects.includes(to.texture)) {
+              // The host places an image the browser decoded, as a device's
+              // host places one it decoded (pxl-gpu-host image.rs): no write
+              // of the guest's, so it takes nothing of the belt, whose chunks
+              // the guest counts.
               (d.queue as ExternalImageQueue).copyExternalImageToTexture(
                 { source },
                 to,
@@ -1251,6 +1356,9 @@ export class GpuHost {
       }
       case op.QUEUE_DONE: {
         const [word, ticket] = [r.addr(), r.u()];
+        // Staged writes are the queue's work as much as what was submitted,
+        // so they are submitted first, as a device's host does.
+        this._submit([]);
         d.queue.onSubmittedWorkDone().then(() => this._signal(word, ticket));
         return;
       }

@@ -72,15 +72,24 @@ The core runs only when xpute's link enters it: with a call from the UI, an
 answer, or the answer of a wait it armed. What it does there is its own, on
 embassy's executor (`sched.rs`). A frame is asked for (`invalidate`, or
 `invalidate_at` for a time, one clock wait armed for the earliest) and runs at
-the display's next vsync as one task, in one order: the effects of what the UI
-sent, then the tick, then the draw (`frame.rs`).
+the first vsync due by the frame's target interval since the last frame's
+start, as one task, in one order: the effects of what the UI sent, then the
+tick, then the draw (`frame.rs`). A vsync answers its frame's start on the
+host's monotonic clock, from which the display is measured
+(`sched/display.rs`).
 
-Each entry has a budget from its start (`begin`, `param.rs` `BUDGET_MS`). The
-tick runs the phases the core declares, in their order, within it
-(`sched/tick.rs`), and a list of work stops once the budget is spent and one
-item has done work, so the list always moves (`run`). A task yields where the
-budget is spent and comes back in a later entry (`yield_if_spent`). An entry
-ends once no task is ready, and a core with nothing to do is not entered.
+Each entry has a deadline, by one rule (`sched.rs` `Budget`): a frame's budget
+is its target interval less `MARGIN_SHARE` (`param.rs`), and an entry ends at
+that budget from the last frame's start, and no sooner than `CONTENT_SHARE` of
+it from its own start. A frame takes the deadline again from its own start,
+the visible phase leaves the content's share unspent, and once the frame has
+run, the entry's tasks get that share from then on, however far the frame ran
+past its deadline. The tick runs the phases the core declares, in their order,
+within it (`sched/tick.rs`), and a list of work stops once the budget is spent
+and one item has done work, so the list always moves (`run`). A task yields
+where the budget is spent and comes back in a later entry (`yield_if_spent`).
+An entry ends once no task is ready, and a core with nothing to do is not
+entered.
 
 ## Reads
 

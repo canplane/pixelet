@@ -56,8 +56,8 @@ use crate::frame::shader::word::SHADOW_SIZE;
 use crate::frame::shader::word::{CELL_SIDE, ROW_LANE_CNT, SQUARE_SIDE, screen};
 use crate::gpu::api;
 use crate::gpu::api::{
-    Entry, Gpu, Layout, RenderContext, buf_entry, buffer_usage, bytes, frame_entries, release,
-    view_entry, word_sz, write_buffer_sz,
+    Entry, Gpu, Layout, Need, RenderContext, buf_entry, buffer_usage, bytes, frame_entries,
+    release, view_entry, word_sz,
 };
 use crate::gpu::draw::ReceiverBox;
 use crate::gpu::generator::{
@@ -711,15 +711,11 @@ impl RayPass {
             } else {
                 c.forget = true;
             }
-            let written_sz = |lane: &[u32]| {
-                o.written_groups
-                    .iter()
-                    .map(|&f| write_buffer_sz(bytes(child_group(lane, f))))
-                    .sum::<usize>()
-            };
-            if c.object_revision == Some(o.since)
-                && api::room(written_sz(o.first_child) + written_sz(o.data))
-            {
+            let written = o.written_groups.iter().fold(api::need(), |n: Need, &f| {
+                n.write_buf(bytes(child_group(o.first_child, f)))
+                    .write_buf(bytes(child_group(o.data, f)))
+            });
+            if c.object_revision == Some(o.since) && api::room(written) {
                 for &first in o.written_groups {
                     g.write_buf(
                         c.objects,
@@ -1859,6 +1855,13 @@ impl RayPass {
             c.light_draws_dispatch = 0;
             c.raster.light_release();
             c.light_ready = false;
+        }
+    }
+
+    /// Keeps the counts whose mapping landed (`Counter::land`).
+    pub fn land_cnts(&mut self) {
+        if let Some(c) = self.cast.as_mut() {
+            c.counter.land();
         }
     }
 

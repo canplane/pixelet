@@ -96,51 +96,48 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 POS => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let at = r_.case(0, 2).and_then(|d| {
+                    let at = args_.case(0, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            Position::load(r_, 8).map(Some)
+                            Position::load(args_, 8).map(Some)
                         }
                     })?;
                     match self.0.pos(at) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 HEADING => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let deg = r_.case(0, 2).and_then(|d| {
+                    let deg = args_.case(0, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(8).map(Some)
+                            args_.f64(8).map(Some)
                         }
                     })?;
                     match self.0.heading(deg) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
                 LOCATION => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let status = r_
+                    let status = args_
                         .case(0, 4)
                         .and_then(|v| LocationStatus::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     match self.0.location(status) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
                     }
                 }
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -153,5 +150,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }

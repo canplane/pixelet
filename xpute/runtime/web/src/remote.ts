@@ -13,11 +13,11 @@
  * where a device's runtime outlives its UI and drops one as a new one
  * attaches (xpute-runtime-native remote.rs `accept`). */
 
-import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
 import {
   DROP,
   type Handle,
+  type Lift,
   type Method,
   type Side,
   type Tag,
@@ -58,8 +58,9 @@ export function attach(
 ): void {
   const post = (m: ToPage) => port.postMessage(m);
   // Posts the UI a method it answers later, and the guest's cancel of it.
-  const forward = (h: Handle, m: Method, tag: Tag, args: U8Array | null) => {
-    post({ kind: "request", tag, h, m, pkt: args && args.slice() });
+  const forward = (h: Handle, m: Method, tag: Tag, args: Lift) => {
+    const pkt = args.pkt();
+    post({ kind: "request", tag, h, m, pkt: pkt && pkt.slice() });
     link.on_cancel(tag, () => post({ kind: "cancel", tag }));
     return ERRNO_EINPROGRESS;
   };

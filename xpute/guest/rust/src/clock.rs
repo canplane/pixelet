@@ -13,7 +13,13 @@ const NS_PER_MS: f64 = 1e6;
 
 /// The time in ms, which never runs backward; only differences mean anything.
 pub fn now() -> f64 {
-    monotonic_clock::now().or_bug(Errno::EPROTO) as f64 / NS_PER_MS
+    ms(monotonic_clock::now().or_bug(Errno::EPROTO))
+}
+
+/// A mark of the monotonic clock in ms, on `now`'s line: a time the host
+/// answers, as a display's frame start.
+pub fn ms(mark: monotonic_clock::Mark) -> f64 {
+    mark as f64 / NS_PER_MS
 }
 
 /// `ms` as a duration the monotonic clock waits for, rounded up.

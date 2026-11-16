@@ -1549,7 +1549,7 @@ impl Renderer {
         // The read that landed was asked by an earlier frame and times that
         // frame. This frame's figures are kept by the read it was asked in,
         // until that read lands.
-        let gpu = g.stamps_complete().map(|r| GpuRead {
+        let gpu = g.take_stamps_complete().map(|r| GpuRead {
             frame: self.read_frame[r],
             spans: core::array::from_fn(|k| g.gpu_ms(k as u32)),
             busy_ms: g.gpu_busy_ms(),
@@ -1846,6 +1846,17 @@ pub fn complete() -> bool {
         pipelines || r.atmosphere.complete()
     });
     images || made
+}
+
+/// Takes in the GPU's reads that landed, the timed spans' (gpu/api.rs `take_reads`) and the
+/// ray counts (ray/count.rs `Counter::land`), each held for the next frame's record. It runs in
+/// each entry, where the core reads what the GPU did, so no frame is drawn for a read and a
+/// still scene misses none.
+pub fn take_reads() {
+    api::take_reads();
+    if let Some(r) = RENDERER.get(|| None).as_mut() {
+        r.screen.land_cnts();
+    }
 }
 
 /// Applies the lists' frees, uploads and rewrites to the upload table, and

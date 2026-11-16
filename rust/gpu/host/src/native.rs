@@ -564,7 +564,8 @@ pub fn unbind(handle: u32) {
 ///   windows `target` takes.
 /// - `pxl_gpu_surface_unbind(uint32_t handle)` lets the window go
 ///   (`unbind`).
-/// - `pxl_gpu_vsync()` is the display's frame, from its display link
+/// - `pxl_gpu_vsync(uint64_t age_ns)` is the display's frame, which started
+///   `age_ns` nanoseconds ago on the platform's clock, from its display link
 ///   (vsync.rs `vsync`).
 ///
 /// On Android the same calls are exported to JNI for the Kotlin class
@@ -612,8 +613,8 @@ macro_rules! native_abi {
         }
 
         #[unsafe(no_mangle)]
-        pub extern "C" fn pxl_gpu_vsync() {
-            $crate::vsync::vsync();
+        pub extern "C" fn pxl_gpu_vsync(age_ns: u64) {
+            $crate::vsync::vsync(age_ns);
         }
 
         #[cfg(target_os = "android")]

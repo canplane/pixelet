@@ -21,25 +21,25 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, _: Option<&[u8]>) -> _rt::Reply {
-        let run = || -> Result<_rt::Reply, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, _: _rt::Lift, _: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 HIDDEN => match self.0.hidden() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
                 SHOWN => match self.0.shown() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
                 ATTACHED => match self.0.attached() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
                 },
-                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
+                _ => _rt::Errno::ENOSYS as i32,
             })
         };
-        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
+        run().unwrap_or_else(|e| e as i32)
     }
 }
 
@@ -52,5 +52,5 @@ mod _rt {
     pub(super) use crate::link;
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
 }
