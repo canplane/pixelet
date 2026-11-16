@@ -79,12 +79,6 @@ export function geolocation_close(): void {
   store.state = of_SensorState(SENSOR_STATUS_IDLE);
 }
 
-/** A grant from outside the app, such as the device's settings, starts the
- * watch again. Without it, a denial would stick until the page reloads. */
-export function on_geolocation_permission_granted(): void {
-  if (!device_location_store().is_tracking_location) start_watching();
-}
-
 /** A location fix, its altitude over the ellipsoid as GPS gives it. */
 export function geolocation_fix(
   lon: f64,

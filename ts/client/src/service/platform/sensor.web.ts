@@ -67,8 +67,9 @@ function geolocation_start(): void {
 let orient_event: string | null = null;
 
 /** An event with every field null is how a browser says it has no sensor; any
- * other is a reading, one with neither a compass heading nor alpha a reading
- * with no heading. */
+ * other is a reading. Its heading is iOS's compass heading, else the absolute
+ * event's alpha, which turns counter-clockwise from north (`orient_start`); one
+ * with neither is a reading with no heading. */
 function on_orient(e: Event): void {
   const o = e as IosOrientationEvent;
   const compass = o.webkitCompassHeading ?? null;
@@ -81,21 +82,16 @@ function on_orient(e: Event): void {
     listener.orient_unavailable();
     return;
   }
-  listener.orient(compass, o.alpha);
-}
-
-function orient_listen(name: string): void {
-  if (orient_event !== null) return;
-  orient_event = name;
-  globalThis.addEventListener(name, on_orient, true);
+  listener.orient(compass ?? (o.alpha === null ? null : (360 - o.alpha) % 360));
 }
 
 function orient_start(): void {
-  orient_listen(
+  if (orient_event !== null) return;
+  orient_event =
     "ondeviceorientationabsolute" in globalThis
       ? "deviceorientationabsolute"
-      : "deviceorientation",
-  );
+      : "deviceorientation";
+  globalThis.addEventListener(orient_event, on_orient, true);
 }
 
 /** Follows the location permission, so that a grant made later in the
@@ -123,20 +119,24 @@ export function follow(): () => void {
   };
 }
 
-/** Raises the prompt before any await, so that it stays inside the gesture. */
+/** Asks before any await, so that inside a press a prompt stays inside the
+ * gesture. A decision already made answers without one, and with none made
+ * outside a press the browser refuses to prompt (NotAllowedError), which is no
+ * answer yet: a press asks. */
 function orient_permit(): Promise<boolean> {
   if (!orient_gated() || orient_event !== null) return Promise.resolve(true);
-  const prompt = (DeviceOrientationEvent as IosOrientationEventCtor)
+  const asked = (DeviceOrientationEvent as IosOrientationEventCtor)
     .requestPermission!();
-  listener.permission("orient", "asking");
-  return prompt.then(
+  return asked.then(
     (permission) => {
       const granted = permission === "granted";
-      if (granted) orient_listen("deviceorientation");
-      listener.permission("orient", granted ? "granted" : "denied");
+      if (!granted) listener.permission("orient", "denied");
       return granted;
     },
     (err) => {
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        return false;
+      }
       console.error("[sensor] orientation permission error:", err);
       listener.permission("orient", "failed");
       return false;
@@ -161,7 +161,6 @@ export const GEOLOCATION: GeolocationSensor = {
 };
 export const ORIENT: OrientationSensor = {
   has: orient_has(),
-  gated: orient_gated(),
   silence: true,
   permit: orient_permit,
   start: orient_start,

@@ -54,8 +54,8 @@ export interface Fix {
 /** Why a position's watch failed. */
 export type GeolocationError = "denied" | "unavailable" | "timeout" | "other";
 
-/** A permission's answer, `asking` while its prompt is up. */
-export type PermissionAnswer = "asking" | "granted" | "denied" | "failed";
+/** A permission's answer. */
+type PermissionAnswer = "granted" | "denied" | "failed";
 
 export interface SensorListener {
   pos(
@@ -69,7 +69,9 @@ export interface SensorListener {
    * the platform knows: a page's watch rides out all but a refusal, and a
    * device's ends on any. */
   pos_err(err: GeolocationError, watching: boolean): void;
-  orient(compass: f64 | null, alpha: f64 | null): void;
+  /** A heading, in degrees clockwise from north, or null for a reading with
+   * no heading. */
+  orient(heading: f64 | null): void;
   /** The place has no compass: a page's event with every field null. */
   orient_unavailable(): void;
   orient_err(): void;
@@ -88,13 +90,13 @@ export interface GeolocationSensor {
 
 export interface OrientationSensor {
   has: boolean;
-  /** Whether a permission prompt, which must be raised inside a gesture,
-   * gates it, as iOS Safari's does. */
-  gated: boolean;
   /** Whether its loss shows only as silence. A browser's compass says nothing
    * when it stops hearing, while a device's reports its failure. */
   silence: boolean;
-  /** Resolves whether it is granted, asking first where a prompt gates it. */
+  /** Resolves whether it is granted, from the decision the place holds. Where
+   * none is held, a prompt is raised only inside a press, as iOS Safari's must
+   * be, and it resolves false elsewhere. A refusal is also told the listener
+   * (`permission`). */
   permit(): Promise<boolean>;
   start(): void;
   stop(): void;

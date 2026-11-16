@@ -7,9 +7,10 @@
  * the device's position, the heading and the location's status
  * (`tell_core`). The sensors are watched only while a surface draws the
  * world, from its draw until the last such surface closes (`worlds`), and
- * stopped while the app is hidden. The location is asked for again when the
- * location card is pressed (`locate`), and the heading when follow is pressed
- * (`ask_heading`). */
+ * stopped while the app is hidden. Each sensor has one start, which holds
+ * that gate and which every trigger calls: a world's draw, the return from
+ * hidden, a permission granted, and a press, the location card's (`locate`)
+ * or follow's (`start_orient`). */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
@@ -33,7 +34,6 @@ import {
   on_orient_lost,
   orient_close,
   orient_event,
-  orient_permission,
   orient_stop,
   orient_unavailable,
   orient_watchdog_step,
@@ -48,7 +48,6 @@ import {
   geolocation_close,
   geolocation_err,
   geolocation_fix,
-  on_geolocation_permission_granted,
   platform as geolocation_platform,
   start_watching,
   stop_watching,
@@ -104,10 +103,10 @@ export const SENSOR_LISTENER: SensorListener = {
     geolocation_err(err, watching);
     post();
   },
-  orient: (compass_in, alpha_in) => {
-    const [compass, alpha] = [finite(compass_in), finite(alpha_in)];
-    if (!(bearing(compass) && bearing(alpha))) return;
-    orient_event(compass, alpha);
+  orient: (heading_in) => {
+    const heading = finite(heading_in);
+    if (!bearing(heading)) return;
+    orient_event(heading);
     post();
   },
   orient_unavailable: () => {
@@ -119,22 +118,23 @@ export const SENSOR_LISTENER: SensorListener = {
     on_orient_lost();
     post();
   },
+  // A grant made outside the app, in the settings, starts the sensor; a
+  // refused compass reads as failed.
   permission: (which, answer) => {
-    if (which === "geolocation") {
-      if (answer === "granted") on_geolocation_permission_granted();
-    } else orient_permission(answer);
+    if (answer === "granted") {
+      if (which === "geolocation") start_location();
+      else void start_orient();
+    } else if (which === "orient") on_orient_lost();
     post();
   },
 };
 
 /** Takes what the place's sensors are, once the client starts: a position, a
- * heading, whether the heading asks a permission inside a gesture, and
- * whether its silence is a loss. */
+ * heading, and whether the heading's silence is a loss. */
 export function set_platform(): void {
   geolocation_platform().supported = platform.GEOLOCATION.has;
   const orient = orient_platform();
   orient.supported = platform.ORIENT.has;
-  orient.needs_permission = platform.ORIENT.gated;
   orient.silence_is_loss = platform.ORIENT.silence;
 }
 
@@ -143,14 +143,12 @@ export function set_platform(): void {
 const worlds = new Set<u32>();
 let unfollow: (() => void) | null = null;
 
-/** The surface `surface` draws the world: the location starts where the
- * platform has one, and the heading is asked for where the platform gives
- * one. */
+/** The surface `surface` draws the world, and the sensors start. */
 export function world_open(surface: u32): void {
   if (worlds.size === 0) unfollow = platform.follow();
   worlds.add(surface);
-  start_watching();
-  request_orient();
+  start_location();
+  void start_orient();
   post();
 }
 
@@ -167,31 +165,44 @@ export function world_closed(surface: u32): void {
 }
 
 /** The app is hidden or shown again. Hiding stops every sensor that runs,
- * keeping what it read; the return starts every sensor the shell wants while
- * a world is open, one that stopped or failed alike. A heading behind a
- * permission still waits for a press. */
+ * keeping what it read; the return starts each sensor again, one that
+ * stopped or failed alike, a heading already permitted without a press. */
 export function sensors_visibility(visible: boolean): void {
   if (!visible) {
     stop_watching();
     orient_stop();
-  } else if (worlds.size !== 0) {
-    start_watching();
-    request_orient();
+  } else {
+    start_location();
+    void start_orient();
   }
   post();
+}
+
+/** Starts the location while a world is open. The watch asks the permission
+ * itself where it is not yet decided. */
+function start_location(): void {
+  if (worlds.size !== 0) start_watching();
+}
+
+/** Starts the heading while a world is open, once the platform permits it,
+ * and resolves whether it does. The platform answers from the decision it
+ * holds, and asks only inside a press: follow's press calls this from the
+ * press itself. A world closed while it answers starts nothing. */
+export async function start_orient(): Promise<boolean> {
+  if (worlds.size === 0) return false;
+  const permitted = await platform.ORIENT.permit();
+  if (permitted && worlds.size !== 0) {
+    request_orient();
+    post();
+  }
+  return permitted;
 }
 
 /** Starts the location once it is permitted. It must run inside a press,
  * which raises the permission's prompt or its settings. */
 export async function locate(): Promise<void> {
   if (!(await platform.GEOLOCATION.permit())) return;
-  start_watching();
-  post();
-}
-
-/** Asks for the heading, as follow is pressed. */
-export function ask_heading(): void {
-  request_orient();
+  start_location();
   post();
 }
 
