@@ -1,8 +1,10 @@
-// @pxl/client/service/platform/text.ts
+// @pxl/client/service/platform/text.web.ts
 
 /**
  * Text measured and drawn on the browser's canvas, which falls back through
- * every script and draws color emoji as the page does.
+ * every script and draws color emoji as the page does. It has no twin here: a
+ * device's text is the platform module's (Text.swift, Text.kt), which
+ * pxl-runtime's text.rs serves, so service/core/text.ts imports it by name.
  */
 
 import type { f32, u32 } from "@xpute/kit/abi/word.ts";

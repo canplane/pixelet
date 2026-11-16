@@ -190,19 +190,27 @@ export async function instantiate(
  * the trap after the stop, as on a device. A throw after the guest trapped
  * is no failure of the host's. */
 function hook(side: Side): (e: unknown) => void {
-  const fail = (e: unknown) => {
-    if (side.trapped()) return;
+  const fail = (e: unknown): boolean => {
+    if (side.trapped()) return false;
     const stack = e instanceof Error ? (e.stack ?? "") : "";
     const errnum = e instanceof XputeBug ? e.errnum : ERRNO_ENOTRECOVERABLE;
     const [file, line] =
       e instanceof XputeBug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
+    const [n1, n2] = e instanceof XputeBug ? [e.a, e.b] : [0n, 0n];
     const message =
       e instanceof XputeBug ? null : e instanceof Error ? e.message : String(e);
-    tell_stop("host", { errnum, file, line, n1: 0n, n2: 0n, message });
+    tell_stop("host", { errnum, file, line, n1, n2, message });
     trap(side, e);
+    return true;
   };
-  addEventListener("error", (ev) => fail(ev.error));
-  addEventListener("unhandledrejection", (ev) => fail(ev.reason));
+  // A failure the hook writes is not reported again by the browser, as a
+  // device's hook replaces Rust's.
+  addEventListener("error", (ev) => {
+    if (fail(ev.error)) ev.preventDefault();
+  });
+  addEventListener("unhandledrejection", (ev) => {
+    if (fail(ev.reason)) ev.preventDefault();
+  });
   return fail;
 }
 
