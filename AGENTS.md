@@ -3,10 +3,9 @@
 ## Hold firmly
 
 - Symmetry usually wins: of role and contract, not of form. Parts whose roles
-  differ are not forced alike. A fix goes where the fact is owned, decides from
-  what the system reports and not from a guess, and holds on every platform
-  alike; a platform differs only in how it is reached. No patch is laid over a
-  part to make one case pass.
+  differ are not forced alike. A fix goes where the fact is owned and holds on
+  every platform alike; a platform differs only in how it is reached. No patch is
+  laid over a part to make one case pass.
 - A structure that is not symmetric (one platform, case or observer handled
   apart from the others, or a step one path takes and another does not), or that
   carries ad hoc pieces (a branch, a flag, a retry or a workaround for one case):

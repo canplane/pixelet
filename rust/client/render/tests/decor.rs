@@ -2508,17 +2508,23 @@ fn list_hdr(frame: &Frame) -> Vec<u32> {
     list
 }
 
+/// What the Rust's passes leave of a frame: the records, each sized for the frame (`recs`), and
+/// those sized about each of `EDGES` (`edges`, `cnt_edges`).
+struct RustLeft {
+    recs: Vec<u32>,
+    edges: [Vec<u32>; 4],
+}
+
 impl Model {
     /// Runs the frame through the Rust's passes, laying a pair's records in `thin_leaves`'s
-    /// order, and returns the records it leaves, each sized for the frame, and those sized about
-    /// each of `EDGES` (`cnt_edges`).
+    /// order, and returns what they leave.
     fn step(
         &mut self,
         world: World,
         frame: &Frame,
         tally: &mut Tally,
         claims: &mut Vec<[i32; 3]>,
-    ) -> (Vec<u32>, [Vec<u32>; 4]) {
+    ) -> RustLeft {
         for &s in &frame.stale {
             self.recs[generation::hdr_at(s) as usize + 2] = 0;
         }
@@ -2621,20 +2627,22 @@ impl Model {
             [0, 0],
         );
         let edges = cnt_edges(&world, &frame.sizing, &self.recs, self.workgroups);
-        (self.recs.clone(), edges)
+        RustLeft {
+            recs: self.recs.clone(),
+            edges,
+        }
     }
 }
 
 /// Where what a frame left differs from what it must leave. Each pair's records, and placed
-/// decor's, must match the Rust's `want` word for word, with the regions it sized them into, or
-/// one of those it sizes about an edge (`edges`, `cnt_edges`).
+/// decor's, must match the Rust's `want.recs` word for word, with the regions it sized them
+/// into, or one of those it sizes about an edge (`want.edges`).
 /// What the draws read must agree with the records the frame sized: each region's count is its
 /// records', its slots hold their lanes, and the args, the uniforms and the count that
 /// light_mark_draws.wgsl `instance_cnt` reads follow from them.
 fn frame_differs(
     got: &FrameLeft,
-    want: &[u32],
-    edges: &[Vec<u32>; 4],
+    want: &RustLeft,
     clipmap: &[[i32; 4]],
     workgroups: u32,
     drawing: &[u32],
@@ -2643,8 +2651,8 @@ fn frame_differs(
 ) -> Vec<String> {
     let mut out = Vec::new();
     let pairs = pairs_of(&got.recs);
-    let want_pairs = pairs_of(want);
-    let edge_pairs = edges.each_ref().map(|e| pairs_of(e));
+    let want_pairs = pairs_of(&want.recs);
+    let edge_pairs = want.edges.each_ref().map(|e| pairs_of(e));
     if pairs.len() != want_pairs.len() {
         out.push(format!(
             "pairs {} against {}",
@@ -2682,14 +2690,14 @@ fn frame_differs(
     }
     let r = REC_WORDS as usize;
     let first = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
-    for p in 0..want[generation::PLACED_HDR as usize] as usize {
+    for p in 0..want.recs[generation::PLACED_HDR as usize] as usize {
         let at = first + p * r;
         let left = &got.recs[at..at + r];
-        if left != &want[at..at + r] && edges.iter().all(|e| left != &e[at..at + r]) {
+        if left != &want.recs[at..at + r] && want.edges.iter().all(|e| left != &e[at..at + r]) {
             out.push(format!(
                 "placed record {p}: got {:x?}, want {:x?}",
                 &got.recs[at..at + r],
-                &want[at..at + r]
+                &want.recs[at..at + r]
             ));
         }
     }
@@ -3291,9 +3299,13 @@ fn hand_frames_answer_as_the_rust() {
         let mut step =
             |model: &mut Model, frame: Frame, tally: &mut Tally, claims: &mut Vec<[i32; 3]>| {
                 let w = if frame.placed_decor { world } else { without };
-                let (left, edges) = model.step(w, &frame, tally, claims);
-                eprintln!("{name}, {}: {} pairs", frame.name, pairs_of(&left).len());
-                wants.push((frame, left, edges));
+                let left = model.step(w, &frame, tally, claims);
+                eprintln!(
+                    "{name}, {}: {} pairs",
+                    frame.name,
+                    pairs_of(&left.recs).len()
+                );
+                wants.push((frame, left));
             };
         step(&mut model, first.clone(), &mut tally, &mut claims);
         let reach = |p: [i32; 3], r: i32| [p[0] - r, p[1] - r, p[0] + r, p[1] + r];
@@ -3465,7 +3477,7 @@ fn hand_frames_answer_as_the_rust() {
             let chain = chain_on();
             let t1 = std::time::Instant::now();
             let mut apart = 0;
-            for (frame, want, edges) in &wants {
+            for (frame, want) in &wants {
                 let b = WorldBinding {
                     clipmap: &clipmap,
                     ground: &ground,
@@ -3484,7 +3496,6 @@ fn hand_frames_answer_as_the_rust() {
                 let mut d = frame_differs(
                     &got,
                     want,
-                    edges,
                     &built.clipmap,
                     workgroups,
                     &frame.sizing.drawing,

@@ -8,7 +8,8 @@
  * would check that it exports what the other does. A file that has no twin
  * and is imported by its name, a device's own module
  * (service/platform/pxl-platform.native.ts) and a page's text
- * (service/platform/text.web.ts), is none of the files this one holds. Nothing imports this file; `tsc` alone reads it.
+ * (service/platform/text.web.ts), is none of the files this one holds.
+ * Nothing imports this file; `tsc` alone reads it.
  */
 
 import type * as page_web from "@/page.web.ts";
