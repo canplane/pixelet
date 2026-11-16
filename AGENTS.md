@@ -73,10 +73,11 @@
   only what it made.
 - Cargo builds into `<root>/rust/target/session/$CLAUDE_CODE_SESSION_ID`,
   written absolute.
-- A command that uses a device's GPU or starts or stops an app on it, and does
-  not hold the device itself (the shader probe, an install, the GPU's tests),
-  runs under its device's module: `script/perf/mac.py`, `android.py` or `ios.py`
-  `<command>`.
+- A Rust test that opens a device's GPU holds the device itself (pxl-gpu-host
+  `lock.test.rs`); every other command that uses a device's GPU or starts or
+  stops an app on it (the shader probe and its test, an install, a test run in a
+  browser) runs under its device's module: `script/perf/mac.py`, `android.py` or
+  `ios.py` `<command>`.
 - While the structure is being reworked, a change is checked by building it, and
   the tests and the formatter wait until it has settled. Then a change is
   checked by `./script/diff-check.py [base]`: the checks and tests of what the

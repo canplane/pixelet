@@ -13,7 +13,7 @@ struct VertexOut {
 
 @vertex
 fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
-  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
+  let p = screen_triangle_corner(i);
   var o: VertexOut;
   o.clip = vec4f(p, 0.0, 1.0);
   o.ndc = p;

@@ -25,7 +25,7 @@ fn placed(v: VertexIn) -> Placement {
   let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
   let scale = lane(4u, i);
   let fit = fits[instance_layer()];
-  let corner = vec2f(select(-1.0, 1.0, (v.k & 1u) != 0u), select(-1.0, 1.0, (v.k & 2u) != 0u));
+  let corner = vec2f(strip_corner(v.k)) * 2.0 - 1.0;
   let up = vec3f(0.0, 0.0, 1.0);
   let to_eye = frame_camera_pos() - base;
   let flat = vec3f(to_eye.xy, 0.0);

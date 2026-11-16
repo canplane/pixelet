@@ -47,7 +47,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   }
   let sigma = (SKY_STAR_SIGMA_PX + SKY_STAR_SWELL_PX * sqrt(max(flux - 1.0, 0.0))) * stars_density();
   let halo = select(0.0, SKY_STAR_HALO_GAIN * sqrt(flux / HALO_FROM), flux > HALO_FROM);
-  let corner = vec2f(f32(v & 1u), f32(v >> 1u)) * 2.0 - 1.0;
+  let corner = vec2f(strip_corner(v)) * 2.0 - 1.0;
   let half = SKY_STAR_CUTOFF_SIGMAS * sigma * select(1.0, SKY_STAR_HALO_SIGMA, halo > 0.0);
   clip.z = 0.0;
   clip = vec4f(clip.xy + corner * half * 2.0 / frame_viewport() * clip.w, clip.z, clip.w);

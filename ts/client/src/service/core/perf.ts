@@ -382,14 +382,15 @@ const TABLE_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 let reading: Promise<unknown> = Promise.resolve();
 
 /** The records of the table `name`: the frames and the tasks oldest first,
- * the worst frames longest first, read a page at a time until a page comes
- * short (`perf.json5` `LIMIT.PAGE_SZ`). */
+ * the worst frames longest first. */
 function table(name: (typeof TABLE_NAMES)[number]): Promise<U8Array> {
   const next = reading.then(() => read_table(name));
   reading = next.catch(() => undefined);
   return next;
 }
 
+/** The table `name`, read a page at a time until a page comes short
+ * (`perf.json5` `LIMIT.PAGE_SZ`). */
 async function read_table(
   name: (typeof TABLE_NAMES)[number],
 ): Promise<U8Array> {

@@ -26,8 +26,8 @@ def state():
 
 
 def hold():
-    """Waits until this process holds the Mac's GPU, as the renderer's GPU
-    tests do (`measure.hold`)."""
+    """Waits until this process holds the Mac's GPU, as every Rust test that
+    opens it does (`measure.hold`)."""
     measure.hold("gpu")
 
 

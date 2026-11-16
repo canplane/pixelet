@@ -74,11 +74,10 @@ test-xpute:
 	+cd xpute && cargo test --workspace
 	pnpm --dir xpute test
 	$(MAKE) -C xpute/cpp test
-# The GPU crates' tests take the Mac's GPU without holding it, so they run
-# under its module; the renderer's passes hold it themselves
-# (pxl-render tests/gpu/lock.rs), and under the module would wait on it.
+# Each Rust test that opens the Mac's GPU holds it itself (pxl-gpu-host
+# lock.test.rs).
 test-gpu:
-	+cd rust && ../script/perf/mac.py cargo test-gpu-host && cargo test-gpu
+	+cd rust && cargo test-gpu-host && cargo test-gpu
 
 fmt: fmt-ts fmt-rust fmt-xpute
 fmt-ts:

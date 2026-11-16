@@ -33,7 +33,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let s = shapes[ii];
   let lo = s.rect.xy - vec2f(1.0);
   let hi = s.rect.zw + vec2f(1.0);
-  let corner = vec2f(f32(vi & 1u), f32(vi >> 1u));
+  let corner = vec2f(strip_corner(vi));
   let at = mix(lo, hi, corner);
   var o: VertexOut;
   o.clip = vec4f(at.x / entry.xy.x * 2.0 - 1.0, 1.0 - at.y / entry.xy.y * 2.0, 0.0, 1.0);

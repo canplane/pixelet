@@ -256,6 +256,48 @@ macro_rules! lit {
         air!["frame", "encode", "effect"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", $($own),*]
     };
 }
+/// The parts of a walk over the node cache alone of the eye's beam rays, before the walk's side
+/// (queue_walk.first.wgsl or queue_walk.parked.wgsl).
+macro_rules! queue_corners {
+    [$side:literal] => {
+        &["walk_word", "eye_bind", "walk_node", "resume", "answer", "cached", "walk", "beam.eye", "parked", "corner_run.eye", "corner", "item_list", "queue_walk", $side]
+    };
+}
+/// The parts of a walk over the node cache alone of the eye's samples, before the walk's side
+/// (queue_walk.first.wgsl or queue_walk.parked.wgsl).
+macro_rules! queue_samples {
+    [$side:literal] => {
+        &["walk_word", "eye_bind", "px", "grid", "walk_node", "resume", "answer", "cached", "walk", "sample.eye", "sample_put", "parked", "sample_run.eye", "sample", "item_list", "queue_walk", $side]
+    };
+}
+/// The parts of a walk over the node cache alone of the eye's holes, before the walk's side
+/// (queue_walk.first.wgsl or queue_walk.parked.wgsl).
+macro_rules! queue {
+    [$side:literal] => {
+        &["walk_word", "eye_bind", "px", "grid", "walk_node", "resume", "answer", "cached", "walk", "hit", "miss_word", "walked", "parked", "hole_run.eye", "hole.eye", "queue", "queue_walk", $side]
+    };
+}
+/// The parts of a walk over the node cache alone of the light's beam rays, before the walk's side
+/// (queue_walk.first.wgsl or queue_walk.parked.wgsl).
+macro_rules! queue_light_corners {
+    [$side:literal] => {
+        &["walk_word", "eye_bind", "walk_node", "resume", "answer", "cached", "walk", "light_aim", "light_list", "beam.light", "parked", "corner_run.light", "corner", "item_list", "queue_walk", $side]
+    };
+}
+/// The parts of a walk over the node cache alone of the light's samples, before the walk's side
+/// (queue_walk.first.wgsl or queue_walk.parked.wgsl).
+macro_rules! queue_light_samples {
+    [$side:literal] => {
+        &["walk_word", "eye_bind", "walk_node", "resume", "answer", "cached", "walk", "light_aim", "light_resume", "light_list", "sample.light", "sample_put", "parked", "sample_run.light", "sample", "item_list", "queue_walk", $side]
+    };
+}
+/// The parts of a walk over the node cache alone of the light's holes, before the walk's side
+/// (queue_walk.first.wgsl or queue_walk.parked.wgsl).
+macro_rules! queue_light {
+    [$side:literal] => {
+        &["walk_word", "eye_bind", "px", "grid", "walk_node", "resume", "answer", "cached", "walk", "hit", "miss_word", "walked", "light_aim", "light_resume", "parked", "hole_run.light", "hole.light", "queue", "queue_walk", $side]
+    };
+}
 
 pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_BOX
@@ -296,26 +338,32 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "location_beacon"
     ],
     // SHADER_MARKER
-    &["frame", "encode", "marker", "marker_sprite"],
+    &["frame", "encode", "vertex", "marker", "marker_sprite"],
     // SHADER_SKY
-    air!["frame", "encode", "finish"; "atmos_air", "atmos_ground", "sky_word", "sky"],
+    air!["frame", "encode", "finish"; "atmos_air", "atmos_ground", "sky_word", "vertex", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
     // SHADER_MIP
-    &["mip"],
+    &["vertex", "mip"],
     // SHADER_AO_DOWNSAMPLE
-    &["frame", "ao_view", "ao_pass", "ao_downsample"],
+    &["frame", "ao_view", "vertex", "ao_pass", "ao_downsample"],
     // SHADER_AO_SAMPLE
-    &["frame", "ao_view", "ao_pass", "ao_sample"],
+    &["frame", "ao_view", "vertex", "ao_pass", "ao_sample"],
     // SHADER_AO_BLUR
-    &["ao_view", "ao_pass", "ao_blur"],
+    &["ao_view", "vertex", "ao_pass", "ao_blur"],
     // SHADER_ATMOS_TRANSMITTANCE
-    &["atmos_medium", "atmos_pass", "atmos_transmittance"],
+    &[
+        "atmos_medium",
+        "vertex",
+        "atmos_pass",
+        "atmos_transmittance",
+    ],
     // SHADER_ATMOS_MULTISCATTER
     &[
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
+        "vertex",
         "atmos_pass",
         "atmos_multiscatter",
     ],
@@ -330,6 +378,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "atmos_ground",
         "atmos_eye.unit",
         "atmos_light",
+        "vertex",
         "atmos_pass",
         "atmos_march",
         "atmos_skyview",
@@ -357,22 +406,30 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
+        "vertex",
         "star",
     ],
     // SHADER_CLOUD
-    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_air", "atmos_ground", "cloud_tile", "cloud_field", "cloud"],
+    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_air", "atmos_ground", "cloud_tile", "cloud_field", "vertex", "cloud"],
     // SHADER_CLOUD_FIELD
     &[
         "cloud_hash",
         "noise",
         "cloud_tile",
+        "vertex",
         "atmos_pass",
         "cloud_bake",
     ],
     // SHADER_ATLAS
-    &["atlas"],
+    &["vertex", "atlas"],
     // SHADER_IMPOSTOR
-    lit!["instance", "impostor_place", "lit_vertex", "impostor"],
+    lit![
+        "instance",
+        "vertex",
+        "impostor_place",
+        "lit_vertex",
+        "impostor"
+    ],
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
@@ -381,18 +438,20 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "atmos_bind",
         "atmos_lut",
         "atmos_eye.unit",
+        "vertex",
         "atmos_pass",
         "atmos_march",
         "atmos_irradiance",
     ],
     // SHADER_MARKER_REGION
-    &["frame", "encode", "marker", "marker_region"],
+    &["frame", "encode", "vertex", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
     lit![
         "ray",
         "paint",
         "px",
         "tile_word",
+        "vertex",
         "screen_tile",
         "tile_quad",
         "debug_look",
@@ -483,22 +542,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "atmos_froxel",
     ],
     // SHADER_QUEUE_CORNERS
-    &[
-        "walk_word",
-        "eye_bind",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "beam.eye",
-        "parked",
-        "corner_run.eye",
-        "corner",
-        "item_list",
-        "queue_walk",
-        "queue_walk.first",
-    ],
+    queue_corners!["queue_walk.first"],
     // SHADER_CELL
     &["walk_word", "eye_bind", "px", "grid", "window", "cell"],
     // SHADER_QUEUE_LAST
@@ -577,7 +621,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "light",
     ],
     // SHADER_LIGHT_MAP
-    &["light_word", "light_lay", "light_map"],
+    &["light_word", "light_lay", "vertex", "light_map"],
     // SHADER_QUEUE_ASK
     &[
         "walk_word",
@@ -603,6 +647,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_AO_APPLY
     &[
         "tile_word",
+        "vertex",
         "screen_tile",
         "tile_quad",
         "effect",
@@ -633,6 +678,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "record",
         "record_box",
         "px",
+        "vertex",
         "raster",
     ],
     // SHADER_FACE
@@ -717,6 +763,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "encode",
         "finish",
         "tile_word",
+        "vertex",
         "screen_tile",
         "tile_quad",
         "screen_finish",
@@ -725,32 +772,52 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     &[
         "frame",
         "tile_word",
+        "vertex",
         "screen_tile",
         "tile_quad",
         "screen_resolve",
     ],
     // SHADER_SCREEN_MASK
-    &["tile_word", "screen_tile", "tile_quad", "screen_mask"],
+    &[
+        "tile_word",
+        "vertex",
+        "screen_tile",
+        "tile_quad",
+        "screen_mask",
+    ],
     // SHADER_SCREEN_SHOW
-    &["screen_show"],
+    &["vertex", "screen_show"],
     // SHADER_SCREEN_PROPAGATE
     &["tile_word", "screen_propagate"],
     // SHADER_SCREEN_WRITE_BACK
-    &["tile_word", "screen_tile", "tile_quad", "screen_write_back"],
+    &[
+        "tile_word",
+        "vertex",
+        "screen_tile",
+        "tile_quad",
+        "screen_write_back",
+    ],
     // SHADER_RASTER_MASK
-    &["tile_word", "screen_tile", "tile_quad", "raster_mask"],
+    &[
+        "tile_word",
+        "vertex",
+        "screen_tile",
+        "tile_quad",
+        "raster_mask",
+    ],
     // SHADER_SCREEN_MARK
     &["screen_mark"],
     // SHADER_LIGHT_MASK
     &[
         "light_word",
         "tile_word",
+        "vertex",
         "screen_tile",
         "light_lay",
         "light_mask",
     ],
     // SHADER_SCREEN_BOUND
-    &["tile_word", "screen_tile", "screen_bound"],
+    &["tile_word", "vertex", "screen_tile", "screen_bound"],
     // SHADER_SKINNED_MARK
     &[
         "frame",
@@ -773,7 +840,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_DECOR_MARK
     &["frame", "place", "instance", "decor_place", "tile_mark"],
     // SHADER_IMPOSTOR_MARK
-    &["frame", "instance", "impostor_place", "tile_mark"],
+    &["frame", "instance", "vertex", "impostor_place", "tile_mark"],
     // SHADER_LOCATION_ZONE_MARK
     &[
         "frame",
@@ -792,24 +859,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_RECT_ARGS
     &["tile_word", "rect_args"],
     // SHADER_QUEUE_LIGHT_CORNERS
-    &[
-        "walk_word",
-        "eye_bind",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "light_aim",
-        "light_list",
-        "beam.light",
-        "parked",
-        "corner_run.light",
-        "corner",
-        "item_list",
-        "queue_walk",
-        "queue_walk.first",
-    ],
+    queue_light_corners!["queue_walk.first"],
     // SHADER_LIGHT_CELL
     &[
         "walk_word",
@@ -868,46 +918,9 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "sample_hit",
     ],
     // SHADER_QUEUE_SAMPLES
-    &[
-        "walk_word",
-        "eye_bind",
-        "px",
-        "grid",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "sample.eye",
-        "sample_put",
-        "parked",
-        "sample_run.eye",
-        "sample",
-        "item_list",
-        "queue_walk",
-        "queue_walk.first",
-    ],
+    queue_samples!["queue_walk.first"],
     // SHADER_QUEUE
-    &[
-        "walk_word",
-        "eye_bind",
-        "px",
-        "grid",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "hit",
-        "miss_word",
-        "walked",
-        "parked",
-        "hole_run.eye",
-        "hole.eye",
-        "queue",
-        "queue_walk",
-        "queue_walk.first",
-    ],
+    queue!["queue_walk.first"],
     // SHADER_QUEUE_LAST_CORNERS
     &[
         "walk_word",
@@ -936,26 +949,7 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "queue_last",
     ],
     // SHADER_QUEUE_LIGHT_SAMPLES
-    &[
-        "walk_word",
-        "eye_bind",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "light_aim",
-        "light_resume",
-        "light_list",
-        "sample.light",
-        "sample_put",
-        "parked",
-        "sample_run.light",
-        "sample",
-        "item_list",
-        "queue_walk",
-        "queue_walk.first",
-    ],
+    queue_light_samples!["queue_walk.first"],
     // SHADER_QUEUE_LAST_LIGHT_CORNERS
     &[
         "walk_word",
@@ -1061,30 +1055,9 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "light_mark_draws_open",
     ],
     // SHADER_CAMERA_GRID
-    &["encode", "sky_word", "debug_look", "camera_grid"],
+    &["encode", "sky_word", "debug_look", "vertex", "camera_grid"],
     // SHADER_QUEUE_LIGHT
-    &[
-        "walk_word",
-        "eye_bind",
-        "px",
-        "grid",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "hit",
-        "miss_word",
-        "walked",
-        "light_aim",
-        "light_resume",
-        "parked",
-        "hole_run.light",
-        "hole.light",
-        "queue",
-        "queue_walk",
-        "queue_walk.first",
-    ],
+    queue_light!["queue_walk.first"],
     // SHADER_QUEUE_LAST_LIGHT
     &[
         "walk_word",
@@ -1119,126 +1092,17 @@ pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
         "queue_last",
     ],
     // SHADER_QUEUE_CORNERS_PARKED
-    &[
-        "walk_word",
-        "eye_bind",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "beam.eye",
-        "parked",
-        "corner_run.eye",
-        "corner",
-        "item_list",
-        "queue_walk",
-        "queue_walk.parked",
-    ],
+    queue_corners!["queue_walk.parked"],
     // SHADER_QUEUE_SAMPLES_PARKED
-    &[
-        "walk_word",
-        "eye_bind",
-        "px",
-        "grid",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "sample.eye",
-        "sample_put",
-        "parked",
-        "sample_run.eye",
-        "sample",
-        "item_list",
-        "queue_walk",
-        "queue_walk.parked",
-    ],
+    queue_samples!["queue_walk.parked"],
     // SHADER_QUEUE_PARKED
-    &[
-        "walk_word",
-        "eye_bind",
-        "px",
-        "grid",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "hit",
-        "miss_word",
-        "walked",
-        "parked",
-        "hole_run.eye",
-        "hole.eye",
-        "queue",
-        "queue_walk",
-        "queue_walk.parked",
-    ],
+    queue!["queue_walk.parked"],
     // SHADER_QUEUE_LIGHT_CORNERS_PARKED
-    &[
-        "walk_word",
-        "eye_bind",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "light_aim",
-        "light_list",
-        "beam.light",
-        "parked",
-        "corner_run.light",
-        "corner",
-        "item_list",
-        "queue_walk",
-        "queue_walk.parked",
-    ],
+    queue_light_corners!["queue_walk.parked"],
     // SHADER_QUEUE_LIGHT_SAMPLES_PARKED
-    &[
-        "walk_word",
-        "eye_bind",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "light_aim",
-        "light_resume",
-        "light_list",
-        "sample.light",
-        "sample_put",
-        "parked",
-        "sample_run.light",
-        "sample",
-        "item_list",
-        "queue_walk",
-        "queue_walk.parked",
-    ],
+    queue_light_samples!["queue_walk.parked"],
     // SHADER_QUEUE_LIGHT_PARKED
-    &[
-        "walk_word",
-        "eye_bind",
-        "px",
-        "grid",
-        "walk_node",
-        "resume",
-        "answer",
-        "cached",
-        "walk",
-        "hit",
-        "miss_word",
-        "walked",
-        "light_aim",
-        "light_resume",
-        "parked",
-        "hole_run.light",
-        "hole.light",
-        "queue",
-        "queue_walk",
-        "queue_walk.parked",
-    ],
+    queue_light!["queue_walk.parked"],
 ];
 
 /// The world's query alone, assembled as a module that no pipeline runs (record.rs

@@ -95,7 +95,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     if (vi < 3u) {
       // One triangle, wound counter-clockwise, covers the whole screen. The depth is reversed,
       // so a lack, at 1, lies before a hit, at `RASTER_EYED_DEPTH`.
-      let xy = vec2f(f32((vi & 1u) * 4u) - 1.0, f32((vi >> 1u) * 4u) - 1.0);
+      let xy = screen_triangle_corner(vi);
       o.clip = vec4f(xy, select(RASTER_EYED_DEPTH, 1.0, lacks), 1.0);
     }
     return o;

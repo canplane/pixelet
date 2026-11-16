@@ -7,6 +7,7 @@
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
+#[path = "../../../../gpu/host/src/lock.test.rs"]
 mod lock;
 
 use std::collections::BTreeMap;
@@ -809,6 +810,11 @@ pub(crate) fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
         a[2] * b[0] - a[0] * b[2],
         a[0] * b[1] - a[1] * b[0],
     ]
+}
+
+/// The float `n` floats along from `x`, a positive float.
+pub(crate) fn along(x: f32, n: i32) -> f32 {
+    f32::from_bits((x.to_bits() as i32 + n) as u32)
 }
 
 /// The ulps between `a` and `b`, by their order as floats.

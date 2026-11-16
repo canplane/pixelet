@@ -45,8 +45,8 @@ _held = {}
 def hold(device):
     """Waits until this process holds `device`, and holds it until the process
     ends. One user drives a device at a time across every checkout of the
-    repository: a run, the shader probe, and on the Mac the renderer's GPU tests
-    and the frame harness (rust/client/render/tests/gpu/lock.rs). The lock is
+    repository: a run, the shader probe, and on the Mac every Rust test that
+    opens its GPU (pxl-gpu-host lock.test.rs). The lock is
     `tmp/lock/<device>.lock` in the main checkout, which its worktrees share."""
     if device in _held:
         return

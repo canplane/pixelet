@@ -9,8 +9,8 @@
 //! Run with `XPUTE_GOLDEN_WRITE=1`, the test encodes the programs, runs each
 //! turn on this machine's GPU through pxl-gpu-host, and writes the
 //! record: the block's layout, each program's turns, its input and the bytes
-//! it read back. A command that uses the GPU runs under its device's module
-//! (`script/perf/mac.py cargo test …`). Without it the test holds the
+//! it read back, holding this machine's GPU from then on (pxl-gpu-host
+//! lock.test.rs). Without it the test holds the
 //! encoder's turns to the record. An address in a turn is a native pointer on
 //! a device, and so differs every run; the record holds each relative to its
 //! own block, and each reader finds the address words by the stream spec's
@@ -26,6 +26,9 @@ use xpute_link::mem;
 
 use super::{Buf, Stream};
 use crate::encode::*;
+
+#[path = "../../host/src/lock.test.rs"]
+mod lock;
 
 type Encoder = Gpu<64>;
 
@@ -221,6 +224,7 @@ fn hex_of(words: &[u32]) -> String {
 
 /// Writes the record, each program run on this machine's GPU.
 fn write() {
+    lock::hold();
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let adapter =

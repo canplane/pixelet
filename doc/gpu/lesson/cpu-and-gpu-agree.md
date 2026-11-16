@@ -92,7 +92,7 @@ The line runs between the world's state and its drawing:
   one word the host rounds (`light::band_texels2`, `W_BAND_SCALE`;
   tests/light.rs `every_pass_bands_a_tile_alike`).
 
-  > Since 2026-11-16: the user ruled that a level of detail need not agree
+  > Since 2026-11-16 (2a5a4684f7): the user ruled that a level of detail need not agree
   > across pipelines. The eye's zoom, which the walks ask (walk_node.wgsl
   > `ask_range`) and record_draw.wgsl works out again for an entry's freshness
   > (record.wgsl `asked_near`), stays in floats in each: a node within an ulp

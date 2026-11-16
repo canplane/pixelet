@@ -122,7 +122,7 @@ A change that touches a GPU call (`spec/gpu/`, the GPU's crates under
 takes this, which needs a GPU and Chrome (`$CHROME`):
 
 ```bash
-(cd rust && ../script/perf/mac.py cargo test-gpu-host)
+(cd rust && cargo test-gpu-host)
 script/perf/mac.py pnpm --dir ts test:gpu:web
 ```
 

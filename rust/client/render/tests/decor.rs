@@ -1989,10 +1989,9 @@ fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32, ulps:
         }
         let at = [recs[i + 1] as i32, recs[i + 2] as i32, recs[i + 3] as i32];
         let d2 = generation::dist2(sizing.origin, at);
-        let along = |n: i32| f32::from_bits((d2.to_bits() as i32 + n) as u32);
         // Placed decor's records lie past the entries'.
         let placed = i >= generation::rec_at(generation::ENTRY_REC_CAP) as usize;
-        let ask = detail.at(along(ulps[0]));
+        let ask = detail.at(gpu::along(d2, ulps[0]));
         let zoom = if placed {
             ask
         } else {
@@ -2001,8 +2000,8 @@ fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32, ulps:
         let (decor, variant, _, cell_zoom) = generation::rec_of(word);
         let group = DECORS[decor as usize].first_group() + variant;
         let hidden = hide[3] != 0 && hide[..3] == at.map(|v| v as u32);
-        let across =
-            angle(drawing::EXTENTS + group) / along(ulps[1]).sqrt().max(drawing::NEAREST_U);
+        let across = angle(drawing::EXTENTS + group)
+            / gpu::along(d2, ulps[1]).sqrt().max(drawing::NEAREST_U);
         let lod = drawing::lod(
             across,
             angle(drawing::MODEL_ANGLE),
