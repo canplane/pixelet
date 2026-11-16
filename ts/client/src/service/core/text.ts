@@ -17,7 +17,7 @@ import type { Memory, Serving } from "@xpute/link";
 import type { Lent } from "@xpute/link/abi/types.ts";
 
 import * as text from "@/abi/text.ts";
-import * as platform from "@/service/platform/text.ts";
+import * as platform from "@/service/platform/text.web.ts";
 
 /** Serves the text on `link`, reading what the core lends in `mem`. */
 export function serve_text(link: Serving, mem: Memory): void {

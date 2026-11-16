@@ -11,11 +11,13 @@ lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-serve
 # with them, which only adds) and the tools.
 lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-gpu-link", "-p", "pxl-gpu-guest", "-p", "pxl-gpu-host", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-render", "-p", "pxl-core", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
 # The device's library, the core with its runtime and the GPU's host, for an
-# iPhone and an Android phone.
-lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-gpu-host", "-p", "pxl-runtime", "--", "-D", "warnings"]
+# iPhone and an Android phone, as a release builds it.
+lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-gpu-host", "-p", "pxl-runtime", "--no-default-features", "--", "-D", "warnings"]
 # Clippy misreads std's Android thread-local expansion: os-based TLS drops the `const` block,
-# so the lint fires on const initializers no code can satisfy. The flag goes when clippy reads
-# it right.
+# so the lint fires on const initializers no code can satisfy. The allow covers no code of
+# ours: each `thread_local!` here that can initialize in a `const` block already does, as the
+# lint asks, and it fires on those alike under the toolchain rust-toolchain.toml pins. The
+# flag goes when `cargo lint-android` passes without it.
 lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-gpu-host", "-p", "pxl-runtime", "--no-default-features", "--", "-D", "warnings", "-A", "clippy::missing_const_for_thread_local"]
 # pxl-tool holds every model to the committed table.
 test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve"]
