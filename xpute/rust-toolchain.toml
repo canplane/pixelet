@@ -4,5 +4,5 @@
 channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
-# A guest is compiled to a module for this target.
-targets = ["wasm32-unknown-unknown"]
+# A guest's module, and Android, which the device's crates are linted for.
+targets = ["wasm32-unknown-unknown", "aarch64-linux-android"]

@@ -1,7 +1,8 @@
 // @pxl/client/service/platform/pxl-platform.native.ts
 
 /** The app's own native module (PlatformModule.swift, PlatformModule.kt under
- * modules/platform/), beside xpute's (@xpute/expo). */
+ * modules/platform/), beside xpute's (@xpute/expo). The page has no such
+ * module, so it has no `.web` twin, and conform.ts holds it to none. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";

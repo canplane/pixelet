@@ -25,7 +25,8 @@ use pxl_global::Global;
 /// Whether `val` may be set for `key` in this build. A dev-only setting or
 /// option, which schema.json5 marks `dev`, is offered only in a development
 /// build, compiled with the feature `dev`, or in a release compiled for
-/// measuring (`crate::MEASURING`), whose drive sets them. Storage outlives
+/// measuring (`crate::MEASURING`), whose drive sets them while its UI shows
+/// no dev rows (ts/client ui/shared/setting.ts `SETTING`). Storage outlives
 /// the build, and a dev value with no row left in the UI to turn it off would
 /// otherwise stay in force. Loading drops such a value, and `set_setting`
 /// refuses it from the console.

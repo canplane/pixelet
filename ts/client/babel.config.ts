@@ -28,13 +28,6 @@ import { tile_source } from "./script/proxy.ts";
 /** The part of Babel a plugin is handed. */
 type Babel = { types: typeof BabelTypes };
 
-declare module "@babel/core" {
-  /** Metro names the platform it bundles for: `web`, `ios` or `android`. */
-  interface TransformCaller {
-    platform?: string | null;
-  }
-}
-
 /** A TypeScript node that holds a value, which any other holds none of. */
 const TS_VALUE =
   /^TS(?:As|Satisfies|NonNull|Instantiation)Expression$|^TSTypeAssertion$/;
@@ -179,14 +172,10 @@ export default (api: ConfigAPI): TransformOptions => {
   // (ui/layout.tsx).
   const drive = process.env.PXL_PERF_DRIVE === "1";
   api.cache.using(() => `${process.env.NODE_ENV} ${source} ${drive}`);
-  // The bundle's platform, which keys the cache too, as `api.caller` does.
-  const platform = api.caller((c) => c?.platform ?? null);
 
   const DEFINE = {
     __TILE_SOURCE__: source,
     __PERF_DRIVE__: drive,
-    __WEB__: platform === "web",
-    __NATIVE__: platform === "ios" || platform === "android",
   };
 
   /** Replaces each name in DEFINE with its value, wherever the name is not

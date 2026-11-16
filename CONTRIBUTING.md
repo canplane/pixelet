@@ -70,7 +70,7 @@ On Android, with a JDK from 17 up and the NDK installed:
 
 ```bash
 make install
-(cd ts/client && pnpm exec expo prebuild --platform android --no-install --clean)
+(cd ts/client && pnpm exec expo prebuild --platform android --no-install)
 (cd ts/client/android && ./gradlew :app:installRelease)
 ```
 

@@ -65,7 +65,7 @@ env:
   # and setup-node is pointed at it, and ts/package.json the pnpm. The Python scripts run
   # on the runner's python3, as the shell scripts on its sh, with the package
   # script/requirements.txt names. A job installs from a file rather than being
-  # told, so the number is in one place.
+  # told.
   #
   # wasm-opt prints the import/export mapping the UI imports, and which
   # letters it assigns is the optimizer's own business — so the version is

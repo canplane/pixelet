@@ -3,7 +3,9 @@
 /** A place reports long animation frames, which Safari, WKWebView and React
  * Native lack, and long tasks. On a device, the long tasks are the JavaScript
  * thread's, which React Native's native performance API reports
- * (RuntimeScheduler_Modern.cpp `reportLongTasks`). */
+ * (RuntimeScheduler_Modern.cpp `reportLongTasks`). Both platforms read the
+ * same performance API, so it is one file and no pair: a pair keeps only what
+ * differs. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { LongFrame, LongFrameSource } from "./types.ts";

@@ -1,5 +1,9 @@
 // @pxl/client/service/platform/sensor-listener.ts
 
+/** What both platforms' sensors share: the listener they report to and how a
+ * reading becomes a fix. Nothing in it differs by platform, so it is one file
+ * and no pair. */
+
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import type { Coords, Fix, SensorListener } from "./types.ts";
@@ -19,7 +23,9 @@ function null_if_negative(v: f64 | null): f64 | null {
 
 /** Where a build made for measuring stands on every platform, so that every
  * run is on the same ground: Seoraksan, whose ridges the drive's eye meets at
- * the horizon. */
+ * the horizon. It sits here, beside the listener the fix goes to, because the
+ * driver gives it and the drive's check (ui/feature/debug/perf/measure.ts)
+ * reads it. */
 export const MEASURE_PLACE: Fix = {
   lat: 38.1193,
   lon: 128.4656,
