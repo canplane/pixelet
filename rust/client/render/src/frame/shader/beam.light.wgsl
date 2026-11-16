@@ -56,6 +56,6 @@ fn beam_lay_origin(base: u32, origin: vec3<i32>) {
 /// The product is rounded, and the Q3 steps are added after, as the engine computes it. Metal
 /// may fuse the two into one rounding; tests/margin.rs names each rounding a pass takes.
 fn beam_start_dist(t: f32) -> f32 {
-  return max(t - (LIGHT_MARGIN_PER_WIDTH * beam_spacing().x + LIGHT_MARGIN_STEPS), 0.0);
+  return max(t - (LIGHT_MARGIN_PER_WIDTH * beam_spacing().x + LIGHT_MARGIN_ROUNDING_U), 0.0);
 }
 

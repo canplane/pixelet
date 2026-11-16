@@ -787,7 +787,7 @@ impl LightBox {
 /// one rounding (beam.light.wgsl `beam_start_dist`). The width comes from the host's word
 /// (`Light::width`), so no other step rounds apart.
 pub(crate) fn margins(width: f32) -> [(&'static str, f32); 2] {
-    let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));
+    let fused = cast::NARROW_DIAGONAL.mul_add(width, light::MARGIN_ROUNDING_U);
     [
         ("the engine's", light::margin(width)),
         ("a fused sum's", fused),

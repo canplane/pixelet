@@ -792,7 +792,7 @@ pub const TILE: u32 = 8;
 pub const BEAM: u32 = TILE;
 pub const BEAM_WINDOW: u32 = 5;
 const _: () = assert!(
-    BEAM_WINDOW as f32 >= 2.0 * cast::SQRT_6,
+    BEAM_WINDOW as f32 >= cast::NARROW_DIAGONAL,
     "a beam ray through `Y` lies within 2√6 spacings"
 );
 
@@ -868,11 +868,15 @@ pub(crate) const fn beam_words(size: u32) -> u32 {
 }
 
 /// How far short of where a beam ray stopped a cell's texels start: the diagonal of a cube
-/// `2√2` beam spacings wide at a spacing of `width` units, which is `2√6 · width`, plus two for
-/// a Q3 step's rounding of each ray's start on the near plane.
+/// `2√2` beam spacings wide (`cast::NARROW_DIAGONAL`) at a spacing of `width` units, plus
+/// `MARGIN_ROUNDING_U`.
 pub fn margin(width: f32) -> f32 {
-    2.0 * cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
+    cast::NARROW_DIAGONAL * width + MARGIN_ROUNDING_U
 }
+
+/// What `margin` adds to the diagonal: two Q3 steps, for a Q3 step's rounding of each ray's
+/// start on the near plane.
+pub const MARGIN_ROUNDING_U: f32 = 2.0 / (1u32 << FRAC_W) as f32;
 
 /// Where the texels of the cells about a beam ray that stopped at `t` start: `margin` short of
 /// `t`, and never before the near plane, as the eye's rays start short of a beam ray's hit

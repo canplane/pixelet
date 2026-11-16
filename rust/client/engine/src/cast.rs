@@ -118,9 +118,9 @@ const _: () = assert!(
     "`NARROW_SQUARED` is `NARROW`'s brick"
 );
 
-/// √6 as an f32 rounds it. A cube `NARROW` spacings wide spans `√3 · NARROW`, which is `2√6`
-/// spacings, corner to corner.
-pub const SQRT_6: f32 = 2.449_489_8;
+/// The diagonal of a cube `NARROW` spacings wide, in spacings: `√3 · NARROW`, which is `2√6`.
+/// Two parallel rays that cross such a cube enter it no more than this apart.
+pub const NARROW_DIAGONAL: f32 = 4.898_979_7;
 
 /// Which cell a ray stops at: the first it cannot see through (`answer::fills`), as an
 /// eye sees (`Opaque`); the first it can see through, where what is climbed out of ends

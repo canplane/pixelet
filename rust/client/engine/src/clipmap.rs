@@ -147,17 +147,15 @@ pub const RUN_WORDS_MOST: u32 = RUN_OFFS_AT + SPANS_COLUMN_CNT * (1 + SPANS_COLU
 
 /// The bits of a head word that hold a column's spans' count (`SPANS_COLUMN_WORDS`).
 pub const SPANS_CNT: u32 = 0xffff;
+/// A head word's face cell where the column has none (`SPANS_COLUMN_WORDS`).
+pub const FACE_NONE: i32 = i16::MIN as i32;
 
 /// A head word's face cell (`i32::MIN` for none) and spans' count, held to pxl-spec `way::SPAN_CAP` so
 /// that a loop over them stays bounded whatever the word.
 pub const fn head_of(w: u32) -> (i32, u32) {
     let face = w as i32 >> 16;
     (
-        if face == i16::MIN as i32 {
-            i32::MIN
-        } else {
-            face
-        },
+        if face == FACE_NONE { i32::MIN } else { face },
         if w & SPANS_CNT < SPAN_CAP as u32 {
             w & SPANS_CNT
         } else {
@@ -262,7 +260,7 @@ pub const SPANS_AT: u32 = 0;
 pub const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMN_CNT: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (pxl-spec `way::SpanList`). The head word holds the count
-/// (`SPANS_CNT`) and, above it, the face cell as an `i16`, `i16::MIN` for none (fill.rs
+/// (`SPANS_CNT`) and, above it, the face cell as an `i16`, `FACE_NONE` for none (fill.rs
 /// `hdr_word`). Then each span holds its lowest and past its highest, an `i16` each as the
 /// world's z is and held to that range (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * SPAN_CAP as u32;

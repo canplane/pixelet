@@ -34,6 +34,7 @@ use pxl_render::frame::shader::record::{
 use pxl_render::frame::shader::word::{ROW_LANE_CNT, SQUARE_SIDE, instance};
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::asset::decor::{DECORS, Decor, Orientation, ROWS};
+use pxl_spec::asset::spin;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
@@ -2105,7 +2106,7 @@ fn lanes_of(drawing: &[u32], recs: &[u32], i: usize) -> Option<(u32, [u32; 5])> 
             (anchor(0) + across as f32 / 2.0).to_bits(),
             (anchor(1) + deep as f32 / 2.0).to_bits(),
             (anchor(2) - sink).to_bits(),
-            ((turn % 4) as f32 * core::f32::consts::FRAC_PI_2).to_bits(),
+            (spin(turn) as f32).to_bits(),
             1.0f32.to_bits(),
         ],
     ))

@@ -285,8 +285,8 @@ const SHADER_ORDER: [(&str, u8); 8] = [
 /// under what is made with them: the decor's generation and the images.
 const GPU_ORDER: [(&str, u8); 15] = [
     ("put", 0),
-    ("split", 0),
     ("text", 0),
+    ("track", 0),
     ("api", 1),
     ("draw", 2),
     ("pipeline", 2),
