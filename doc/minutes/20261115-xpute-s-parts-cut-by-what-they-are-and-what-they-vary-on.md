@@ -80,6 +80,11 @@ What the user reproved in the agents' work, to be kept clear of:
   each answer runs the core's whole `end`; a skipped or refused frame still
   costs an entry each vsync.
 
+> Since 2026-11-16 (`deb1fbb08c`): an entry's budget runs from the frame's start
+> and its paced interval, the vsync answers its timestamp, and a refused frame
+> waits for the next paced slot, as a skipped one does
+> ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)).
+
 ## What was decided
 
 - **The entities** (**the user**). xpute's parts are the kit, the link, the

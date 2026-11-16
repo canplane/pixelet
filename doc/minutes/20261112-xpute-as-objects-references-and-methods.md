@@ -206,4 +206,9 @@ name becomes a number.
   pacing are then measured apart.
 - **Small items:** `BUDGET_MS`'s value, regenerating the perf spec, and EDEADLK in
   the errno spec.
+
+> Since 2026-11-16 (`deb1fbb08c`): `BUDGET_MS` is gone; an entry's deadline is the
+> deployed build's rule again, from the frame's start and its paced interval, and
+> the pace is capped at 60 Hz again, neither yet measured against that build
+> ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)).
 - **C++ catches up last.**
