@@ -18,6 +18,9 @@ export function tile_url(
  * dev tile server's answer. */
 export const TILE_SOURCE_ROUTE = `${TILE_ROOT}/source`;
 
+/** The one place a route becomes a URL: a remote origin, which the platform
+ * reports (`origin.REMOTE`), takes the site's address, which this module
+ * owns. */
 export function href(route: string): string {
   return origin.REMOTE ? `${SITE_URL}${route}` : route;
 }

@@ -6,7 +6,8 @@
 # `host/rust` is the host in Rust: its end of the link, the bindings served
 # there and what it serves; `runtime/native` is the runtime on a native device,
 # the environment the host runs in, which injects into the host what it needs
-# of it: the guest's thread, its loop and the UI's channel. A program may bring
+# of it: the way back to the guest's thread, where a report goes and the log.
+# A program may bring
 # plugins of its own, in its own tree, each repeating the link, the guest and
 # the host. `gen` is the data specs' generator, and `gen-targets` what it makes
 # of xpute's parts; `link/gen` the bindings' generator, which carries xpute's

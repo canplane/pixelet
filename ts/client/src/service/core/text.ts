@@ -5,7 +5,9 @@
  * the platform's text: a width, and a raster. Its methods answer at once: each
  * reads the text the core lends, and what a raster writes into the image the
  * core lends is in place by the time the call returns. The core breaks the
- * lines itself.
+ * lines itself. A page's worker mounts it (runtime/worker.ts) and a device's
+ * text is pxl-runtime's text.rs; it sits in service/core because it serves
+ * one of the core's interfaces, as the others here call them.
  */
 
 import { td } from "@xpute/kit/codec/encoding.ts";

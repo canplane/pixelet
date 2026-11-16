@@ -956,6 +956,9 @@ fn raster_box() -> String {
         ("RASTER_STALE", U32(STALE)),
         ("RASTER_STALE_DEPTH", F32(STALE_DEPTH)),
         ("RASTER_LACK", U32(LACK)),
+        // The depth an eyed box is drawn at, one step short of a lack's 1.
+        // Only raster.wgsl reads it and no rule of the CPU's does, so it is
+        // owned here and not in pxl-engine, as NEAR and STALE_DEPTH are.
         ("RASTER_EYED_DEPTH", F32(1.0 - 1.0 / (1u32 << 20) as f32)),
         ("RASTER_NEAR", F32(NEAR)),
     ]) + &format!(

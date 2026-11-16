@@ -197,7 +197,9 @@ export function ask_heading(): void {
 
 /** A build made for measuring has its place given and starts no sensor, so
  * that no permission prompt holds it on any platform. Its fix comes as the
- * platform's do, in an entry of its own. */
+ * platform's do, in an entry of its own. This is the measuring build's
+ * fixture (the performance skill's `PXL_PERF_DRIVE`), the one branch on the
+ * build here, and no platform's case. */
 const GEOLOCATION_CMD: Readonly<Record<GeolocationCommand, () => void>> = {
   [GEOLOCATION_COMMAND_START]: () => {
     if (!__PERF_DRIVE__) return platform.GEOLOCATION.start();

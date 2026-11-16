@@ -6,7 +6,7 @@
 // call in. The machine's names are read here as the guest's callers read them.
 //
 // A program says nothing of its memory here: what the link lays and lends,
-// its layout and a GPU stream's records, it takes from the memory resource
+// and its layout, it takes from the memory resource
 // the program set as its default (`std::pmr::get_default_resource`), and the
 // program picks it and its global `operator new`.
 

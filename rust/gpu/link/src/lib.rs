@@ -19,7 +19,9 @@ pub mod handle;
 
 /// This is what a guest asks of its GPU, as its program's data spec says, by
 /// WebGPU's names: the power preference, the features the device must have,
-/// and those it takes where the adapter has them.
+/// and those it takes where the adapter has them. It crosses no link, so no
+/// spec owns it: it is defined in Rust and TypeScript alike
+/// (@pxl/gpu `GpuAsk`).
 #[derive(Clone, Copy)]
 pub struct GpuAsk {
     pub power: &'static str,
@@ -29,7 +31,9 @@ pub struct GpuAsk {
 
 /// These are the settings of the GPU's host that the program chooses, the
 /// same on a page and a device; a device's host chooses the rest of its
-/// config (pxl-gpu-host `Config`, `native::config`).
+/// config (pxl-gpu-host `Config`, `native::config`). It crosses no link, so
+/// no spec owns it: it is defined in Rust and TypeScript alike, the same
+/// fields and types (@pxl/gpu `GpuConfig`).
 #[derive(Clone, Copy)]
 pub struct GpuConfig {
     /// This is how many frames may be admitted and unfinished on the GPU at

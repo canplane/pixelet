@@ -10,7 +10,9 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 
 /** This is what a guest asks of its GPU, as its program's data spec says, by
  * WebGPU's names: the power preference, the features the device must have,
- * and those it takes where the adapter has them. */
+ * and those it takes where the adapter has them. It crosses no link, so no
+ * spec owns it: it is defined in Rust and TypeScript alike (pxl-gpu-link
+ * `GpuAsk`). */
 export interface GpuAsk {
   power: string;
   required_feats: readonly string[];
@@ -18,7 +20,9 @@ export interface GpuAsk {
 }
 
 /** These are the settings of the GPU's host that the program chooses, the
- * same on a page and a device (pxl-gpu-link `GpuConfig`). */
+ * same on a page and a device. It crosses no link, so no spec owns it: it is
+ * defined in Rust and TypeScript alike, the same fields and types
+ * (pxl-gpu-link `GpuConfig`). */
 export interface GpuConfig {
   /** How many frames may be admitted and unfinished on the GPU at once, at
    * least one. The host tells it the guest in the device's block (spec

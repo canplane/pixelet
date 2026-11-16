@@ -9,8 +9,8 @@ which installs the toolchain `rust-toolchain.toml` names; a C++20 compiler, as
 [WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 `$WASI_SDK_PATH`, with which the C++ tests compile the library for wasm32.
 The device's crates are linted for Android too, which takes Rust's
-`aarch64-linux-android` target (`rustup target add aarch64-linux-android`)
-and the Android NDK, its clang and `llvm-ar` named by
+`aarch64-linux-android` target, which `rust-toolchain.toml` names, and the
+Android NDK, its clang and `llvm-ar` named by
 `CC_aarch64_linux_android` and `AR_aarch64_linux_android`. Each command runs
 from xpute's root.
 

@@ -28,7 +28,8 @@ export interface Stop {
 }
 
 /** A stop as the UI hears it: the report without its message, which the
- * runtime alone writes, as a device's listener carries it. */
+ * runtime alone writes, as a device's listener carries it. It sits here with
+ * `Stop`, whose shape it takes, and the UI end takes it from the host. */
 export type UiStop = Omit<Stop, "message">;
 
 export interface Runtime {

@@ -3,7 +3,9 @@
 // its package.json `exports`, which are its published API and kept whether
 // used here or not. xpute's kit is not listed: all of it is published and
 // kept. What a generator writes under abi/, as *.spec.ts and as
-// place-symbol.ts is not reported, nor a package knip's plugins infer from a
+// place-symbol.ts is not reported (symbol-path.ts is generated too, but every
+// export of it is imported, so knip has nothing to report and it is not
+// listed), nor a package knip's plugins infer from a
 // configuration that no code imports (ignoreDependencies). A report names
 // candidates, each removed only as the code skill's "One owner" says.
 {

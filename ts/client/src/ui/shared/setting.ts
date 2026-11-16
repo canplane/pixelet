@@ -9,7 +9,9 @@ type Spec = typeof EVERY;
 
 /** The table is chosen by a constant that the build folds, rather than
  * filtered, so that the dev rows are absent from a production bundle instead
- * of hidden. */
+ * of hidden. A build made for measuring takes the production table on
+ * purpose: it shows no dev rows, while the core still offers their values
+ * for its drive to set (pxl-core domain/setting.rs `is_offered`). */
 export const SETTING = (__DEV__ ? EVERY : PROD) as Spec;
 
 export type SettingName = keyof Spec;

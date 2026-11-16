@@ -4,7 +4,9 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 
 import { PLATFORM } from "./pxl-platform.native.ts";
 
-/** A device's app has no origin of its own: it reads from the site's. */
+/** A device's app has no origin of its own: it reads from the site's. The
+ * platform says only whether the origin is remote; the site's address is
+ * service/origin's (route.ts `href`). */
 export const REMOTE: boolean = true;
 
 /** The encoding the bake stores its objects in. It is asked for, so that the

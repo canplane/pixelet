@@ -27,8 +27,8 @@
 	serve-tile watch-wasm web web-preview \
 	sync-build-number deploy
 
-# Each tree's packages, by its own manager: ts/'s here, xpute's by its make,
-# and the cargo tools the tests run under.
+# Each tree's packages, by its own manager: ts/'s and xpute's by pnpm, each in
+# its own workspace, and the cargo tools the tests run under.
 install: install-ts install-xpute install-rust install-py
 install-ts:
 	pnpm --dir ts install
