@@ -1,8 +1,8 @@
 // xpute-runtime-native/link.rs
 
 //! The guest linked into the app, and the host's side of the link over it
-//! (link/wit/types.wit), which the runtime makes and gives to each server it
-//! mounts (native.rs `run`), as a page's worker makes its side over the
+//! (link/wit/types.wit), which the runtime makes and gives to each mount it
+//! runs (native.rs `run`), as a page's worker makes its side over the
 //! module and gives it (worker.ts `instantiate`): the same machine as the
 //! guest's (xpute-link link.rs `Side`) over the other box. It lays its frames
 //! in the guest's inbox and crosses by entering the guest, which is linked
@@ -81,23 +81,27 @@ pub(crate) fn trap(err: &str) {
 }
 
 /// Enters the guest first, once the host's own objects and what the UI
-/// serves are mounted: the guest lays its link, the host reads its layout,
-/// then the guest boots and may open them (@xpute/runtime-web worker.ts
-/// `enter`). Where an interface of `imports` (the bindings' `IMPORTS`) is
-/// served by nothing mounted, under its named handle or by an opener of its
-/// resources (xpute-link `Side::serves`), or one of `over`, the interfaces
-/// the UI serves that hold a function without `async` (the
-/// bindings' `CALLS`), the link traps, naming each, and the guest is never
-/// entered. False where the link trapped, whichever side failed.
+/// implements are mounted: the guest lays its link, the host reads its
+/// layout, then the guest boots and may open them (@xpute/runtime-web
+/// worker.ts `enter`). Where an interface of `imports` (the bindings'
+/// `IMPORTS`) is implemented by nothing mounted, under its named handle or by
+/// an opener of its resources (xpute-link `Side::implements`), or one of
+/// `over`, the interfaces the UI implements that hold a function without
+/// `async` (the bindings' `CALLS`), the link traps, naming each, and the
+/// guest is never entered. False where the link trapped, whichever side
+/// failed.
 pub(crate) fn init(imports: &[(&str, Handle)], over: &[Handle]) -> bool {
     let s = side();
-    let unserved: Vec<&str> = imports
+    let unimplemented: Vec<&str> = imports
         .iter()
-        .filter(|&&(_, h)| !s.serves(h))
+        .filter(|&&(_, h)| !s.implements(h))
         .map(|&(name, _)| name)
         .collect();
-    if !unserved.is_empty() {
-        trap(&format!("no server mounts {}", unserved.join(", ")));
+    if !unimplemented.is_empty() {
+        trap(&format!(
+            "no implementation of {}",
+            unimplemented.join(", ")
+        ));
         return false;
     }
     let mut called: Vec<String> = over
@@ -113,7 +117,7 @@ pub(crate) fn init(imports: &[(&str, Handle)], over: &[Handle]) -> bool {
     called.dedup();
     if !called.is_empty() {
         trap(&format!(
-            "a function without async is served by the UI: {}",
+            "a function without async is implemented by the UI: {}",
             called.join(", ")
         ));
         return false;
@@ -134,10 +138,10 @@ pub(crate) fn init(imports: &[(&str, Handle)], over: &[Handle]) -> bool {
 
 /// The guest's import: the frame it laid at `at`, taken by the host's side
 /// of the link on this thread, as a page's `link_out` is (@xpute/runtime-web
-/// worker.ts `instantiate`). A panic of the host's while it serves, which its
+/// worker.ts `instantiate`). A panic of the host's while it answers, which its
 /// hook has reported, unwinds no further: the link is trapped, and the
 /// guest's call is answered ENOTRECOVERABLE. Once trapped, a frame is not
-/// served: EPIPE, as `cross_in` answers.
+/// run: EPIPE, as `cross_in` answers.
 #[unsafe(no_mangle)]
 pub extern "C" fn link_out(at: u64) -> i32 {
     if side().trapped() {

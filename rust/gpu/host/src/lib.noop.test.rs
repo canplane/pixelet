@@ -135,9 +135,8 @@ fn write_lands_before_destroy() {
     h.submit(core::iter::empty());
 }
 
-/// A host writes the frames it admitted and has not seen done into the
-/// device's block, in the word before `STATUS`, at each poll. It admits
-/// by the same rule that a page's guest applies to that word.
+/// A host writes the frames it counted and has not seen done into the
+/// device's block, in the word before `STATUS`, at each poll.
 #[test]
 fn native_tells_unfinished() {
     let (adapter, device, queue) = device();
@@ -145,9 +144,7 @@ fn native_tells_unfinished() {
     let block = test::mem::alloc(4 * device::WORDS as u32);
     let unfinished = block + 4 * device::UNFINISHED_AT as u64;
     h.block = Some(block);
-    assert!(h.admit_frame());
     h.count_frame();
-    assert!(!h.admit_frame(), "its one frame unfinished");
     h.tell_counts();
     assert_eq!(mem::load_acquire(unfinished), 1);
     h.poll();
@@ -156,7 +153,6 @@ fn native_tells_unfinished() {
         0,
         "the frame done as the device is polled"
     );
-    assert!(h.admit_frame());
 }
 
 /// A device lost stays lost, so its owner lets the host go. The first poll

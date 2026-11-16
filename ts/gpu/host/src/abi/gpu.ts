@@ -1,4 +1,4 @@
-// @pxl/gpu/link/src/abi/gpu.ts
+// @pxl/gpu/host/src/abi/gpu.ts
 //
 // GENERATED from spec/gpu/wit (xpute-link-gen wit.rs)
 
@@ -12,11 +12,11 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
+  type Callee,
   ComponentError,
   type Handle,
   type LinkObject,
   type Method,
-  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -47,7 +47,7 @@ export interface Host {
 
 /** The object over `implementation`. */
 function object(
-  l: Pick<Serving, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "on_cancel">,
   implementation: Host,
 ): LinkObject {
   return {
@@ -88,9 +88,9 @@ function object(
   };
 }
 
-/** Serves `implementation` under the interface's handle. */
+/** Mounts `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Serving, "mount_named" | "task_return" | "on_cancel">,
+  l: Pick<Callee, "mount_named" | "task_return" | "on_cancel">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(l, implementation));
@@ -105,7 +105,7 @@ export interface HostDevice {
 
 /** The object over `implementation`. */
 export function device(
-  l: Pick<Serving, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "on_cancel">,
   implementation: HostDevice,
 ): LinkObject {
   return {

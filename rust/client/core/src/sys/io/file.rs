@@ -176,7 +176,7 @@ fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
 
 /// What `attempt` comes to, made again each time it ends aborted
 /// (`exit_of`), as a device's runtime cancels what a reload of its UI leaves
-/// of the files the UI serves, the storage file among them. A page's worker
+/// of the files the UI implements, the storage file among them. A page's worker
 /// dies with its page, so none of its methods ends so there.
 async fn redo<T, F: Future<Output = Result<T, Errno>>>(
     mut attempt: impl FnMut() -> F,

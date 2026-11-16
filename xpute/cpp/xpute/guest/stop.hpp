@@ -1,7 +1,7 @@
 // cpp/xpute/guest/stop.hpp
 
 // The guest's report of its own failures to the host, by the stop the host
-// serves (`wit/stop/stop.wit`), as `xpute-guest`'s `stop.rs` is a Rust
+// implements (`wit/stop/stop.wit`), as `xpute-guest`'s `stop.rs` is a Rust
 // guest's.
 
 #pragma once

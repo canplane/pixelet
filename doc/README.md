@@ -9,6 +9,9 @@ agenda, its minutes and its reports beside its rules.
 
 - [backlog.md](./backlog.md) — the agenda: what is queued, in priority order,
   one line each, pointing at where its reasoning lives.
+- [upstream.md](./upstream.md) — the defects found in what the project builds
+  on, by upstream project, each with the records it rests on and what the tree
+  does about it; an entry goes when it is found fixed or found to be ours.
 - [minutes/](./minutes/) — one meeting's record a file, `YYYYMMDD-topic.md`:
   what was asked, what was weighed, and what was resolved, if anything was. A
   design or a report written for a meeting becomes its minutes once the meeting

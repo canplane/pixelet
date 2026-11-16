@@ -1,7 +1,7 @@
-// @pxl/client/remote-console.ts
+// @pxl/shader/remote-console.ts
 
-/** Forwards a page's console to the dev server's terminal, because a phone
- * reached over a tunnel has no devtools to attach. */
+/** Forwards the probe page's console to its dev server (console.ts), because
+ * a phone reached over a tunnel has no devtools to attach. */
 
 const ENDPOINT = "/__console";
 

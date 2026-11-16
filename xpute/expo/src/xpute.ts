@@ -4,6 +4,7 @@
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { UiStop } from "@xpute/host";
+import type { Level } from "@xpute/host/abi/log/log.enum.ts";
 import { requireNativeModule } from "expo";
 
 /** The guest's stop, as its host reports it (xpute-runtime-native listener.rs
@@ -36,7 +37,7 @@ interface Xpute {
   ): { remove(): void };
   /** Starts the runtime on the guest's thread and attaches the UI to it
    * (xpute.h `xpute_start`): `named` the named handles of the interfaces the
-   * UI serves, `prefixes` the prefixes the UI mounts openers at, in their
+   * UI implements, `prefixes` the prefixes the UI mounts openers at, in their
    * order, each with its interface's named handle, a lowered
    * `list<tuple<u32, list<token>>>` packet. The module keeps the UI's handle
    * it answers, which each of the calls below names. */
@@ -51,8 +52,8 @@ interface Xpute {
   /** The `len` bytes the guest lent at the address whose low and high words
    * are `lo` and `hi`, a buffer over them, the UI's until the lend's answer. */
   bytes(lo: u32, hi: u32, len: u32): ArrayBuffer;
-  /** Writes a line to the process's output (`log`). */
-  log(line: string): void;
+  /** Writes a log record by the runtime's writer (`log`). */
+  log(level: Level, context: string, message: string): void;
   /** The guest's last stop, or null before the guest stopped (xpute.h
    * `xpute_stop`). */
   stop(): Report | null;
@@ -85,8 +86,8 @@ export function trap_on(hear: (err: string) => void): { remove(): void } {
   return sub;
 }
 
-/** Writes `line` to the process's output: stdout on iOS, the log under the
- * tag `xpute` on Android. */
-export function log(line: string): void {
-  XPUTE.log(line);
+/** Writes `message` at `level`, about `context`, by the runtime's writer,
+ * which writes the host's records (xpute-runtime-native log.rs). */
+export function log(level: Level, context: string, message: string): void {
+  XPUTE.log(level, context, message);
 }

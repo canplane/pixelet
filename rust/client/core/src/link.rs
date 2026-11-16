@@ -2,7 +2,7 @@
 
 //! The core's side of the link: its boot, and the start and end of every
 //! entry, which xpute's link runs (lib.rs `link!`). The boot mounts what the
-//! core serves and starts its tasks; the start begins the entry's budget;
+//! core implements and starts its tasks; the start begins the entry's budget;
 //! the end runs the core's tasks until none is ready and tells the UI what
 //! changed, and the overlay whole to a UI that has just started
 //! (`tell_all`).

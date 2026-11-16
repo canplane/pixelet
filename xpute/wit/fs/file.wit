@@ -1,6 +1,6 @@
 package xpute:fs@0.1.0;
 
-// xpute's files, which the host serves, each opened by its path's URI.
+// xpute's files, which the host implements, each opened by its path's URI.
 // An open answers at once; a file that turns out missing answers `no-entry` on
 // its first size or read. Closing a file cancels what is in flight on it, as
 // closing a handle does: a pending method answers ECANCELED.

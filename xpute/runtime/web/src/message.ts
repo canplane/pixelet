@@ -4,7 +4,7 @@
  * messages join these in its own unions. Beside them, the UI's port carries
  * the UI's crossing to the guest's link and back (remote.ts, page.ts): a
  * method called, its answer, and the opens, cancels and drops of what the UI
- * serves, by the tags and handles of the guest's end, and the things the UI
+ * implements, by the tags and handles of the guest's end, and the things the UI
  * gives beside them. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -12,15 +12,16 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import type { Handle, Method, Tag } from "@xpute/link";
 import type { Token } from "@xpute/link/abi/types.ts";
 import type { UiStop } from "@xpute/host";
+import type { Level } from "@xpute/host/abi/log/log.enum.ts";
 
 /** The prefixes the UI opens objects under, each `[handle, prefix]`, the
  * named handle of the interface whose resources they are, in the order the
  * UI mounted them. */
 export type Prefixes = readonly (readonly [Handle, readonly Token[]])[];
 
-/** What the page sends the worker to instantiate the guest (page.ts
- * `start`): the module, how to fetch it, the UI's port, the named handles of
- * the interfaces the UI serves, and the prefixes it opens the objects under,
+/** What the page sends the worker to instantiate the guest (page.ts `start`):
+ * the module, how to fetch it, the UI's port, the named handles of the
+ * interfaces the UI implements, and the prefixes it opens the objects under,
  * each with its interface. */
 export interface Instantiate {
   module: string;
@@ -30,8 +31,8 @@ export interface Instantiate {
   prefixes: Prefixes;
 }
 
-/** A method `m` of the object `h`, sent across the port: the guest's, of
- * an object the UI serves, or the UI's, of the guest's; its request `tag` is
+/** A method `m` of the object `h`, sent across the port: the guest's, of an
+ * object the UI implements, or the UI's, of the guest's; its request `tag` is
  * the caller's, which its answer names. */
 export interface Request {
   kind: "request";
@@ -58,13 +59,13 @@ export interface Open {
   uri: readonly Token[];
 }
 
-/** The guest canceled the request `tag` the UI serves. */
+/** The guest canceled the request `tag` the UI owes. */
 export interface Cancel {
   kind: "cancel";
   tag: Tag;
 }
 
-/** The guest dropped the object `h` the UI serves. */
+/** The guest dropped the object `h` the UI implements. */
 export interface Drop {
   kind: "drop";
   h: Handle;
@@ -84,10 +85,13 @@ export type ToWorker = Request | Answer | Give;
 /** What the UI's port carries to the page. */
 export type ToPage = Request | Answer | Open | Cancel | Drop;
 
-/** A line of the worker's console. */
+/** A log record the worker's runtime wrote (worker.ts `log`): its level, its
+ * context and its message. */
 export interface Log {
   kind: "log";
-  text: string;
+  level: Level;
+  context: string;
+  message: string;
 }
 
 /** A trap, out of an export or a failure of the host's own, its module not
@@ -98,7 +102,7 @@ export interface Trap {
 }
 
 /** The guest stopped, with the report of the broken invariant: the guest's,
- * as the host that serves the stop hands it (worker.ts `stopped`), or the
+ * as the host that implements the stop hands it (worker.ts `stopped`), or the
  * host's own failure (worker.ts `hook`), which the runtime sends (worker.ts
  * `tell_stop`). */
 export interface Stopped {

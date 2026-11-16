@@ -3,10 +3,11 @@
 # link, the protocol both sides run, and its code. `guest/rust` asks to be run
 # its way (an entry at a time, a deadline measured from the frame, I/O asked of
 # its host), and it depends on `kit` and the link, never the reverse.
-# `host/rust` is the host in Rust: its end of the link, the bindings served
-# there and what it serves; `runtime/native` is the runtime on a native device,
-# the environment the host runs in, which injects into the host what it needs
-# of it: the way back to the guest's thread, where a report goes and the log.
+# `host/rust` is the host in Rust: its end of the link, the bindings mounted
+# there and what it implements; `runtime/native` is the runtime on a native
+# device, the environment the host runs in, which injects into the host what
+# it needs of it: the way back to the guest's thread, where a report goes and
+# the log.
 # A program may bring
 # plugins of its own, in its own tree, each repeating the link, the guest and
 # the host. `gen` is the data specs' generator, and `gen-targets` what it makes
@@ -44,6 +45,32 @@ xpute-gen-targets = { path = "gen-targets" }
 xpute-golden = { path = "golden/rust" }
 # A test reads a golden packet's bytes back with this.
 hex = "0.4"
+
+# The lints each of xpute's crates takes (`[lints] workspace = true`).
+[workspace.lints.rust]
+# A path no longer than what is already in scope.
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+# A path past a crate and one module is brought in by a `use` at the top of
+# its module, so what a file reaches for is read in one place.
+absolute_paths = "warn"
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+borrow_as_ptr = "warn"
+ref_as_ptr = "warn"
+# A lint is let pass by `#[expect]`, which says so once it no longer fires,
+# and with its reason.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+# What stands in for code while it is written does not ship.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+# An `unsafe` block says, in a `// SAFETY:` comment, why it holds.
+undocumented_unsafe_blocks = "warn"
+manual_let_else = "warn"
+semicolon_if_nothing_returned = "warn"
 
 [workspace.package]
 edition = "2024"

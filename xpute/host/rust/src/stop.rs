@@ -1,10 +1,10 @@
 // xpute-host/stop.rs
 
-//! The stop the host serves the guest (wit/stop/stop.wit): the guest's report
-//! of a broken invariant, handed to the host's runtime (runtime.rs
-//! `stopped`), which reports it, before the guest stops (stop.ts). The
-//! host's own failures are its runtime's to tell, as a stop and a trap, and
-//! so is a guest's trap, as a page's stop and trap are two messages.
+//! The stop the host implements for the guest (wit/stop/stop.wit): the guest's
+//! report of a broken invariant, handed to the host's runtime (runtime.rs
+//! `stopped`), which reports it, before the guest stops (stop.ts). The host's
+//! own failures are its runtime's to tell, as a stop and a trap, and so is a
+//! guest's trap, as a page's stop and trap are two messages.
 
 use std::rc::Rc;
 
@@ -39,6 +39,6 @@ impl abi::stop::Host for Report {
 }
 
 /// Mounts the stop on `side`.
-pub fn serve(side: &'static Side) {
+pub fn mount(side: &'static Side) {
     abi::stop::mount(side, Rc::new(Report));
 }

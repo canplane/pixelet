@@ -17,8 +17,8 @@
 // (OPS), the memory address is a u64 on every platform (link/wit/types.wit `lent`), written as
 // two words, its low word first.
 
-/** The URI a guest that draws serves its surface under (spec/gpu/wit/surface.wit `surface`),
- * which its host opens. */
+/** The URI a guest that draws implements its surface under
+ * (spec/gpu/wit/surface.wit `surface`), which its host opens. */
 export const SURFACE_URI = ["pxl:gpu", "surface"] as const;
 
 /** The value of an optional field that is unset, such as an absent index or handle. */
@@ -185,6 +185,20 @@ export function of_BindingKind(val: number): BindingKind | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_BindingKind(val: BindingKind): string {
+  switch (val) {
+    case BINDING_KIND_BUFFER:
+      return "buffer";
+    case BINDING_KIND_SAMPLER:
+      return "sampler";
+    case BINDING_KIND_TEXTURE:
+      return "texture";
+    case BINDING_KIND_STORAGE_TEXTURE:
+      return "storage-texture";
+  }
+}
+
 export type ResourceKind =
   | typeof RESOURCE_KIND_BUFFER
   | typeof RESOURCE_KIND_SAMPLER
@@ -200,6 +214,18 @@ export function of_ResourceKind(val: number): ResourceKind | null {
     val === RESOURCE_KIND_TEXTURE_VIEW
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_ResourceKind(val: ResourceKind): string {
+  switch (val) {
+    case RESOURCE_KIND_BUFFER:
+      return "buffer";
+    case RESOURCE_KIND_SAMPLER:
+      return "sampler";
+    case RESOURCE_KIND_TEXTURE_VIEW:
+      return "texture-view";
+  }
 }
 
 /** GPUBufferUsage, its bits as WebGPU numbers them. */
@@ -301,7 +327,7 @@ export const OPS = [
  * counts: first before STATUS, as it writes the rest of the block, and afterwards with
  * release each time a count changes. The guest loads them with acquire once STATUS reads
  * READY, and draws a frame only while the unfinished frames are below the block's frame
- * latency; both hosts hold a frame to that rule (pxl-gpu-link `admits`). */
+ * latency (pxl-gpu-guest `admit::frame`). */
 export const DEVICE = {
   LIMITS_AT: 0 as number,
   FEATS_AT: 31 as number,

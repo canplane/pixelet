@@ -1,6 +1,6 @@
 package xpute:clocks@0.1.0;
 
-// The clocks a guest reads, which its host serves.
+// The clocks a guest reads, which its host implements.
 
 world imports {
   import monotonic-clock;

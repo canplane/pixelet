@@ -3,7 +3,7 @@
 //! The link (`link/wit/types.wit`). Whatever is called is an object, called
 //! by its methods under a handle: an interface's named handle, the hash of its
 //! name (`frame.json5` `NAMED`), or a resource's, named by a URI, a tuple of
-//! tokens, and opened by the root's `open` to a handle the serving side
+//! tokens, and opened by the root's `open` to a handle the implementing side
 //! issues, or answered by a function that returns it. A frame is one method
 //! called: its tag the request, unique among the sender's pending ones, its
 //! command the handle, the method and a `RES` bit (`frame.rs`), its packet the
@@ -16,13 +16,14 @@
 //! - `call` takes what the crossing returns, for a method that always answers
 //!   at once, and stops as a bug on EINPROGRESS;
 //! - `send` hands it to its answer, and an `async func` is sent;
-//! - `mount_named` serves an interface under its named handle, `add` an
-//!   object under a handle issued for a function to answer, and `mount`
-//!   puts the opener of an interface's resources the side serves under a
-//!   URI's leading tokens, the longest matching winning; `open` and `drop` reach the root's
-//!   open and a handle's drop on the other side;
+//! - `mount_named` mounts an interface's implementation under its named
+//!   handle, `add` an object under a handle issued for a function to answer,
+//!   and `mount` puts the opener of an interface's resources the side
+//!   implements under a URI's leading tokens, the longest matching winning;
+//!   `open` and `drop` reach the root's open and a handle's drop on the other
+//!   side;
 //! - `cancel` cancels a request sent and pending (the root's `CANCEL`), and
-//!   `on_cancel` puts what runs if a request the side serves is canceled.
+//!   `on_cancel` puts what runs if a request the side answers is canceled.
 //!
 //! The link holds these on both ends:
 //!
@@ -77,33 +78,33 @@ pub type Method = u32;
 
 pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT, layout};
 
-/// An object a side serves: given a method, the request's tag, for a later
-/// answer (`task_return`), and the args, it answers.
+/// An object a side implements: given a method, the request's tag, for a
+/// later answer (`task_return`), and the args, it answers.
 pub trait Object {
     fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply;
 }
 
-/// How a request a side serves stops if its caller cancels it (`CANCEL`).
+/// How a request a side answers stops if its caller cancels it (`CANCEL`).
 pub type Cancel = Box<dyn FnOnce()>;
 
 /// What answers an async method's request once the method has its value, and
 /// where the method says how it stops if its caller cancels it (`CANCEL`).
 pub struct Return<T> {
-    /// The serving side's `on_cancel` for the request.
+    /// The answering side's `on_cancel` for the request.
     on: Box<dyn Fn(Cancel)>,
     answer: Box<dyn FnOnce(Result<T, Errno>)>,
 }
 
 impl<T> Return<T> {
     /// The answer to a request, `on` putting how it stops on the side that
-    /// serves it.
+    /// answers it.
     pub fn new(on: Box<dyn Fn(Cancel)>, answer: Box<dyn FnOnce(Result<T, Errno>)>) -> Return<T> {
         Return { on, answer }
     }
 
     /// Answers the request with `v`.
     pub fn answer(self, v: Result<T, Errno>) {
-        (self.answer)(v)
+        (self.answer)(v);
     }
 
     /// Runs `stop` if the caller cancels the request before its answer; the
@@ -192,7 +193,7 @@ type Completion = (Tag, i32, Option<Vec<u8>>);
 
 /// An opener mounted: the named handle of the interface whose resources it
 /// opens, the URI's leading tokens it opens under, and the opener.
-type Mount = (Handle, Vec<Token>, Rc<Opener>);
+type Prefix = (Handle, Vec<Token>, Rc<Opener>);
 
 /// One side of the link: what both sides do, once. A side lays its frames in
 /// its own box and crosses by its own function: the guest lays in its outbox
@@ -215,14 +216,14 @@ pub struct Side {
     /// Where the next request's tag is sought.
     next: Cell<Tag>,
     /// The openers mounted.
-    mounts: RefCell<Vec<Mount>>,
-    /// The objects this side serves, by the handles it issued.
+    mounts: RefCell<Vec<Prefix>>,
+    /// The objects this side implements, by the handles it issued.
     objects: RefCell<Table<Rc<dyn Object>>>,
-    /// The interfaces this side serves, by their named handles (`NAMED`).
+    /// The interfaces this side implements, by their named handles (`NAMED`).
     named: RefCell<BTreeMap<Handle, Rc<dyn Object>>>,
     /// The answers of the sent requests that answer later, by tag.
     pending: RefCell<BTreeMap<Tag, Answer>>,
-    /// How each request this side serves stops if its caller cancels it, by
+    /// How each request this side answers stops if its caller cancels it, by
     /// tag, until it answers.
     cancels: RefCell<BTreeMap<Tag, Cancel>>,
     /// The answers due, run after the work at hand.
@@ -307,20 +308,20 @@ impl Side {
         self.mounts.borrow_mut().push((h, prefix, Rc::new(open)));
     }
 
-    /// Serves `o` under its interface's named handle `h`, which the other
+    /// Mounts `o` under its interface's named handle `h`, which the other
     /// side calls with no open.
     pub fn mount_named(&self, h: Handle, o: Rc<dyn Object>) {
         let was = self.named.borrow_mut().insert(h, o);
         xpute_kit::ensure!(was.is_none(), EEXIST, h);
     }
 
-    /// Whether this side serves the interface of the named handle `h`: under
-    /// that handle, or by an opener of its resources.
-    pub fn serves(&self, h: Handle) -> bool {
+    /// Whether this side implements the interface of the named handle `h`:
+    /// under that handle, or by an opener of its resources.
+    pub fn implements(&self, h: Handle) -> bool {
         self.named.borrow().contains_key(&h) || self.mounts.borrow().iter().any(|(i, ..)| *i == h)
     }
 
-    /// Serves `o` under a handle issued for it, which a method answers for
+    /// Adds `o` under a handle issued for it, which a method answers for
     /// the other side to call `o` by: a resource a function returns.
     pub fn add(&self, o: Rc<dyn Object>) -> Handle {
         self.objects.borrow_mut().add(o)
@@ -377,7 +378,7 @@ impl Side {
         }
     }
 
-    /// Puts `stop` as how the request `t` this side serves stops if it is
+    /// Puts `stop` as how the request `t` this side answers stops if it is
     /// canceled (`Return::on_cancel`).
     pub fn on_cancel(&self, t: Tag, stop: Cancel) {
         self.cancels.borrow_mut().insert(t, stop);
@@ -430,7 +431,7 @@ impl Side {
             return 0;
         }
         let reply = match pkt {
-            Ok(args) => self.serve(f.handle, f.method, f.tag, args),
+            Ok(args) => self.run(f.handle, f.method, f.tag, args),
             Err(e) => Reply::from(e as i32),
         };
         // The args are read: the answer goes in the frame they came in.
@@ -485,7 +486,7 @@ impl Side {
 
     /// Runs `m` of `h`: the root's open or cancel, a drop, or an object's
     /// method.
-    fn serve(&self, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+    fn run(&self, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
         match (h, m) {
             (ROOT, OPEN) => match self.opened(args) {
                 Ok(h) => Reply {

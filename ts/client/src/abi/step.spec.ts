@@ -53,6 +53,30 @@ export function of_StepName(val: number): StepName | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_StepName(val: StepName): string {
+  switch (val) {
+    case STEP_NAME_CONTROLLER:
+      return "controller";
+    case STEP_NAME_INPUT:
+      return "input";
+    case STEP_NAME_CAMERA:
+      return "camera";
+    case STEP_NAME_EDIT:
+      return "edit";
+    case STEP_NAME_GHOST:
+      return "ghost";
+    case STEP_NAME_ENVIRONMENT:
+      return "environment";
+    case STEP_NAME_COMPANION:
+      return "companion";
+    case STEP_NAME_DEMAND:
+      return "demand";
+    case STEP_NAME_SCENE:
+      return "scene";
+  }
+}
+
 export const EFFECT_NAMES = [
   "navigation",
   "bootstrap",
@@ -94,4 +118,26 @@ export function of_EffectName(val: number): EffectName | null {
     val === EFFECT_NAME_SETTING
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_EffectName(val: EffectName): string {
+  switch (val) {
+    case EFFECT_NAME_NAVIGATION:
+      return "navigation";
+    case EFFECT_NAME_BOOTSTRAP:
+      return "bootstrap";
+    case EFFECT_NAME_FOLLOW:
+      return "follow";
+    case EFFECT_NAME_DST:
+      return "dst";
+    case EFFECT_NAME_DECOR:
+      return "decor";
+    case EFFECT_NAME_OBJECT:
+      return "object";
+    case EFFECT_NAME_LOCATION:
+      return "location";
+    case EFFECT_NAME_SETTING:
+      return "setting";
+  }
 }

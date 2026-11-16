@@ -8,9 +8,9 @@
 // the callee issued above METHOD_BITS, and the method's place among its object's below
 // them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,
 // lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT
-// is the handle every side serves, OPEN and CANCEL its methods, DROP the method every handle
-// has, NAMED marks an interface's handle, SLOT_BITS splits an issued handle into its
-// slot and its generation, and TRAP and TRAP_AT are a native guest's stop.
+// is the handle every side implements, OPEN and CANCEL its methods, DROP the method
+// every handle has, NAMED marks an interface's handle, SLOT_BITS splits an issued handle
+// into its slot and its generation, and TRAP and TRAP_AT are a native guest's stop.
 
 /// The request, which a later answer carries back.
 pub const TAG: u32 = 0;
@@ -33,7 +33,7 @@ pub const RES: u32 = 2147483648;
 /// The bits of the command below the handle, which hold the method.
 pub const METHOD_BITS: u32 = 8;
 
-/// The root's handle, which every side serves.
+/// The root's handle, which every side implements.
 pub const ROOT: u32 = 0;
 
 /// The root's method that opens an object by its URI.
@@ -49,7 +49,7 @@ pub const DROP: u32 = 255;
 
 /// The handle's top bit, which marks it named: an interface's, its bits below the hash of
 /// the interface's name the generator writes (xpute-link-gen wit.rs). An interface with
-/// functions of its own is served under it with no open; one of resources alone names its
+/// functions of its own is mounted under it with no open; one of resources alone names its
 /// openers by it. An issued handle has it clear.
 pub const NAMED: u32 = 4194304;
 

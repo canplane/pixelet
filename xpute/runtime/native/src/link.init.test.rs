@@ -18,7 +18,7 @@ xpute_guest::link!(4097, || {}, || {}, || false);
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: Vec::new(),
+        mounts: Vec::new(),
         imports: &[],
         calls: &[],
     }

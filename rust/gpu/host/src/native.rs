@@ -1,11 +1,12 @@
 // pxl-gpu-host/native.rs
 
 //! This is the GPU's host for a guest on a native device, as web.ts is a
-//! page's: the host serves `gpu` and the guest's `device` (spec/gpu/wit/gpu.wit)
-//! on the host's side its runtime gives (`serve`), and binds the platform's windows to
-//! the guest's surfaces (`bind`); `vsync` is vsync.rs's. The device, the
-//! windows and everything run on them live on a thread of their own, the
-//! GPU's (`on_gpu` says why): the records `gpu.run` lends are
+//! page's: the host implements `gpu` and the guest's `device`
+//! (spec/gpu/wit/gpu.wit) on the host's side its runtime gives (`mount`), and
+//! binds the platform's windows to the guest's surfaces (`bind`); `vsync` is
+//! vsync.rs's. The device, the windows and everything run on them live on a
+//! thread of their own, the GPU's (`on_gpu` says why): the records `gpu.run`
+//! lends are
 //! run there and stay lent until its answer, the device is opened there when
 //! the guest asks it ready, windows are bound there, and its completions land
 //! there (`poll`). wgpu calls a mapping's or the queue's callbacks only as the
@@ -92,7 +93,7 @@ impl Drop for Window {
 }
 
 /// What a device is opened by: the program's ask and config, and where the
-/// platform keeps compiled pipelines (`serve`), as a page's `WebGpu` holds
+/// platform keeps compiled pipelines (`mount`), as a page's `WebGpu` holds
 /// its own.
 struct OpenArgs {
     ask: Ask,
@@ -258,11 +259,11 @@ fn poll() {
 }
 
 /// Mounts `gpu` and `vsync` on `side`, the host's side its runtime gives, on
-/// the guest's thread before it boots (a server the program lists), the
+/// the guest's thread before it boots (a mount the program lists), the
 /// device `gpu` gives to be opened as `ask` and `cfg` say, its compiled
 /// pipelines kept in `cache_dir`, the directory the platform keeps the app's
 /// caches in.
-pub fn serve(side: &'static Side, ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
+pub fn mount(side: &'static Side, ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
     let args = Arc::new(OpenArgs {
         ask,
         cfg,
@@ -272,7 +273,7 @@ pub fn serve(side: &'static Side, ask: Ask, cfg: Config, cache_dir: Option<PathB
     abi::vsync::mount(side, Rc::new(Vsync));
 }
 
-/// What serves `gpu` on `side`, which issues the guest's device its handle.
+/// What implements `gpu` on `side`, which issues the guest's device its handle.
 struct Gpu {
     side: &'static Side,
     args: Arc<OpenArgs>,
@@ -304,7 +305,7 @@ impl abi::gpu::Host for Gpu {
         }));
     }
 
-    /// The guest's device, served under a handle the link issues.
+    /// The guest's device, added under a handle the link issues.
     fn get_device(&self) -> Result<u32, Errno> {
         let device = abi::gpu::device(self.side, Rc::new(GuestDevice(self.args.clone())));
         Ok(self.side.add(device))

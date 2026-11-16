@@ -6,7 +6,7 @@
  * each under its key: a shard under its tile's quadkey, and the top of the
  * tree under `TOP_KEY`. The core reads those two kinds of file, (OBJECT,
  * quadkey) and (OBJECT, TOP), which binding.ts maps here, and sends batches of
- * edits through pxl:core object `apply` (`serve_objects`). In one
+ * edits through pxl:core object `apply` (`mount_objects`). In one
  * transaction, each batch is laid over the shards its writes fall in, and the
  * top's rows for those shards are rebuilt (object_tree.ts). A shard with no
  * leaves has no file, and neither has a top with no rows. A server can answer
@@ -19,7 +19,7 @@ import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Memory, type Serving } from "@xpute/link";
+import { type Callee, ComponentError, type Memory } from "@xpute/link";
 import {
   ERROR_CODE_BAD_MESSAGE,
   ERROR_CODE_IO,
@@ -237,10 +237,10 @@ export function object_backend(db: Db = DB): {
 
 export const OBJECTS = object_backend();
 
-/** Serves the core's objects (pxl:core object) on `link`: each batch it
+/** Mounts the core's objects (pxl:core object) on `link`: each batch it
  * lends in `mem` is applied. One that does not decode answers `bad-message`,
  * and one the database fails to keep `io`. */
-export function serve_objects(link: Serving, mem: Memory): void {
+export function mount_objects(link: Callee, mem: Memory): void {
   object.mount(link, {
     async apply(batch) {
       try {

@@ -4,7 +4,7 @@
  * The shader probe's dev server (probe.html). It serves each module as the
  * renderer assembles it, and the pipelines the renderer makes over them
  * (pxl-render examples/assembled.rs), at `/__assembled`, and prints a device's
- * console here (@pxl/build/console.ts). Run `pnpm probe`, then open
+ * console here (console.ts). Run `pnpm probe`, then open
  * /probe.html on the device. A device other than this machine must reach it
  * over a tunnel, because WebGPU needs a secure context.
  */
@@ -16,8 +16,9 @@ import { promisify } from "node:util";
 
 import { defineConfig, type Plugin } from "vite";
 
-import { CONSOLE_PATH, console_handler } from "@pxl/build/console.ts";
 import { REPO } from "@pxl/build/path.ts";
+
+import { CONSOLE_PATH, console_handler } from "./console.ts";
 
 /** The modules are assembled again at each ask: cargo rebuilds the example
  * after a shader is edited, and reuses it otherwise. */

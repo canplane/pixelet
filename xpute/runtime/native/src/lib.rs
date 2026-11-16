@@ -11,15 +11,15 @@
 //! alone writes to the platform's output (`log`).
 //!
 //! It starts the guest from what the program lists (native.rs `Boot`), as
-//! @xpute/runtime-web starts a page's: the program's servers,
-//! xpute-host's among them, each mounting on the link what it serves,
-//! and the interfaces the guest's world imports, which are all mounted
-//! before the guest is entered. It runs the steps itself, in their order:
-//! the servers, what the UI serves (`remote`), the guest's first entry
-//! (`link::init`), which an import no server mounts and a function without
-//! `async` served by the UI refuse, and the loop for the guest's life. It exports itself to
-//! the platform's module over the program's start (`native`, `native_abi!`),
-//! as @xpute/runtime-web is the page's.
+//! @xpute/runtime-web starts a page's: the program's mounts, xpute-host's
+//! among them, each mounting on the link its implementations, and the
+//! interfaces the guest's world imports, which are all mounted before the
+//! guest is entered. It runs the steps itself, in their order: the mounts,
+//! what the UI implements (`remote`), the guest's first entry (`link::init`),
+//! which an import with no implementation and a function without `async` the
+//! UI implements refuse, and the loop for the guest's life. It exports itself
+//! to the platform's module over the program's start (`native`,
+//! `native_abi!`), as @xpute/runtime-web is the page's.
 //!
 //! It makes the host's side of the link over the guest (`link`), from
 //! xpute-link's machine (`Side`), and takes the rest of the contract both
@@ -40,6 +40,10 @@ mod log;
 pub mod native;
 pub mod remote;
 
+use xpute_host::abi::log::Level;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
+
 /// A method from the UI of the handle `ui` (remote.rs `accept`), for the
 /// guest's thread: `m` of one of the guest's objects `h`, its request `tag`
 /// the UI's. Called on the JavaScript thread.
@@ -48,7 +52,7 @@ pub fn post(ui: u32, tag: u32, h: u32, m: u32, pkt: Option<Vec<u8>>) {
 }
 
 /// The answer of the UI of the handle `ui` to the request `tag` of the
-/// guest's that it serves, for the guest's thread. Called on the JavaScript
+/// guest's that it answers, for the guest's thread. Called on the JavaScript
 /// thread.
 pub fn answer(ui: u32, tag: u32, result: i32, data: Option<Vec<u8>>) {
     event_loop::post_task(Box::new(move || remote::answer(ui, tag, result, data)));
@@ -57,4 +61,11 @@ pub fn answer(ui: u32, tag: u32, result: i32, data: Option<Vec<u8>>) {
 /// The app was hidden or shown again, from the platform's lifecycle.
 pub fn life(shown: bool) {
     event_loop::post_task(Box::new(move || life::tell(shown)));
+}
+
+/// A log record of the UI's: `message` at `level`, about `context`, written
+/// by the runtime's writer (`log`) as the host's are. Called on the
+/// JavaScript thread.
+pub fn log(level: u32, context: &str, message: &str) {
+    log::log(Level::of(level).or_bug(Errno::EINVAL), context, message);
 }

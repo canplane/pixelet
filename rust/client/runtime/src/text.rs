@@ -1,11 +1,11 @@
 // pxl-runtime/text.rs
 
-//! A device's `text` (spec/client/core/wit/text.wit), served on the host's
-//! side of the link and answered by the system's font engine (Text.swift,
-//! Text.kt) on the core's own thread before the call returns, so an entry that
-//! needs a text waits for no other thread. On a page the runtime answers the
-//! same calls (ts/client/src/service/core/text.ts); the core breaks the lines
-//! itself (pxl-core sys/io/text.rs).
+//! A device's `text` (spec/client/core/wit/text.wit), implemented on the
+//! host's side of the link and answered by the system's font engine
+//! (Text.swift, Text.kt) on the core's own thread before the call returns, so
+//! an entry that needs a text waits for no other thread. On a page the
+//! runtime answers the same calls (ts/client/src/service/core/text.ts); the
+//! core breaks the lines itself (pxl-core sys/io/text.rs).
 
 use std::rc::Rc;
 use std::sync::OnceLock;
@@ -108,7 +108,7 @@ impl text::Host for Device {
 
 /// Mounts the text on `side`, the host's side the runtime gives, on the
 /// core's thread before it boots (lib.rs `start`).
-pub(crate) fn serve(side: &'static Side) {
+pub(crate) fn mount(side: &'static Side) {
     text::mount(side, Rc::new(Device));
 }
 

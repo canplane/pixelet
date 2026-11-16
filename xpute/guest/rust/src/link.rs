@@ -92,12 +92,12 @@ pub fn mount(
     SIDE.with(|s| s.mount(h, prefix, open));
 }
 
-/// Serves `o` under its interface's named handle `h`.
+/// Mounts `o` under its interface's named handle `h`.
 pub fn mount_named(h: Handle, o: Rc<dyn Object>) {
     SIDE.with(|s| s.mount_named(h, o));
 }
 
-/// Serves `o` under a handle issued for it, for a method to answer.
+/// Adds `o` under a handle issued for it, for a method to answer.
 pub fn add(o: Rc<dyn Object>) -> Handle {
     SIDE.with(|s| s.add(o))
 }
@@ -129,7 +129,7 @@ pub fn cancel(t: Tag) {
     SIDE.with(|s| s.cancel(t));
 }
 
-/// Puts `stop` as how the request `t` the guest serves stops if it is
+/// Puts `stop` as how the request `t` the guest answers stops if it is
 /// canceled.
 pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
     SIDE.with(|s| s.on_cancel(t, stop));

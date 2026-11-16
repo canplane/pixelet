@@ -8,8 +8,10 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use xpute_guest::abi::life;
+use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
 use xpute_link::{Handle, Method, NAMED, OPEN, Object, ROOT, Reply, Tag, uri};
+use xpute_runtime_native::listener;
 use xpute_runtime_native::native::Boot;
 
 #[path = "app.test.rs"]
@@ -41,7 +43,7 @@ impl life::Guest for Guest {
 
     fn attached(&self) -> Result<(), Errno> {
         ATTACH_CNT.fetch_add(1, Ordering::Relaxed);
-        xpute_guest::link::send(
+        link::send(
             UI,
             0,
             None,
@@ -69,7 +71,7 @@ xpute_guest::link!(
     4096,
     || {
         life::mount(Rc::new(Guest));
-        xpute_guest::link::mount(
+        link::mount(
             OBJ,
             uri(&["obj"]),
             |_, _| Ok(Rc::new(Obj) as Rc<dyn Object>),
@@ -82,7 +84,7 @@ xpute_guest::link!(
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: Vec::new(),
+        mounts: Vec::new(),
         imports: &[("ui", UI)],
         calls: &[],
     }
@@ -112,7 +114,7 @@ fn request(ui: u32, messages: &mut Vec<app::Message>) -> i64 {
 /// the old UI's take, and its answer to the new UI's request, reach nothing.
 #[test]
 fn reload() {
-    xpute_runtime_native::listener::notify_on(Some(notified));
+    listener::notify_on(Some(notified));
     let old = app::start(boot, &[UI]);
     let mut messages = Vec::new();
     let pending = request(old, &mut messages) as Tag;

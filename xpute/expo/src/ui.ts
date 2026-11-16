@@ -4,19 +4,20 @@
  * The UI's end of the runtime, as a page's is of its worker
  * (@xpute/runtime-web page.ts): the link's end (@xpute/link `End`) over the
  * JavaScript half of the UI's crossing, this module, on which the UI calls
- * the guest and serves it by the generated bindings as any end does. The
- * runtime stands in for the UI on the guest's link (xpute-runtime-native
- * remote.rs). What the UI calls goes to the module's `post`, and what it
- * answers to its `answer`; what the runtime sends comes in a batch on one
- * notify (`take`), each message an XTP packet by its kind (`HEAR`): a method
- * of an object the UI serves, answered back by its tag, at once or later; an
- * open of one under the handle the guest's end issued, by the opener of the
- * prefix that matched; the guest's cancel of a method and its drop of an
- * object; and the answer to a call of the UI's. A buffer the guest lends is
- * read and written through a buffer the module makes over its span
- * (`bytes`). The module names the UI's handle on the runtime in each of
- * these (xpute.h `xpute_start`). A device's module moves no object beside
- * the calls: the GPU's module binds a surface to its view itself.
+ * the guest and implements its imports by the generated bindings as any end
+ * does. The runtime stands in for the UI on the guest's link
+ * (xpute-runtime-native remote.rs). What the UI calls goes to the module's
+ * `post`, and what it answers to its `answer`; what the runtime sends comes
+ * in a batch on one notify (`take`), each message an XTP packet by its kind
+ * (`HEAR`): a method of an object the UI implements, answered back by its
+ * tag, at once or later; an open of one under the handle the guest's end
+ * issued, by the opener of the prefix that matched; the guest's cancel of a
+ * method and its drop of an object; and the answer to a call of the UI's. A
+ * buffer the guest lends is read and written through a buffer the module
+ * makes over its span (`bytes`). The module names the UI's handle on the
+ * runtime in each of these (xpute.h `xpute_start`). A device's module moves
+ * no object beside the calls: the GPU's module binds a surface to its view
+ * itself.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -47,7 +48,7 @@ import { XPUTE } from "./xpute.ts";
 
 /** The UI's end, over the module: a request posted, answered later in a
  * batch, since one thread cannot wait on the other, and an answer to a
- * request the UI serves; and the guest's lent memory, in the same
+ * request the UI owes; and the guest's lent memory, in the same
  * process. */
 const ui = new (class extends End implements Memory {
   protected _out(
@@ -141,10 +142,11 @@ export function open_ui(): End & Memory {
   return ui;
 }
 
-/** Starts the runtime on the guest's thread with what the UI serves, once it
- * is mounted on the UI's end: its named handles, and its prefixes, each with
- * its interface's named handle, lowered as a `list<tuple<u32, list<token>>>`,
- * the fixed part at 0 (xpute.h `xpute_start`). */
+/** Starts the runtime on the guest's thread with what the UI implements, once
+ * it is mounted on the UI's end: its named handles, and its prefixes, each
+ * with its interface's named handle, lowered as a
+ * `list<tuple<u32, list<token>>>`, the fixed part at 0 (xpute.h
+ * `xpute_start`). */
 export function start(): void {
   const prefixes = ui.prefixes();
   const pkt = pkt_of([

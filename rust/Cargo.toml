@@ -90,8 +90,8 @@ pxl-geo-spec = { path = "server/geo-spec" }
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
 # pxl-tool's rule refuses. A crate takes these with `[lints]
-# workspace = true`; xpute-guest and xpute-host, in their own workspace, spell
-# them themselves.
+# workspace = true`; xpute's crates take theirs from xpute's own workspace
+# (xpute/Cargo.toml), which owns its crates' lints.
 [workspace.lints.rust]
 # A path no longer than what is already in scope.
 unused_qualifications = "warn"

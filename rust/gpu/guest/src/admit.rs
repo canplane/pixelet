@@ -1,15 +1,13 @@
 // pxl-gpu-guest/admit.rs
 
 //! Admission says whether the GPU's host can take another frame now without
-//! blocking. Every host holds a frame to one rule (`admits`): a guest draws a
-//! frame only while fewer of its frames than its frame latency are unfinished
-//! on the GPU. Every host writes the frame latency its program chose and its
-//! count into the device's block (spec `DEVICE`), and `frame` applies the
-//! rule there.
+//! blocking, by one rule: a guest draws a frame only while fewer of its
+//! frames than its frame latency are unfinished on the GPU. Every host writes
+//! the frame latency its program chose and its count into the device's block
+//! (spec `DEVICE`), and `frame` applies the rule there.
 
 use std::cell::Cell;
 
-use pxl_gpu_link::admit::admits;
 use pxl_gpu_link::spec::device;
 use pxl_gpu_link::spec::status;
 
@@ -35,8 +33,8 @@ pub fn block() -> Option<*const u32> {
 }
 
 /// This is the admission of a guest that has the GPU. It admits a frame
-/// while the block's `STATUS` is `READY` and `admits` holds for the block's
-/// unfinished frames and its frame latency. It admits none before the guest
+/// while the block's `STATUS` is `READY` and its unfinished frames are fewer
+/// than its frame latency. It admits none before the guest
 /// has asked for the block, and none once the device is lost.
 pub fn frame() -> bool {
     block().is_some_and(|at| {
@@ -45,6 +43,6 @@ pub fn frame() -> bool {
         // frame latency before `STATUS` and never after.
         let word = |k: usize| unsafe { load_acquire(at.add(k)) };
         word(device::STATUS_AT) == status::READY
-            && admits(word(device::UNFINISHED_AT), word(device::LATENCY_AT))
+            && word(device::UNFINISHED_AT) < word(device::LATENCY_AT)
     })
 }

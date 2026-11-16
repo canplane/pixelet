@@ -16,9 +16,9 @@ const INBOX = 4 * LAYOUT.WORDS;
 const CAP = 64;
 const OUTBOX = INBOX + CAP;
 
-/** What the host serves: method 0 answers at once with a word, method 1
- * later, and method 2 at once with a value past the cap. */
-const SERVED = (NAMED | 1) >>> 0;
+/** An interface the host implements: method 0 answers at once with a word,
+ * method 1 later, and method 2 at once with a value past the cap. */
+const INTERFACE = (NAMED | 1) >>> 0;
 
 /** The host's side over a guest that only lays its link and keeps each
  * frame the host lays in its inbox; and the tag method 1 left to answer. */
@@ -41,7 +41,7 @@ function link(): {
       return 0;
     },
   });
-  side.mount_named(SERVED, {
+  side.mount_named(INTERFACE, {
     call(m, tag) {
       if (m === 0) return { result: 0, data: [4, (w) => w.u32(0, 7)] };
       if (m === 1) {
@@ -66,7 +66,7 @@ test("the answer a side lays in the frame its request came in is marked RES and 
     lay(view, OUTBOX, {
       tag,
       res: false,
-      handle: SERVED,
+      handle: INTERFACE,
       method,
       result: 0,
       pkt_len: 0,
@@ -75,7 +75,7 @@ test("the answer a side lays in the frame its request came in is marked RES and 
     const f = read(view, OUTBOX);
     assert.deepEqual(
       [f.res, f.tag, f.handle, f.method, f.result],
-      [true, tag, SERVED, method, result],
+      [true, tag, INTERFACE, method, result],
     );
   }
 });
@@ -90,7 +90,7 @@ test("a later answer is marked RES and carries the request's tag", () => {
     lay(view, OUTBOX, {
       tag,
       res: false,
-      handle: SERVED,
+      handle: INTERFACE,
       method: 1,
       result: 0,
       pkt_len: 0,
@@ -118,13 +118,13 @@ test("a cancel runs the stop its request put once, and none once the request has
     return out(BigInt(OUTBOX));
   };
   let stops = 0;
-  assert.equal(send(5, SERVED, 1, null), ERRNO_EINPROGRESS);
+  assert.equal(send(5, INTERFACE, 1, null), ERRNO_EINPROGRESS);
   side.on_cancel(later(), () => stops++);
   send(6, ROOT, CANCEL, 5);
   send(7, ROOT, CANCEL, 5);
   assert.equal(stops, 1);
 
-  assert.equal(send(8, SERVED, 1, null), ERRNO_EINPROGRESS);
+  assert.equal(send(8, INTERFACE, 1, null), ERRNO_EINPROGRESS);
   side.on_cancel(later(), () => stops++);
   side.task_return(later(), 0);
   send(9, ROOT, CANCEL, 8);

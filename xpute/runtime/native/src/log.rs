@@ -2,10 +2,11 @@
 
 //! The runtime's writer, the one place a device's xpute writes to the
 //! platform's output: a log record its host hands it (xpute-host
-//! runtime.rs `log`), and the stop and the trap it tells, each as `[context]
-//! message`, to Android's log under the tag `xpute` at the priority of its
-//! level, because an Android app's error stream goes nowhere, and to the
-//! process's error stream elsewhere, which has no levels.
+//! runtime.rs `log`) or its UI does (lib.rs `log`), and the stop and the trap
+//! it tells, each as `[context] message`, to Android's log under the tag
+//! `xpute` at the priority of its level, because an Android app's error
+//! stream goes nowhere, and to the process's error stream elsewhere, which
+//! has no levels.
 
 use xpute_host::abi::log::Level;
 

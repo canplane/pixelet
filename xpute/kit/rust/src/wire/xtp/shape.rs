@@ -37,7 +37,7 @@ impl<T: ArrayElem + 'static> Shape for Vec<T> {
     type Write<'a> = &'a [T];
 
     fn most(v: &&[T]) -> u64 {
-        WORD + (core::mem::size_of_val(*v) as u64).next_multiple_of(WORD)
+        WORD + (size_of_val(*v) as u64).next_multiple_of(WORD)
     }
     fn write(v: &&[T], w: &mut PacketWriter<'_>) {
         w.array(Some(*v));

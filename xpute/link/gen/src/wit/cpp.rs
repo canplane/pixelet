@@ -6,7 +6,7 @@
 //! itself from one (cpp/xpute/link/cabi.hpp) at the offsets the Rust and the
 //! TypeScript take, from the one layout of each type (`Gen::layout`), and the
 //! guest's side of its objects, the only side C++ is written for: a function
-//! per method it calls, and a class per object it serves, with the object
+//! per method it calls, and a class per object it implements, with the object
 //! over it and what mounts or opens it. A record is a struct, an enum
 //! xpute-gen's (`cpp_enum`), a variant a struct over a `std::variant` of one
 //! struct per case, an option a `std::optional`, a result a `std::variant` of
@@ -36,8 +36,8 @@ use xpute_gen::spec::{Includes, Member, cpp_enum, cpp_ident, cpp_member, mark, p
 
 use super::{
     Gen, Kind, Obj, Role, TOOL, WitTarget, cases, discriminant, escaped, folded, is_async, is_lent,
-    is_serving, kind, members, method_const, method_name, object_method, package_name, params,
-    plus, rec_layout, rs_name, serving, type_name, variant_layout,
+    is_side_trait, kind, members, method_const, method_name, object_method, package_name, params,
+    plus, rec_layout, rs_name, side_trait, type_name, variant_layout,
 };
 
 /// Where a name the bindings take from the library is declared: its
@@ -73,10 +73,10 @@ pub(super) enum Library {
 }
 
 /// The names the C++ bindings give in a scope a WIT name shares: the
-/// interface's handle, a record's store and load, what serves an object and
-/// mounts it, an async method's answer, and an async call's lent buffer's
-/// template parameter. A WIT
-/// name that meets one takes `_`.
+/// interface's handle, a record's store and load, the class an object's
+/// implementation derives from and what mounts it, an async method's answer,
+/// and an async call's lent buffer's template parameter. A WIT name that
+/// meets one takes `_`.
 const GIVEN: [&str; 7] = [
     "HANDLE",
     "store",
@@ -88,15 +88,15 @@ const GIVEN: [&str; 7] = [
 ];
 
 /// Whether the C++ bindings give `n`: one of `GIVEN`, a lent span's template
-/// parameter (`T0`, …), or a resource's serving class's form.
+/// parameter (`T0`, …), or a resource's side class's form.
 fn given(n: &str) -> bool {
     GIVEN.contains(&n)
         || n.strip_prefix('T')
             .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
-        || is_serving(n)
+        || is_side_trait(n)
 }
 
-/// The class over a served object's implementation, which its trailing `_`
+/// The class over an object's implementation, which its trailing `_`
 /// keeps from every WIT name.
 fn object_class(o: &Obj) -> String {
     if o.resource {
@@ -598,7 +598,7 @@ impl Header<'_> {
         if let Some(role) = role {
             for o in objs {
                 match role {
-                    Role::Serve => self.export(o, &mut out)?,
+                    Role::Implement => self.export(o, &mut out)?,
                     Role::Call => self.import(o, &mut out)?,
                 }
             }
@@ -699,10 +699,10 @@ impl Header<'_> {
         Ok(format!("{}<{v}>", self.rt_use(ERROR, "Result")))
     }
 
-    /// The serving side of an object: its class, the object over it, and
+    /// The implementing side of an object: its class, the object over it, and
     /// what mounts it under the interface's handle or opens it.
     fn export(&self, o: &Obj, out: &mut String) -> Result<(), String> {
-        let (t, obj) = (serving(o, "Guest"), object_class(o));
+        let (t, obj) = (side_trait(o, "Guest"), object_class(o));
         self.include("memory");
         self.include("optional");
         self.include("span");
@@ -821,7 +821,7 @@ impl Header<'_> {
         } else {
             let _ = writeln!(
                 out,
-                "// Serves `implementation` under the interface's handle.\ninline void mount(std::unique_ptr<{t}> implementation) {{\n    {}(HANDLE, std::make_unique<{obj}>(std::move(implementation)));\n}}\n",
+                "// Mounts `implementation` under the interface's handle.\ninline void mount(std::unique_ptr<{t}> implementation) {{\n    {}(HANDLE, std::make_unique<{obj}>(std::move(implementation)));\n}}\n",
                 self.rt_use(GUEST_LINK, "mount_named")
             );
         }

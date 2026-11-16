@@ -64,7 +64,7 @@ fn block_contents_survive() {
             "a block of {sz} at {at:#x} is outside [{base:#x}, {end:#x})"
         );
         // SAFETY: `sz` bytes the allocator just handed out.
-        unsafe { core::ptr::write_bytes(p, i as u8, *sz) };
+        unsafe { ptr::write_bytes(p, i as u8, *sz) };
         live.push((p, *sz, i as u8));
     }
     assert!(
@@ -84,7 +84,7 @@ fn block_contents_survive() {
         let p = unsafe { heap.malloc(sz) };
         if !p.is_null() {
             // SAFETY: `sz` bytes the allocator just handed out.
-            unsafe { core::ptr::write_bytes(p, 0xff, sz) };
+            unsafe { ptr::write_bytes(p, 0xff, sz) };
         }
     }
 
@@ -102,14 +102,17 @@ fn block_contents_survive() {
 fn buddies_merge() {
     let heap: BuddyMalloc<Buddies> = BuddyMalloc::new();
     let one = 1 << MIN;
-    // SAFETY: the range is the test's own, here and below.
+    // SAFETY: the range is the test's own.
     let (a, b) = unsafe { (heap.malloc(one), heap.malloc(one)) };
     assert!(!a.is_null() && !b.is_null());
     let low = a.min(b);
+    // SAFETY: `a` and `b` were served by this heap at `one` bytes, and each
+    // is freed once.
     unsafe {
         heap.free(a, one);
         heap.free(b, one);
     }
+    // SAFETY: the range is the test's own.
     let both = unsafe { heap.malloc(one * 2) };
     assert_eq!(
         both, low,
@@ -121,12 +124,14 @@ fn buddies_merge() {
 fn oversize_refused() {
     let heap: BuddyMalloc<Full> = BuddyMalloc::new();
     let one = 1 << MIN;
-    // SAFETY: the range is the test's own, here and below.
+    // SAFETY: the range is the test's own.
     let first = unsafe { heap.malloc(one) };
     assert!(!first.is_null());
-    unsafe { core::ptr::write_bytes(first, 0x5a, one) };
+    // SAFETY: `first` is a live block of `one` bytes.
+    unsafe { ptr::write_bytes(first, 0x5a, one) };
 
     let mut served = 1;
+    // SAFETY: the range is the test's own.
     while !unsafe { heap.malloc(one) }.is_null() {
         served += 1;
         assert!(
@@ -151,13 +156,16 @@ fn oversize_refused() {
 fn freed_reused() {
     let heap: BuddyMalloc<Reuse> = BuddyMalloc::new();
     let sz = 1 << (MIN + 2);
-    // SAFETY: the range is the test's own, here and below.
+    // SAFETY: the range is the test's own.
     let p = unsafe { heap.malloc(sz) };
     assert!(!p.is_null());
     let reached = heap.peak();
 
     for _ in 0..8 {
+        // SAFETY: `p` is live at `sz` bytes, served again each round, and is
+        // freed once a round.
         unsafe { heap.free(p, sz) };
+        // SAFETY: the range is the test's own.
         let q = unsafe { heap.malloc(sz) };
         assert_eq!(q, p, "the same request after the same free moved");
         assert_eq!(

@@ -21,3 +21,17 @@ export function of_LocationStatus(val: number): LocationStatus | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_LocationStatus(val: LocationStatus): string {
+  switch (val) {
+    case LOCATION_STATUS_IDLE:
+      return "Idle";
+    case LOCATION_STATUS_LOADING:
+      return "Loading";
+    case LOCATION_STATUS_READY:
+      return "Ready";
+    case LOCATION_STATUS_ERROR:
+      return "Error";
+  }
+}

@@ -41,6 +41,24 @@ export function of_StreamName(val: number): StreamName | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_StreamName(val: StreamName): string {
+  switch (val) {
+    case STREAM_NAME_TERRAIN:
+      return "terrain";
+    case STREAM_NAME_PLACE:
+      return "place";
+    case STREAM_NAME_DIVISION:
+      return "division";
+    case STREAM_NAME_ASSET:
+      return "asset";
+    case STREAM_NAME_EARTH:
+      return "earth";
+    case STREAM_NAME_OBJECT:
+      return "object";
+  }
+}
+
 export const OUTCOME_NAMES = ["ok", "aborted", "err"] as const;
 
 export type OutcomeName =
@@ -60,6 +78,18 @@ export function of_OutcomeName(val: number): OutcomeName | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_OutcomeName(val: OutcomeName): string {
+  switch (val) {
+    case OUTCOME_NAME_OK:
+      return "ok";
+    case OUTCOME_NAME_ABORTED:
+      return "aborted";
+    case OUTCOME_NAME_ERR:
+      return "err";
+  }
+}
+
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms"] as const;
 
 export type TaskPhaseName =
@@ -77,6 +107,18 @@ export function of_TaskPhaseName(val: number): TaskPhaseName | null {
     val === TASK_PHASE_NAME_DECODE_MS
     ? val
     : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_TaskPhaseName(val: TaskPhaseName): string {
+  switch (val) {
+    case TASK_PHASE_NAME_NET_MS:
+      return "net_ms";
+    case TASK_PHASE_NAME_BYTES:
+      return "bytes";
+    case TASK_PHASE_NAME_DECODE_MS:
+      return "decode_ms";
+  }
 }
 
 /** A run's timings past this many are dropped. */

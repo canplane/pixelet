@@ -19,10 +19,10 @@ import type * as db_web from "@/service/platform/db.web.ts";
 import * as db_native from "@/service/platform/db.native.ts";
 import type * as device_web from "@/service/platform/device.web.ts";
 import * as device_native from "@/service/platform/device.native.ts";
+import type * as drive_web from "@/service/platform/drive.web.ts";
+import * as drive_native from "@/service/platform/drive.native.ts";
 import type * as locale_web from "@/service/platform/locale.web.ts";
 import * as locale_native from "@/service/platform/locale.native.ts";
-import type * as log_web from "@/service/platform/log.web.ts";
-import * as log_native from "@/service/platform/log.native.ts";
 import type * as online_web from "@/service/platform/online.web.ts";
 import * as online_native from "@/service/platform/online.native.ts";
 import type * as origin_web from "@/service/platform/origin.web.ts";
@@ -74,8 +74,8 @@ export const CONFORMS = [
   boot_native satisfies typeof boot_web,
   db_native satisfies typeof db_web,
   device_native satisfies typeof device_web,
+  drive_native satisfies typeof drive_web,
   locale_native satisfies typeof locale_web,
-  log_native satisfies typeof log_web,
   online_native satisfies typeof online_web,
   origin_native satisfies typeof origin_web,
   safe_area_native satisfies typeof safe_area_web,

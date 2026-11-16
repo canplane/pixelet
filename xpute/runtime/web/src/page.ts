@@ -3,21 +3,21 @@
 /**
  * The UI's end of the guest's worker, as @xpute/expo is a device's of its
  * runtime: the link's end (@xpute/link `End`) over the page's half of the
- * UI's crossing, a port to the worker (`open_ui`), on which the UI calls
- * the guest and serves it by the generated bindings as any end does; it
- * hears the guest's stop and its trap (`stopped_on`, `trap_on`), and starts
- * the guest (`start`). A page has one worker, as a process has one runtime,
- * and one port to it, which moves an object beside the calls (`give`). The
- * worker stands in for the UI on the guest's link (remote.ts) and posts what
- * reaches it (message.ts): a method of an object the UI serves, answered
- * back by its tag, at once or later; an open of one under the handle the
- * guest's end issued, by the opener of the prefix that matched; the guest's
- * cancel of a method and its drop of an object; and the answer to a call of
- * the UI's. What the worker posts besides is a message by its kind, the
- * runtime's own and a host's or the program's alike (`message_on`), heard as
- * it comes. Nothing is kept for a late hearer: the worker dies with its page,
- * so no UI comes late to it, where a device's runtime outlives its UI and
- * keeps the guest's stop and its trap.
+ * UI's crossing, a port to the worker (`open_ui`), on which the UI calls the
+ * guest and implements its imports by the generated bindings as any end does;
+ * it hears the guest's stop and its trap (`stopped_on`, `trap_on`), and
+ * starts the guest (`start`). A page has one worker, as a process has one
+ * runtime, and one port to it, which moves an object beside the calls
+ * (`give`). The worker stands in for the UI on the guest's link (remote.ts)
+ * and posts what reaches it (message.ts): a method of an object the UI
+ * implements, answered back by its tag, at once or later; an open of one
+ * under the handle the guest's end issued, by the opener of the prefix that
+ * matched; the guest's cancel of a method and its drop of an object; and the
+ * answer to a call of the UI's. What the worker posts besides is a message by
+ * its kind, the runtime's own and a host's or the program's alike
+ * (`message_on`), heard as it comes. Nothing is kept for a late hearer: the
+ * worker dies with its page, so no UI comes late to it, where a device's
+ * runtime outlives its UI and keeps the guest's stop and its trap.
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
@@ -155,12 +155,13 @@ export function trap_on(hear: (err: string) => void): { remove(): void } {
   return message_on<Trap>("trap", (m) => hear(m.err));
 }
 
-/** Starts the guest with what the UI serves, once it is mounted on the UI's
- * end, as @xpute/expo `start` does on a device: the worker is sent the
+/** Starts the guest with what the UI implements, once it is mounted on the
+ * UI's end, as @xpute/expo `start` does on a device: the worker is sent the
  * guest's `module`, fetched with `init`, the UI's port, the named handles and
- * prefixes of what the UI serves, and `more`, the program's own fields, which
- * its worker reads with them (`Instantiate`). The guest is told the page's lifecycle from here on (`tell_life`),
- * as a device's module tells its runtime the app's. */
+ * prefixes of what the UI implements, and `more`, the program's own fields,
+ * which its worker reads with them (`Instantiate`). The guest is told the
+ * page's lifecycle from here on (`tell_life`), as a device's module tells its
+ * runtime the app's. */
 export function start(
   module: string,
   init: RequestInit | undefined,

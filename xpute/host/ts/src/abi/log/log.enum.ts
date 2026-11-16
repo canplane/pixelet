@@ -27,3 +27,21 @@ export function of_Level(val: number): Level | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_Level(val: Level): string {
+  switch (val) {
+    case LEVEL_TRACE:
+      return "Trace";
+    case LEVEL_DEBUG:
+      return "Debug";
+    case LEVEL_INFO:
+      return "Info";
+    case LEVEL_WARN:
+      return "Warn";
+    case LEVEL_ERROR:
+      return "Error";
+    case LEVEL_CRITICAL:
+      return "Critical";
+  }
+}

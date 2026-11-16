@@ -12,7 +12,7 @@
 //! `RESULT`), and a run never waits for an answer.
 //!
 //! `native` holds the host for a guest linked into its own process, and
-//! exports it under xpute's names (`native_abi!`); it serves the GPU's
+//! exports it under xpute's names (`native_abi!`); it mounts the GPU's
 //! bindings (`abi`) on the host's side its runtime gives.
 
 /// The bindings of the GPU's package on the host's side, generated from its

@@ -19,7 +19,7 @@ import {
   BOOT_TERMINATED,
 } from "@/service/sys/boot.ts";
 import * as setting from "@/service/core/setting.ts";
-import { log } from "@/service/platform/log.ts";
+import { tell_drive } from "@/service/platform/drive.ts";
 import * as visibility from "@/service/platform/visibility.ts";
 import * as overlay from "@/service/core/overlay.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
@@ -45,7 +45,7 @@ async function tell(text: string): Promise<void> {
   const n = Math.ceil(text.length / PIECE);
   for (let i = 0; i < n; i++) {
     const piece = text.slice(i * PIECE, (i + 1) * PIECE);
-    log(`PXLPERF ${i + 1}/${n} ${piece}`);
+    tell_drive(`PXLPERF ${i + 1}/${n} ${piece}`);
     if ((i + 1) % BURST === 0) {
       await new Promise((done) => setTimeout(done, BURST_GAP_MS));
     }
@@ -80,7 +80,7 @@ function progress(): () => void {
   const tick = setInterval(() => {
     const t = performance.now();
     const unanswered = asked < 0 ? 0 : t - asked;
-    log(
+    tell_drive(
       `PXLRUN t ${t} shown ${Number(visibility.shown())} boot ${boot_state()} unanswered_ms ${unanswered} ${draw}`,
     );
     if (asked < 0) void ask();

@@ -14,15 +14,15 @@ thread_local! {
 
 const CAP: u32 = 64;
 
-/// What the host serves: method 0 answers at once with a word, method 1
-/// later, and method 2 at once with a value past the cap.
-const SERVED: Handle = NAMED | 1;
+/// An interface the host implements: method 0 answers at once with a word,
+/// method 1 later, and method 2 at once with a value past the cap.
+const INTERFACE: Handle = NAMED | 1;
 
-struct Served {
+struct Implementation {
     later: Rc<Cell<Option<Tag>>>,
 }
 
-impl Object for Served {
+impl Object for Implementation {
     fn call(&self, m: Method, tag: Tag, _: Option<&[u8]>) -> Reply {
         match m {
             0 => Reply {
@@ -41,8 +41,8 @@ impl Object for Served {
     }
 }
 
-/// Lays the link and mounts what the host serves: the inbox, and the tag of
-/// the request method 1 left to answer.
+/// Lays the link and mounts the host's implementation: the inbox, and the tag
+/// of the request method 1 left to answer.
 fn link() -> (u64, Rc<Cell<Option<Tag>>>) {
     let l = Layout {
         inbox: alloc(2 * CAP),
@@ -53,8 +53,8 @@ fn link() -> (u64, Rc<Cell<Option<Tag>>>) {
     HOST.with(|h| {
         h.set_layout(l);
         h.mount_named(
-            SERVED,
-            Rc::new(Served {
+            INTERFACE,
+            Rc::new(Implementation {
                 later: later.clone(),
             }),
         );
@@ -69,11 +69,11 @@ fn recv_answers_res_with_tag() {
     let (inbox, _) = link();
     let outbox = inbox + u64::from(CAP);
     for (m, result) in [(0, 0), (2, Errno::EMSGSIZE as i32)] {
-        let t = GUEST.with(|g| g.send(SERVED, m, Packet::Args(None), None));
+        let t = GUEST.with(|g| g.send(INTERFACE, m, Packet::Args(None), None));
         let f = Frame::at(outbox);
         assert_eq!(
             (f.res, f.tag, f.handle, f.method, f.result),
-            (true, t, SERVED, m, result),
+            (true, t, INTERFACE, m, result),
             "method {m}"
         );
     }
@@ -101,7 +101,7 @@ fn task_return_answers_res_with_tag() {
         let h = heard.clone();
         let t = GUEST.with(|g| {
             g.send(
-                SERVED,
+                INTERFACE,
                 1,
                 Packet::Args(None),
                 Some(Box::new(move |r, d| h.set(Some((r, d))))),
@@ -126,14 +126,14 @@ fn cancel_stops_once_and_never_after_answer() {
         let s = stops.clone();
         Box::new(move || s.set(s.get() + 1)) as Box<dyn FnOnce()>
     };
-    let t = GUEST.with(|g| g.send(SERVED, 1, Packet::Args(None), Some(Box::new(|_, _| {}))));
+    let t = GUEST.with(|g| g.send(INTERFACE, 1, Packet::Args(None), Some(Box::new(|_, _| {}))));
     assert_eq!(later.take(), Some(t));
     HOST.with(|h| h.on_cancel(t, stop()));
     GUEST.with(|g| g.cancel(t));
     GUEST.with(|g| g.cancel(t));
     assert_eq!(stops.get(), 1);
 
-    let t = GUEST.with(|g| g.send(SERVED, 1, Packet::Args(None), Some(Box::new(|_, _| {}))));
+    let t = GUEST.with(|g| g.send(INTERFACE, 1, Packet::Args(None), Some(Box::new(|_, _| {}))));
     assert_eq!(later.take(), Some(t));
     HOST.with(|h| h.on_cancel(t, stop()));
     HOST.with(|h| h.task_return(t, 0, Packet::Args(None)));

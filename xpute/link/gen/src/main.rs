@@ -24,10 +24,10 @@ const USAGE: &str = "xpute-link-gen <guest|host> <wit> [--rs <file>] [--ts <dir>
      [--use <wit> [--rs <file>] [--ts <dir>] [--cpp <dir>]]... [--check]";
 
 fn run(args: &[String]) -> Result<(), String> {
-    let (side, wit, mut rest) = match args {
-        [side, wit, rest @ ..] => (side, wit, rest),
-        _ => return Err(USAGE.into()),
+    let [side, wit, rest @ ..] = args else {
+        return Err(USAGE.into());
     };
+    let mut rest = rest;
     let side = match side.as_str() {
         "guest" => Side::Guest,
         "host" => Side::Host,

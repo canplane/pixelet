@@ -15,8 +15,8 @@
 
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { install } from "../../client/src/remote-console.ts";
 import { entries, make, type Pipeline } from "./pipeline.ts";
+import { install } from "./remote-console.ts";
 
 const RECORDED = import.meta.glob<string>(
   "../../../doc/**/experiment/**/*.wgsl",

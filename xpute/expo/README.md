@@ -23,20 +23,20 @@ beside this one, which links into the same crate.
 
 ## The UI's end
 
-The UI opens its end of the runtime (`open_ui`), mounts on it what it serves,
-and then starts the runtime (`start`). The first start of a process starts
-the guest and serves it what is mounted on the UI's end by then, its named
-handles and prefixes; each start attaches the UI under a new handle, one
-after the first dropping the last UI's, as a reload's, and tells the guest a
-UI attached. The UI hears the guest's stop and its trap (`stopped_on`,
-`trap_on`), and each, as the UI begins to hear it, tells at once the last the
-runtime keeps, so a UI that starts after the guest's end hears it too:
+The UI opens its end of the runtime (`open_ui`), mounts on it what it
+implements, and then starts the runtime (`start`). The first start of a process
+starts the guest with what is mounted on the UI's end by then, its named
+handles and prefixes; each start attaches the UI under a new handle, one after
+the first dropping the last UI's, as a reload's, and tells the guest a UI
+attached. The UI hears the guest's stop and its trap (`stopped_on`, `trap_on`),
+and each, as the UI begins to hear it, tells at once the last the runtime
+keeps, so a UI that starts after the guest's end hears it too:
 
 ```ts
 const ui = open_ui();
 stopped_on((stop) => { /* show it */ });
 trap_on((err) => { /* show it */ });
-// Mount on `ui` what the UI serves, before the first `start`.
+// Mount on `ui` what the UI implements, before the first `start`.
 start();
 ```
 

@@ -1,6 +1,6 @@
 // cpp/xpute/guest/log.hpp
 
-// The guest's log records, told to its host by the log it serves
+// The guest's log records, told to its host by the log it implements
 // (`wit/log/log.wit`), as `xpute-guest`'s `log.rs` is a Rust guest's: a
 // level, a context and a message, each record worth telling and neither an
 // error nor a bug.

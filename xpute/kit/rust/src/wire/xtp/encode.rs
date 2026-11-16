@@ -79,7 +79,7 @@ fn walk(w: &mut PacketWriter<'_>, node: &Node) {
             val: Some(children),
         }) => {
             w.branch(children.len() as u32, |b| {
-                children.iter().for_each(|c| walk(b, c))
+                children.iter().for_each(|c| walk(b, c));
             });
         }
         Node::Branch(BranchNode { val: None }) => {

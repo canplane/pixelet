@@ -362,9 +362,9 @@ the image is a WebAssembly module and its runtime the page's worker; on a device
 it is linked into the app with `pxl-runtime`, the device's counterpart of that
 worker, and xpute's native runtime runs it on a thread of its own. The world
 cannot tell which, and does not need to, so the same world runs everywhere.
-Every interface between the core and what serves it is declared in WIT,
-pixelet's own under `spec/client/core/wit/`; xpute's own documents describe the
-link it crosses, and this one is about what pixelet does over it. The GPU is
+Every interface between the core and what implements its imports is declared in
+WIT, pixelet's own under `spec/client/core/wit/`; xpute's own documents describe
+the link it crosses, and this one is about what pixelet does over it. The GPU is
 pixelet's plugin of xpute, its own guest's end, hosts and UI ends beside xpute's
 (`rust/gpu/README.md`).
 

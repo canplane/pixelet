@@ -1,10 +1,11 @@
 // @xpute/kit/status/error.ts
 
 import {
-  ERRNO,
   KIND_UNKNOWN,
   kind_Errno,
+  name_Errno,
   of_Errno,
+  text_Errno,
   type Kind,
 } from "./errno.spec.ts";
 import type { i32 } from "../abi/word.ts";
@@ -13,8 +14,8 @@ import type { i32 } from "../abi/word.ts";
  * (`errno.json5`). The strings are for a person to read; an error carries the
  * number alone. */
 export function strerror(errnum: i32): string {
-  const e = Object.entries(ERRNO).find(([, v]) => v.number === errnum);
-  return e === undefined ? `errno ${errnum}` : `${e[0]}: ${e[1].text}`;
+  const e = of_Errno(errnum);
+  return e === null ? `errno ${errnum}` : `${name_Errno(e)}: ${text_Errno(e)}`;
 }
 
 /** An errno a fault from outside the program raised: its input, its peer,

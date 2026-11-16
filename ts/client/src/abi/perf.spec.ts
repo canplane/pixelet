@@ -35,6 +35,20 @@ export function of_HitKind(val: number): HitKind | null {
     : null;
 }
 
+/** The member's name, as its source spells it. */
+export function name_HitKind(val: HitKind): string {
+  switch (val) {
+    case HIT_KIND_GROUND:
+      return "ground";
+    case HIT_KIND_OBJECT:
+      return "object";
+    case HIT_KIND_OBJECTS:
+      return "objects";
+    case HIT_KIND_DECOR:
+      return "decor";
+  }
+}
+
 export const LIMIT = {
   REASON_CAP: 4 as number,
   /** A reason's words: its fail, its detail and how many (STREAM_STAT.reasons). */

@@ -1,6 +1,6 @@
 // xpute-runtime-native/native.boot.test.rs
 
-//! A server that fails as the runtime boots traps the link before the guest
+//! A mount that fails as the runtime boots traps the link before the guest
 //! is entered (native.rs `run`).
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,14 +26,14 @@ xpute_guest::link!(
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![Box::new(|_| panic!("the server fails"))],
+        mounts: vec![Box::new(|_| panic!("the mount fails"))],
         imports: &[],
         calls: &[],
     }
 }
 
 #[test]
-fn failing_server_traps() {
+fn failing_mount_traps() {
     let ui = app::start(boot, &[]);
     let mut messages = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
@@ -43,7 +43,7 @@ fn failing_server_traps() {
         matches!(&told[..], [Exit::Stop(e, _), Exit::Trap(err)]
             if *e == Errno::ENOTRECOVERABLE as i32
                 && err.starts_with("the host stopped: panicked at ")
-                && err.ends_with("the server fails")),
+                && err.ends_with("the mount fails")),
         "{told:?}"
     );
     assert!(

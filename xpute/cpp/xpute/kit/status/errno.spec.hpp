@@ -254,307 +254,71 @@ constexpr Kind kind_Errno(Errno val) noexcept {
     __builtin_unreachable();
 }
 
-namespace ERRNO {
-
-namespace ok {
-
-inline constexpr std::string_view text = "Success";
-} // namespace ok
-
-namespace eperm {
-
-inline constexpr std::string_view text = "Operation not permitted";
-} // namespace eperm
-
-namespace enoent {
-
-inline constexpr std::string_view text = "No such file or directory / entry not found";
-} // namespace enoent
-
-namespace esrch {
-
-inline constexpr std::string_view text = "No such process";
-} // namespace esrch
-
-namespace eintr {
-
-inline constexpr std::string_view text = "Interrupted system call";
-} // namespace eintr
-
-namespace eio {
-
-inline constexpr std::string_view text = "I/O error";
-} // namespace eio
-
-namespace enxio {
-
-inline constexpr std::string_view text = "No such device or address";
-} // namespace enxio
-
-namespace e2big {
-
-inline constexpr std::string_view text = "Argument list too long / object too large for fixed local cap";
-} // namespace e2big
-
-namespace enoexec {
-
-inline constexpr std::string_view text = "Exec format error";
-} // namespace enoexec
-
-namespace ebadf {
-
-inline constexpr std::string_view text = "Bad file descriptor / bad handle";
-} // namespace ebadf
-
-namespace echild {
-
-inline constexpr std::string_view text = "No child processes";
-} // namespace echild
-
-namespace eagain {
-
-inline constexpr std::string_view text = "Try again / Resource temporarily unavailable";
-} // namespace eagain
-
-namespace enomem {
-
-inline constexpr std::string_view text = "Out of memory";
-} // namespace enomem
-
-namespace eacces {
-
-inline constexpr std::string_view text = "Permission denied";
-} // namespace eacces
-
-namespace efault {
-
-inline constexpr std::string_view text = "Bad address";
-} // namespace efault
-
-namespace ebusy {
-
-inline constexpr std::string_view text = "Device or resource busy";
-} // namespace ebusy
-
-namespace eexist {
-
-inline constexpr std::string_view text = "File exists / duplicate bind";
-} // namespace eexist
-
-namespace exdev {
-
-inline constexpr std::string_view text = "Cross-device link";
-} // namespace exdev
-
-namespace enodev {
-
-inline constexpr std::string_view text = "No such device";
-} // namespace enodev
-
-namespace enotdir {
-
-inline constexpr std::string_view text = "Not a directory";
-} // namespace enotdir
-
-namespace eisdir {
-
-inline constexpr std::string_view text = "Is a directory";
-} // namespace eisdir
-
-namespace einval {
-
-inline constexpr std::string_view text = "Invalid argument";
-} // namespace einval
-
-namespace enfile {
-
-inline constexpr std::string_view text = "File table overflow (system-wide)";
-} // namespace enfile
-
-namespace emfile {
-
-inline constexpr std::string_view text = "Too many open files (process)";
-} // namespace emfile
-
-namespace enotty {
-
-inline constexpr std::string_view text = "Not a tty";
-} // namespace enotty
-
-namespace efbig {
-
-inline constexpr std::string_view text = "File too large / payload too large";
-} // namespace efbig
-
-namespace enospc {
-
-inline constexpr std::string_view text = "No space left on device / local mailbox full";
-} // namespace enospc
-
-namespace espipe {
-
-inline constexpr std::string_view text = "Illegal seek";
-} // namespace espipe
-
-namespace erofs {
-
-inline constexpr std::string_view text = "Read-only file system";
-} // namespace erofs
-
-namespace emlink {
-
-inline constexpr std::string_view text = "Too many links";
-} // namespace emlink
-
-namespace epipe {
-
-inline constexpr std::string_view text = "Broken pipe";
-} // namespace epipe
-
-namespace edom {
-
-inline constexpr std::string_view text = "Math argument out of domain";
-} // namespace edom
-
-namespace erange {
-
-inline constexpr std::string_view text = "Math result not representable";
-} // namespace erange
-
-namespace enosys {
-
-inline constexpr std::string_view text = "Function not implemented";
-} // namespace enosys
-
-namespace eproto {
-
-inline constexpr std::string_view text = "Protocol error";
-} // namespace eproto
-
-namespace ebadmsg {
-
-inline constexpr std::string_view text = "Bad message (protocol/frame/payload invalid)";
-} // namespace ebadmsg
-
-namespace eoverflow {
-
-inline constexpr std::string_view text = "Value too large for target type / overflow";
-} // namespace eoverflow
-
-namespace emsgsize {
-
-inline constexpr std::string_view text = "Message too long / packet too large";
-} // namespace emsgsize
-
-namespace enotsup {
-
-inline constexpr std::string_view text = "Operation not supported";
-} // namespace enotsup
-
-namespace eilseq {
-
-inline constexpr std::string_view text = "Illegal byte sequence (decode/encoding failure)";
-} // namespace eilseq
-
-namespace eaddrinuse {
-
-inline constexpr std::string_view text = "Address already in use";
-} // namespace eaddrinuse
-
-namespace eaddrnotavail {
-
-inline constexpr std::string_view text = "Cannot assign requested address";
-} // namespace eaddrnotavail
-
-namespace enetdown {
-
-inline constexpr std::string_view text = "Network is down";
-} // namespace enetdown
-
-namespace enetunreach {
-
-inline constexpr std::string_view text = "Network is unreachable";
-} // namespace enetunreach
-
-namespace enetreset {
-
-inline constexpr std::string_view text = "Network dropped connection because of reset";
-} // namespace enetreset
-
-namespace econnaborted {
-
-inline constexpr std::string_view text = "Software caused connection abort";
-} // namespace econnaborted
-
-namespace econnreset {
-
-inline constexpr std::string_view text = "Connection reset by peer";
-} // namespace econnreset
-
-namespace enobufs {
-
-inline constexpr std::string_view text = "No buffer space available";
-} // namespace enobufs
-
-namespace eisconn {
-
-inline constexpr std::string_view text = "Transport endpoint is already connected";
-} // namespace eisconn
-
-namespace enotconn {
-
-inline constexpr std::string_view text = "Transport endpoint is not connected";
-} // namespace enotconn
-
-namespace eshutdown {
-
-inline constexpr std::string_view text = "Cannot send after transport endpoint shutdown";
-} // namespace eshutdown
-
-namespace etoomanyrefs {
-
-inline constexpr std::string_view text = "Too many references";
-} // namespace etoomanyrefs
-
-namespace etimedout {
-
-inline constexpr std::string_view text = "Connection timed out";
-} // namespace etimedout
-
-namespace econnrefused {
-
-inline constexpr std::string_view text = "Connection refused";
-} // namespace econnrefused
-
-namespace ehostdown {
-
-inline constexpr std::string_view text = "Host is down";
-} // namespace ehostdown
-
-namespace ehostunreach {
-
-inline constexpr std::string_view text = "No route to host";
-} // namespace ehostunreach
-
-namespace ealready {
-
-inline constexpr std::string_view text = "Operation already in progress";
-} // namespace ealready
-
-namespace einprogress {
-
-inline constexpr std::string_view text = "Operation now in progress";
-} // namespace einprogress
-
-namespace ecanceled {
-
-inline constexpr std::string_view text = "Operation canceled";
-} // namespace ecanceled
-
-namespace enotrecoverable {
-
-inline constexpr std::string_view text = "State not recoverable: an invariant the code stands on does not hold";
-} // namespace enotrecoverable
-} // namespace ERRNO
+// The member's `text`.
+constexpr std::string_view text_Errno(Errno val) noexcept {
+    switch (val) {
+    case Errno::ok: return "Success";
+    case Errno::eperm: return "Operation not permitted";
+    case Errno::enoent: return "No such file or directory / entry not found";
+    case Errno::esrch: return "No such process";
+    case Errno::eintr: return "Interrupted system call";
+    case Errno::eio: return "I/O error";
+    case Errno::enxio: return "No such device or address";
+    case Errno::e2big: return "Argument list too long / object too large for fixed local cap";
+    case Errno::enoexec: return "Exec format error";
+    case Errno::ebadf: return "Bad file descriptor / bad handle";
+    case Errno::echild: return "No child processes";
+    case Errno::eagain: return "Try again / Resource temporarily unavailable";
+    case Errno::enomem: return "Out of memory";
+    case Errno::eacces: return "Permission denied";
+    case Errno::efault: return "Bad address";
+    case Errno::ebusy: return "Device or resource busy";
+    case Errno::eexist: return "File exists / duplicate bind";
+    case Errno::exdev: return "Cross-device link";
+    case Errno::enodev: return "No such device";
+    case Errno::enotdir: return "Not a directory";
+    case Errno::eisdir: return "Is a directory";
+    case Errno::einval: return "Invalid argument";
+    case Errno::enfile: return "File table overflow (system-wide)";
+    case Errno::emfile: return "Too many open files (process)";
+    case Errno::enotty: return "Not a tty";
+    case Errno::efbig: return "File too large / payload too large";
+    case Errno::enospc: return "No space left on device / local mailbox full";
+    case Errno::espipe: return "Illegal seek";
+    case Errno::erofs: return "Read-only file system";
+    case Errno::emlink: return "Too many links";
+    case Errno::epipe: return "Broken pipe";
+    case Errno::edom: return "Math argument out of domain";
+    case Errno::erange: return "Math result not representable";
+    case Errno::enosys: return "Function not implemented";
+    case Errno::eproto: return "Protocol error";
+    case Errno::ebadmsg: return "Bad message (protocol/frame/payload invalid)";
+    case Errno::eoverflow: return "Value too large for target type / overflow";
+    case Errno::emsgsize: return "Message too long / packet too large";
+    case Errno::enotsup: return "Operation not supported";
+    case Errno::eilseq: return "Illegal byte sequence (decode/encoding failure)";
+    case Errno::eaddrinuse: return "Address already in use";
+    case Errno::eaddrnotavail: return "Cannot assign requested address";
+    case Errno::enetdown: return "Network is down";
+    case Errno::enetunreach: return "Network is unreachable";
+    case Errno::enetreset: return "Network dropped connection because of reset";
+    case Errno::econnaborted: return "Software caused connection abort";
+    case Errno::econnreset: return "Connection reset by peer";
+    case Errno::enobufs: return "No buffer space available";
+    case Errno::eisconn: return "Transport endpoint is already connected";
+    case Errno::enotconn: return "Transport endpoint is not connected";
+    case Errno::eshutdown: return "Cannot send after transport endpoint shutdown";
+    case Errno::etoomanyrefs: return "Too many references";
+    case Errno::etimedout: return "Connection timed out";
+    case Errno::econnrefused: return "Connection refused";
+    case Errno::ehostdown: return "Host is down";
+    case Errno::ehostunreach: return "No route to host";
+    case Errno::ealready: return "Operation already in progress";
+    case Errno::einprogress: return "Operation now in progress";
+    case Errno::ecanceled: return "Operation canceled";
+    case Errno::enotrecoverable: return "State not recoverable: an invariant the code stands on does not hold";
+    }
+    __builtin_unreachable();
+}
 
 } // namespace xpute

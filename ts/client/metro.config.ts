@@ -14,7 +14,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
 import { platform_file, REPO, WORKSPACE } from "@pxl/build/path.ts";
-import { CONSOLE_PATH, console_handler } from "@pxl/build/console.ts";
 import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import {
@@ -114,8 +113,6 @@ const resolve_request: NonNullable<typeof BASE.resolver.resolveRequest> = (
   return ctx.resolveRequest(ctx, file ?? name, platform);
 };
 
-const dev_console = console_handler(path.join(APP, ".dev-console.log"));
-
 /** Metro's caches, its transforms' and its file map's, lie in the checkout's
  * tmp/ (AGENTS.md), each tree's its own, where Expo would put them in the
  * system's temporary folder. The store is the kind Expo makes, rooted there;
@@ -144,7 +141,6 @@ export default {
       (metro: Middleware): Middleware =>
       (req, res, next) => {
         const url = req.url ?? "/";
-        if (url.startsWith(CONSOLE_PATH)) return dev_console(req, res);
         const target = route_target(url);
         if (target) return forward(target, req, res);
         metro(req, res, next);

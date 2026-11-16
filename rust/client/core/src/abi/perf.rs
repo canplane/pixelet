@@ -108,7 +108,7 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `implementation` under the interface's handle.
+/// Mounts `implementation` under the interface's handle.
 pub fn mount(implementation: _rt::Rc<dyn Guest>) {
     _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }

@@ -8,6 +8,7 @@ use std::sync::Mutex;
 
 use xpute_guest::abi::clocks::monotonic_clock::{HANDLE, WAIT_FOR};
 use xpute_guest::link::{cancel, send};
+use xpute_host::clock;
 use xpute_kit::status::errno::Errno;
 use xpute_link::{Lower, OPEN, ROOT};
 use xpute_runtime_native::native::Boot;
@@ -39,7 +40,7 @@ xpute_guest::link!(
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![Box::new(xpute_host::clock::serve)],
+        mounts: vec![Box::new(clock::mount)],
         imports: &[("monotonic-clock", HANDLE)],
         calls: &[],
     }

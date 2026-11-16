@@ -13,3 +13,15 @@ export function of_Tool(val: number): Tool | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_Tool(val: Tool): string {
+  switch (val) {
+    case TOOL_POINTER:
+      return "Pointer";
+    case TOOL_ITEM:
+      return "Item";
+    case TOOL_ERASER:
+      return "Eraser";
+  }
+}

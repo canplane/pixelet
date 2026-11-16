@@ -365,7 +365,7 @@ pub(crate) fn perf_recording_extremes() -> RecordingSection {
     perf().extreme
 }
 
-/// Records that an entry served the UI's read of the profiler, which took
+/// Records that an entry answered the UI's read of the profiler, which took
 /// `ms`. That time is the profiler's cost to the interval in progress
 /// (`perf_ms`).
 pub(crate) fn perf_record_read(ms: f64) {

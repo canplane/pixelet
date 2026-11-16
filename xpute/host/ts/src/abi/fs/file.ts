@@ -11,11 +11,11 @@ import {
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
+  type Callee,
   ComponentError,
   type Handle,
   type LinkObject,
   type Method,
-  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -44,7 +44,7 @@ export interface HostFile {
 
 /** The object over `implementation`. */
 export function file(
-  l: Pick<Serving, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "on_cancel">,
   implementation: HostFile,
 ): LinkObject {
   return {

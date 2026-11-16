@@ -17,3 +17,13 @@ export const PHASE_VISIBLE = 1;
 export function of_Phase(val: number): Phase | null {
   return val === PHASE_INTERACTION || val === PHASE_VISIBLE ? val : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_Phase(val: Phase): string {
+  switch (val) {
+    case PHASE_INTERACTION:
+      return "interaction";
+    case PHASE_VISIBLE:
+      return "visible";
+  }
+}

@@ -7,7 +7,7 @@
  * host's (`Side`). Whatever is called is an
  * object, called by its methods under a handle: an interface's named handle, the hash of its name
  * (`frame.json5` `NAMED`), or a resource's, named by a URI, a tuple of
- * tokens, and opened by the root's `open` to a handle the serving side
+ * tokens, and opened by the root's `open` to a handle the implementing side
  * issues, or answered by a function that returns it. A frame is one method
  * called: its tag the request, unique among the sender's pending ones, its
  * command the handle, the method and a `RES` bit (`frame.ts`), its packet the
@@ -16,12 +16,12 @@
  * to: its result, or EINPROGRESS for one that answers later, by a frame marked
  * RES with the request's tag. `call` takes what the crossing returns, for a
  * method that always answers at once, and stops as a bug on EINPROGRESS; `send`
- * hands it to its answer, and an `async func` is sent; `mount_named` serves an
- * interface under its named handle, `add` an object under a handle issued for
- * a function to answer, and `mount` puts the opener of an interface's
- * resources the host serves under a URI's leading tokens, the longest matching
- * winning; `on_cancel` puts what runs if a request it serves is
- * canceled.
+ * hands it to its answer, and an `async func` is sent; `mount_named` mounts an
+ * interface's implementation under its named handle, `add` an object under a
+ * handle issued for a function to answer, and `mount` puts the opener of an
+ * interface's resources the host implements under a URI's leading tokens, the
+ * longest matching winning; `on_cancel` puts what runs if a request it
+ * answers is canceled.
  *
  * The link holds these on both ends:
  *
@@ -76,7 +76,7 @@ export type Imports = readonly (readonly [string, Handle])[];
 
 export { CANCEL, DROP, NAMED, OPEN, ROOT };
 
-/** An object a side serves: given a method, the request's tag, for a
+/** An object a side implements: given a method, the request's tag, for a
  * later answer (`task_return`), and the args, it answers; and it is told its
  * drop once the other side drops its handle, as a Rust object is dropped
  * (xpute-link `link.rs` `Object`). */
@@ -138,12 +138,12 @@ export interface Sender {
   send(h: Handle, m: Method, args: Args): Promise<Answered>;
 }
 
-/** What the generated bindings serve by: it serves an interface under its
- * named handle (`mount_named`), puts the opener of an interface's resources
- * under a URI's leading tokens (`mount`), answers a request later by its tag
- * (`task_return`), and puts what runs if the caller cancels a request
- * (`on_cancel`). An end (`End`) is one. */
-export interface Serving {
+/** What the generated bindings implement by, the callee's end: it mounts an
+ * interface's implementation under its named handle (`mount_named`), puts the
+ * opener of an interface's resources under a URI's leading tokens (`mount`),
+ * answers a request later by its tag (`task_return`), and puts what runs if
+ * the caller cancels a request (`on_cancel`). An end (`End`) is one. */
+export interface Callee {
   mount_named(h: Handle, o: LinkObject): void;
   mount(h: Handle, prefix: readonly Token[], open: Opener): void;
   task_return(t: Tag, result: i32, data?: Packet): void;
@@ -203,7 +203,7 @@ export class ComponentError<P = unknown> extends Error {
 }
 
 /** The errno a method refuses with: an XputeError's. Anything else, a `XputeBug`
- * or any other throw, is a failure of the serving side's own, thrown on: out
+ * or any other throw, is a failure of the callee's own, thrown on: out
  * of a method answered at once, to what called it (on the host, the guest's
  * import, `Side.recv`; on a UI, its runtime's message handler); out of
  * one answered later, on either side, as a rejection no one handles. */
@@ -220,27 +220,27 @@ export interface Memory {
   bytes(at: u64, len: u32): U8Array;
 }
 
-/** One end of the link, the part both ends run alike, as xpute-link
- * `link.rs` `Side` runs it beside its frames: what it serves, its interfaces
- * by their named handles, the objects in a table (`Table`) under handles,
- * the openers of an interface's resources by the URI's leading tokens, the
+/** One end of the link, the part both ends run alike, as xpute-link `link.rs`
+ * `Side` runs it beside its frames: what it implements, its interfaces by
+ * their named handles, the objects in a table (`Table`) under handles, the
+ * openers of an interface's resources by the URI's leading tokens, the
  * longest matching winning, how each request it answers later stops if its
  * caller cancels it, and the answers of what it sent, by tag. How a frame
  * crosses to the other end is its transport's (`_out`), which an end over it
  * implements, and the transport hands the end each frame from the other end
  * (`input`): the guest's boxes and the crossing into it (`Side`), or a
  * runtime's transport to a UI on another thread. */
-export abstract class End implements Serving {
+export abstract class End implements Callee {
   /** The openers, each with the named handle of the interface whose
    * resources it opens, by the URI's leading tokens. */
   private readonly _mounts: [Handle, readonly Token[], Opener][] = [];
-  /** The interfaces this end serves, by their named handles (`NAMED`). */
+  /** The interfaces this end implements, by their named handles (`NAMED`). */
   private readonly _named = new Map<Handle, LinkObject>();
-  /** The objects this end serves, by their handles: those it issued, or,
+  /** The objects this end implements, by their handles: those it issued, or,
    * for an object the other end opened under a handle it issued, that
    * handle (`open_at`). */
   private readonly _objects = new Table<LinkObject>();
-  /** How each request this end serves stops if its caller cancels it, by
+  /** How each request this end answers stops if its caller cancels it, by
    * tag, until it answers. */
   private readonly _cancels = new Map<Tag, () => void>();
   /** The answers of the sent requests that answer later, by tag. */
@@ -285,7 +285,7 @@ export abstract class End implements Serving {
     this._mounts.push([h, prefix, open]);
   }
 
-  /** The named handles of the interfaces this end serves. */
+  /** The named handles of the interfaces this end implements. */
   named(): Handle[] {
     return [...this._named.keys()];
   }
@@ -297,20 +297,20 @@ export abstract class End implements Serving {
     return this._mounts.map(([h, p]) => [h, p]);
   }
 
-  /** Whether this end serves the interface of the named handle `h`: under
-   * that handle, or by an opener of its resources. */
-  serves(h: Handle): boolean {
+  /** Whether this end implements the interface of the named handle `h`:
+   * under that handle, or by an opener of its resources. */
+  implements(h: Handle): boolean {
     return this._named.has(h) || this._mounts.some(([i]) => i === h);
   }
 
-  /** Serves `o` under its interface's named handle `h`, which the other
+  /** Mounts `o` under its interface's named handle `h`, which the other
    * end calls with no open. */
   mount_named(h: Handle, o: LinkObject): void {
     if (this._named.has(h)) bug(ERRNO_EEXIST);
     this._named.set(h, o);
   }
 
-  /** Serves `o` under a handle issued for it, which a method answers for the
+  /** Adds `o` under a handle issued for it, which a method answers for the
    * other end to call `o` by: a resource a function returns. */
   add(o: LinkObject): Handle {
     return this._objects.add(o);
@@ -335,7 +335,7 @@ export abstract class End implements Serving {
   }
 
   /** Puts `stop` as what runs if the caller cancels the request `t` this
-   * end serves (`frame.json5` `CANCEL`): a method that can stop then answers
+   * end answers (`frame.json5` `CANCEL`): a method that can stop then answers
    * ECANCELED, and one that can't runs on. */
   on_cancel(t: Tag, stop: () => void): void {
     this._cancels.set(t, stop);
@@ -382,7 +382,7 @@ export abstract class End implements Serving {
 
   /** The frame the transport brought from the other end: a later answer, to
    * this end's request, heard after the work at hand with a copy of its
-   * data, answering 0; or a method, to an object this end serves, answering
+   * data, answering 0; or a method, to an object this end implements, answering
    * its reply, which the transport carries back where it is not EINPROGRESS:
    * the root's open or cancel, a drop, or an object's method. `args` are the
    * receiver's for the crossing alone. */

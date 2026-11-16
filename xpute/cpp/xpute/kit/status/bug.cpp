@@ -1,6 +1,7 @@
 // cpp/xpute/kit/status/bug.cpp
 
 #include "bug.hpp"
+#include "verbose_abort.hpp"
 
 #include <atomic>
 #include <cstdlib>
@@ -33,12 +34,17 @@ void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::source_location at
 
 } // namespace xpute
 
-#ifdef __wasm__
-// libc++'s own definition prints to stderr. On WebAssembly that imports
-// WASI's file calls, which would give the module a second way to reach the
-// host beside the contract, so a failed libc++ check is a bug instead.
-void std::__libcpp_verbose_abort(char const *, ...) noexcept {
+void xpute_verbose_abort() noexcept {
     xpute::bug(xpute::Errno::enotrecoverable);
+}
+
+#ifdef __wasm__
+// libc++'s compiled library calls its own handler, not the macro, and its
+// definition prints to stderr. On WebAssembly that imports WASI's file calls,
+// which would give the module a second way to reach the host beside the
+// contract, so a module's handler is the bug as well.
+void std::__libcpp_verbose_abort(char const *, ...) noexcept {
+    xpute_verbose_abort();
 }
 
 // libc++abi's `__cxa_pure_virtual`, which an abstract class's vtable names,

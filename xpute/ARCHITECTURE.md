@@ -1,44 +1,42 @@
 # Architecture — xpute
 
-[xpute](./README.md) claims that a program's compiled **guest** and the
-**host** that serves it need share nothing but the guest's memory and one kind
-of message laid in it. This document follows that claim through the parts that
-make it hold, in the order they depend on each other, across xpute's three
+[xpute](./README.md) claims that a program's compiled **guest** and the **host**
+that implements its imports need share nothing but the guest's memory and one
+kind of message laid in it. This document follows that claim through the parts
+that make it hold, in the order they depend on each other, across xpute's three
 parts: the guest, the host and the link between them, which WIT draws; the
 runtime, the platform's environment that runs them; and the kit beneath both.
 The **link** carries every call as a frame. The **sides** run the link alike on
 every platform, each end over a transport its runtime plugs in, and a runtime
 carries a UI on another thread to the guest's end. A failure is its call's to
 judge, and a bug ends in a stop, after which the link answers what was owed, so
-that no side waits on an answer that will not come. And the three languages
-hold the same facts: a spec or WIT owns
-each one and a generator writes it into each, and frozen records hold the rest
-of their code to each other. The document ends with
-what xpute does not know, what it took from earlier work and a map of the code.
-The layouts are written once in `spec/` and the interfaces in WIT, and this
-document points there.
+that no side waits on an answer that will not come. And the three languages hold
+the same facts: a spec or WIT owns each one and a generator writes it into each,
+and frozen records hold the rest of their code to each other. The document ends
+with what xpute does not know, what it took from earlier work and a map of the
+code. The layouts are written once in `spec/` and the interfaces in WIT, and
+this document points there.
 
 ---
 
 ## The link
 
-A frame is four words and a packet (`link/spec/frame.json5`): TAG, the
-request; CMD, the handle of the object called and the method's place in its
-interface, with a RES bit that marks an answer; RESULT, the answer's status
-alone, 0 or a negative errno; and PKT, the packet's length. The guest has
-three exports: `link_init`, which lays its link and answers where the link
-lies; `link_boot`, its first entry, which mounts what it serves; and
-`link_in`, which enters it with a frame the host laid in its inbox, a request
-or an answer. Out of the guest goes one
-function, `link_out`, the same on every platform, which takes a frame the
-guest laid in its outbox. Each crossing returns at once what the method came
-to.
+A frame is four words and a packet (`link/spec/frame.json5`): TAG, the request;
+CMD, the handle of the object called and the method's place in its interface,
+with a RES bit that marks an answer; RESULT, the answer's status alone, 0 or a
+negative errno; and PKT, the packet's length. The guest has three exports:
+`link_init`, which lays its link and answers where the link lies; `link_boot`,
+its first entry, which mounts its implementations; and `link_in`, which enters
+it with a frame the host laid in its inbox, a request or an answer. Out of the
+guest goes one function, `link_out`, the same on every platform, which takes a
+frame the guest laid in its outbox. Each crossing returns at once what the
+method came to.
 
 Whatever is called is an object under a handle. A singleton interface is a
 **named handle**, the hash of its package and name, called with no open. An
 object of which there are many, a file or a surface, is opened by a **URI**, a
-tuple of tokens, through the root's `open`, which the serving side answers
-from the opener mounted at the longest matching prefix. The serving side is
+tuple of tokens, through the root's `open`, which the implementing side answers
+from the opener mounted at the longest matching prefix. The implementing side is
 polymorphic behind the handle, so the caller never branches on what it calls.
 
 A packet holds the args, or an answer's value, in the Component Model's
@@ -60,59 +58,59 @@ what it armed; when it runs is the program's.
 ## The sides
 
 An end of the link is a **`Side`**, the same machine in Rust, TypeScript and
-C++: it lays frames in its own box, crosses by its own function, serves what
-is mounted on it and hears the answers to what it sent. The guest holds one
-over its outbox, and the host one over the guest's inbox. TypeScript names
-apart the part every end runs alike, `End`: the handle table, the requests
-pending by tag, the dispatch to an object by its handle, the later answers,
-the cancels and the drops; a `Side` is an `End` over the guest's boxes.
+C++: it lays frames in its own box, crosses by its own function, answers by what
+is mounted on it and hears the answers to what it sent. The guest holds one over
+its outbox, and the host one over the guest's inbox. TypeScript names apart the
+part every end runs alike, `End`: the handle table, the requests pending by tag,
+the dispatch to an object by its handle, the later answers, the cancels and the
+drops; a `Side` is an `End` over the guest's boxes.
 
 What runs beside the guest is split the same way everywhere, and every
 dependency points down: a part declares the interface it needs, and a part above
 implements it and injects it. The **host** is the guest's counterpart: the
-host's end of the link, the bindings of what is served there, and xpute's own
-servers, the clocks, the stop and the log. It varies by language, as the guest
-does, and names no runtime. The **runtime** is the platform's environment, a
-page's worker or a device's guest thread. It instantiates or links the guest,
+host's end of the link, the bindings mounted there, and xpute's own
+implementations, the clocks, the stop and the log. It varies by language, as the
+guest does, and names no runtime. The **runtime** is the platform's environment,
+a page's worker or a device's guest thread. It instantiates or links the guest,
 makes the host's `Side`, injects into the host what the host needs of it (the
 way back to the guest's thread, where a report goes, the log) and runs the loop
 that enters the guest. Nothing names a runtime but its own UI end and the
 program's assembly. A program may bring plugins of its own, a GPU for one, each
 beside the runtime as its own guest's end and host, and neither names the other.
-The program starts its guest with a `Boot`, which lists its servers, the host's
-among them, each a `Server` that mounts some of the guest's imports, in no
-order, since none depends on another, and its runtime runs the steps in their
-order, on both platforms alike: it mounts each server, stands in for the UI,
-enters the guest only once every interface the guest's world imports is mounted,
-and on a device runs the loop.
+The program starts its guest with a `Boot`, which lists its mounts, the host's
+among them, each a `Mount` that mounts the implementations of some of the
+guest's imports, in no order, since none depends on another, and its runtime
+runs the steps in their order, on both platforms alike: it runs each mount,
+stands in for the UI, enters the guest only once every interface the guest's
+world imports is mounted, and on a device runs the loop.
 
 An end of the link is one machine whatever carries its frames, as a link
 layer knows its two ends and not the wire. What carries them is the
 **transport**, which the runtime plugs in: the guest's boxes and the crossing
 into it, in the guest's memory, which both ends share.
 
-The UI calls the guest's exports and serves the imports it serves by the same
+The UI calls the guest's exports and implements some of its imports by the same
 WIT and the same generated bindings as any end, which call by a `Sender` and
-serve by a `Serving`, and never know which thread they run on. A UI on another
-thread than the guest's, a page's main thread to the guest's worker or a
+implement by a `Callee`, and never know which thread they run on. A UI on
+another thread than the guest's, a page's main thread to the guest's worker or a
 device's JavaScript thread to the guest's thread, is across a second boundary,
 copied, which the runtime alone carries, by its shell's convention: messages
 over a page's MessagePort, the module's functions and events over a device's C
 ABI. The runtime holds both halves of that crossing. On the guest's thread it
 stands in for the UI on the guest's end: a stand-in under each named handle the
-UI serves and an opener at each prefix it serves, each method sent across and
-answered later by its tag. On the UI's thread, its UI end is an `End` over
-the runtime's own transport, a page's port or a device's module, so the
-bindings call and serve there as on any end. One thread cannot wait on the
-other, so every method the UI serves is an `async func`, and the runtime
+UI implements and an opener at each prefix it implements, each method sent
+across and answered later by its tag. On the UI's thread, its UI end is an `End`
+over the runtime's own transport, a page's port or a device's module, so the
+bindings call and implement there as on any end. One thread cannot wait on the
+other, so every method the UI implements is an `async func`, and the runtime
 refuses to start the guest where a function without `async` (the bindings'
-`CALLS`) is one the UI serves, as it refuses an import no server mounts. The
-guest's open of an object the UI serves is answered at once on the guest's end,
-pipelined, so that end issues its handle, and the runtime tells the UI end the
-handle and the prefix that matched, whose opener the UI end runs. The guest's
-cancel of a method and its drop of an object cross as the runtime's own
-messages. Handing an object beside a call, a canvas, is a property of a
-crossing that can move one, a page's port.
+`CALLS`) is one the UI implements, as it refuses an import with no
+implementation. The guest's open of an object the UI implements is answered at
+once on the guest's end, pipelined, so that end issues its handle, and the
+runtime tells the UI end the handle and the prefix that matched, whose opener
+the UI end runs. The guest's cancel of a method and its drop of an object cross
+as the runtime's own messages. Handing an object beside a call, a canvas, is a
+property of a crossing that can move one, a page's port.
 
 The UI's connection is the runtime's, and an object like any other: a device's
 runtime attaches a UI under a handle of its own, everything the UI sends and
@@ -139,21 +137,22 @@ message, an end as a stop or a trap report, the stop with the bug's optional
 message (a panic the language raises, the panic's own), and what is worth
 telling and is neither as a log record, a level, a context and a message
 (`wit/log`, in `wasi:logging`'s shape). Each end has its `log`: the guest's
-calls the import, and the host serves it and hands the records, with its own,
-to the log its runtime injects. The runtime alone writes them to the
+calls the import, and the host implements it and hands the records, with its
+own, to the log its runtime injects. The runtime alone writes them to the
 platform's output, its error stream, Android's log or a page's console, and
-alone decides by level which it writes; no other part drops a record.
+alone decides by level which it writes; no other part drops a record. A device's
+UI end hands it the UI's records to write the same way (`log`); a page's worker
+tells the page each record it writes, which the page does not write again.
 
 A guest's bug is reported through `stop`, and the guest traps. A host's own
 failure is a stop on both platforms too, reported the same way, and then the
 link traps, so no answer the host owed leaves the guest waiting. It is handed
-off one of two ways: synchronously, caught at `link_out` while the host
-answers the guest, or asynchronously, by the platform's listener for what the
-worker leaves uncaught, or by Rust's panic hook. A trapped guest is entered no
-more, and a frame to it answers EPIPE, a request already pending on it too,
-once. The app hears the trap with what stopped it, alike on both platforms,
-the imports no server mounts among them where the runtime refused to start
-the guest.
+off one of two ways: synchronously, caught at `link_out` while the host answers
+the guest, or asynchronously, by the platform's listener for what the worker
+leaves uncaught, or by Rust's panic hook. A trapped guest is entered no more,
+and a frame to it answers EPIPE, a request already pending on it too, once. The
+app hears the trap with what stopped it, alike on both platforms, the imports
+with no implementation among them where the runtime refused to start the guest.
 
 ## The languages, held to each other
 
@@ -207,7 +206,7 @@ word; and a rule the GPU alone decides is one function every pass calls.
   allocation takes are the program's, in either language.
 - **The policy is the program's.** When the guest runs and how much I/O is out
   are decided outside xpute; it has no turn, no budget and no backpressure.
-- **The host serves only what every guest shares**: the clocks, the stop and
+- **The host implements only what every guest shares**: the clocks, the stop and
   the log. Any other I/O is the program's, over its own interfaces or a
   plugin it brings.
 - **xpute does not isolate.** The contract describes one host and one guest;

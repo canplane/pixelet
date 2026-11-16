@@ -1,9 +1,9 @@
 // pxl-core/link/export.rs
 
-//! The interfaces the core serves (spec/client/core/wit/), each one's methods
-//! in its own module beside this one, served by one object, `Core`, which
-//! `mount` mounts under each interface's named handle. Its GPU surfaces
-//! (surface.rs) are xpute's, and come apart.
+//! The interfaces the core implements (spec/client/core/wit/), each one's
+//! methods in its own module beside this one, implemented by one object,
+//! `Core`, which `mount` mounts under each interface's named handle. Its GPU
+//! surfaces (surface.rs) are xpute's, and come apart.
 
 mod camera;
 mod edit;
@@ -51,10 +51,10 @@ fn applied() -> Result<(), Errno> {
     Ok(())
 }
 
-/// What serves the core's interfaces.
+/// What implements the core's interfaces.
 struct Core;
 
-/// Mounts the interfaces the core serves.
+/// Mounts the interfaces the core implements.
 pub(super) fn mount() {
     abi::camera::mount(Rc::new(Core));
     abi::input::mount(Rc::new(Core));

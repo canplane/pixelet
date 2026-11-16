@@ -43,7 +43,7 @@ struct Run {
 }
 
 const _: () = assert!(
-    1 << MIN_CLASS_LOG2 >= core::mem::size_of::<*mut u8>(),
+    1 << MIN_CLASS_LOG2 >= size_of::<*mut u8>(),
     "a free slot holds the address of the next"
 );
 
@@ -84,7 +84,7 @@ impl<R: Range> SlabMalloc<R> {
     }
 
     const fn head_slots(c: usize) -> usize {
-        core::mem::size_of::<Run>().div_ceil(1usize << class_log2(c))
+        size_of::<Run>().div_ceil(1usize << class_log2(c))
     }
 
     const fn slots(c: usize) -> usize {
@@ -221,19 +221,23 @@ impl<R: Range> SlabMalloc<R> {
         let mut i = Self::slots(c);
         while i > Self::head_slots(c) {
             i -= 1;
+            // SAFETY: `i` is below `slots(c)`, and `slots(c)` slots of
+            // `class_sz` bytes fill the run of `run_sz` bytes just taken.
             let slot = unsafe { at.add(i * class_sz) };
             // SAFETY: the slot is free, and a class is at least one pointer.
-            unsafe { *(slot as *mut *mut u8) = next };
+            unsafe { *slot.cast::<*mut u8>() = next };
             next = slot;
         }
         // SAFETY: single-threaded; see the Sync impl.
         unsafe { *self.run_live.get() += run_sz };
-        let run = at as *mut Run;
+        let run = at.cast::<Run>();
         // SAFETY: the run's leading slots, which head_slots keeps for this.
         unsafe {
             (*run).free = next;
             (*run).inuse = 0;
         }
+        // SAFETY: the run is of class `c` and was just taken from the buddy,
+        // so it is in no list.
         unsafe { self.push_partial(c, run) };
         run
     }
@@ -244,6 +248,8 @@ impl<R: Range> SlabMalloc<R> {
         // SAFETY: single-threaded; see the Sync impl.
         let partial = unsafe { &mut *self.partial.get() };
         let head = partial[c];
+        // SAFETY: `run` is a run in no list, the caller's, and `head`, where
+        // not null, is the first run of class `c`'s list, which is live.
         unsafe {
             (*run).prev = ptr::null_mut();
             (*run).next = head;
@@ -259,6 +265,8 @@ impl<R: Range> SlabMalloc<R> {
     unsafe fn drop_partial(&self, c: usize, run: *mut Run) {
         // SAFETY: single-threaded; see the Sync impl.
         let partial = unsafe { &mut *self.partial.get() };
+        // SAFETY: `run` is in class `c`'s partial list, the caller's, so its
+        // neighbours, where not null, are live runs of that list.
         unsafe {
             let (prev, next) = ((*run).prev, (*run).next);
             if prev.is_null() {
@@ -312,7 +320,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
         // SAFETY: a run on the partial list has a free slot by definition.
         unsafe {
             let slot = (*run).free;
-            (*run).free = *(slot as *mut *mut u8);
+            (*run).free = *slot.cast::<*mut u8>();
             (*run).inuse += 1;
             if (*run).free.is_null() {
                 self.drop_partial(c, run);
@@ -336,7 +344,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
         // SAFETY: the caller's — a slot of this run, of this class.
         unsafe {
             let was_full = (*run).free.is_null();
-            *(ptr as *mut *mut u8) = (*run).free;
+            *ptr.cast::<*mut u8>() = (*run).free;
             (*run).free = ptr;
             (*run).inuse -= 1;
             *self.slot_live.get() -= 1usize << class_log2(c);
@@ -346,7 +354,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
                     self.drop_partial(c, run);
                 }
                 *self.run_live.get() -= run_sz;
-                self.buddy.free(run as *mut u8, run_sz);
+                self.buddy.free(run.cast::<u8>(), run_sz);
             } else if was_full {
                 self.push_partial(c, run);
             }

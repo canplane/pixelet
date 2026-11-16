@@ -1,4 +1,4 @@
-// @pxl/gpu/link/src/abi/imports.ts
+// @pxl/gpu/host/src/abi/imports.ts
 //
 // GENERATED from spec/gpu/wit (xpute-link-gen wit.rs)
 

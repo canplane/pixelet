@@ -18,9 +18,8 @@ export { type Taker } from "./remote.ts";
 export {
   type Boot,
   type Calls,
-  forward_console,
   instantiate,
   type Instance,
   run,
-  type Server,
+  type Mount,
 } from "./worker.ts";

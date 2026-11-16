@@ -1,12 +1,11 @@
 // xpute-link-gen/wit/rs.rs
 
 //! The link's bindings in Rust (wit.rs): a module per interface, its types,
-//! each storing itself into a packet and loading itself from one
-//! (xpute-link cabi.rs), the side that serves it and the side that calls it.
-//! The guest's reach its link through its crate's `link`, the one the guest
-//! lays; a host's take the side they serve on and call by (xpute-link
-//! `Side`), as the TypeScript takes its link, given by the runtime that made
-//! it.
+//! each storing itself into a packet and loading itself from one (xpute-link
+//! cabi.rs), the side that implements it and the side that calls it. The
+//! guest's reach its link through its crate's `link`, the one the guest lays;
+//! a host's take the side they mount on and call by (xpute-link `Side`), as
+//! the TypeScript takes its link, given by the runtime that made it.
 
 use std::fmt::Write as _;
 
@@ -16,14 +15,14 @@ use xpute_gen::spec::{pascal, rs_enum};
 
 use super::{
     Gen, Kind, Obj, Role, cases, discriminant, is_async, is_lent, kind, members, method_const,
-    method_name, object_method, params, plus, rec_layout, rs_given, rs_name, serving, type_name,
+    method_name, object_method, params, plus, rec_layout, rs_given, rs_name, side_trait, type_name,
     variant_layout,
 };
 
 /// The Rust modules the bindings take items from, beside the link's crate.
 const RS_ERRNO: &str = "xpute_kit::status::errno";
 
-/// The object over a served object's implementation, a name of the
+/// The object over an object's implementation, a name of the
 /// generator's alone, which its leading `_` keeps from every WIT name.
 fn object_struct(o: &Obj) -> String {
     if o.resource {
@@ -259,16 +258,16 @@ impl Gen<'_> {
         })
     }
 
-    /// The serving side of an object, on the side of the crate `side`, or on
-    /// a side given where `side` is none: its trait, and the object over it.
+    /// The implementing side of an object, on the side of the crate `side`, or
+    /// on a side given where `side` is none: its trait, and the object over it.
     fn rs_export(
         &self,
         o: &Obj,
         side: Option<&str>,
-        serves: &str,
+        side_name: &str,
         out: &mut String,
     ) -> Result<(), String> {
-        let (t, obj) = (serving(o, serves), object_struct(o));
+        let (t, obj) = (side_trait(o, side_name), object_struct(o));
         let errno = self.rs_use(RS_ERRNO, "Errno");
         let reply = self.rs_use(self.link_rs, "Reply");
         let rc = self.rs_use("std::rc", "Rc");
@@ -310,7 +309,7 @@ impl Gen<'_> {
         } else {
             "_"
         };
-        // A host's object that answers later holds the side it serves on.
+        // A host's object that answers later holds the side it is mounted on.
         let holds = side.is_none() && o.methods.iter().any(|f| is_async(f));
         let (fields, imp, made) = if holds {
             (
@@ -426,14 +425,14 @@ impl Gen<'_> {
             (false, Some(c)) => {
                 let _ = writeln!(
                     out,
-                    "/// Serves `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n",
+                    "/// Mounts `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n",
                     self.rs_use(c, "link")
                 );
             }
             (false, None) => {
                 let _ = writeln!(
                     out,
-                    "/// Serves `implementation` under the interface's handle on `side_`.\npub fn mount(side_: &'static {}, implementation: {rc}<dyn {t}>) {{\n    side_.mount_named(HANDLE, {rc}::new({obj}({made})));\n}}\n",
+                    "/// Mounts `implementation` under the interface's handle on `side_`.\npub fn mount(side_: &'static {}, implementation: {rc}<dyn {t}>) {{\n    side_.mount_named(HANDLE, {rc}::new({obj}({made})));\n}}\n",
                     self.rs_use(self.link_rs, "Side")
                 );
             }
@@ -614,10 +613,10 @@ impl Gen<'_> {
         }
         items.push('\n');
         self.rs_types(&mut items)?;
-        if let Some((role, side, serves)) = role {
+        if let Some((role, side, side_name)) = role {
             for o in objs {
                 match role {
-                    Role::Serve => self.rs_export(o, side, serves, &mut items)?,
+                    Role::Implement => self.rs_export(o, side, side_name, &mut items)?,
                     Role::Call => self.rs_import(o, side, &mut items)?,
                 }
             }

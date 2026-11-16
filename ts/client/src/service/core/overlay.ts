@@ -1,6 +1,6 @@
 // @pxl/client/service/core/overlay.ts
 
-import type { Serving } from "@xpute/link";
+import type { Callee } from "@xpute/link";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
 
@@ -71,9 +71,9 @@ export function cur_draft(): string {
   return draft;
 }
 
-/** Serves `overlay` on `ui`, the UI's end, before the core boots: the
+/** Mounts `overlay` on `ui`, the UI's end, before the core boots: the
  * core's snapshot and view, each answered once it is taken. */
-export function serve_overlay(ui: Serving): void {
+export function mount_overlay(ui: Callee): void {
   mount(ui, {
     show: async (snapshot) => set_snapshot(snapshot),
     draft: async (text) => {

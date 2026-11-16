@@ -65,7 +65,7 @@ fn slot_contents_survive() {
             continue;
         }
         // SAFETY: `sz` bytes the allocator just handed out.
-        unsafe { core::ptr::write_bytes(p, i as u8, *sz) };
+        unsafe { ptr::write_bytes(p, i as u8, *sz) };
         live.push((p, *sz, i as u8));
     }
     assert!(
@@ -86,7 +86,7 @@ fn slot_contents_survive() {
         let p = unsafe { heap.alloc(layout) };
         if !p.is_null() {
             // SAFETY: `sz` bytes the allocator just handed out.
-            unsafe { core::ptr::write_bytes(p, 0xff, sz) };
+            unsafe { ptr::write_bytes(p, 0xff, sz) };
         }
     }
 
@@ -103,7 +103,7 @@ fn slot_contents_survive() {
 #[test]
 fn empty_run_returned() {
     let heap: SlabMalloc<EmptyRun> = SlabMalloc::new();
-    // SAFETY: the range is the test's own, here and below.
+    // SAFETY: the range is the test's own.
     let first = unsafe { heap.alloc(small()) };
     assert!(!first.is_null());
     let one_run = heap.pages().live();
@@ -111,6 +111,7 @@ fn empty_run_returned() {
 
     let mut live = vec![first];
     while heap.pages().live() == one_run {
+        // SAFETY: the range is the test's own.
         let p = unsafe { heap.alloc(small()) };
         assert!(!p.is_null(), "the range ran out before one run was full");
         live.push(p);
@@ -118,6 +119,8 @@ fn empty_run_returned() {
     // The last slot is the second run's only one. Freeing it first gives the
     // second run back and leaves the first run's slots.
     let spilled = live.pop().unwrap();
+    // SAFETY: `spilled` was served at `small()`, and leaves `live` as it is
+    // freed.
     unsafe { heap.dealloc(spilled, small()) };
     assert_eq!(
         heap.pages().live(),
@@ -126,6 +129,7 @@ fn empty_run_returned() {
     );
 
     for p in live {
+        // SAFETY: each of `live` was served at `small()` and is freed once.
         unsafe { heap.dealloc(p, small()) };
     }
     assert_eq!(
@@ -141,7 +145,7 @@ fn page_requests_delegated() {
     for sz in [PAGE, PAGE + 1, PAGE * 4] {
         let layout = Layout::from_size_align(sz, 8).unwrap();
         let before = heap.pages().live();
-        // SAFETY: the range is the test's own, here and below.
+        // SAFETY: the range is the test's own.
         let p = unsafe { heap.alloc(layout) };
         assert!(!p.is_null());
         let took = heap.pages().live() - before;
@@ -154,6 +158,7 @@ fn page_requests_delegated() {
             0,
             "a whole-page request was not page-aligned"
         );
+        // SAFETY: `p` was served at `layout` just above.
         unsafe { heap.dealloc(p, layout) };
         assert_eq!(heap.pages().live(), before, "it did not go back whole");
     }
@@ -183,7 +188,7 @@ fn slots_inside_runs() {
     for round in 0..4 {
         for (k, sz) in sizes.iter().enumerate() {
             let layout = Layout::from_size_align(*sz, 8).unwrap();
-            // SAFETY: the range is the test's own, here and below.
+            // SAFETY: the range is the test's own.
             let p = unsafe { heap.alloc(layout) };
             assert!(!p.is_null(), "the range ran out at {sz} on round {round}");
             live.push((p, layout));
@@ -192,6 +197,8 @@ fn slots_inside_runs() {
             // partly full.
             if k % 2 == 1 {
                 let (q, l) = live.remove(0);
+                // SAFETY: `q` was served at `l`, and leaves `live` as it is
+                // freed.
                 unsafe { heap.dealloc(q, l) };
                 check(&heap);
             }
@@ -199,6 +206,7 @@ fn slots_inside_runs() {
     }
 
     for (p, l) in live.drain(..) {
+        // SAFETY: `p` was served at `l`, and leaves `live` as it is freed.
         unsafe { heap.dealloc(p, l) };
         check(&heap);
     }

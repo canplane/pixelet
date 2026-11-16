@@ -21,9 +21,9 @@ Side host([](Layout l) { return l.inbox; }, [](std::uint64_t at) { return guest.
 
 constexpr std::uint32_t CAP = 64;
 
-// What the host serves: method 0 answers at once with a word, method 1 later,
-// and method 2 at once with a value past the cap.
-constexpr Handle SERVED = NAMED | 1;
+// An interface the host implements: method 0 answers at once with a word,
+// method 1 later, and method 2 at once with a value past the cap.
+constexpr Handle INTERFACE = NAMED | 1;
 
 std::optional<Tag> later;
 
@@ -31,7 +31,7 @@ constexpr std::int32_t status(Errno e) noexcept {
     return static_cast<std::int32_t>(e);
 }
 
-class Served : public Object {
+class Implementation : public Object {
   public:
     Reply call(Method m, Tag tag, std::optional<std::span<const std::uint8_t>>) override {
         if (m == 0) return Reply{0, Packet{4, [](Lower &w) { w.put<std::uint32_t>(0, 7); }}};
@@ -43,13 +43,14 @@ class Served : public Object {
     }
 };
 
-// Lays the link and mounts what the host serves, once, and answers the inbox.
+// Lays the link and mounts the host's implementation, once, and answers the
+// inbox.
 std::uint64_t inbox() {
     static std::uint64_t at = [] {
         Layout l{test::alloc(2 * CAP), CAP};
         guest.set_layout(l);
         host.set_layout(l);
-        host.mount_named(SERVED, std::make_unique<Served>());
+        host.mount_named(INTERFACE, std::make_unique<Implementation>());
         return l.inbox;
     }();
     return at;
@@ -62,9 +63,9 @@ std::uint64_t inbox() {
 XPUTE_TEST(link_recv_answers_res_with_tag) {
     std::uint64_t outbox = inbox() + CAP;
     for (auto [m, result] : {std::pair<Method, std::int32_t>{0, 0}, {2, status(Errno::emsgsize)}}) {
-        Tag t = guest.send(SERVED, m, std::nullopt, nullptr);
+        Tag t = guest.send(INTERFACE, m, std::nullopt, nullptr);
         Frame f = Frame::at(outbox);
-        XPUTE_CHECK(f.res && f.tag == t && f.handle == SERVED && f.method == m && f.result == result);
+        XPUTE_CHECK(f.res && f.tag == t && f.handle == INTERFACE && f.method == m && f.result == result);
     }
 }
 
@@ -74,7 +75,7 @@ XPUTE_TEST(link_task_return_answers_res_with_tag) {
     std::uint64_t at = inbox();
     for (auto [sz, result] : {std::pair<std::size_t, std::int32_t>{4, 0}, {CAP, status(Errno::emsgsize)}}) {
         std::optional<std::pair<std::int32_t, std::optional<std::vector<std::uint8_t>>>> heard;
-        Tag t = guest.send(SERVED, 1, std::nullopt, [&](std::int32_t r, std::optional<std::vector<std::uint8_t>> d) { heard.emplace(r, std::move(d)); });
+        Tag t = guest.send(INTERFACE, 1, std::nullopt, [&](std::int32_t r, std::optional<std::vector<std::uint8_t>> d) { heard.emplace(r, std::move(d)); });
         XPUTE_CHECK(later == t);
         host.task_return(t, 0, Packet{sz, [](Lower &w) { w.put<std::uint32_t>(0, 9); }});
         Frame f = Frame::at(at);
@@ -93,14 +94,14 @@ XPUTE_TEST(link_cancel_stops_once_and_never_after_answer) {
     inbox();
     int stops = 0;
     auto stop = [&] { stops++; };
-    Tag t = guest.send(SERVED, 1, std::nullopt, [](std::int32_t, std::optional<std::vector<std::uint8_t>>) {});
+    Tag t = guest.send(INTERFACE, 1, std::nullopt, [](std::int32_t, std::optional<std::vector<std::uint8_t>>) {});
     XPUTE_CHECK(later == t);
     host.on_cancel(t, stop);
     guest.cancel(t);
     guest.cancel(t);
     XPUTE_CHECK(stops == 1);
 
-    t = guest.send(SERVED, 1, std::nullopt, [](std::int32_t, std::optional<std::vector<std::uint8_t>>) {});
+    t = guest.send(INTERFACE, 1, std::nullopt, [](std::int32_t, std::optional<std::vector<std::uint8_t>>) {});
     XPUTE_CHECK(later == t);
     host.on_cancel(t, stop);
     host.task_return(t, 0, std::nullopt);

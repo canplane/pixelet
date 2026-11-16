@@ -15,3 +15,13 @@ export function of_Message(val: number): Message | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_Message(val: Message): string {
+  switch (val) {
+    case MESSAGE_WORLD_READ_FAILING:
+      return "WorldReadFailing";
+    case MESSAGE_WORLD_UNAVAILABLE:
+      return "WorldUnavailable";
+  }
+}

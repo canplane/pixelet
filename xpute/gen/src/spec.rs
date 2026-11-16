@@ -971,8 +971,9 @@ pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<Str
 /// An enum's TypeScript, as every enum has it: its type, the union of its
 /// members' numbers, then each member as a constant of its own, named by the
 /// enum and the member in SCREAMING snake case, which a reader imports by
-/// name, and the member a number is (`of_ident`), as Rust's `of`. No object holds
-/// them, so a bundle's tree shaking keeps no name.
+/// name, the member a number is (`of_ident`), as Rust's `of`, and a member's
+/// name (`name_Errno`), as Rust's `name`. No object holds them, so a bundle's
+/// tree shaking keeps no name it does not read.
 pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
     let union: Vec<String> = members
         .iter()
@@ -999,7 +1000,16 @@ pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
         ),
         format!("  return {} ? val : null;", tests.join(" || ")),
         "}".into(),
+        String::new(),
+        "/** The member's name, as its source spells it. */".into(),
+        format!("export function name_{e}(val: {e}): string {{"),
+        "  switch (val) {".into(),
     ]);
+    for m in members {
+        out.push(format!("    case {}:", ts_const(e, m)));
+        out.push(format!("      return {};", json_str(&m.name)));
+    }
+    out.extend(["  }".to_string(), "}".into()]);
     out
 }
 

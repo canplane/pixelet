@@ -13,3 +13,13 @@ export function of_SceneContent(val: number): SceneContent | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_SceneContent(val: SceneContent): string {
+  switch (val) {
+    case SCENE_CONTENT_WORLD:
+      return "World";
+    case SCENE_CONTENT_CHARACTER:
+      return "Character";
+  }
+}

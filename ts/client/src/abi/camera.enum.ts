@@ -16,3 +16,15 @@ export function of_Tracking(val: number): Tracking | null {
     ? val
     : null;
 }
+
+/** The member's name, as its source spells it. */
+export function name_Tracking(val: Tracking): string {
+  switch (val) {
+    case TRACKING_RECENTER:
+      return "Recenter";
+    case TRACKING_FOLLOW:
+      return "Follow";
+    case TRACKING_UNFOLLOW:
+      return "Unfollow";
+  }
+}

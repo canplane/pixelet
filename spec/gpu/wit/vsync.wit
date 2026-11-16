@@ -1,6 +1,6 @@
 package pxl:gpu@0.1.0;
 
-// The display's vsync, which the host serves beside the GPU: a display's
+// The display's vsync, which the host implements beside the GPU: a display's
 // refresh belongs to whoever holds the surface.
 interface vsync {
   // Answers at the display's next vsync.

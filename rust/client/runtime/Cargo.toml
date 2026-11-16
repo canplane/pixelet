@@ -22,7 +22,7 @@ pxl-spec.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 xpute-link.workspace = true
 pxl-gpu-link.workspace = true
-# The runtime the core runs in on a device, what its host serves, and the
+# The runtime the core runs in on a device, what its host implements, and the
 # GPU's host that runs the renderer's stream around each entry, as the page's
 # runs it on WebGPU. Metal on an iPhone, Vulkan on Android; each backend
 # compiles to nothing on the other's system.

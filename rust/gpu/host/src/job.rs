@@ -1,9 +1,9 @@
 // pxl-gpu-host/job.rs
 
-//! A job another thread runs for what the host serves, its result handed back
-//! to the guest's thread over its runtime's `post` (xpute-host runtime.rs):
-//! only the job's id and its result cross, and what hears the result stays
-//! on the guest's thread.
+//! A job another thread runs for what the host implements, its result handed
+//! back to the guest's thread over its runtime's `post` (xpute-host
+//! runtime.rs): only the job's id and its result cross, and what hears the
+//! result stays on the guest's thread.
 //!
 //! It is the GPU's: on a device the GPU host runs its device and presents on
 //! a thread of its own (native.rs `on_gpu` says why). That thread is the

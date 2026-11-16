@@ -1,8 +1,8 @@
 // pxl-core/link/export/surface.rs
 
 //! The surfaces the UI lends the GPU (spec/gpu/wit/surface.wit), each an
-//! object the core serves under the handle the link issued it: opened by the
-//! UI, resized by it, and closed as the UI drops it.
+//! object the core implements under the handle the link issued it: opened by
+//! the UI, resized by it, and closed as the UI drops it.
 
 use std::rc::Rc;
 

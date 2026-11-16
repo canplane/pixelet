@@ -55,7 +55,11 @@ SOURCES := $(sort $(shell find xpute dev/test -name '*.cpp'))
 # The library is what the amalgamation holds: kit, then the link over it, then
 # the guest's end, in the order the two files read.
 LAYERS := kit link guest
-LIBRARY_HEADERS := $(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp')))
+# libc++'s abort (xpute/kit/status/verbose_abort.hpp) is read before any
+# other header: the amalgamation's header opens with it, and each of the
+# tree's files is compiled with it included first.
+VERBOSE_ABORT := xpute/kit/status/verbose_abort.hpp
+LIBRARY_HEADERS := $(VERBOSE_ABORT) $(filter-out $(VERBOSE_ABORT),$(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp'))))
 LIBRARY_SOURCES := $(filter-out %.test.cpp,$(foreach d,$(LAYERS),$(filter xpute/$(d)/%,$(SOURCES))))
 
 # The compilers' names are kept in a stamp rewritten only when they change,
@@ -113,7 +117,7 @@ $(AMALGAMATION)/xpute.cpp: amalgamation.awk $(LIBRARY_HEADERS) $(LIBRARY_SOURCES
 # a compiler's errors still print.
 $(OUT)/test/%.o: %.cpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
-	@$(CXX) $(FLAGS) -I . $(PREFIX_MAP) -MMD -MP -c $< -o $@
+	@$(CXX) $(FLAGS) -I . -include $(VERBOSE_ABORT) $(PREFIX_MAP) -MMD -MP -c $< -o $@
 
 $(OUT)/wasm/xpute.o: $(AMALGAMATION)/xpute.cpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS) | wasi
 	@mkdir -p $(@D)

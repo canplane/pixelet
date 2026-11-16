@@ -7,3 +7,5 @@
 -Wextra
 -Wno-missing-field-initializers
 -I.
+-include
+xpute/kit/status/verbose_abort.hpp

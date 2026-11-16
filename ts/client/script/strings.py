@@ -61,7 +61,8 @@ ALLOWED = {
     "rust/spec/src/asset.rs": lambda text, src, off, byte: byte,
     # The line-break sets.
     "rust/client/core/src/sys/io/text.rs": lambda text, src, off, byte: STR_CONST.search(src, max(0, off - DECL_SZ), off),
-    # The URIs the guest opens its GPU device by and serves its surface under.
+    # The URIs the guest opens its GPU device by and implements its surface
+    # under.
     "rust/gpu/link/src/api.spec.rs": lambda text, src, off, byte: URI_CONST.search(src, max(0, off - DECL_SZ), off),
 }
 

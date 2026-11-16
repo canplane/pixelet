@@ -1,8 +1,8 @@
 // xpute-runtime-native/jni.rs
 
 //! JNI's bindings as an Android app's native side reaches the runtime, its
-//! host and what they serve, re-exported (`sys`) so that a device beside the
-//! guest names them through this crate; and a Kotlin class whose static
+//! host and what they implement, re-exported (`sys`) so that a device beside
+//! the guest names them through this crate; and a Kotlin class whose static
 //! methods a thread of the runtime or a host calls (`Class`, `call`,
 //! `Return`), a string the C ABI gives among their values (`string`). The
 //! runtime itself reaches the app through them: the C ABI's calls under the
@@ -12,7 +12,8 @@
 //! threads that tell it, a thread the runtime made attached to the VM for
 //! good as a daemon; the stop and the trap kept for a UI that starts after
 //! them it reads by `stop(): Stop?` and `trap(): String?` (listener.rs
-//! `stop`, `trap`). A stop crosses as an `xpute.Stop` both ways (`stop_object`).
+//! `stop`, `trap`). A stop crosses as an `xpute.Stop` both ways
+//! (`stop_object`).
 
 use core::ffi::CStr;
 use std::path::PathBuf;
@@ -20,18 +21,20 @@ use std::sync::OnceLock;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::mem;
 
 pub use jni_sys as sys;
 
 use sys::{JNIEnv, jbyteArray, jint, jintArray, jlong, jobject, jstring, jvalue};
 
-use crate::listener::{notify_on, stopped_on, trap_on};
+use crate::listener::{self, notify_on, stopped_on, trap_on};
+use crate::remote;
 
 /// This is the table of JNI's functions that the environment of a call holds.
 ///
 /// # Safety
 /// `env` is the environment JNI called with.
-pub unsafe fn env<'e>(env: *mut sys::JNIEnv) -> &'e sys::JNINativeInterface_ {
+pub unsafe fn env<'e>(env: *mut JNIEnv) -> &'e sys::JNINativeInterface_ {
     // SAFETY: an environment points at its function table for the call.
     unsafe { &**env }
 }
@@ -42,7 +45,7 @@ pub unsafe fn env<'e>(env: *mut sys::JNIEnv) -> &'e sys::JNINativeInterface_ {
 ///
 /// # Safety
 /// `e` is this thread's environment, and `at` `len` readable bytes.
-pub unsafe fn string(e: *mut sys::JNIEnv, at: *const u8, len: usize) -> sys::jstring {
+pub unsafe fn string(e: *mut JNIEnv, at: *const u8, len: usize) -> jstring {
     // SAFETY: as the caller holds.
     let s =
         String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).replace('\0', " ");
@@ -74,8 +77,8 @@ unsafe impl<const N: usize> Sync for Class<N> {}
 /// # Safety
 /// `e` and `this` are what JNI called with, on a thread Java made.
 pub unsafe fn class<const N: usize>(
-    e: *mut sys::JNIEnv,
-    this: sys::jobject,
+    e: *mut JNIEnv,
+    this: jobject,
     methods: [(&CStr, &CStr); N],
 ) -> Option<Class<N>> {
     // SAFETY: the environment JNI called this with.
@@ -118,20 +121,15 @@ pub trait Return: Default {
     /// a static method of `class` that returns this type, and `args` the
     /// values of its signature.
     unsafe fn call(
-        e: *mut sys::JNIEnv,
+        e: *mut JNIEnv,
         class: sys::jclass,
         m: sys::jmethodID,
-        args: *const sys::jvalue,
+        args: *const jvalue,
     ) -> Self;
 }
 
 impl Return for () {
-    unsafe fn call(
-        e: *mut sys::JNIEnv,
-        class: sys::jclass,
-        m: sys::jmethodID,
-        args: *const sys::jvalue,
-    ) {
+    unsafe fn call(e: *mut JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const jvalue) {
         // SAFETY: as the caller holds.
         unsafe { env(e).CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, class, m, args) }
     }
@@ -139,10 +137,10 @@ impl Return for () {
 
 impl Return for f64 {
     unsafe fn call(
-        e: *mut sys::JNIEnv,
+        e: *mut JNIEnv,
         class: sys::jclass,
         m: sys::jmethodID,
-        args: *const sys::jvalue,
+        args: *const jvalue,
     ) -> f64 {
         // SAFETY: as the caller holds.
         unsafe { env(e).CallStaticDoubleMethodA.or_bug(Errno::ENOSYS)(e, class, m, args) }
@@ -164,9 +162,9 @@ impl Return for f64 {
 pub unsafe fn call<const N: usize, R: Return>(
     c: &Class<N>,
     m: usize,
-    args: impl FnOnce(*mut sys::JNIEnv) -> Vec<sys::jvalue>,
+    args: impl FnOnce(*mut JNIEnv) -> Vec<jvalue>,
 ) -> R {
-    let mut e: *mut sys::JNIEnv = core::ptr::null_mut();
+    let mut e: *mut JNIEnv = core::ptr::null_mut();
     // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
     // class `class` holds globally, the ID of one of its static methods, and
     // the values its signature takes, as the caller holds.
@@ -349,7 +347,7 @@ extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u
 /// # Safety
 /// `e` is what JNI called with.
 pub unsafe fn stop(e: *mut JNIEnv) -> jobject {
-    let Some(s) = crate::listener::stop() else {
+    let Some(s) = listener::stop() else {
         return core::ptr::null_mut();
     };
     // SAFETY: the environment JNI called with, and the stop's file.
@@ -372,7 +370,7 @@ pub unsafe fn stop(e: *mut JNIEnv) -> jobject {
 /// # Safety
 /// `e` is what JNI called with.
 pub unsafe fn trap(e: *mut JNIEnv) -> jstring {
-    let Some(err) = crate::listener::trap() else {
+    let Some(err) = listener::trap() else {
         return core::ptr::null_mut();
     };
     // SAFETY: the environment JNI called with, and the trap's UTF-8.
@@ -412,19 +410,28 @@ pub unsafe fn handles(e: *mut JNIEnv, a: jintArray) -> Vec<u32> {
     }
 }
 
+/// The text of a Java `String`.
+///
+/// # Safety
+/// `e` is what JNI called with, and `s` a live string.
+pub unsafe fn text(e: *mut JNIEnv, s: jstring) -> String {
+    // SAFETY: JNI's string, its UTF released after the copy.
+    unsafe {
+        let j = env(e);
+        let at = j.GetStringUTFChars.or_bug(Errno::ENOSYS)(e, s, core::ptr::null_mut());
+        let text = CStr::from_ptr(at).to_string_lossy().into_owned();
+        j.ReleaseStringUTFChars.or_bug(Errno::ENOSYS)(e, s, at);
+        text
+    }
+}
+
 /// A directory a Java `String` names.
 ///
 /// # Safety
 /// `e` is what JNI called with, and `s` a live string.
 pub unsafe fn dir(e: *mut JNIEnv, s: jstring) -> PathBuf {
-    // SAFETY: JNI's string, its UTF released after the copy.
-    unsafe {
-        let j = env(e);
-        let at = j.GetStringUTFChars.or_bug(Errno::ENOSYS)(e, s, core::ptr::null_mut());
-        let dir = PathBuf::from(core::ffi::CStr::from_ptr(at).to_string_lossy().into_owned());
-        j.ReleaseStringUTFChars.or_bug(Errno::ENOSYS)(e, s, at);
-        dir
-    }
+    // SAFETY: the caller's.
+    PathBuf::from(unsafe { text(e, s) })
 }
 
 /// The batch the UI of the handle `ui` has not taken, as a Java `byte[]`.
@@ -432,7 +439,7 @@ pub unsafe fn dir(e: *mut JNIEnv, s: jstring) -> PathBuf {
 /// # Safety
 /// `e` is what JNI called with.
 pub unsafe fn take(e: *mut JNIEnv, ui: u32) -> jbyteArray {
-    let b = crate::remote::take(ui);
+    let b = remote::take(ui);
     // SAFETY: JNI's own calls; the array is the caller's local reference.
     unsafe {
         let j = env(e);
@@ -449,7 +456,7 @@ pub unsafe fn take(e: *mut JNIEnv, ui: u32) -> jbyteArray {
 /// `e` is what JNI called with, and the span is lent to the UI.
 pub unsafe fn buf(e: *mut JNIEnv, at: jlong, len: jint) -> jobject {
     // SAFETY: the caller's.
-    let b = unsafe { xpute_link::mem::bytes(at as u64, len as u32) };
+    let b = unsafe { mem::bytes(at as u64, len as u32) };
     // SAFETY: JNI's own call over the span.
     unsafe {
         env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(e, b.as_mut_ptr().cast(), i64::from(len))
@@ -462,8 +469,8 @@ pub unsafe fn buf(e: *mut JNIEnv, at: jlong, len: jint) -> jobject {
 /// which answers the UI's handle, `post(ui: Int, tag: Int, h: Int, m: Int,
 /// pkt: ByteArray?)`, `answer(ui: Int, tag: Int, result: Int, data:
 /// ByteArray?)`, `take(ui: Int): ByteArray`,
-/// `bytes(at: Long, len: Int): ByteBuffer`, `life(shown: Boolean)`, `stop(): Stop?` and
-/// `trap(): String?`.
+/// `bytes(at: Long, len: Int): ByteBuffer`, `life(shown: Boolean)`, `stop(): Stop?`,
+/// `trap(): String?` and `log(level: Int, context: String, message: String)`.
 #[macro_export]
 macro_rules! jni_abi {
     ($start:path) => {
@@ -585,6 +592,26 @@ macro_rules! jni_abi {
             shown: $crate::jni::sys::jboolean,
         ) {
             $crate::life(shown != 0);
+        }
+
+        /// # Safety
+        /// Only JNI calls this, with live strings.
+        #[unsafe(no_mangle)]
+        unsafe extern "system" fn Java_xpute_Runtime_log(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            level: $crate::jni::sys::jint,
+            context: $crate::jni::sys::jstring,
+            message: $crate::jni::sys::jstring,
+        ) {
+            // SAFETY: what JNI called with.
+            let (context, message) = unsafe {
+                (
+                    $crate::jni::text(env, context),
+                    $crate::jni::text(env, message),
+                )
+            };
+            $crate::log(level as u32, &context, &message);
         }
     };
 }
