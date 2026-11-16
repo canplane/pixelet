@@ -39,12 +39,6 @@ fn tile_in_damage(ii: u32) -> bool {
   return tiles_in_damage(tiles, changed_at[ii]);
 }
 
-// Corner `vi` of a quad's two triangles, its step across and down worked out from the
-// vertex's number, as light_map.wgsl's quad's.
-fn tile_corner(vi: u32) -> vec2u {
-  return vec2u(u32(vi == 1u || vi == 2u || vi == 4u), u32(vi == 2u || vi == 4u || vi == 5u));
-}
-
 fn tile_px_clip(px: vec2f) -> vec4f {
   let size = tiles.size.xy;
   return vec4f(px.x / size.x * 2.0 - 1.0, 1.0 - px.y / size.y * 2.0, 0.0, 1.0);
@@ -54,7 +48,7 @@ fn tile_px_clip(px: vec2f) -> vec4f {
 // corner of an undamaged tile lies outside the clip volume, so its quad draws nothing.
 fn tile_clip(vi: u32, ii: u32) -> vec4f {
   let t = vec2u(ii % tiles.cnt.x, ii / tiles.cnt.x);
-  let c = tile_corner(vi);
+  let c = quad_corner(vi);
   let px = min(vec2f((t + c) * tile_side()), tiles.size.xy) + (vec2f(c) * 2.0 - 1.0) * tiles.size.z;
   return select(vec4f(2.0, 2.0, 0.0, 1.0), tile_px_clip(px), tile_in_damage(ii));
 }

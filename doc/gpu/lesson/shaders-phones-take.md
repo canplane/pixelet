@@ -33,7 +33,7 @@ own Vulkan driver. Each is a different compiler with its own faults.
 - **An atomic in a branch of its own.** naga reads its pointer out of scope;
   ask it of every lane, a no-op where there is nothing to do.
 
-  > Since 2026-11-16: the pointer read out of scope was in the WGSL naga's
+  > Since 2026-11-16 (a3469dea75): the pointer read out of scope was in the WGSL naga's
   > SPIR-V front end wrote from rust-gpu's output. The hand WGSL forms each
   > atomic's pointer at its call, in its own branch, and naga validates it so;
   > an atomic in a branch is kept where it stands.
@@ -83,7 +83,7 @@ part.rs `SHADERS` counts 86 now. The S23 has drawn with the shaders by hand
 since 2026-11-05
 ([the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md)).
 
-> Since 2026-11-16: `refuse_faults` (render build/check.rs) also refuses a
+> Since 2026-11-16 (a3469dea75): `refuse_faults` (render build/check.rs) also refuses a
 > function that returns what holds an array and a constant, `let` or
 > `var<private>` array of vectors read at a place found as the shader runs.
 > The hand WGSL that did either works the value out (`face_normal`,
@@ -125,7 +125,7 @@ S23 through naga and through Tint
 ([the app that did not move](../../experiment/20261109-the-app-that-did-not-move/README.md)).
 The fault that was seen is a matrix in a `var<storage>` array.
 
-> Since 2026-11-16: render build/check.rs `refuse_faults` refuses a `var<uniform>` or
+> Since 2026-11-16 (4be0c6e96e): render build/check.rs `refuse_faults` refuses a `var<uniform>` or
 > `var<storage>` with room inside it in every assembled module, as the first
 > test did. `Resolve` and `Propagate` are word.rs uniforms (`resolve`,
 > `propagate`), bound as `array<vec4f, N>` and read through their accessors, as

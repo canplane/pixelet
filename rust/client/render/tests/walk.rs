@@ -63,14 +63,6 @@ fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
 }
 
-fn next_up(x: f32) -> f32 {
-    f32::from_bits(x.to_bits() + 1)
-}
-
-fn next_down(x: f32) -> f32 {
-    f32::from_bits(x.to_bits() - 1)
-}
-
 /// On a split distance squared, `2304 · 4^k`, and on the floats either side of it, the zoom the
 /// walks ask must be `grid::cell_zoom_at`'s. The vectors lie along an axis, a little off an
 /// axis, and across all three axes. A device's distance squared may lie up to `gpu::FUSED_ULPS` off
@@ -102,7 +94,7 @@ fn hand_zoom_on_a_split_distance() {
         );
         let mut put = |v: [f32; 3]| {
             let got = squared(v);
-            if got == next_down(r2) || got == r2 || got == next_up(r2) {
+            if got == r2.next_down() || got == r2 || got == r2.next_up() {
                 cases.push(v);
             }
         };
@@ -115,8 +107,8 @@ fn hand_zoom_on_a_split_distance() {
         put([d, pow2(k - 6), 0.0]);
         put([0.0, -pow2(k - 6), d]);
         // The float under the distance squared: the next f32 under the distance squares to it.
-        put([next_down(d), 0.0, 0.0]);
-        put([0.0, 0.0, next_down(d)]);
+        put([d.next_down(), 0.0, 0.0]);
+        put([0.0, 0.0, d.next_down()]);
         // Vectors across all three axes, with X stepped over the floats about the value whose
         // sum comes to the distance squared.
         for _ in 0..24 {
@@ -124,7 +116,7 @@ fn hand_zoom_on_a_split_distance() {
             let x = (1.0 - y * y - z * z).sqrt();
             let v = [x, y, z].map(|c| (c * f64::from(d)) as f32);
             for n in -6i32..=6 {
-                let x = f32::from_bits((v[0].to_bits() as i32 + n) as u32);
+                let x = gpu::along(v[0], n);
                 put([x, v[1], -v[2]]);
             }
         }
@@ -137,8 +129,8 @@ fn hand_zoom_on_a_split_distance() {
         let (got_r2, got) = (f32::from_bits(h[3]), h[4]);
         // The case lies on a zoom's edge when a float either side of the Rust's distance
         // squared asks another zoom.
-        let edge = grid::cell_zoom_at(next_up(want_r2)) != want
-            || grid::cell_zoom_at(next_down(want_r2)) != want;
+        let edge = grid::cell_zoom_at(want_r2.next_up()) != want
+            || grid::cell_zoom_at(want_r2.next_down()) != want;
         on[usize::from(edge)] += 1;
         if got == want && got_r2 == want_r2 {
             continue;
@@ -184,7 +176,7 @@ fn hand_narrow_on_its_edge() {
         for m in [-4i32, 0, 3] {
             // An angle and a distance squared whose width is exactly `w · side`.
             let (angle, d2) = (w * pow2(j - m), pow2(2 * m));
-            for s in [next_down(side), side, next_up(side)] {
+            for s in [side.next_down(), side, side.next_up()] {
                 cases.push([s, angle, d2]);
             }
         }
@@ -248,11 +240,7 @@ fn hand_width_off_a_square_root() {
         let angle = libm::exp2(-6.0 - rand() * 8.0) as f32;
         let side = cast::NARROW * width_of(angle, d2);
         for n in -3i32..=3 {
-            cases.push([
-                f32::from_bits((side.to_bits() as i32 + n) as u32),
-                angle,
-                d2,
-            ]);
+            cases.push([gpu::along(side, n), angle, d2]);
         }
     }
     let have = probe(&gpu, &cases);

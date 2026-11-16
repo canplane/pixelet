@@ -73,9 +73,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> CloudOu
   let h = select(cirrus, alto, k == 0u);
   let dist = clouds_draw_dist();
   let half = sqrt(max(dist * dist - h * h, 0.0)) / atmos_km_per_u();
-  // The quad's two triangles, each corner's step across and down worked out from the
-  // vertex's number, as light_map.wgsl's quad's.
-  let step = vec2f(f32(v == 1u || v == 2u || v == 4u), f32(v == 2u || v == 4u || v == 5u));
+  let step = vec2f(quad_corner(v));
   var o: CloudOut;
   o.world = frame_camera_pos() + vec3f((step * 2.0 - 1.0) * half, 0.0) + frame_up() * (h / atmos_km_per_u());
   o.clip = jittered(frame_view_proj() * vec4f(o.world, 1.0));

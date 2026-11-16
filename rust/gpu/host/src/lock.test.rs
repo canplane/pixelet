@@ -1,9 +1,10 @@
-// pxl-render/tests/gpu/lock.rs
+// pxl-gpu-host/lock.test.rs
 
 //! The GPU of the machine the tests run on, which one user drives at a time across every
 //! checkout of the repository: a test process that opens a device holds it from then until it
 //! ends, as a run or the shader probe on the machine does (script/perf/measure.py `hold`). A
-//! test process that finds it held waits, and says so.
+//! test process that finds it held waits, and says so. Every Rust test that opens a device
+//! takes this file as a module of its own and holds the GPU before it opens one.
 
 use std::fs::File;
 use std::io::Write;

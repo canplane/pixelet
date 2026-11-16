@@ -46,6 +46,8 @@ class App:
         return ios.state()
 
     def close(self):
+        """Ends the console, and the app with it: devicectl hands the app the
+        signal that ends it."""
         self.lines.close()
 
 

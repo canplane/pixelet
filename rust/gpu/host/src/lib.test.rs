@@ -8,20 +8,27 @@ use super::*;
 
 const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/gpu/program.tsv"));
 
+#[path = "lock.test.rs"]
+mod lock;
 #[path = "../../../../xpute/link/rust/src/mem.test.rs"]
 pub(super) mod mem;
 
 use mem::alloc;
 
-fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+/// A device on this machine's GPU with `features`, which the process holds from here on
+/// (`lock::hold`).
+fn device(features: wgpu::Features) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+    lock::hold();
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
     let adapter =
         pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .expect("an adapter");
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .expect("a device");
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_features: features,
+        ..Default::default()
+    }))
+    .expect("a device");
     (adapter, device, queue)
 }
 
@@ -57,7 +64,7 @@ fn host(
 /// polled.
 #[test]
 fn host_counts_frames() {
-    let (adapter, device, queue) = device();
+    let (adapter, device, queue) = device(wgpu::Features::empty());
     let (busy, other) = (
         host(&adapter, &device, &queue, 1),
         host(&adapter, &device, &queue, 1),
@@ -96,7 +103,7 @@ fn frame_ends_either_way() {
 /// the frames they counted are released with them.
 #[test]
 fn lost_device_frames_released() {
-    let (adapter, device, queue) = device();
+    let (adapter, device, queue) = device(wgpu::Features::empty());
     let h = host(&adapter, &device, &queue, 1);
     let count = h.unfinished_cnt.clone();
     h.count_frame();
@@ -120,7 +127,7 @@ fn lost_device_frames_released() {
 /// the test claims the slot as `bind` does, without one.
 #[test]
 fn stale_handle_inert() {
-    let (adapter, device, queue) = device();
+    let (adapter, device, queue) = device(wgpu::Features::empty());
     let mut h = host(&adapter, &device, &queue, 2);
     // These are slot 3, generations 1 and 2 (`slot | generation << 16`).
     let (old, newer) = (3 | (1 << 16), 3 | (2 << 16));
@@ -156,16 +163,7 @@ fn stale_handle_inert() {
 )]
 fn recs_read_back() {
     let g = Golden::load(GOLDEN);
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter =
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .expect("an adapter");
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: wgpu::Features::TIMESTAMP_QUERY,
-        ..Default::default()
-    }))
-    .expect("a device with timestamp queries");
+    let (adapter, device, queue) = device(wgpu::Features::TIMESTAMP_QUERY);
     let region_sz = g.u32("region");
     let base = alloc(region_sz);
     // The record's places, as addresses in the test's block.
