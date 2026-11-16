@@ -43,11 +43,13 @@ program's real interface, scattered through glue code.
 
 xpute replaces those crossings with one memory that both sides share and one
 kind of message, a frame, laid in that memory: one method of an object, called
-under the object's handle. A frame crosses into the guest by one export and out
-of it by one function, the same on every platform, and each crossing returns at
-once what the method came to: its result, or word that the answer will come
-later in a frame of its own. Each method is declared in WIT and its bindings are
-generated, so no binding is written by hand for any one piece of work.
+under the object's handle. Arguments are laid once in a frame's packet; buffers
+can instead be lent where they lie and accessed in place by a host in the same
+process. A frame crosses into the guest by one export and out of it by one
+function, the same on every platform, and each crossing returns at once what the
+method came to: its result, or word that the answer will come later in a frame
+of its own. Each method is declared in WIT and its bindings are generated, so no
+binding is written by hand for any one piece of work.
 [ARCHITECTURE.md](./ARCHITECTURE.md) lays out the frame and the crossings.
 
 The host gives the guest only its entries, the clocks, the stop and the log.
