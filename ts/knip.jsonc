@@ -27,7 +27,7 @@
     // its imports. conform.ts, which tsc alone reads, is no entry: it names
     // every export of each web file and each default. knip does not
     // resolve an import of `x.ts` to `x.web.ts` or `x.native.ts`, as Metro
-    // does (ts/build/path.ts `platform_file`), so the imports of each pair are
+    // does (ts/build/path.ts `platformFile`), so the imports of each pair are
     // not reported unresolved (ignoreUnresolved); both type-checks, the web
     // one and the native one, resolve every import.
     "client": {

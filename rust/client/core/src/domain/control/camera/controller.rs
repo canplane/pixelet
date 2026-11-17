@@ -176,8 +176,7 @@ pub(crate) fn pose() -> Option<ObserverPose> {
     }
 }
 
-/// Returns the intent the controller took, which a gesture continues from
-/// (gesture.rs `Anchor::settle`).
+/// Returns the intent the controller took.
 pub(crate) fn set_intent(partial: IntentPatch) -> Intent {
     match active() {
         Active::Orbit => orbit::ask(partial),
@@ -189,8 +188,7 @@ pub(crate) fn set_intent(partial: IntentPatch) -> Intent {
     }
 }
 
-/// Turns the camera to north and keeps the tilt. That is what "align north"
-/// means both for the compass and at the end of follow mode.
+/// Turns the camera to north and keeps the tilt, as follow mode ends.
 pub(crate) fn reset_azimuth() {
     set_intent(IntentPatch {
         azimuth: Some(DEFAULT_AZIMUTH),
@@ -214,30 +212,9 @@ pub(crate) fn come_in_to_default() {
     }
 }
 
-/// A wheel turn of `delta_y` CSS pixels. First person has no zoom, so it
-/// ignores the wheel.
-pub(crate) fn wheel(delta_y: f64) {
-    if active() == Active::Orbit {
-        orbit::wheel(delta_y);
-    }
-}
-
-/// The pinch's start is the gesture's and is taken in every mode, so a pinch
-/// that the mode turns to orbit midway zooms on from where it began.
-pub(crate) fn pinch_begin(span: f64) {
-    orbit::pinch_begin(span);
-}
-
-pub(crate) fn pinch(span: f64) {
-    if active() == Active::Orbit {
-        orbit::pinch(span);
-    }
-}
-
-/// A trackpad's pinch, its fingers' spread changed by `scale`. The camera's
-/// distance is divided by it, as a pinch of two touches divides it (gesture.rs
-/// `spread`). First person has no zoom, so it ignores the pinch.
-pub(crate) fn pinch_by(scale: f64) {
+/// A spread of the hands by `scale`, which divides the camera's distance.
+/// First person has no zoom, so it ignores it.
+pub(crate) fn zoom(scale: f64) {
     if active() == Active::Orbit {
         orbit::zoom_by(1.0 / scale);
     }

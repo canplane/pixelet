@@ -20,19 +20,19 @@ import { mount_vsync, WebGpu } from "@pxl/gpu/host";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
 import { CALLS } from "@/abi/calls.ts";
-import { set_online } from "@/service/origin/online.ts";
-import { mount_files } from "@/service/sys/fs/file.ts";
-import { mount_objects } from "@/service/sys/fs/object.ts";
+import { setOnline } from "@/service/origin/online.ts";
+import { mountFiles } from "@/service/sys/fs/file.ts";
+import { mountObjects } from "@/service/sys/fs/object.ts";
 import {
   type Declaration,
-  declare_source,
+  declareSource,
   type Source,
-  source_decl,
-  source_state,
-  watch_source,
+  sourceDeclaration,
+  sourceState,
+  watchSource,
 } from "@/service/sys/fs/source.ts";
-import { set_storage } from "@/service/sys/fs/storage.ts";
-import { mount_text } from "@/service/core/text.ts";
+import { setStorage } from "@/service/sys/fs/storage.ts";
+import { mountText } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
 
 /** What the page's start sends the worker beside the core's instantiation
@@ -46,14 +46,14 @@ export interface Kept {
 export interface SourceReport {
   kind: "source";
   state: Source;
-  decl: Declaration | null;
+  declaration: Declaration | null;
 }
 
 /** A kept key the worker wrote, which the page keeps too. */
 export interface KeepReport {
   kind: "keep";
   key: string;
-  val: string;
+  value: string;
 }
 
 const tell = (m: SourceReport | KeepReport) => postMessage(m);
@@ -66,17 +66,17 @@ onmessage = ({ data: m }: MessageEvent<Instantiate & Kept>) => {
 /** A copy of the page's kept entries, each write sent back to the page. */
 function keep(entries: [string, string][]): void {
   const store = new Map(entries);
-  set_storage({
+  setStorage({
     get: (key) => store.get(key) ?? null,
-    set: (key, val) => {
-      store.set(key, val);
-      tell({ kind: "keep", key, val });
+    set: (key, value) => {
+      store.set(key, value);
+      tell({ kind: "keep", key, value });
     },
   });
 }
 
 async function boot(m: Instantiate): Promise<void> {
-  online.watch(set_online);
+  online.watch(setOnline);
   const instance = await instantiate(m.module, m.init);
   if (instance === null) return;
   const { side } = instance;
@@ -102,9 +102,9 @@ async function boot(m: Instantiate): Promise<void> {
         mount_clock,
         mount_vsync,
         () => gpu.mount(),
-        (s) => mount_text(s, s),
-        (s) => mount_files(s, s),
-        (s) => mount_objects(s, s),
+        (s) => mountText(s, s),
+        (s) => mountFiles(s, s),
+        (s) => mountObjects(s, s),
       ],
       imports: IMPORTS,
       calls: CALLS,
@@ -120,8 +120,12 @@ async function boot(m: Instantiate): Promise<void> {
 
 /** Declares the tile source to the core, and tells the page its state. */
 async function declare(side: Side): Promise<void> {
-  watch_source(() =>
-    tell({ kind: "source", state: source_state(), decl: source_decl() }),
+  watchSource(() =>
+    tell({
+      kind: "source",
+      state: sourceState(),
+      declaration: sourceDeclaration(),
+    }),
   );
-  await declare_source(sender(side));
+  await declareSource(sender(side));
 }

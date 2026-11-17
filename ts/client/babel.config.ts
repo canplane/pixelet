@@ -17,13 +17,8 @@ import type {
   TransformOptions,
   types as BabelTypes,
 } from "@babel/core";
-import {
-  type Export,
-  exports_of,
-  file_of,
-  is_pure,
-} from "@pxl/build/constant.ts";
-import { tile_source } from "./script/proxy.ts";
+import { type Export, exportsOf, fileOf, isPure } from "@pxl/build/constant.ts";
+import { tileSource } from "./script/proxy.ts";
 
 /** The part of Babel a plugin is handed. */
 type Babel = { types: typeof BabelTypes };
@@ -32,7 +27,7 @@ type Babel = { types: typeof BabelTypes };
 const TS_VALUE =
   /^TS(?:As|Satisfies|NonNull|Instantiation)Expression$|^TSTypeAssertion$/;
 
-const in_type = (p: NodePath): boolean =>
+const inType = (p: NodePath): boolean =>
   p.findParent(
     (a) => a.node.type.startsWith("TS") && !TS_VALUE.test(a.node.type),
   ) !== null;
@@ -44,23 +39,23 @@ const in_type = (p: NodePath): boolean =>
  * no longer read by name is left for tree shaking to drop. */
 const inline = ({ types: t }: Babel): PluginObj => ({
   visitor: {
-    Program(p, state) {
+    Program(program, state) {
       const from = state.filename ?? "";
       /** Writes what each read of `local`, bound to `at`, comes to, and says
        * whether a read is left that still needs the name. */
       const write = (local: string, at: Export): boolean => {
-        let by_name = false;
-        for (const ref of p.scope.getBinding(local)!.referencePaths) {
-          if (in_type(ref)) continue;
+        let byName = false;
+        for (const ref of program.scope.getBinding(local)!.referencePaths) {
+          if (inType(ref)) continue;
           // A JSX tag, or the declaration's own export, takes no value.
           if (!ref.isIdentifier()) {
-            by_name = true;
+            byName = true;
             continue;
           }
           const named = ref.parentPath;
           if (named?.isExportSpecifier()) {
             const { exported } = named.node;
-            const listed = exports_of(from).get(
+            const listed = exportsOf(from).get(
               t.isIdentifier(exported) ? exported.name : exported.value,
             );
             // Struck only where a reader of the name is written through it.
@@ -69,7 +64,7 @@ const inline = ({ types: t }: Babel): PluginObj => ({
               "file" in listed &&
               "file" in at &&
               listed.file === at.file &&
-              is_pure(at.file)
+              isPure(at.file)
             ) {
               const clause = named.parentPath;
               named.remove();
@@ -79,95 +74,100 @@ const inline = ({ types: t }: Babel): PluginObj => ({
               ) {
                 clause.remove();
               }
-            } else by_name = true;
+            } else byName = true;
             continue;
           }
           let read: NodePath = ref;
-          let e: Export = at;
-          while ("file" in e) {
+          let resolved: Export = at;
+          while ("file" in resolved) {
             const up: NodePath | null = read.parentPath;
             if (
               !up?.isMemberExpression({ object: read.node, computed: false })
             ) {
               break;
             }
-            const next: Export | undefined = exports_of(e.file).get(
+            const next: Export | undefined = exportsOf(resolved.file).get(
               (up.node.property as BabelTypes.Identifier).name,
             );
             if (next === undefined) break;
-            e = next;
+            resolved = next;
             read = up;
           }
-          if ("val" in e) read.replaceWith(t.valueToNode(e.val));
-          else if (read !== ref && is_pure(e.file)) {
+          if ("value" in resolved)
+            read.replaceWith(t.valueToNode(resolved.value));
+          else if (read !== ref && isPure(resolved.file)) {
             throw read.buildCodeFrameError(
               "a module of literals read whole through another module; import it itself",
             );
-          } else by_name = true;
+          } else byName = true;
         }
-        return by_name;
+        return byName;
       };
-      for (const decl of p.get("body")) {
-        if (!decl.isImportDeclaration() || decl.node.importKind === "type") {
+      for (const statement of program.get("body")) {
+        if (
+          !statement.isImportDeclaration() ||
+          statement.node.importKind === "type"
+        ) {
           continue;
         }
-        const target = file_of(from, decl.node.source.value);
+        const target = fileOf(from, statement.node.source.value);
         if (target === null) continue;
         let struck = false;
-        for (const s of decl.get("specifiers")) {
-          if (s.isImportDefaultSpecifier()) continue;
+        for (const specifier of statement.get("specifiers")) {
+          if (specifier.isImportDefaultSpecifier()) continue;
           let at: Export | undefined;
-          if (s.isImportSpecifier()) {
-            if (s.node.importKind === "type") continue;
-            const { imported } = s.node;
-            at = exports_of(target).get(
+          if (specifier.isImportSpecifier()) {
+            if (specifier.node.importKind === "type") continue;
+            const { imported } = specifier.node;
+            at = exportsOf(target).get(
               t.isIdentifier(imported) ? imported.name : imported.value,
             );
           } else {
             at = { file: target };
           }
           if (at === undefined) continue;
-          const local = s.node.local.name;
-          const by_name = write(local, at);
+          const local = specifier.node.local.name;
+          const byName = write(local, at);
           if (
-            by_name &&
-            s.isImportSpecifier() &&
+            byName &&
+            specifier.isImportSpecifier() &&
             "file" in at &&
-            is_pure(at.file)
+            isPure(at.file)
           ) {
             // The name it came through is struck where it was exported.
             const relative = path.relative(path.dirname(from), at.file);
-            decl.insertBefore(
+            statement.insertBefore(
               t.importDeclaration(
                 [t.importNamespaceSpecifier(t.identifier(local))],
                 t.stringLiteral(`./${relative}`),
               ),
             );
-          } else if (by_name) continue;
-          s.remove();
+          } else if (byName) continue;
+          specifier.remove();
           struck = true;
         }
-        if (struck && decl.node.specifiers.length === 0) decl.remove();
+        if (struck && statement.node.specifiers.length === 0)
+          statement.remove();
       }
-      for (const decl of p.get("body")) {
-        if (!decl.isExportNamedDeclaration()) continue;
-        const d = decl.get("declaration");
-        if (!d.isVariableDeclaration()) continue;
-        for (const v of d.get("declarations")) {
+      for (const statement of program.get("body")) {
+        if (!statement.isExportNamedDeclaration()) continue;
+        const declaration = statement.get("declaration");
+        if (!declaration.isVariableDeclaration()) continue;
+        for (const v of declaration.get("declarations")) {
           const { id } = v.node;
           if (!t.isIdentifier(id)) continue;
-          const at = exports_of(from).get(id.name);
-          if (at !== undefined && "val" in at) write(id.name, at);
+          const at = exportsOf(from).get(id.name);
+          if (at !== undefined && "value" in at) write(id.name, at);
         }
       }
-      p.scope.crawl();
+      program.scope.crawl();
     },
   },
 });
 
 export default (api: ConfigAPI): TransformOptions => {
-  const prod = process.env.NODE_ENV === "production";
-  const source = tile_source();
+  const production = process.env.NODE_ENV === "production";
+  const source = tileSource();
   // Whether this is a build made for measuring, which runs the drive at boot
   // (ui/layout.tsx).
   const drive = process.env.PXL_PERF_DRIVE === "1";
@@ -212,7 +212,7 @@ export default (api: ConfigAPI): TransformOptions => {
     overrides: [
       {
         exclude: (file) => /[\\/]node_modules[\\/]|\0/.test(file ?? ""),
-        plugins: prod ? [define, inline] : [define],
+        plugins: production ? [define, inline] : [define],
       },
     ],
   };

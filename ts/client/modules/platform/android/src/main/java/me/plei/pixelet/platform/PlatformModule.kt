@@ -27,13 +27,6 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the world's surface (service/platform/surface.native.tsx) ----
-
-    View(WorldView::class) {
-      Events("onAttach", "onDetach", "onPointer")
-      Prop("surface") { view: WorldView, surface: Int -> view.surface = surface }
-    }
-
     OnCreate { PxlNative.textOn() }
 
     // ---- the transport (service/platform/origin.native.ts) ----

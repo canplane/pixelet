@@ -13,19 +13,19 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { read } from "@/service/core/perf.ts";
 import {
-  boot_state,
-  watch_boot,
+  bootState,
+  watchBoot,
   BOOT_STARTED,
   BOOT_TERMINATED,
 } from "@/service/sys/boot.ts";
 import * as setting from "@/service/core/setting.ts";
-import { tell_drive } from "@/service/platform/drive.ts";
+import { tellDrive } from "@/service/platform/drive.ts";
 import * as visibility from "@/service/platform/visibility.ts";
 import * as overlay from "@/service/core/overlay.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
-import { DRIVE_SETTINGS, perf_drive } from "./drive.ts";
-import { perf_trace } from "./trace.ts";
-import { perf_report_read } from "./view.ts";
+import { DRIVE_SETTINGS, perfDrive } from "./drive.ts";
+import { perfTrace } from "./trace.ts";
+import { perfReportRead } from "./view.ts";
 
 /** What a load is given to settle before the drive. */
 const SETTLE_MS = 35_000;
@@ -45,14 +45,14 @@ async function tell(text: string): Promise<void> {
   const n = Math.ceil(text.length / PIECE);
   for (let i = 0; i < n; i++) {
     const piece = text.slice(i * PIECE, (i + 1) * PIECE);
-    tell_drive(`PXLPERF ${i + 1}/${n} ${piece}`);
+    tellDrive(`PXLPERF ${i + 1}/${n} ${piece}`);
     if ((i + 1) % BURST === 0) {
       await new Promise((done) => setTimeout(done, BURST_GAP_MS));
     }
   }
 }
 
-const off = (v: f64 | null, at: f64) =>
+const strays = (v: f64 | null, at: f64) =>
   v === null || Math.abs(v - at) > PLACE_SLACK_DEG;
 
 /** Says the run's progress, a line a second until the answer is called,
@@ -80,8 +80,8 @@ function progress(): () => void {
   const tick = setInterval(() => {
     const t = performance.now();
     const unanswered = asked < 0 ? 0 : t - asked;
-    tell_drive(
-      `PXLRUN t ${t} shown ${Number(visibility.shown())} boot ${boot_state()} unanswered_ms ${unanswered} ${draw}`,
+    tellDrive(
+      `PXLRUN t ${t} shown ${Number(visibility.shown())} boot ${bootState()} unanswered_ms ${unanswered} ${draw}`,
     );
     if (asked < 0) void ask();
   }, PROGRESS_MS);
@@ -91,9 +91,9 @@ function progress(): () => void {
 /** The boot's state turns `BOOT_STARTED`: the world has been made. */
 function started(): Promise<void> {
   return new Promise((done) => {
-    if (boot_state() === BOOT_STARTED) return done();
-    const stop = watch_boot(() => {
-      if (boot_state() !== BOOT_STARTED) return;
+    if (bootState() === BOOT_STARTED) return done();
+    const stop = watchBoot(() => {
+      if (bootState() !== BOOT_STARTED) return;
       stop();
       done();
     });
@@ -106,20 +106,20 @@ function started(): Promise<void> {
  * its core waits for it to be shown again, or where the core stops, whose
  * reason the host says. */
 export async function measure(): Promise<void> {
-  const stop_progress = progress();
+  const stopProgress = progress();
   const unwatch: (() => void)[] = [];
   const ended = new Promise<never>((_, fail) => {
     const hidden = () =>
       visibility.shown() || fail(new Error("the page is hidden"));
     const stopped = () => {
-      const b = boot_state();
+      const b = bootState();
       if (b === BOOT_TERMINATED) {
         fail(new Error(`the core stopped (boot ${b})`));
       }
     };
     hidden();
     stopped();
-    unwatch.push(visibility.watch(hidden), watch_boot(stopped));
+    unwatch.push(visibility.watch(hidden), watchBoot(stopped));
   });
   try {
     await tell(await Promise.race([run(), ended]));
@@ -127,7 +127,7 @@ export async function measure(): Promise<void> {
     await tell(JSON.stringify({ error: String(e) }));
   } finally {
     unwatch.forEach((w) => w());
-    stop_progress();
+    stopProgress();
   }
 }
 
@@ -137,24 +137,24 @@ async function run(): Promise<string> {
   await started();
   await new Promise((done) => setTimeout(done, SETTLE_MS));
   const before = DRIVE_SETTINGS.map(
-    ([key]) => [key, overlay.cur().settings[key]] as const,
+    ([key]) => [key, overlay.currentSnapshot().settings[key]] as const,
   );
-  const report = await perf_drive();
-  const r = await perf_report_read();
-  const trace = await perf_trace();
+  const report = await perfDrive();
+  const perfReport = await perfReportRead();
+  const trace = await perfTrace();
   for (const [key, value] of before) setting.set(key, value);
-  const [lat, lon] = [r.view.pivot_lat, r.view.pivot_lon];
-  if (off(lat, MEASURE_PLACE.lat) || off(lon, MEASURE_PLACE.lon)) {
+  const [lat, lon] = [perfReport.view.pivot_lat, perfReport.view.pivot_lon];
+  if (strays(lat, MEASURE_PLACE.lat) || strays(lon, MEASURE_PLACE.lon)) {
     throw new Error(`stands at ${lat}, ${lon}`);
   }
-  const f = r.frames;
+  const frames = perfReport.frames;
   return JSON.stringify({
     build: __DEV__ ? "dev" : "release",
-    longest: Math.max(0, ...r.longs.map((l) => l.duration_ms)),
-    gpu: f
-      ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_timed]
+    longest: Math.max(0, ...perfReport.longs.map((l) => l.durationMs)),
+    gpu: frames
+      ? [frames.gpuBusy.p50, frames.gpuBusy.p95, frames.n, frames.gpuTimed]
       : [null, null, 0, 0],
-    tick: f ? [f.tick.p50, f.tick.p95] : [null, null],
+    tick: frames ? [frames.tick.p50, frames.tick.p95] : [null, null],
     report,
     trace,
   });

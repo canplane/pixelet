@@ -1,19 +1,16 @@
 // @pxl/client/service/platform/surface.native.tsx
 
 /** The core's surfaces natively are the GPU's native view (@pxl/gpu/expo
- * `SurfaceView`), which wgpu draws into directly; the world's is the subclass
- * that gives its touches as pointer events (modules/platform `WorldView`),
- * fed to the input as the web canvas feeds its own. The view's layer arrives
- * after the view mounts, so the view reports when its layer is bound. */
+ * `SurfaceView`), which wgpu draws into directly. The view's layer arrives
+ * after the view mounts, so the view reports when its layer is bound. A
+ * native world hears no wheel and no keys. */
 
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { SurfaceView, type SurfaceViewProps } from "@pxl/gpu/expo";
-import { requireNativeView } from "expo";
-import { type ComponentType, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
-  type NativeSyntheticEvent,
   Dimensions,
   PixelRatio,
   StyleSheet,
@@ -21,21 +18,18 @@ import {
 
 import type {
   CharacterSurfaceProps,
-  PointerPhase,
   SurfaceDriver,
   Viewport,
   WorldSurfaceProps,
 } from "./types.ts";
 
-/** A touch on the world's view, in the view's units. */
-type Touch = { phase: PointerPhase; id: i32; x: f64; y: f64 };
-
-const WorldView: ComponentType<
-  SurfaceViewProps & { onPointer: (e: NativeSyntheticEvent<Touch>) => void }
-> = requireNativeView("PxlPlatform", "WorldView");
+/** No press is shifted, with no keyboard to shift it. */
+export function pressShifted(): boolean {
+  return false;
+}
 
 /** The surface fills the window. */
-export function surface_box(): { width: f64; height: f64 } {
+export function surfaceBox(): { width: f64; height: f64 } {
   const { width, height } = Dimensions.get("window");
   return { width, height };
 }
@@ -45,7 +39,7 @@ function useSurface(
   key: string,
   opened?: (surface: u32) => () => void,
 ) {
-  const [handle, set_handle] = useState<u32>(0);
+  const [handle, setHandle] = useState<u32>(0);
   const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
   const attached = useRef<u32>(0);
   const open = useRef(opened);
@@ -68,13 +62,13 @@ function useSurface(
       // at once.
       if (closed) return driver.close(opened);
       surface = opened;
-      set_handle(surface);
+      setHandle(surface);
       if (open.current) close = open.current(surface);
     });
     return () => {
       closed = true;
       close();
-      set_handle(0);
+      setHandle(0);
       if (surface !== 0) driver.close(surface);
     };
   }, [key]);
@@ -100,19 +94,9 @@ function useSurface(
   return props;
 }
 
-export function World({ surface: driver, input }: WorldSurfaceProps) {
+export function World({ surface: driver }: WorldSurfaceProps) {
   const props = useSurface(driver, "world");
-
-  return (
-    <WorldView
-      {...props}
-      style={StyleSheet.absoluteFill}
-      onPointer={(e) => {
-        const { phase, id, x, y } = e.nativeEvent;
-        input.pointer(phase, "touch", id, 0, x, y);
-      }}
-    />
-  );
+  return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }
 
 export function CharacterSurface({

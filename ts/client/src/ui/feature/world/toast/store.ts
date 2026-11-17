@@ -39,7 +39,7 @@ interface ToastState {
   entries: Entry[];
   /** The sum of the turns so far, a turn up counting as 1. The stack compares
    * it with its last value to tell which way the cards moved. */
-  turn_count: i32;
+  turnCount: i32;
   dragging: boolean;
   /** A toast that changed during a drag. It comes to the front when the drag
    * ends. */
@@ -48,7 +48,7 @@ interface ToastState {
 
 const store = create<ToastState>()(() => ({
   entries: [],
-  turn_count: 0,
+  turnCount: 0,
   dragging: false,
   pending: null,
 }));
@@ -61,14 +61,10 @@ export function useToastEntries(): readonly Entry[] {
 }
 
 export function useToastTurnCount(): i32 {
-  return store((s) => s.turn_count);
+  return store((s) => s.turnCount);
 }
 
-export function toast_count(): u32 {
-  return get().entries.length;
-}
-
-function to_front(id: u32): void {
+function toFront(id: u32): void {
   const { entries } = get();
   const at = entries.findIndex((e) => e.id === id);
   if (at < 0) return;
@@ -77,7 +73,7 @@ function to_front(id: u32): void {
   });
 }
 
-export function show_toast(id: u32, spec: ToastSpec): void {
+export function showToast(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
   const shown = entries.find((e) => e.id === id);
   // The same toast shown again, as a toast held past its cause is, changes
@@ -93,7 +89,7 @@ export function show_toast(id: u32, spec: ToastSpec): void {
     // Reordering during a drag would move the held card away from the front,
     // so the move waits for the drag to end.
     if (dragging) set({ pending: id });
-    else to_front(id);
+    else toFront(id);
     return;
   }
   const entry = { id, ...spec };
@@ -102,7 +98,7 @@ export function show_toast(id: u32, spec: ToastSpec): void {
   set({ entries: [...entries.slice(0, at), entry, ...entries.slice(at)] });
 }
 
-export function dismiss_toast(id: u32): void {
+export function dismissToast(id: u32): void {
   const { entries, pending } = get();
   set({
     entries: entries.filter((e) => e.id !== id),
@@ -112,20 +108,20 @@ export function dismiss_toast(id: u32): void {
 
 /** A `delta` of 1, a swipe up, sends the front card to the back. A `delta` of
  * -1, a swipe down, brings the back card forward. */
-export function rotate_toasts(delta: i32): void {
-  const { entries, turn_count } = get();
+export function rotateToasts(delta: i32): void {
+  const { entries, turnCount } = get();
   const k = ((delta % entries.length) + entries.length) % entries.length;
   set({
     entries: [...entries.slice(k), ...entries.slice(0, k)],
-    turn_count: turn_count + delta,
+    turnCount: turnCount + delta,
   });
 }
 
-export function set_toast_dragging(dragging: boolean): void {
+export function setToastDragging(dragging: boolean): void {
   const { pending } = get();
   set({ dragging });
   if (!dragging && pending !== null) {
     set({ pending: null });
-    to_front(pending);
+    toFront(pending);
   }
 }

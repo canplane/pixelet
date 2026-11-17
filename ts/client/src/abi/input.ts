@@ -2,85 +2,118 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import {
-  type Drag,
-  type PointerPhase,
-  of_Drag,
-  of_PointerPhase,
-} from "./input.enum.ts";
-import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Lift } from "@xpute/link/cabi.ts";
 import type { Handle, Method, Sender } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/input` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5ee0f8;
 
-/** `pointer` */
-export const POINTER: Method = 0;
-/** `wheel` */
-export const WHEEL: Method = 1;
-/** `pinch` */
-export const PINCH: Method = 2;
+/** `pan` */
+export const PAN: Method = 0;
+/** `turn` */
+export const TURN: Method = 1;
+/** `tilt` */
+export const TILT: Method = 2;
+/** `zoom` */
+export const ZOOM: Method = 3;
+/** `drag` */
+export const DRAG: Method = 4;
+/** `tap` */
+export const TAP: Method = 5;
+/** `hover` */
+export const HOVER: Method = 6;
+/** `out` */
+export const OUT: Method = 7;
 /** `move` */
-export const MOVE: Method = 3;
+export const MOVE: Method = 8;
 /** `xr-pose` */
-export const XR_POSE: Method = 4;
+export const XR_POSE: Method = 9;
 /** `xr-pose-end` */
-export const XR_POSE_END: Method = 5;
+export const XR_POSE_END: Method = 10;
 
-export function load_PointerPhase(r: Lift, at: number): PointerPhase {
-  const v = of_PointerPhase(r.case(at, 5));
-  if (v === null) throw new XputeError(ERRNO_EBADMSG);
-  return v;
-}
-
-export function load_Drag(r: Lift, at: number): Drag {
-  const v = of_Drag(r.case(at, 3));
-  if (v === null) throw new XputeError(ERRNO_EBADMSG);
-  return v;
-}
-
-export async function pointer(
+export async function pan(
   link_: Sender,
-  phase: PointerPhase,
-  touch: boolean,
-  id: number,
-  drag: Drag,
-  x: number,
-  y: number,
+  dx: number,
+  dy: number,
 ): Promise<void> {
-  const a_ = await link_.send(HANDLE, POINTER, [
-    32,
+  const a_ = await link_.send(HANDLE, PAN, [
+    16,
     (w_) => {
-      w_.u8(0, phase);
-      w_.bool(1, touch);
-      w_.i32(4, id);
-      w_.u8(8, drag);
-      w_.f64(16, x);
-      w_.f64(24, y);
+      w_.f64(0, dx);
+      w_.f64(8, dy);
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
 }
 
-export async function wheel(link_: Sender, delta_y: number): Promise<void> {
-  const a_ = await link_.send(HANDLE, WHEEL, [
+export async function turn(link_: Sender, rad: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, TURN, [
     8,
     (w_) => {
-      w_.f64(0, delta_y);
+      w_.f64(0, rad);
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
 }
 
-export async function pinch(link_: Sender, scale: number): Promise<void> {
-  const a_ = await link_.send(HANDLE, PINCH, [
+export async function tilt(link_: Sender, rad: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, TILT, [
+    8,
+    (w_) => {
+      w_.f64(0, rad);
+    },
+  ]);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+}
+
+export async function zoom(link_: Sender, scale: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, ZOOM, [
     8,
     (w_) => {
       w_.f64(0, scale);
     },
   ]);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+}
+
+export async function drag(link_: Sender, dragging: boolean): Promise<void> {
+  const a_ = await link_.send(HANDLE, DRAG, [
+    1,
+    (w_) => {
+      w_.bool(0, dragging);
+    },
+  ]);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+}
+
+export async function tap(link_: Sender, x: number, y: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, TAP, [
+    16,
+    (w_) => {
+      w_.f64(0, x);
+      w_.f64(8, y);
+    },
+  ]);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+}
+
+export async function hover(
+  link_: Sender,
+  x: number,
+  y: number,
+): Promise<void> {
+  const a_ = await link_.send(HANDLE, HOVER, [
+    16,
+    (w_) => {
+      w_.f64(0, x);
+      w_.f64(8, y);
+    },
+  ]);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+}
+
+export async function out(link_: Sender): Promise<void> {
+  const a_ = await link_.send(HANDLE, OUT, null);
   if (a_.result !== 0) throw new XputeError(a_.result);
 }
 

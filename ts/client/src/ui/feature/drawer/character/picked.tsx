@@ -6,14 +6,14 @@ import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/ui/shared/component/icon.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
-import { surface_driver } from "@/service/core/surface.ts";
+import { surfaceDriver } from "@/service/core/surface.ts";
 import type { Character } from "./character.ts";
 import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 import { CharacterSurface } from "@/service/platform/surface.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as scene from "@/service/core/scene.ts";
 
-const SURFACE = surface_driver();
+const SURFACE = surfaceDriver();
 const BACKDROP = parseInt(COLOR.backdrop.slice(1), 16);
 
 interface PickedCharacterProps {
@@ -23,7 +23,7 @@ interface PickedCharacterProps {
 
 export function PickedCharacter(props: PickedCharacterProps) {
   const { character, style } = props;
-  const [surface, set_surface] = useState<u32>(0);
+  const [surface, setSurface] = useState<u32>(0);
   const drawn = useCore(
     (s) => surface !== 0 && s.character_surfaces.includes(surface),
   );
@@ -39,8 +39,8 @@ export function PickedCharacter(props: PickedCharacterProps) {
           surface={SURFACE}
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
-            set_surface(surface);
-            scene.draw_character(surface, character.group, BACKDROP);
+            setSurface(surface);
+            scene.drawCharacter(surface, character.group, BACKDROP);
             return () => {};
           }}
         />

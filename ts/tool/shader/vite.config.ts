@@ -18,7 +18,7 @@ import { defineConfig, type Plugin } from "vite";
 
 import { REPO } from "@pxl/build/path.ts";
 
-import { CONSOLE_PATH, console_handler } from "./console.ts";
+import { CONSOLE_PATH, consoleHandler } from "./console.ts";
 
 /** The modules are assembled again at each ask: cargo rebuilds the example
  * after a shader is edited, and reuses it otherwise. */
@@ -54,13 +54,13 @@ async function assembled(): Promise<{
   }
 }
 
-function probe_server(): Plugin {
+function probeServer(): Plugin {
   return {
     name: "pxl-shader-probe",
     configureServer(server) {
       server.middlewares.use(
         CONSOLE_PATH,
-        console_handler(path.join(REPO, "ts/tool/shader/.dev-console.log")),
+        consoleHandler(path.join(REPO, "ts/tool/shader/.dev-console.log")),
       );
       server.middlewares.use("/__assembled", (_req, res) => {
         assembled().then(
@@ -81,7 +81,7 @@ function probe_server(): Plugin {
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
-  plugins: [probe_server()],
+  plugins: [probeServer()],
   server: {
     host: true,
     allowedHosts: [".trycloudflare.com"],

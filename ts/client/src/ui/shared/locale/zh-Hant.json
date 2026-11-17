@@ -183,7 +183,6 @@
       "object_size": "大小 {{n}}"
     },
     "controls": {
-      "reset_orientation": "朝向北方",
       "move_to_location": "前往我的位置",
       "start_compass_mode": "開啟指南針",
       "exit_compass_mode": "關閉指南針",

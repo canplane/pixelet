@@ -1,66 +1,76 @@
 // @pxl/client/service/core/input.ts
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
-import {
-  type Drag,
-  type PointerPhase,
-  DRAG_NONE,
-  DRAG_PAN,
-  DRAG_ROTATE,
-  POINTER_PHASE_DOWN,
-  POINTER_PHASE_MOVE,
-  POINTER_PHASE_UP,
-  POINTER_PHASE_CANCEL,
-  POINTER_PHASE_OUT,
-} from "@/abi/input.enum.ts";
-import {
-  type PointerKind,
-  type PointerPhase as PlacePhase,
-} from "@/service/platform/types.ts";
 import * as input from "@/abi/input.ts";
 import { ui } from "@/service/core/core.ts";
+import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 
-export function pointer(
-  phase: PointerPhase,
-  touch: boolean,
-  id: i32,
-  drag: Drag,
-  x: f64,
-  y: f64,
-): void {
-  void input.pointer(ui, phase, touch, id, drag, x, y);
+/** The log of the zoom one CSS pixel of a wheel asks for: a wheel turned down
+ * zooms out. */
+const WHEEL_GAIN = 0.0022;
+
+/** What the hand does with the world from its press to its release, as the
+ * UI's gestures recognize it (ui/feature/world/gesture.tsx): it pans, turns
+ * or pinches. */
+export type DragMode = "none" | "pan" | "turn" | "pinch";
+
+let mode: DragMode = "none";
+const modeListeners = new ListenerSet();
+
+/** The core hears whether a hand drags the view. */
+export function setDragMode(next: DragMode): void {
+  if (next === mode) return;
+  if ((next === "none") !== (mode === "none"))
+    void input.drag(ui, next !== "none");
+  mode = next;
+  modeListeners.notify();
 }
 
-export function wheel(delta_y: f64): void {
-  void input.wheel(ui, delta_y);
+export function dragMode(): DragMode {
+  return mode;
 }
 
-export function pinch(scale: f64): void {
-  void input.pinch(ui, scale);
+export const watchDragMode = modeListeners.watch;
+
+/** Told of each zoom; one of one zooms nothing. */
+const zoomListeners = new ListenerSet();
+
+export const watchZoom = zoomListeners.watch;
+
+export function zoom(scale: f64): void {
+  if (scale !== 1) zoomListeners.notify();
+  void input.zoom(ui, scale);
+}
+
+/** A wheel turn of `deltaY` CSS pixels. */
+export function wheel(deltaY: f64): void {
+  zoom(Math.exp(-deltaY * WHEEL_GAIN));
+}
+
+export function pan(dx: f64, dy: f64): void {
+  void input.pan(ui, dx, dy);
+}
+
+export function turn(radians: f64): void {
+  void input.turn(ui, radians);
+}
+
+export function tilt(radians: f64): void {
+  void input.tilt(ui, radians);
+}
+
+export function tap(x: f64, y: f64): void {
+  void input.tap(ui, x, y);
+}
+
+export function hover(x: f64, y: f64): void {
+  void input.hover(ui, x, y);
+}
+
+export function out(): void {
+  void input.out(ui);
 }
 
 export function move(x: i32, y: i32): void {
   void input.move(ui, x, y);
 }
-
-export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
-  down: POINTER_PHASE_DOWN,
-  move: POINTER_PHASE_MOVE,
-  up: POINTER_PHASE_UP,
-  cancel: POINTER_PHASE_CANCEL,
-  out: POINTER_PHASE_OUT,
-};
-
-/** What a press drags by its button, as the web numbers buttons: the primary
- * pans, the secondary turns, and any other drags nothing. */
-export function drag_of(button: i32): Drag {
-  return button === 0 ? DRAG_PAN : button === 2 ? DRAG_ROTATE : DRAG_NONE;
-}
-
-/** Whether a pointer of each kind is a finger on a screen (pxl:core input
- * `pointer`'s `touch`). */
-export const TOUCH: Readonly<Record<PointerKind, boolean>> = {
-  mouse: false,
-  touch: true,
-  pen: false,
-};

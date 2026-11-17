@@ -7,9 +7,9 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { WATCHDOG_TIMEOUT_MS } from "./param.ts";
 import {
-  device_orient_store,
-  set_is_tracking_orient,
-  set_orient,
+  deviceOrientationStore,
+  setIsTrackingOrientation,
+  setOrientation,
   SENSOR_STATUS_ERROR,
   SENSOR_STATUS_IDLE,
   SENSOR_STATUS_LOADING,
@@ -28,14 +28,14 @@ export interface OrientationPlatform {
   /** Whether silence means the sensor is lost. A browser's sensor talks even
    * while the device is still. A native sensor (Core Location) speaks only
    * on change and reports its own failure. */
-  silence_is_loss: boolean;
+  silenceIsLoss: boolean;
 }
 
 /** The compass as the platform reports it once the client starts. Until then
  * the place has none. */
 const PLATFORM: OrientationPlatform = {
   supported: false,
-  silence_is_loss: false,
+  silenceIsLoss: false,
 };
 
 export function platform(): OrientationPlatform {
@@ -46,69 +46,69 @@ interface Orientation {
   /** The time the watchdog measures silence from: the last event or the start
    * of tracking. It is read only while tracking, and every start of tracking
    * sets it. */
-  last_event_at: number;
+  lastEventAt: number;
   /** The last command. The platform's listener follows it and ignores a
    * repeated command. */
-  cmd: OrientationCommand | null;
+  command: OrientationCommand | null;
 }
 
-const orient: Orientation = { last_event_at: 0, cmd: null };
+const orientation: Orientation = { lastEventAt: 0, command: null };
 
 /** A heading, in degrees clockwise from north, or null for a reading with no
  * heading. */
-export function orient_event(heading: f64 | null): void {
-  orient.last_event_at = performance.now();
-  set_orient(device_orient_store(), heading);
+export function orientationEvent(heading: f64 | null): void {
+  orientation.lastEventAt = performance.now();
+  setOrientation(deviceOrientationStore(), heading);
 }
 
 /** The place has no compass, as a web event with every field null says: its
- * listener stops, and the compass reads unavailable, which `request_orient`
+ * listener stops, and the compass reads unavailable, which `requestOrientation`
  * keeps until the world's surface closes. */
-export function orient_unavailable(): void {
-  orient.cmd = ORIENTATION_COMMAND_STOP;
-  const store = device_orient_store();
-  set_is_tracking_orient(store, false);
+export function orientationUnavailable(): void {
+  orientation.command = ORIENTATION_COMMAND_STOP;
+  const store = deviceOrientationStore();
+  setIsTrackingOrientation(store, false);
   store.status = SENSOR_STATUS_UNAVAILABLE;
 }
 
 /** Asks for the heading, once the platform permits it. Returns true when the
  * heading is tracked or now asked for. */
-export function request_orient(): boolean {
-  const store = device_orient_store();
-  if (store.is_tracking_orient) return true;
+export function requestOrientation(): boolean {
+  const store = deviceOrientationStore();
+  if (store.isTrackingOrientation) return true;
   if (!PLATFORM.supported || store.status === SENSOR_STATUS_UNAVAILABLE) {
     store.status = SENSOR_STATUS_UNAVAILABLE;
     return false;
   }
   store.status = SENSOR_STATUS_LOADING;
-  orient.cmd = ORIENTATION_COMMAND_START;
-  orient.last_event_at = performance.now();
-  set_is_tracking_orient(store, true);
+  orientation.command = ORIENTATION_COMMAND_START;
+  orientation.lastEventAt = performance.now();
+  setIsTrackingOrientation(store, true);
   return true;
 }
 
 /** The compass is lost, or its permission refused. */
-export function on_orient_lost(): void {
-  const store = device_orient_store();
-  set_is_tracking_orient(store, false);
+export function onOrientationLost(): void {
+  const store = deviceOrientationStore();
+  setIsTrackingOrientation(store, false);
   store.status = SENSOR_STATUS_ERROR;
 }
 
-export function orient_close(): void {
-  orient.cmd = ORIENTATION_COMMAND_STOP;
-  const store = device_orient_store();
-  set_is_tracking_orient(store, false);
+export function orientationClose(): void {
+  orientation.command = ORIENTATION_COMMAND_STOP;
+  const store = deviceOrientationStore();
+  setIsTrackingOrientation(store, false);
   store.status = SENSOR_STATUS_IDLE;
 }
 
 /** Stops a tracked heading while the app is hidden, its status kept; the
- * return asks for it again (`request_orient`), whose watchdog measures afresh
+ * return asks for it again (`requestOrientation`), whose watchdog measures afresh
  * from then. */
-export function orient_stop(): void {
-  const store = device_orient_store();
-  if (store.is_tracking_orient) {
-    orient.cmd = ORIENTATION_COMMAND_STOP;
-    set_is_tracking_orient(store, false);
+export function orientationStop(): void {
+  const store = deviceOrientationStore();
+  if (store.isTrackingOrientation) {
+    orientation.command = ORIENTATION_COMMAND_STOP;
+    setIsTrackingOrientation(store, false);
   }
 }
 
@@ -118,18 +118,21 @@ export function orient_stop(): void {
  * tracked. It wakes once, when the silence since the last event would amount
  * to a loss. An event before then moves that deadline, so a sensor that keeps
  * talking is never polled. */
-export function orient_watchdog_step(): number | null {
-  if (!PLATFORM.silence_is_loss || !device_orient_store().is_tracking_orient)
+export function orientationWatchdogStep(): number | null {
+  if (
+    !PLATFORM.silenceIsLoss ||
+    !deviceOrientationStore().isTrackingOrientation
+  )
     return null;
-  const lost_at = orient.last_event_at + WATCHDOG_TIMEOUT_MS;
-  if (performance.now() < lost_at) return lost_at;
-  orient.cmd = ORIENTATION_COMMAND_STOP;
-  on_orient_lost();
+  const lostAt = orientation.lastEventAt + WATCHDOG_TIMEOUT_MS;
+  if (performance.now() < lostAt) return lostAt;
+  orientation.command = ORIENTATION_COMMAND_STOP;
+  onOrientationLost();
   return null;
 }
 
-export function take_orient_cmd(): OrientationCommand | null {
-  const c = orient.cmd;
-  orient.cmd = null;
+export function takeOrientationCommand(): OrientationCommand | null {
+  const c = orientation.command;
+  orientation.command = null;
   return c;
 }

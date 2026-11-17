@@ -20,10 +20,10 @@ import {
 
 interface StackItem {
   label: string;
-  on_press: () => void;
+  onPress: () => void;
   glyph?: GlyphName;
   face?: ReactNode;
-  is_active?: boolean;
+  isActive?: boolean;
   disabled?: boolean;
 }
 
@@ -49,7 +49,7 @@ export function ButtonStack({
           key={item.label}
           // A disabled button still takes the touch, so that a tap on it does
           // not reach the world.
-          onPress={item.disabled ? undefined : item.on_press}
+          onPress={item.disabled ? undefined : item.onPress}
           accessibilityRole="button"
           accessibilityLabel={item.label}
           accessibilityState={{ disabled: item.disabled }}
@@ -71,7 +71,7 @@ export function ButtonStack({
                   <Glyph
                     glyph={item.glyph}
                     size={CHROME.glyph}
-                    color={item.is_active ? COLOR.action : LABEL.primary}
+                    color={item.isActive ? COLOR.action : LABEL.primary}
                   />
                 ))}
             </Motion>

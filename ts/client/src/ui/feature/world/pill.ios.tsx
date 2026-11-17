@@ -19,7 +19,7 @@ import { Backing } from "@/ui/shared/component/backing.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
 import { PILL_STYLE } from "./pill-style.ts";
 import type { PillProps } from "./pill.tsx";
-import { touch_outset } from "@/ui/shared/component/touch.ts";
+import { touchOutset } from "@/ui/shared/component/touch.ts";
 
 // This file exports everything pill.tsx does, with its own `Pill` in place of
 // that one.
@@ -27,7 +27,7 @@ export * from "./pill.tsx";
 
 /** Only size and place animate. A view that comes or goes does so at once. */
 const MOVE: LayoutAnimationConfig = {
-  duration: SNAP.duration_ms,
+  duration: SNAP.durationMs,
   update: { type: "spring", springDamping: 1 },
 };
 
@@ -60,12 +60,11 @@ export function Pill({
   last.current = [x, width];
 
   const r = height / 2;
-  const outset = touch ? touch_outset(height) : 0;
+  const outset = touch ? touchOutset(height) : 0;
   // The content stands inside the glass, because interactive glass answers
   // only the touches that reach it through its own content.
   return (
     <View
-      {...touch}
       style={[
         touch ? PILL_STYLE.target : PILL_STYLE.box,
         {

@@ -14,14 +14,14 @@ import {
 } from "@/service/core/sensor/reading.ts";
 
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
-import { halo_gap, HaloIcon } from "./halo.tsx";
+import { HaloIcon } from "./halo.tsx";
 import { COLOR } from "@/ui/shared/component/theme.ts";
 import * as device from "@/service/platform/device.ts";
 import { useSensor } from "@/ui/shared/watch.ts";
 
 /** Each surface passes its own `tone`, because the glyphs over the world are
  * paler than a sheet's. */
-export function status_color(
+export function statusColor(
   status: SensorStatus,
   base: string,
   tone: { pending: string; failed: string },
@@ -36,7 +36,7 @@ export function status_color(
   }
 }
 
-const GLYPH_TONE = { pending: COLOR.pending_glyph, failed: COLOR.alarm_glyph };
+const GLYPH_TONE = { pending: COLOR.pendingGlyph, failed: COLOR.alarmGlyph };
 
 const PRESENCE: Record<SensorStatus, f64> = {
   [SENSOR_STATUS_IDLE]: 0.35,
@@ -50,17 +50,14 @@ export function SensorIcons() {
   const location = useSensor((l) => l.state.status);
   const orientation = useSensor((_, o) => o.status);
 
-  // The glyph and its halo fade as one layer. Faded apart, the halo would
-  // show through and gray the glyph.
   const icon = (glyph: GlyphName, status: SensorStatus) => (
-    <View needsOffscreenAlphaCompositing style={{ opacity: PRESENCE[status] }}>
-      <HaloIcon
-        glyph={glyph}
-        size={12}
-        color={status_color(status, COLOR.white, GLYPH_TONE)}
-        struck={status === SENSOR_STATUS_ERROR}
-      />
-    </View>
+    <HaloIcon
+      glyph={glyph}
+      size={12}
+      color={statusColor(status, COLOR.white, GLYPH_TONE)}
+      struck={status === SENSOR_STATUS_ERROR}
+      opacity={PRESENCE[status]}
+    />
   );
 
   return (
@@ -74,5 +71,5 @@ export function SensorIcons() {
 }
 
 const STYLE = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: halo_gap(8) },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
 });

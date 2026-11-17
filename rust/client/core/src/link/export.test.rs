@@ -24,7 +24,7 @@ fn a_refused_argument_answers_its_errno() {
     assert!(surface_open(1));
     let refused = [
         camera::goto(off_earth, 0.0),
-        input::pinch(0.0),
+        input::zoom(0.0),
         input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
         edit::hold(Tool::Item, u32::MAX, 0),
         source::declare(0, Vec::new(), Vec::new()),
@@ -92,18 +92,19 @@ fn take_method_asks() -> u32 {
 #[test]
 fn a_method_applied_asks_for_its_frame() {
     use crate::abi::camera::Tracking;
-    use crate::abi::input::{Drag, PointerPhase};
     use crate::abi::{camera as cam, edit as ed, input as inp, sensor as sen};
     use crate::domain::control::camera::fixture::place;
     place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
-    let pointer = |phase| inp::Guest::pointer(&Core, phase, false, 1, Drag::Pan, 10.0, 10.0);
-    let methods: [(&str, Input); 12] = [
-        ("hover", &|| pointer(PointerPhase::Move)),
-        ("pointer down", &|| pointer(PointerPhase::Down)),
-        ("pressed move", &|| pointer(PointerPhase::Move)),
-        ("pointer up", &|| pointer(PointerPhase::Up)),
-        ("wheel", &|| inp::Guest::wheel(&Core, 1.0)),
-        ("pinch", &|| inp::Guest::pinch(&Core, 1.1)),
+    let methods: [(&str, Input); 15] = [
+        ("hover", &|| inp::Guest::hover(&Core, 10.0, 10.0)),
+        ("drag", &|| inp::Guest::drag(&Core, true)),
+        ("pan", &|| inp::Guest::pan(&Core, 1.0, 1.0)),
+        ("turn", &|| inp::Guest::turn(&Core, 0.1)),
+        ("tilt", &|| inp::Guest::tilt(&Core, 0.1)),
+        ("zoom", &|| inp::Guest::zoom(&Core, 1.1)),
+        ("drag end", &|| inp::Guest::drag(&Core, false)),
+        ("tap", &|| inp::Guest::tap(&Core, 10.0, 10.0)),
+        ("out", &|| inp::Guest::out(&Core)),
         ("xr pose", &|| {
             inp::Guest::xr_pose(&Core, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
         }),
@@ -150,7 +151,7 @@ fn a_method_refused_asks_for_no_frame() {
     use crate::abi::{camera as cam, input as inp, scene as sc};
     take_method_asks();
     assert_eq!(cam::Guest::goto(&Core, 181.0, 0.0), Err(Errno::EINVAL));
-    assert_eq!(inp::Guest::pinch(&Core, 0.0), Err(Errno::EINVAL));
+    assert_eq!(inp::Guest::zoom(&Core, 0.0), Err(Errno::EINVAL));
     let long = "a".repeat(CHAT_TEXT_CHARS as usize + 1);
     assert_eq!(sc::Guest::chat(&Core, long), Ok(Err(ErrorCode::TooLong)));
     assert_eq!(take_method_asks(), 0);

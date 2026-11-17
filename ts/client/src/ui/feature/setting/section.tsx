@@ -8,11 +8,11 @@ import {
   type Setting,
   type SettingName,
   type SettingSection,
-  settings_in,
+  settingsIn,
 } from "@/ui/shared/setting.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
-import { set as set_setting } from "@/service/core/setting.ts";
+import { set as setSetting } from "@/service/core/setting.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
@@ -24,7 +24,7 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
 /** Whether `option` is shown only in development. The table may hold no
  * setting with dev options, and then its type has no `dev_options`, so the
  * field is read this way. */
-function is_dev_option(setting: Setting, option: string): boolean {
+function isDevOption(setting: Setting, option: string): boolean {
   const options =
     "dev_options" in setting ? (setting.dev_options as readonly string[]) : [];
   return options.includes(option);
@@ -33,7 +33,7 @@ function is_dev_option(setting: Setting, option: string): boolean {
 export function SettingsSection(props: { section: SettingSection }) {
   const { section } = props;
   const { t } = useTranslation();
-  const keys = settings_in(section);
+  const keys = settingsIn(section);
   if (keys.length === 0) return null;
 
   return (
@@ -66,7 +66,7 @@ function SettingControl(props: { name: SettingName }) {
           label={t(`${base}.label`)}
           description={t(`${base}.description`)}
           active={value === 1}
-          onChange={(on) => set_setting(key, on ? 1 : 0)}
+          onChange={(on) => setSetting(key, on ? 1 : 0)}
           cost={cost}
           dev={dev}
         />
@@ -84,17 +84,17 @@ function SettingControl(props: { name: SettingName }) {
           dev={dev}
         >
           {Object.entries(setting.options).map(([option, number], i) => {
-            const dev_only = is_dev_option(setting, option);
+            const devOnly = isDevOption(setting, option);
             return (
-              (__DEV__ || !dev_only) && (
+              (__DEV__ || !devOnly) && (
                 <SettingChoiceRow
                   key={option}
                   label={t(`${base}.${option}.label`)}
                   description={t(`${base}.${option}.description`)}
                   selected={value === number}
-                  onSelect={() => set_setting(key, number)}
+                  onSelect={() => setSetting(key, number)}
                   cost={("costs" in setting ? setting.costs[i] : "") || cost}
-                  dev={dev_only}
+                  dev={devOnly}
                 />
               )
             );

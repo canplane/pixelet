@@ -22,11 +22,11 @@ function measure(): SafeArea {
 }
 
 export function useSafeArea(): SafeArea {
-  const [area, set_area] = useState(measure);
+  const [area, setArea] = useState(measure);
   // The insets are read after layout, as the window's size is
   // (viewport.web.ts), and again on each resize, because a rotation moves them.
   useEffect(() => {
-    const observer = new ResizeObserver(() => set_area(measure()));
+    const observer = new ResizeObserver(() => setArea(measure()));
     observer.observe(document.documentElement);
     return () => observer.disconnect();
   }, []);

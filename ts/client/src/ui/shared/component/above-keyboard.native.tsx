@@ -6,7 +6,7 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 import {
   type AboveKeyboardProps,
-  bottom_rest,
+  bottomRest,
 } from "@/ui/shared/component/bottom-rest.ts";
 import { LAYER } from "@/ui/shared/component/theme.ts";
 import { useSafeArea } from "@/service/platform/safe-area.ts";
@@ -34,19 +34,19 @@ export function AboveKeyboard({
   lift = 0,
   children,
 }: AboveKeyboardProps) {
-  const rest = bottom_rest(useSafeArea(), inset);
-  const [layout_lift, set_layout_lift] = useState(0);
+  const rest = bottomRest(useSafeArea(), inset);
+  const [layoutLift, setLayoutLift] = useState(0);
   return (
     <KeyboardDock
       clearance={inset}
       rest={rest}
-      layoutLiftPx={layout_lift}
-      onLift={(event) => set_layout_lift(event.nativeEvent.lift)}
+      layoutLiftPx={layoutLift}
+      onLift={(event) => setLayoutLift(event.nativeEvent.lift)}
       style={{
         position: "absolute",
         left: inset,
         right: inset,
-        bottom: rest + lift + layout_lift,
+        bottom: rest + lift + layoutLift,
         zIndex: LAYER.bottom,
         pointerEvents: "box-none",
       }}

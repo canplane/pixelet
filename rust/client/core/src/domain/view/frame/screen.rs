@@ -29,6 +29,12 @@ pub(crate) fn units_per_px_at(dist: f64) -> f64 {
     dist / px_per_unit()
 }
 
+/// CSS pixels from the view's top left, as NDC, in [−1, 1] with y up.
+pub(crate) fn px_to_ndc([x, y]: [f64; 2]) -> [f64; 2] {
+    let v = view();
+    [(x / v.width) * 2.0 - 1.0, -(y / v.height) * 2.0 + 1.0]
+}
+
 /// `ndc`, in [−1, 1] with y up, as CSS pixels from the view's top left.
 pub(crate) fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
     let v = view();

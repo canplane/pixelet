@@ -23,7 +23,7 @@ import {
   SOURCE_FAILING,
   SOURCE_REFUSED,
 } from "@/service/sys/fs/source.ts";
-import { cover_of, type Standing } from "./cover.ts";
+import { coverOf, type Standing } from "./cover.ts";
 import {
   MESSAGE_WORLD_READ_FAILING,
   MESSAGE_WORLD_UNAVAILABLE,
@@ -35,7 +35,7 @@ const RUNNING: Standing = {
   source: SOURCE_DECLARED,
   online: true,
   stall: null,
-  stop_code: null,
+  stopCode: null,
   progress: 1,
   area: 1,
 };
@@ -48,8 +48,8 @@ const STARTING: Standing = {
 };
 const LOADING: Standing = { ...RUNNING, boot: BOOT_LOADING, progress: 0.5 };
 
-test("cover_of - before it ran: failed where it will not, progress while it waits", () => {
-  const of = (s: Partial<Standing>) => cover_of({ ...STARTING, ...s });
+test("coverOf - before it ran: failed where it will not, progress while it waits", () => {
+  const of = (s: Partial<Standing>) => coverOf({ ...STARTING, ...s });
   for (const [s, key] of [
     [{ gpu: GPU_MISSING }, "failed.gpu"],
     [{ gpu: GPU_UNSUPPORTED }, "failed.webgpu"],
@@ -74,16 +74,16 @@ test("cover_of - before it ran: failed where it will not, progress while it wait
   }
 });
 
-test("cover_of - opening the core: its own step, before any GPU is asked for", () => {
-  expect(cover_of({ ...STARTING, boot: BOOT_OPENING })).toEqual({
+test("coverOf - opening the core: its own step, before any GPU is asked for", () => {
+  expect(coverOf({ ...STARTING, boot: BOOT_OPENING })).toEqual({
     kind: "progress",
     of: "progress.app",
     share: expect.any(Number),
   });
 });
 
-test("cover_of - loading, the world under it: what it waits on, then a panic if broken", () => {
-  const of = (s: Partial<Standing>) => cover_of({ ...LOADING, ...s });
+test("coverOf - loading, the world under it: what it waits on, then a panic if broken", () => {
+  const of = (s: Partial<Standing>) => coverOf({ ...LOADING, ...s });
   for (const [s, key] of [
     [{}, "progress.shaders"],
     [{ progress: 1 }, "progress.area"],
@@ -102,8 +102,8 @@ test("cover_of - loading, the world under it: what it waits on, then a panic if 
   });
 });
 
-test("cover_of - once it shows, a panic or nothing", () => {
-  const of = (s: Partial<Standing>) => cover_of({ ...RUNNING, ...s });
+test("coverOf - once it shows, a panic or nothing", () => {
+  const of = (s: Partial<Standing>) => coverOf({ ...RUNNING, ...s });
   expect(of({})).toBeNull();
   expect(of({ online: false })).toBeNull();
   expect(of({ gpu: GPU_WAITING })).toBeNull();
@@ -112,16 +112,16 @@ test("cover_of - once it shows, a panic or nothing", () => {
     kind: "panic",
     code: "WORLD_UNAVAILABLE",
   });
-  expect(of({ boot: BOOT_TERMINATED, stop_code: "X" })).toEqual({
+  expect(of({ boot: BOOT_TERMINATED, stopCode: "X" })).toEqual({
     kind: "panic",
     of: "panic.app",
     code: "X",
   });
 });
 
-test("cover_of - the bar's share: half what the renderer makes, half what shows", () => {
+test("coverOf - the bar's share: half what the renderer makes, half what shows", () => {
   const share = (progress: number, area: number) =>
-    cover_of({ ...LOADING, progress, area });
+    coverOf({ ...LOADING, progress, area });
   expect(share(0, 0)).toMatchObject({ share: 0 });
   expect(share(1, 0)).toMatchObject({ share: 0.5 });
   expect(share(1, 0.5)).toMatchObject({ share: 0.75 });

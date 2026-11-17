@@ -8,8 +8,6 @@ import { useEffect, useRef } from "react";
 import type {
   CharacterSurfaceProps,
   InputDriver,
-  PointerKind,
-  PointerPhase,
   SurfaceDriver,
   WorldSurfaceProps,
 } from "./types.ts";
@@ -31,7 +29,7 @@ const FILL = {
 } as const;
 
 /** The canvas's layout box, in CSS pixels; null while there is none. */
-export function surface_box(): { width: f64; height: f64 } | null {
+export function surfaceBox(): { width: f64; height: f64 } | null {
   const canvas = document.querySelector("canvas");
   return canvas && { width: canvas.clientWidth, height: canvas.clientHeight };
 }
@@ -42,7 +40,7 @@ function dpr(): f64 {
 
 /** The device pixel ratio changes with a page zoom or a move to another
  * screen. */
-function on_ratio_change(then: () => void): () => void {
+function onRatioChange(then: () => void): () => void {
   let query = matchMedia(`(resolution: ${dpr()}dppx)`);
   const fire = () => {
     query.removeEventListener("change", fire);
@@ -60,7 +58,7 @@ function on_ratio_change(then: () => void): () => void {
  * device pixels, so the CSS box times the pixel ratio stands in, and a change
  * of the ratio alone is watched for.
  */
-function open_surface(
+function openSurface(
   canvas: HTMLCanvasElement,
   surface: SurfaceDriver,
   opened?: (handle: u32) => () => void,
@@ -91,31 +89,31 @@ function attach(
   give(handle, canvas.transferControlToOffscreen());
   const send = (width: u32, height: u32) =>
     surface.size(handle, width, height, dpr());
-  const send_box = () =>
+  const sendBox = () =>
     send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];
     const exact = entry.devicePixelContentBoxSize?.[0];
     if (exact) send(exact.inlineSize, exact.blockSize);
-    else send_box();
+    else sendBox();
   });
-  let stop_ratio = () => {};
+  let stopRatio = () => {};
   try {
     observer.observe(canvas, { box: "device-pixel-content-box" });
   } catch {
     observer.observe(canvas);
-    stop_ratio = on_ratio_change(send_box);
+    stopRatio = onRatioChange(sendBox);
   }
   const after = opened?.(handle) ?? (() => {});
   return () => {
     after();
-    stop_ratio();
+    stopRatio();
     observer.disconnect();
     surface.close(handle);
   };
 }
 
-function in_field(e: KeyboardEvent): boolean {
+function inField(e: KeyboardEvent): boolean {
   const target = e.target;
   return (
     target instanceof HTMLElement &&
@@ -124,48 +122,26 @@ function in_field(e: KeyboardEvent): boolean {
   );
 }
 
-function pointer_kind(e: PointerEvent): PointerKind {
-  return e.pointerType === "touch"
-    ? "touch"
-    : e.pointerType === "pen"
-      ? "pen"
-      : "mouse";
+/** Whether the press under way, or the last, is a primary one with Shift
+ * held, which turns the view as a secondary one does, so that a trackpad
+ * turns it with one finger as well as with two pressed. */
+let shifted = false;
+
+export function pressShifted(): boolean {
+  return shifted;
 }
 
 function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
-  const { key_down, key_up, release_keys, release_pointers } = input;
-  // Where the canvas is drawn on the page, with its transforms. A pointer's
-  // client position is read against it and scaled into the layout box's CSS
-  // pixels.
-  let rect = canvas.getBoundingClientRect();
-  const place = () => {
-    rect = canvas.getBoundingClientRect();
-  };
-  // A primary press with Shift held is taken as a secondary one, so that a
-  // trackpad turns the view with one finger as well as with two pressed.
-  const pointer = (phase: PointerPhase) => (e: PointerEvent) =>
-    input.pointer(
-      phase,
-      pointer_kind(e),
-      e.pointerId,
-      e.button === 0 && e.shiftKey ? 2 : e.button,
-      ((e.clientX - rect.left) * canvas.clientWidth) / (rect.width || 1),
-      ((e.clientY - rect.top) * canvas.clientHeight) / (rect.height || 1),
-    );
-  const on_move = pointer("move");
-  const on_up = pointer("up");
-  const on_cancel = pointer("cancel");
-  const on_leave = pointer("out");
-  const down = pointer("down");
-  const on_down = (e: PointerEvent) => {
-    place();
-    down(e);
+  const { keyDown, keyUp, releaseKeys } = input;
+  // Heard in the capture phase, before the gestures hear the press.
+  const onPress = (e: PointerEvent) => {
+    shifted = e.button === 0 && e.shiftKey;
   };
   // A trackpad's pinch comes as a wheel with ctrl held, whose deltaY is -100
   // times the log of the pinch's scale, in Chrome, Safari and Firefox alike.
   // The page's zoom, its default, is prevented. A wheel turned with ctrl
   // held cannot be told from it (`PINCH_MOST`).
-  const on_wheel = (e: WheelEvent) => {
+  const onWheel = (e: WheelEvent) => {
     const per =
       e.deltaMode === WheelEvent.DOM_DELTA_LINE
         ? LINE_PX
@@ -177,11 +153,10 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     const scale = Math.exp((-e.deltaY * per) / 100);
     input.pinch(clamp(scale, 1 / PINCH_MOST, PINCH_MOST));
   };
-  const on_ctx_menu = (e: MouseEvent) => e.preventDefault();
   // A key in a composition belongs to the IME, and a shortcut to the browser,
   // so neither goes to the core. Tab still goes in a composition, because it
   // switches the dock even in the middle of a word.
-  const on_key_down = (e: KeyboardEvent) => {
+  const onKeyDown = (e: KeyboardEvent) => {
     if (
       e.repeat ||
       (e.isComposing && e.code !== "Tab") ||
@@ -190,52 +165,31 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
       e.altKey
     )
       return;
-    if (key_down(e.code, { in_field: in_field(e) })) e.preventDefault();
+    if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
-  const on_key_up = (e: KeyboardEvent) => key_up(e.code);
+  const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
   // The core hears of the hiding from the platform (visibility.web.ts), so this
-  // only lets go of what the world holds.
-  const on_visibility = () => {
-    if (document.visibilityState !== "visible") {
-      release_keys();
-      release_pointers();
-    }
+  // only lets go of the keys the world holds.
+  const onVisibility = () => {
+    if (document.visibilityState !== "visible") releaseKeys();
   };
 
-  canvas.addEventListener("pointerdown", on_down);
-  canvas.addEventListener("pointermove", on_move);
-  canvas.addEventListener("pointerleave", on_leave);
-  canvas.addEventListener("contextmenu", on_ctx_menu);
-  canvas.addEventListener("wheel", on_wheel, { passive: false });
-  globalThis.addEventListener("scroll", place, true);
-  globalThis.addEventListener("pointerup", on_up);
-  globalThis.addEventListener("pointercancel", on_cancel);
-  document.addEventListener("visibilitychange", on_visibility);
+  globalThis.addEventListener("pointerdown", onPress, true);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  document.addEventListener("visibilitychange", onVisibility);
   // Keys are heard in the capture phase, because react-native-web's TextInput
   // stops a key's propagation before it would bubble up to here.
-  globalThis.addEventListener("keydown", on_key_down, true);
-  globalThis.addEventListener("keyup", on_key_up, true);
-  globalThis.addEventListener("blur", release_keys);
-  globalThis.addEventListener("blur", release_pointers);
-  const observer = new ResizeObserver(place);
-  observer.observe(canvas);
+  globalThis.addEventListener("keydown", onKeyDown, true);
+  globalThis.addEventListener("keyup", onKeyUp, true);
+  globalThis.addEventListener("blur", releaseKeys);
 
   return () => {
-    release_pointers();
-    observer.disconnect();
-    globalThis.removeEventListener("blur", release_pointers);
-    globalThis.removeEventListener("blur", release_keys);
-    globalThis.removeEventListener("keyup", on_key_up, true);
-    globalThis.removeEventListener("keydown", on_key_down, true);
-    document.removeEventListener("visibilitychange", on_visibility);
-    globalThis.removeEventListener("pointercancel", on_cancel);
-    globalThis.removeEventListener("pointerup", on_up);
-    globalThis.removeEventListener("scroll", place, true);
-    canvas.removeEventListener("wheel", on_wheel);
-    canvas.removeEventListener("contextmenu", on_ctx_menu);
-    canvas.removeEventListener("pointerleave", on_leave);
-    canvas.removeEventListener("pointermove", on_move);
-    canvas.removeEventListener("pointerdown", on_down);
+    globalThis.removeEventListener("blur", releaseKeys);
+    globalThis.removeEventListener("keyup", onKeyUp, true);
+    globalThis.removeEventListener("keydown", onKeyDown, true);
+    document.removeEventListener("visibilitychange", onVisibility);
+    canvas.removeEventListener("wheel", onWheel);
+    globalThis.removeEventListener("pointerdown", onPress, true);
   };
 }
 
@@ -249,7 +203,7 @@ export function World({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const close = open_surface(canvas, driver);
+    const close = openSurface(canvas, driver);
     const stop = drive(canvas, input);
     return () => {
       stop();
@@ -281,7 +235,7 @@ export function CharacterSurface({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    return open_surface(canvas, driver, (handle) => open.current(handle));
+    return openSurface(canvas, driver, (handle) => open.current(handle));
   }, [openKey]);
 
   // Each surface gets a canvas of its own, because a canvas crosses to the

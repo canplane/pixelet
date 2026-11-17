@@ -22,8 +22,6 @@ export const LABEL: {
   placeholder: system("placeholderText"),
 };
 
-export const NORTH: string = system("systemRed");
-
 export const STATUS: { ready: string; pending: string; failed: string } = {
   ready: system("systemGreen"),
   pending: system("systemOrange"),

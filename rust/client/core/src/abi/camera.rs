@@ -7,10 +7,8 @@ pub const HANDLE: _rt::Handle = 0x5a7108;
 
 /// `track`
 pub const TRACK: _rt::Method = 0;
-/// `north-up`
-pub const NORTH_UP: _rt::Method = 1;
 /// `goto`
-pub const GOTO: _rt::Method = 2;
+pub const GOTO: _rt::Method = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -46,7 +44,6 @@ impl Tracking {
 
 pub trait Guest {
     fn track(&self, tracking: Tracking) -> Result<(), _rt::Errno>;
-    fn north_up(&self) -> Result<(), _rt::Errno>;
     fn goto(&self, lon: f64, lat: f64) -> Result<(), _rt::Errno>;
 }
 
@@ -65,10 +62,6 @@ impl _rt::Object for _Object {
                         Err(e) => e as i32,
                     }
                 }
-                NORTH_UP => match self.0.north_up() {
-                    Ok(()) => 0,
-                    Err(e) => e as i32,
-                },
                 GOTO => {
                     let lon = args_.f64(0)?;
                     let lat = args_.f64(8)?;

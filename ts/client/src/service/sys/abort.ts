@@ -13,7 +13,7 @@ let code: string | null = null;
 /** A published build names its files by number, so its stop code also carries
  * the build number, whose table of paths decodes them. The code is null when
  * the core stopped without a report. */
-export function stop_code(): string | null {
+export function stopCode(): string | null {
   return code;
 }
 

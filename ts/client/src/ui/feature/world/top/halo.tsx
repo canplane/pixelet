@@ -9,7 +9,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { G, Path } from "react-native-svg";
+import { G, Path, Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { IconProps } from "@/ui/shared/component/icon.tsx";
@@ -26,17 +26,25 @@ import {
  * growing radius. It cannot be a widened stroke, because the native text and
  * an iPhone's symbol have no stroke to widen. Each ring fades as one layer,
  * so that copies that overlap are no darker. The box includes the rings,
- * because Android clips a layer at its view's bounds.
+ * because Android clips a layer at its view's bounds, and a margin as deep
+ * takes them back out, so that the layout sees only what is drawn. The whole
+ * fades as one layer by `opacity`, so that the halo does not show through
+ * and gray the drawing.
  */
 function Halo({
   style,
+  opacity,
   draw,
 }: {
-  style: StyleProp<ViewStyle>;
+  style?: StyleProp<ViewStyle>;
+  opacity?: f64;
   draw: (ink?: string) => ReactNode;
 }) {
   return (
-    <View style={[style, STYLE.rings]}>
+    <View
+      needsOffscreenAlphaCompositing={opacity !== undefined}
+      style={[style, STYLE.rings, opacity !== undefined && { opacity }]}
+    >
       {HALO_RINGS.map((px) => (
         <View
           key={px}
@@ -68,16 +76,14 @@ function Halo({
   );
 }
 
-export function halo_gap(gap: f64): f64 {
-  return gap - 2 * HALO.width;
-}
-
 export function HaloIcon({
   struck,
+  opacity,
   ...icon
-}: IconProps & { struck?: boolean }) {
+}: IconProps & { struck?: boolean; opacity?: f64 }) {
   return (
     <Halo
+      opacity={opacity}
       style={{
         width: icon.size + 2 * HALO.width,
         height: icon.size + 2 * HALO.width,
@@ -89,7 +95,34 @@ export function HaloIcon({
   );
 }
 
-/** A white stroke over its halo, which the caller must draw inside an `Svg`.
+/** The room an `HaloSvg` keeps around its drawing: a halo, and half of a
+ * stroke two wide. */
+const PAD_PX = HALO.width + 1;
+
+/** An `Svg` drawn in units that start at its top left, with room around for
+ * the halo of what is drawn near its edges, taken back out by a margin as
+ * `Halo`'s is. */
+export function HaloSvg({
+  width,
+  height,
+  children,
+}: {
+  width: f64;
+  height: f64;
+  children: ReactNode;
+}) {
+  const [w, h] = [width + 2 * PAD_PX, height + 2 * PAD_PX];
+  return (
+    <View style={STYLE.svg}>
+      <Svg width={w} height={h} viewBox={`${-PAD_PX} ${-PAD_PX} ${w} ${h}`}>
+        {children}
+      </Svg>
+    </View>
+  );
+}
+
+/** A white stroke over its halo, which the caller must draw inside an
+ * `HaloSvg`.
  * The halo's rings are black strokes along `under`, which defaults to `d`. */
 export function HaloPath({
   d,
@@ -159,7 +192,8 @@ function around(px: f64): [f64, f64][] {
 
 const STYLE = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
-  rings: { padding: HALO.width },
+  rings: { padding: HALO.width, margin: -HALO.width },
+  svg: { margin: -PAD_PX },
   copy: {
     position: "absolute",
     top: HALO.width,

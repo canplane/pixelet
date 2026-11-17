@@ -10,7 +10,7 @@ import {
 } from "@xpute/host/abi/fs/types.enum.ts";
 
 import { LEAF_ZOOM, path as tree } from "@/abi/file.spec.ts";
-import { binding, type Path, walk } from "./binding.ts";
+import { BINDING, type Path, walk } from "./binding.ts";
 
 const SIGNAL = new AbortController().signal;
 
@@ -28,8 +28,7 @@ const E = tree.EARTH.ID;
 const S = tree.STORAGE.ID;
 const O = tree.OBJECT.ID;
 
-test("binding - a path that leads to no node, or whose data its node does not take, is no file, and reaches no backend", () => {
-  const b = binding();
+test("BINDING - a path that leads to no node, or whose data its node does not take, is no file, and reaches no backend", () => {
   const none: Path[] = [
     [],
     [T],
@@ -52,16 +51,15 @@ test("binding - a path that leads to no node, or whose data its node does not ta
   ];
   for (const p of none) {
     assert.deepStrictEqual(
-      code(() => b.open(p, SIGNAL)),
+      code(() => BINDING.open(p, SIGNAL)),
       ERROR_CODE_NO_ENTRY,
       JSON.stringify(p),
     );
   }
 });
 
-test("binding - only the settings are written", () => {
-  const b = binding();
-  const read_only: Path[] = [
+test("BINDING - only the settings are written", () => {
+  const readOnly: Path[] = [
     [T, "0123"],
     [tree.ASSET.ID, 1],
     [S, String(0)],
@@ -69,9 +67,9 @@ test("binding - only the settings are written", () => {
     [O, tree.OBJECT.TOP.ID],
     [O, "00000000"],
   ];
-  for (const p of read_only) {
+  for (const p of readOnly) {
     assert.deepStrictEqual(
-      code(() => b.commit!(p, new Uint8Array())),
+      code(() => BINDING.commit(p, new Uint8Array())),
       ERROR_CODE_READ_ONLY,
       JSON.stringify(p),
     );

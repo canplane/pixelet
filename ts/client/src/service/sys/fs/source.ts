@@ -14,7 +14,7 @@ import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import type { Sender } from "@xpute/link";
 import { declare } from "@/abi/source.ts";
 import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
-import { online, when_online } from "@/service/origin/online.ts";
+import { online, whenOnline } from "@/service/origin/online.ts";
 import {
   BASE_KINDS,
   VERSION_SZ,
@@ -53,7 +53,7 @@ export interface Declaration {
 /** A version must be one segment of a URL, so that a tile's path stays under
  * its version. The rule is pxl-spec bake/source.rs `is_version`, and both are
  * tested against spec/golden/bake/version.tsv. */
-function is_version(s: string): boolean {
+function isVersion(s: string): boolean {
   return (
     s.length >= 1 &&
     s.length <= VERSION_SZ &&
@@ -65,7 +65,7 @@ function is_version(s: string): boolean {
  * wrong. Only the shape is checked here. Whether the core follows the zoom, the
  * formats and the shard names is the core's to decide, and it refuses what it
  * does not (pxl-core sys/io/source.rs). */
-export function decl(d: unknown): Declaration | null {
+export function declarationOf(parsed: unknown): Declaration | null {
   const versions = (v: unknown, every: boolean) =>
     typeof v === "object" &&
     v !== null &&
@@ -73,28 +73,30 @@ export function decl(d: unknown): Declaration | null {
       ([k, s]) =>
         (BASE_KINDS as readonly string[]).includes(k) &&
         typeof s === "string" &&
-        is_version(s),
+        isVersion(s),
     ) &&
     (!every || BASE_KINDS.every((k) => k in v));
   if (
-    typeof d !== "object" ||
-    d === null ||
-    !("version" in d) ||
-    !versions(d.version, true)
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("version" in parsed) ||
+    !versions(parsed.version, true)
   )
     return null;
   const whole = (n: unknown) =>
     typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
-  if (!("min_zoom" in d) || !whole(d.min_zoom)) return null;
+  if (!("min_zoom" in parsed) || !whole(parsed.min_zoom)) return null;
   if (
-    !("format" in d) ||
-    typeof d.format !== "object" ||
-    d.format === null ||
-    !BASE_KINDS.every((k) => whole((d.format as Record<string, unknown>)[k]))
+    !("format" in parsed) ||
+    typeof parsed.format !== "object" ||
+    parsed.format === null ||
+    !BASE_KINDS.every((k) =>
+      whole((parsed.format as Record<string, unknown>)[k]),
+    )
   )
     return null;
-  if (!("shard" in d)) return null;
-  const shard = d.shard;
+  if (!("shard" in parsed)) return null;
+  const shard = parsed.shard;
   if (typeof shard !== "object" || shard === null || Array.isArray(shard)) {
     return null;
   }
@@ -106,11 +108,11 @@ export function decl(d: unknown): Declaration | null {
     )
       return null;
   }
-  return d as Declaration;
+  return parsed as Declaration;
 }
 
 let state: Source = SOURCE_ASKING;
-let cur_decl: Declaration | null = null;
+let currentDeclaration: Declaration | null = null;
 const listeners = new ListenerSet();
 
 function set(next: Source): void {
@@ -118,32 +120,30 @@ function set(next: Source): void {
   listeners.notify();
 }
 
-export function source_state(): Source {
+export function sourceState(): Source {
   return state;
 }
 
 /** The declaration the core took, or null before it took one. */
-export function source_decl(): Declaration | null {
-  return cur_decl;
+export function sourceDeclaration(): Declaration | null {
+  return currentDeclaration;
 }
 
-export function source_versions(): Declaration["version"] | null {
-  return cur_decl?.version ?? null;
+export function sourceVersions(): Declaration["version"] | null {
+  return currentDeclaration?.version ?? null;
 }
 
-export const watch_source = listeners.watch;
+export const watchSource = listeners.watch;
 
 /** Resolves with the declaration once the core takes it, and rejects once
  * the source is refused or `signal` aborts: a file opened under it waits for
  * it (binding.ts), as a reloaded native UI opens the tiles a running core
  * asks for again before it has declared the source. What it watches goes
  * when it settles. */
-export function when_source_declared(
-  signal: AbortSignal,
-): Promise<Declaration> {
+export function whenSourceDeclared(signal: AbortSignal): Promise<Declaration> {
   return new Promise((resolve, reject) => {
     const settle = (): boolean => {
-      if (cur_decl !== null) resolve(cur_decl);
+      if (currentDeclaration !== null) resolve(currentDeclaration);
       else if (state === SOURCE_REFUSED)
         reject(new Error("[source] the tile source is refused"));
       else if (signal.aborted) reject(signal.reason);
@@ -151,21 +151,24 @@ export function when_source_declared(
       return true;
     };
     if (settle()) return;
-    const on_change = () => {
+    const onChange = () => {
       if (!settle()) return;
       stop();
-      signal.removeEventListener("abort", on_change);
+      signal.removeEventListener("abort", onChange);
     };
-    const stop = watch_source(on_change);
-    signal.addEventListener("abort", on_change);
+    const stop = watchSource(onChange);
+    signal.addEventListener("abort", onChange);
   });
 }
 
 /** On the web, the core and the asking for the declaration run in a worker.
  * The page's thread holds no files, so the UI learns the source's state and
  * declaration through this (runtime/worker.ts). */
-export function mirror_source(next: Source, decl: Declaration | null): void {
-  cur_decl = decl;
+export function mirrorSource(
+  next: Source,
+  declaration: Declaration | null,
+): void {
+  currentDeclaration = declaration;
   set(next);
 }
 
@@ -182,7 +185,7 @@ const ASK_AGAIN_MOST_MS = 60_000;
  * a connection cut while the body comes in may still end in an ok response
  * with a short body (Expo's fetch on Android resolves `text()` so), and a
  * captive portal answers ok with a page of its own. */
-async function ask_decl(): Promise<unknown> {
+async function askDeclaration(): Promise<unknown> {
   try {
     const res = await get(TILE_SOURCE_ROUTE);
     if (res.ok) return JSON.parse(await res.text()) as unknown;
@@ -198,25 +201,25 @@ async function ask_decl(): Promise<unknown> {
   }
 }
 
-/** Resolves once the source is declared or refused, `source_state` then
+/** Resolves once the source is declared or refused, `sourceState` then
  * saying which. The core is handed its part of the declaration over `link`
  * (pxl:core source `declare`). It is refused when that part is more than one
  * frame can carry, or when the core refuses it, as it does, among others, a
  * format this build cannot read. */
-export async function declare_source(link: Sender): Promise<void> {
-  let source = await ask_decl();
-  let wait_ms = ASK_AGAIN_MS;
+export async function declareSource(link: Sender): Promise<void> {
+  let source = await askDeclaration();
+  let waitMs = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
       set(SOURCE_FAILING);
       await new Promise((resolve) =>
-        setTimeout(resolve, Math.random() * wait_ms),
+        setTimeout(resolve, Math.random() * waitMs),
       );
-      wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
-    } else await when_online();
-    source = await ask_decl();
+      waitMs = Math.min(2 * waitMs, ASK_AGAIN_MOST_MS);
+    } else await whenOnline();
+    source = await askDeclaration();
   }
-  const read = decl(source);
+  const read = declarationOf(source);
   if (read === null) {
     console.error(
       "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
@@ -235,6 +238,6 @@ export async function declare_source(link: Sender): Promise<void> {
     set(SOURCE_REFUSED);
     return;
   }
-  cur_decl = read;
+  currentDeclaration = read;
   set(SOURCE_DECLARED);
 }

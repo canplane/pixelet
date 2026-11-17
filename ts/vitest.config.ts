@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { platform_file } from "./build/path.ts";
+import { platformFile } from "./build/path.ts";
 
 // The tests run the web files: x.web.ts where an import names x.ts, as
 // Metro takes them for the web (build/path.ts).
@@ -9,7 +9,7 @@ export default defineConfig({
       name: "pxl-platform-file",
       enforce: "pre",
       resolveId: (spec, from) =>
-        from ? platform_file(from, spec, "web") : null,
+        from ? platformFile(from, spec, "web") : null,
     },
   ],
   test: {

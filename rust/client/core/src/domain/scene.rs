@@ -37,7 +37,7 @@ use crate::domain::scene::model::registry::ModelTable;
 /// another frame.
 pub(crate) fn animate(list: &mut DrawList, models: &ModelTable, frame: &Frame) -> bool {
     companion_animate(list, models, frame, character_surface_shows())
-        | location_animate(frame)
+        | location_animate(list, frame)
         | environment_animate(frame)
 }
 

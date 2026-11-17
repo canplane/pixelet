@@ -27,7 +27,7 @@ import {
   WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
-import { status_color } from "@/ui/feature/world/top/sensor-icon.tsx";
+import { statusColor } from "@/ui/feature/world/top/sensor-icon.tsx";
 import { LABEL, STATUS } from "@/ui/shared/component/palette.ts";
 import { AboveKeyboard } from "@/ui/shared/component/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/ui/shared/component/text-field.tsx";
@@ -37,15 +37,15 @@ import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { FILL, SYMBOL } from "./place_theme.spec.ts";
 import { PLACE_SYMBOLS, type PlaceSymbol } from "./place-symbol.ts";
 import { SEARCH_KIND } from "./search.spec.ts";
-import { assemble_label } from "@/ui/feature/division/label.ts";
+import { assembleLabel } from "@/ui/feature/division/label.ts";
 import {
   useDivisionLabel,
   usePivotCoordinate,
 } from "@/ui/feature/division/pivot.ts";
 import { DIVISION_SUBTYPE } from "@/ui/feature/division/division.spec.ts";
-import { fetch_search, type SearchResult } from "./fetch.ts";
+import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
-import { touch_outset } from "@/ui/shared/component/touch.ts";
+import { touchOutset } from "@/ui/shared/component/touch.ts";
 import { useSensor } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 import * as sensor from "@/service/core/sensor.ts";
@@ -53,7 +53,7 @@ import * as overlay from "@/service/core/overlay.ts";
 
 const DEBOUNCE_MS = 300;
 
-function format_distance(m: f64): string {
+function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
   if (m < 10000) return `${fixed(m / 1000, 1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
@@ -74,9 +74,9 @@ function ResultRow({
   const within = result.context.filter(
     (p) => p.subtype !== DIVISION_SUBTYPE.COUNTRY,
   );
-  const where = within.length > 0 ? assemble_label(within) : "";
+  const where = within.length > 0 ? assembleLabel(within) : "";
   const theme =
-    result.kind === SEARCH_KIND.PLACE ? place_theme(result.category) : null;
+    result.kind === SEARCH_KIND.PLACE ? placeTheme(result.category) : null;
   const symbol = theme?.symbol;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={STYLE.row}>
@@ -102,7 +102,7 @@ function ResultRow({
           )}
         </View>
       )}
-      <View style={STYLE.row_text}>
+      <View style={STYLE.rowText}>
         <Text numberOfLines={1} style={STYLE.name}>
           {result.name}
         </Text>
@@ -123,7 +123,7 @@ function ResultRow({
 
 /** The country is null for a result no country holds, such as one at sea or
  * beyond the mapped divisions. */
-function country_of(result: SearchResult): string | null {
+function countryOf(result: SearchResult): string | null {
   if (
     result.kind === SEARCH_KIND.DIVISION &&
     result.category === DIVISION_SUBTYPE.COUNTRY
@@ -144,13 +144,13 @@ interface CountrySection {
 /** The pivot's country comes first, then each other country where its best
  * result was ranked, and the results with no country come last. Within a
  * section, results keep the API's order. */
-function by_country(
+function byCountry(
   results: SearchResult[],
   home: string | null,
 ): CountrySection[] {
   const sections = new Map<string | null, CountrySection>();
   for (const result of results) {
-    const country = country_of(result);
+    const country = countryOf(result);
     const section = sections.get(country) ?? { country, rows: [] };
     section.rows.push(result);
     sections.set(country, section);
@@ -169,7 +169,7 @@ function LocateCard() {
   // and takes no press.
   const location = useSensor((l) => l.state.status);
   const known = useSensor((l) => l.location !== null);
-  const locating = useSensor((l) => l.is_tracking_location);
+  const locating = useSensor((l) => l.isTrackingLocation);
   if (known) return null;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
@@ -177,29 +177,29 @@ function LocateCard() {
         fill={COLOR.ground}
         place={BackingPlace.ON_SHEET}
         interactive
-        style={STYLE.locate_card}
+        style={STYLE.locateCard}
       >
         <Pressable
           onPress={() => void sensor.locate()}
           disabled={locating}
           accessibilityRole="button"
-          style={STYLE.locate_row}
+          style={STYLE.locateRow}
         >
           <Glyph
             glyph="location"
             size={CHROME.glyph}
-            color={status_color(location, LABEL.secondary, STATUS)}
+            color={statusColor(location, LABEL.secondary, STATUS)}
           />
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-            style={STYLE.locate_label}
+            style={STYLE.locateLabel}
           >
             {t("world.sensors.label")}
           </Text>
           <Text
             maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-            style={locating ? STYLE.locating : STYLE.locate_action}
+            style={locating ? STYLE.locating : STYLE.locateAction}
           >
             {locating ? t("world.search.locating") : t("world.sensors.turn_on")}
           </Text>
@@ -218,7 +218,7 @@ function MapCenter() {
   if (coordinate === null) return null;
   return (
     <View>
-      <SectionTitle style={STYLE.section_header}>
+      <SectionTitle style={STYLE.sectionHeader}>
         {t("world.search.pivot")}
       </SectionTitle>
       <View style={STYLE.center}>
@@ -246,8 +246,8 @@ interface Found {
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 
-  const [query, set_query] = useState("");
-  const [found, set_found] = useState<Found>({
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<Found>({
     query: "",
     results: [],
     home: null,
@@ -260,20 +260,20 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (q === "") return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      const shown = overlay.cur();
+      const shown = overlay.currentSnapshot();
       const near = shown.pivot.lon_lat ?? undefined;
       const home =
         shown.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
           ?.name ?? null;
-      fetch_search(q, { near, signal: controller.signal })
+      fetchSearch(q, { near, signal: controller.signal })
         .then(
           (results) =>
-            controller.signal.aborted || set_found({ query: q, results, home }),
+            controller.signal.aborted || setFound({ query: q, results, home }),
         )
         .catch(
           () =>
             controller.signal.aborted ||
-            set_found({ query: q, results: [], home: null }),
+            setFound({ query: q, results: [], home: null }),
         );
     }, DEBOUNCE_MS);
     return () => {
@@ -287,8 +287,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  function distance_of(result: SearchResult): string | null {
-    return result.dist_m === null ? null : format_distance(result.dist_m);
+  function distanceOf(result: SearchResult): string | null {
+    return result.dist_m === null ? null : formatDistance(result.dist_m);
   }
 
   return (
@@ -308,7 +308,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
               />
               <TextField
                 value={query}
-                onChangeText={set_query}
+                onChangeText={setQuery}
                 placeholder={t("world.search.placeholder")}
                 placeholderTextColor={LABEL.placeholder}
                 clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
@@ -316,10 +316,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
               />
               {!SYSTEM_CLEAR && query.length > 0 && (
                 <Pressable
-                  onPress={() => set_query("")}
+                  onPress={() => setQuery("")}
                   accessibilityRole="button"
                   accessibilityLabel={t("world.search.clear_aria_label")}
-                  style={STYLE.clear_target}
+                  style={STYLE.clearTarget}
                 >
                   <View style={STYLE.clear}>
                     <Glyph
@@ -337,7 +337,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       >
         <ScrollView
           style={STYLE.results}
-          contentContainerStyle={STYLE.results_room}
+          contentContainerStyle={STYLE.resultsRoom}
           keyboardShouldPersistTaps="handled"
         >
           {q === "" && <MapCenter />}
@@ -349,9 +349,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             </Text>
           )}
 
-          {by_country(results, found.home).map(({ country, rows }) => (
+          {byCountry(results, found.home).map(({ country, rows }) => (
             <View key={country ?? ""}>
-              <SectionTitle style={STYLE.section_header}>
+              <SectionTitle style={STYLE.sectionHeader}>
                 {country === null
                   ? t("world.search.section_elsewhere")
                   : country}
@@ -360,7 +360,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 <ResultRow
                   key={r.gers_id}
                   result={r}
-                  distance={distance_of(r)}
+                  distance={distanceOf(r)}
                   onPress={() => select(r)}
                 />
               ))}
@@ -375,12 +375,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 }
 
 const STYLE = StyleSheet.create({
-  locate_card: {
+  locateCard: {
     borderRadius: CHROME.target / 2,
     pointerEvents: "auto",
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)",
   },
-  locate_row: {
+  locateRow: {
     minHeight: CHROME.target,
     flexDirection: "row",
     alignItems: "center",
@@ -388,14 +388,14 @@ const STYLE = StyleSheet.create({
     paddingLeft: (CHROME.target - CHROME.glyph) / 2,
     paddingRight: PANEL_EDGE,
   },
-  locate_label: { flex: 1, ...TEXT_STYLE.body, color: LABEL.primary },
-  locate_action: {
+  locateLabel: { flex: 1, ...TEXT_STYLE.body, color: LABEL.primary },
+  locateAction: {
     ...TEXT_STYLE.body,
     fontWeight: WEIGHT.semibold,
     color: COLOR.action,
   },
   locating: { ...TEXT_STYLE.body, color: LABEL.secondary },
-  results_room: {
+  resultsRoom: {
     paddingTop: PANEL_CONTENT_TOP,
     paddingBottom: CHROME.target + 2 * PANEL_EDGE,
     gap: PANEL_SECTION_GAP,
@@ -412,10 +412,10 @@ const STYLE = StyleSheet.create({
     borderRadius: PANEL_CONTROL / 2,
   },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
-  clear_target: {
+  clearTarget: {
     width: CHROME.target,
     height: CHROME.target,
-    marginHorizontal: -touch_outset(CLEAR),
+    marginHorizontal: -touchOutset(CLEAR),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -433,7 +433,7 @@ const STYLE = StyleSheet.create({
     ...TEXT_STYLE.footnote,
     color: LABEL.secondary,
   },
-  section_header: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
+  sectionHeader: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -441,7 +441,7 @@ const STYLE = StyleSheet.create({
     paddingHorizontal: PANEL_EDGE,
     paddingVertical: 12,
   },
-  row_text: { flex: 1, minWidth: 0, gap: 4 },
+  rowText: { flex: 1, minWidth: 0, gap: 4 },
   name: { ...TEXT_STYLE.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   small: { ...TEXT_STYLE.caption, color: LABEL.secondary },
@@ -468,7 +468,7 @@ const STYLE = StyleSheet.create({
  * (place_theme.spec.ts): its symbol in its fill color, or a dot of that fill
  * for a category with no symbol. It is null for a category Carto draws no
  * point for. */
-function place_theme(
+function placeTheme(
   category: number,
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {
   const fill = FILL[category - 1];

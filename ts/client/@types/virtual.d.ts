@@ -1,6 +1,6 @@
 // @pxl/client/@types/virtual.d.ts
 
-/** What the build is, written by metro.config.ts `build_stamp` from
+/** What the build is, written by metro.config.ts `buildStamp` from
  * ts/build/stamp.ts. Code reads it through build.ts, which says what each
  * field means. */
 declare module "virtual:pxl-build" {

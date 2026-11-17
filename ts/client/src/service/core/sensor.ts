@@ -5,12 +5,12 @@
  * every decision about them; their readings are in `sensor/reading.ts`. It
  * tells the core the three facts of them the core reads, each as it changes:
  * the device's position, the heading and the location's status
- * (`tell_core`). The sensors are watched only while a surface draws the
+ * (`tellCore`). The sensors are watched only while a surface draws the
  * world, from its draw until the last such surface closes (`worlds`), and
  * stopped while the app is hidden. Each sensor has one start, which holds
  * that gate and which every trigger calls: a world's draw, the return from
  * hidden, a permission granted, and a press, the location card's (`locate`)
- * or follow's (`start_orient`). */
+ * or follow's (`startOrientation`). */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
@@ -25,38 +25,38 @@ import {
 } from "@/abi/sensor.enum.ts";
 import type { SensorListener } from "@/service/platform/types.ts";
 import * as platform from "@/service/platform/sensor.ts";
-import * as sensor_listener from "@/service/platform/sensor-listener.ts";
+import * as sensorListener from "@/service/platform/sensor-listener.ts";
 import { ui } from "@/service/core/core.ts";
 import {
   type OrientationCommand,
   ORIENTATION_COMMAND_START,
   ORIENTATION_COMMAND_STOP,
-  on_orient_lost,
-  orient_close,
-  orient_event,
-  orient_stop,
-  orient_unavailable,
-  orient_watchdog_step,
-  platform as orient_platform,
-  request_orient,
-  take_orient_cmd,
+  onOrientationLost,
+  orientationClose,
+  orientationEvent,
+  orientationStop,
+  orientationUnavailable,
+  orientationWatchdogStep,
+  platform as orientationPlatform,
+  requestOrientation,
+  takeOrientationCommand,
 } from "./sensor/device_orientation.ts";
 import {
   type GeolocationCommand,
   GEOLOCATION_COMMAND_START,
   GEOLOCATION_COMMAND_STOP,
-  geolocation_close,
-  geolocation_err,
-  geolocation_fix,
-  platform as geolocation_platform,
-  start_watching,
-  stop_watching,
-  take_geolocation_cmd,
+  geolocationClose,
+  geolocationError,
+  geolocationFix,
+  platform as geolocationPlatform,
+  startWatching,
+  stopWatching,
+  takeGeolocationCommand,
 } from "./sensor/geolocation.ts";
 import {
   type LocationSensorStatus,
-  device_location_store,
-  device_orient_store,
+  deviceLocationStore,
+  deviceOrientationStore,
   SENSOR_STATUS_ERROR,
   SENSOR_STATUS_IDLE,
   SENSOR_STATUS_LOADING,
@@ -69,7 +69,7 @@ function finite(n: number | null): number | null {
   return n !== null && Number.isFinite(n) ? n : null;
 }
 
-function on_earth(lon: f64, lat: f64): boolean {
+function onEarth(lon: f64, lat: f64): boolean {
   return lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90;
 }
 
@@ -82,60 +82,60 @@ function bearing(deg: f64 | null): boolean {
 /** What the platform's pair reports, each an entry of the driver. A reading
  * out of its range is dropped whole. */
 export const SENSOR_LISTENER: SensorListener = {
-  pos: (lon, lat, alt_in, accuracy_in, course_in) => {
+  pos: (lon, lat, altitudeIn, accuracyIn, courseIn) => {
     const [alt, accuracy, course] = [
-      finite(alt_in),
-      finite(accuracy_in),
-      finite(course_in),
+      finite(altitudeIn),
+      finite(accuracyIn),
+      finite(courseIn),
     ];
     if (!(
-      on_earth(lon, lat) &&
+      onEarth(lon, lat) &&
       (accuracy === null || accuracy >= 0) &&
       bearing(course)
     ))
       return;
     // A fix that comes without an accuracy is taken as having an infinite
     // error.
-    geolocation_fix(lon, lat, alt, accuracy ?? Infinity, course);
+    geolocationFix(lon, lat, alt, accuracy ?? Infinity, course);
     post();
   },
-  pos_err: (err, watching) => {
-    geolocation_err(err, watching);
+  positionError: (error, watching) => {
+    geolocationError(error, watching);
     post();
   },
-  orient: (heading_in) => {
-    const heading = finite(heading_in);
+  orientation: (headingIn) => {
+    const heading = finite(headingIn);
     if (!bearing(heading)) return;
-    orient_event(heading);
+    orientationEvent(heading);
     post();
   },
-  orient_unavailable: () => {
-    orient_unavailable();
+  orientationUnavailable: () => {
+    orientationUnavailable();
     post();
   },
   // The compass gives no cause for its failure.
-  orient_err: () => {
-    on_orient_lost();
+  orientationError: () => {
+    onOrientationLost();
     post();
   },
   // A grant made outside the app, in the settings, starts the sensor; a
   // refused compass reads as failed.
   permission: (which, answer) => {
     if (answer === "granted") {
-      if (which === "geolocation") start_location();
-      else void start_orient();
-    } else if (which === "orient") on_orient_lost();
+      if (which === "geolocation") startLocation();
+      else void startOrientation();
+    } else if (which === "orientation") onOrientationLost();
     post();
   },
 };
 
 /** Takes what the place's sensors are, once the client starts: a position, a
  * heading, and whether the heading's silence is a loss. */
-export function set_platform(): void {
-  geolocation_platform().supported = platform.GEOLOCATION.has;
-  const orient = orient_platform();
-  orient.supported = platform.ORIENT.has;
-  orient.silence_is_loss = platform.ORIENT.silence;
+export function setPlatform(): void {
+  geolocationPlatform().supported = platform.GEOLOCATION.has;
+  const orientation = orientationPlatform();
+  orientation.supported = platform.ORIENTATION.has;
+  orientation.silenceIsLoss = platform.ORIENTATION.silence;
 }
 
 /** The surfaces that draw the world. While one is open the sensors are
@@ -144,55 +144,55 @@ const worlds = new Set<u32>();
 let unfollow: (() => void) | null = null;
 
 /** The surface `surface` draws the world, and the sensors start. */
-export function world_open(surface: u32): void {
+export function worldOpen(surface: u32): void {
   if (worlds.size === 0) unfollow = platform.follow();
   worlds.add(surface);
-  start_location();
-  void start_orient();
+  startLocation();
+  void startOrientation();
   post();
 }
 
 /** A world's surface closed. A surface can close after the one replacing it
  * has opened, so the sensors stop with the last world's surface. */
-export function world_closed(surface: u32): void {
+export function worldClosed(surface: u32): void {
   worlds.delete(surface);
   if (worlds.size !== 0) return;
   unfollow?.();
   unfollow = null;
-  geolocation_close();
-  orient_close();
+  geolocationClose();
+  orientationClose();
   post();
 }
 
 /** The app is hidden or shown again. Hiding stops every sensor that runs,
  * keeping what it read; the return starts each sensor again, one that
  * stopped or failed alike, a heading already permitted without a press. */
-export function sensors_visibility(visible: boolean): void {
+export function sensorsVisibility(visible: boolean): void {
   if (!visible) {
-    stop_watching();
-    orient_stop();
+    stopWatching();
+    orientationStop();
   } else {
-    start_location();
-    void start_orient();
+    startLocation();
+    void startOrientation();
   }
   post();
 }
 
 /** Starts the location while a world is open. The watch asks the permission
  * itself where it is not yet decided. */
-function start_location(): void {
-  if (worlds.size !== 0) start_watching();
+function startLocation(): void {
+  if (worlds.size !== 0) startWatching();
 }
 
 /** Starts the heading while a world is open, once the platform permits it,
  * and resolves whether it does. The platform answers from the decision it
  * holds, and asks only inside a press: follow's press calls this from the
  * press itself. A world closed while it answers starts nothing. */
-export async function start_orient(): Promise<boolean> {
+export async function startOrientation(): Promise<boolean> {
   if (worlds.size === 0) return false;
-  const permitted = await platform.ORIENT.permit();
+  const permitted = await platform.ORIENTATION.permit();
   if (permitted && worlds.size !== 0) {
-    request_orient();
+    requestOrientation();
     post();
   }
   return permitted;
@@ -202,7 +202,7 @@ export async function start_orient(): Promise<boolean> {
  * which raises the permission's prompt or its settings. */
 export async function locate(): Promise<void> {
   if (!(await platform.GEOLOCATION.permit())) return;
-  start_location();
+  startLocation();
   post();
 }
 
@@ -215,7 +215,7 @@ const GEOLOCATION_CMD: Readonly<Record<GeolocationCommand, () => void>> = {
   [GEOLOCATION_COMMAND_START]: () => {
     if (!__PERF_DRIVE__) return platform.GEOLOCATION.start();
     queueMicrotask(() =>
-      sensor_listener.geolocation_fix(sensor_listener.MEASURE_PLACE),
+      sensorListener.geolocationFix(sensorListener.MEASURE_PLACE),
     );
   },
   [GEOLOCATION_COMMAND_STOP]: () => platform.GEOLOCATION.stop(),
@@ -223,15 +223,15 @@ const GEOLOCATION_CMD: Readonly<Record<GeolocationCommand, () => void>> = {
 
 const ORIENTATION_CMD: Readonly<Record<OrientationCommand, () => void>> = {
   [ORIENTATION_COMMAND_START]: () => {
-    if (!__PERF_DRIVE__) platform.ORIENT.start();
+    if (!__PERF_DRIVE__) platform.ORIENTATION.start();
   },
-  [ORIENTATION_COMMAND_STOP]: () => platform.ORIENT.stop(),
+  [ORIENTATION_COMMAND_STOP]: () => platform.ORIENTATION.stop(),
 };
 
 /** The watchdog's one wake, armed for the earliest time it asks. */
 let wake: { at: number; timer: ReturnType<typeof setTimeout> } | null = null;
 
-function wake_at(at: number): void {
+function wakeAt(at: number): void {
   if (wake !== null && wake.at <= at) return;
   if (wake !== null) clearTimeout(wake.timer);
   wake = {
@@ -249,31 +249,29 @@ const listeners = new ListenerSet();
  * platform follows the last commands, the core is told the facts that
  * changed, and what watches the sensors is told to look again. */
 function post(): void {
-  const at = orient_watchdog_step();
-  if (at !== null) wake_at(at);
-  const g = take_geolocation_cmd();
+  const at = orientationWatchdogStep();
+  if (at !== null) wakeAt(at);
+  const g = takeGeolocationCommand();
   if (g !== null) GEOLOCATION_CMD[g]();
-  const o = take_orient_cmd();
+  const o = takeOrientationCommand();
   if (o !== null) ORIENTATION_CMD[o]();
-  tell_core();
+  tellCore();
   listeners.notify();
 }
 
 /** Watches the sensors' state (`sensor/reading.ts`). */
-export const watch_sensor = listeners.watch;
+export const watchSensor = listeners.watch;
 
 /** The compass heading, 0-360 degrees, or null while there is none. */
 function heading(): f64 | null {
-  return device_orient_store().orient?.heading ?? null;
+  return deviceOrientationStore().orientation?.heading ?? null;
 }
 
 /** The device's position, its altitude over the ellipsoid where the device
  * gives one; null without a fix. */
 function pos(): Position | null {
-  const l = device_location_store().location;
-  return l === null
-    ? null
-    : { lon: l.lon_lat[0], lat: l.lon_lat[1], alt: l.alt };
+  const l = deviceLocationStore().location;
+  return l === null ? null : { lon: l.coord[0], lat: l.coord[1], alt: l.alt };
 }
 
 /** The location's status as the core takes it. */
@@ -286,11 +284,11 @@ const LOCATION_STATUS: Readonly<Record<LocationSensorStatus, LocationStatus>> =
   };
 
 /** The location's status; ready once a fix came. */
-function location_status(): LocationStatus {
-  return LOCATION_STATUS[device_location_store().state.status];
+function locationStatus(): LocationStatus {
+  return LOCATION_STATUS[deviceLocationStore().state.status];
 }
 
-function is_same_pos(a: Position | null, b: Position | null): boolean {
+function isSamePosition(a: Position | null, b: Position | null): boolean {
   if (a === null || b === null) return a === b;
   return a.lon === b.lon && a.lat === b.lat && a.alt === b.alt;
 }
@@ -303,9 +301,9 @@ let told: {
 } | null = null;
 
 /** Tells the core each fact that differs from what it was told last. */
-function tell_core(): void {
-  const [at, deg, status] = [pos(), heading(), location_status()];
-  if (told === null || !is_same_pos(told.at, at)) void core.pos(ui, at);
+function tellCore(): void {
+  const [at, deg, status] = [pos(), heading(), locationStatus()];
+  if (told === null || !isSamePosition(told.at, at)) void core.pos(ui, at);
   if (told === null || told.heading !== deg) void core.heading(ui, deg);
   if (told === null || told.status !== status) void core.location(ui, status);
   told = { at, heading: deg, status };

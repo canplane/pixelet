@@ -3,11 +3,11 @@
 /** Where the browser refuses a database, as in a sandboxed frame or a private
  * window, this keeps nothing and never throws. */
 
-import type { Tx } from "./types.ts";
+import type { Transaction } from "./types.ts";
 
 const STORE = "file";
 
-const NOTHING: Tx = {
+const NOTHING: Transaction = {
   get: () => Promise.resolve(null),
   put: () => Promise.resolve(),
 };
@@ -39,14 +39,16 @@ function settle<R>(req: IDBRequest<R>): Promise<R> {
   });
 }
 
-export async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+export async function transaction<T>(
+  fn: (tx: Transaction) => Promise<T>,
+): Promise<T> {
   const idb = await db;
   if (idb === null) return fn(NOTHING);
-  const t = idb.transaction(STORE, "readwrite");
-  const store = t.objectStore(STORE);
+  const idbTransaction = idb.transaction(STORE, "readwrite");
+  const store = idbTransaction.objectStore(STORE);
   const committed = new Promise<void>((resolve, reject) => {
-    t.oncomplete = () => resolve();
-    t.onabort = () => reject(t.error);
+    idbTransaction.oncomplete = () => resolve();
+    idbTransaction.onabort = () => reject(idbTransaction.error);
   });
   // When `fn` rejects, its own rejection is the one thrown. The abort that
   // follows rejects `committed` too, and this catch keeps that second
@@ -68,7 +70,7 @@ export async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     return out;
   } catch (err) {
     try {
-      t.abort();
+      idbTransaction.abort();
     } catch {
       // The transaction has already finished, so there is nothing to abort.
     }

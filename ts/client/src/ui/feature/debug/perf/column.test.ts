@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import { FRAME, FRAME_GROUP } from "@/abi/perf.spec.ts";
-import { is_list, COLUMNS } from "@/service/core/perf.ts";
+import { isList, COLUMNS } from "@/service/core/perf.ts";
 import { GROUPS, LIST_NAMES } from "./column.ts";
 
 test("FRAME_GROUP - every column is printed, in one group", () => {
@@ -17,7 +17,7 @@ test("FRAME_GROUP - every column is printed, in one group", () => {
 
 test("COLUMNS - a list column spans a word a name", () => {
   for (const { name, width } of COLUMNS) {
-    const names = is_list(name) ? LIST_NAMES[name].length : 1;
+    const names = isList(name) ? LIST_NAMES[name].length : 1;
     assert.deepStrictEqual(width, names, name);
   }
 });

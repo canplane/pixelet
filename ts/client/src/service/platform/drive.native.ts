@@ -7,6 +7,6 @@
 import { LEVEL_INFO } from "@xpute/host/abi/log/log.enum.ts";
 import { log } from "@xpute/expo";
 
-export function tell_drive(line: string): void {
+export function tellDrive(line: string): void {
   log(LEVEL_INFO, "perf", line);
 }

@@ -13,23 +13,23 @@ import { useSourceVersions } from "@/ui/shared/watch.ts";
 
 /** Shown in the settings in a dev build, because a phone has no URL bar to
  * tell which build is on screen. */
-function dev_label(): string {
+function devLabel(): string {
   return TILE_SOURCE === "delivery" ? "dev" : `dev:${TILE_SOURCE}`;
 }
 
-function bake_lines(source: Readonly<Record<string, string>> | null): string[] {
+function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
   return Object.entries(source ?? {}).map(
     ([kind, version]) => `${kind}/${version}`,
   );
 }
 
-function object_label(): string {
+function objectLabel(): string {
   return `objects · format ${format.OBJECT}`;
 }
 
 /** The build time is shown in UTC, because a time in the viewer's zone reads
  * differently on two phones. */
-function build_label(): string {
+function buildLabel(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;
   const s = d.toISOString();
@@ -46,7 +46,7 @@ export function AboutSection() {
       <Prose>
         <View style={STYLE.name}>
           <BrandSymbol size={20} color={LABEL.primary} />
-          <Text style={STYLE.name_text}>pixelet</Text>
+          <Text style={STYLE.nameText}>pixelet</Text>
         </View>
 
         <Text style={SETTING_TEXT.small}>{t("settings.about.tagline")}</Text>
@@ -58,15 +58,15 @@ export function AboutSection() {
         <View>
           <Text style={SETTING_TEXT.faint}>
             {BUILD_NUMBER}
-            {__DEV__ && ` (${dev_label()})`}
-            {` · ${build_label()}`}
+            {__DEV__ && ` (${devLabel()})`}
+            {` · ${buildLabel()}`}
           </Text>
-          {bake_lines(source).map((line) => (
+          {bakeLines(source).map((line) => (
             <Text key={line} style={SETTING_TEXT.faint}>
               {line}
             </Text>
           ))}
-          <Text style={SETTING_TEXT.faint}>{object_label()}</Text>
+          <Text style={SETTING_TEXT.faint}>{objectLabel()}</Text>
         </View>
       </Prose>
     </Section>
@@ -75,5 +75,5 @@ export function AboutSection() {
 
 const STYLE = StyleSheet.create({
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name_text: { ...TEXT_STYLE.title, color: LABEL.primary },
+  nameText: { ...TEXT_STYLE.title, color: LABEL.primary },
 });

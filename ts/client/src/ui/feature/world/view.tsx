@@ -8,12 +8,11 @@ import { type InputDriver } from "@/service/platform/types.ts";
 import * as surface from "@/service/platform/surface.tsx";
 import { useSafeArea } from "@/service/platform/safe-area.ts";
 import { useVisualViewport } from "@/service/platform/viewport.ts";
-import { drag_of, POINTER_PHASE, TOUCH } from "@/service/core/input.ts";
-import { surface_driver } from "@/service/core/surface.ts";
-import { key_down, key_up, release_keys } from "./keyboard.ts";
-import { release_pointers, world_pointer } from "./pointer.ts";
+import { surfaceDriver } from "@/service/core/surface.ts";
+import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
+import { WorldGestures } from "./gesture.tsx";
 import { Corner } from "./corner.tsx";
-import { bottom_rest } from "@/ui/shared/component/bottom-rest.ts";
+import { bottomRest } from "@/ui/shared/component/bottom-rest.ts";
 import { Toaster } from "@/ui/feature/world/toast/stack.tsx";
 import { CHROME, COLOR, LAYER } from "@/ui/shared/component/theme.ts";
 import { KEEPS_KEYBOARD } from "@/ui/shared/component/keyboard.tsx";
@@ -33,32 +32,29 @@ const TOAST_LIFT_PX = CHROME.inset + 20;
 
 const PANEL_GAP_PX = 12;
 
-const WORLD = surface_driver(scene.draw_world, sensor.world_closed);
+const WORLD = surfaceDriver(scene.drawWorld, sensor.worldClosed);
 
 const INPUT: InputDriver = {
-  pointer: (phase, kind, id, button, x, y) =>
-    world_pointer(POINTER_PHASE[phase], TOUCH[kind], id, drag_of(button), x, y),
   wheel: input.wheel,
-  pinch: input.pinch,
-  key_down,
-  key_up,
-  release_keys,
-  release_pointers,
+  pinch: input.zoom,
+  keyDown,
+  keyUp,
+  releaseKeys,
 };
 
 /** A component of its own, so that a change of the marker under the pointer
  * re-renders only the surface. */
 function World() {
-  const over_marker = useCore((s) => s.over_marker);
+  const overMarker = useCore((s) => s.over_marker);
   return (
-    <surface.World surface={WORLD} input={INPUT} overMarker={over_marker} />
+    <surface.World surface={WORLD} input={INPUT} overMarker={overMarker} />
   );
 }
 
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + CHROME.control + PANEL_GAP_PX;
   const bottom =
-    bottom_rest(useSafeArea(), CHROME.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
+    bottomRest(useSafeArea(), CHROME.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
   return <View style={[STYLE.between, { top, bottom }]}>{children}</View>;
 }
 
@@ -85,10 +81,12 @@ export function WorldView() {
         <Corner />
       </BetweenChrome>
 
-      {/* The world puts the keyboard away itself (`world_pointer`), so the
+      {/* The world puts the keyboard away itself (`WorldGestures`), so the
           shared dismissal leaves its touches alone. */}
       <View {...KEEPS_KEYBOARD} style={StyleSheet.absoluteFill}>
-        <World />
+        <WorldGestures style={StyleSheet.absoluteFill}>
+          <World />
+        </WorldGestures>
       </View>
 
       {/* The toasts lie under the chrome, so that the size popover covers

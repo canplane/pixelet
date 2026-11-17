@@ -13,14 +13,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
-import { platform_file, REPO, WORKSPACE } from "@pxl/build/path.ts";
+import { platformFile, REPO, WORKSPACE } from "@pxl/build/path.ts";
 import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import {
   forward,
   type Middleware,
-  route_target,
-  tile_source,
+  routeTarget,
+  tileSource,
 } from "./script/proxy.ts";
 
 // The app's directory is found from the workspace that the aliases are read
@@ -39,7 +39,7 @@ const FROM_APP = path.join(APP, "index.ts");
 
 /** The stamp is written once, when Metro starts, so a dev server's stamp is
  * the one it started under. */
-function build_stamp(): string {
+function buildStamp(): string {
   const { time, id, number } = stamp();
   const file = path.join(APP, ".expo/pxl-build.js");
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -51,7 +51,7 @@ function build_stamp(): string {
   );
   return file;
 }
-const BUILD_STAMP = build_stamp();
+const BUILD_STAMP = buildStamp();
 
 // A release build drops what is imported and not used, as a bundler of ES
 // modules does. Expo reads the switches from the environment.
@@ -63,7 +63,7 @@ const BASE = getDefaultConfig(APP);
 /** xpute's packages, as xpute's pnpm-workspace.yaml lists them: one
  * `  - <dir>` a line under `packages:`, up to a blank line, each with a named
  * package.json and a src/. Anything else there refuses the file. */
-function xpute_packages(): string[] {
+function xputePackages(): string[] {
   const file = path.join(REPO, "xpute/pnpm-workspace.yaml");
   const after = fs.readFileSync(file, "utf8").split("\npackages:\n")[1];
   if (after === undefined) throw new Error(`${file}: no \`packages:\``);
@@ -85,7 +85,7 @@ function xpute_packages(): string[] {
   if (dirs.length === 0) throw new Error(`${file}: lists no package`);
   return dirs;
 }
-const XPUTE = xpute_packages();
+const XPUTE = xputePackages();
 
 /** A release build compiles each exported literal into the files that read
  * it (babel.config.ts), so the transforms it may reuse depend on them. */
@@ -94,7 +94,7 @@ const LITERALS =
     ? digest([path.join(APP, "src"), ...XPUTE])
     : "";
 
-const resolve_request: NonNullable<typeof BASE.resolver.resolveRequest> = (
+const resolveRequest: NonNullable<typeof BASE.resolver.resolveRequest> = (
   ctx,
   name,
   platform,
@@ -109,7 +109,7 @@ const resolve_request: NonNullable<typeof BASE.resolver.resolveRequest> = (
   if (name === "virtual:pxl-build") {
     return { type: "sourceFile", filePath: BUILD_STAMP };
   }
-  const file = platform_file(ctx.originModulePath, name, platform);
+  const file = platformFile(ctx.originModulePath, name, platform);
   return ctx.resolveRequest(ctx, file ?? name, platform);
 };
 
@@ -132,16 +132,16 @@ export default {
   // A build made for measuring, or for another tile source, differs in what
   // its modules compile to (babel.config.ts's defines), so it shares no
   // transform with any other.
-  cacheVersion: `${BASE.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${tile_source()}${LITERALS}`,
+  cacheVersion: `${BASE.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${tileSource()}${LITERALS}`,
   fileMapCacheDirectory: CACHE,
-  resolver: { ...BASE.resolver, resolveRequest: resolve_request },
+  resolver: { ...BASE.resolver, resolveRequest: resolveRequest },
   server: {
     ...BASE.server,
     enhanceMiddleware:
       (metro: Middleware): Middleware =>
       (req, res, next) => {
         const url = req.url ?? "/";
-        const target = route_target(url);
+        const target = routeTarget(url);
         if (target) return forward(target, req, res);
         metro(req, res, next);
       },

@@ -14,7 +14,7 @@ import { ui } from "@/service/core/core.ts";
 
 /** A surface's driver; `draw` runs once it opens, and `closed` once it is
  * dropped. */
-export function surface_driver(
+export function surfaceDriver(
   draw?: (surface: u32) => void,
   closed?: (surface: u32) => void,
 ): SurfaceDriver {

@@ -3,16 +3,10 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import {
-  type FrameGroup,
-  GROUPS,
-  n1,
-  value_text,
-  zoom_name,
-} from "./column.ts";
+import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./column.ts";
 
-const bytes = (b: number) => value_text("_bytes", b);
-import { fail_text } from "./report.ts";
+const bytes = (b: number) => valueText("_bytes", b);
+import { failText } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
 import { alpha, COLOR } from "@/ui/shared/component/theme.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
@@ -41,8 +35,8 @@ export const Head = ({
   end?: ReactNode;
 }) => (
   <View style={GAUGE.head}>
-    <Text style={[GAUGE.text, GAUGE.head_text]}>{children}</Text>
-    <View style={GAUGE.head_line} />
+    <Text style={[GAUGE.text, GAUGE.headText]}>{children}</Text>
+    <View style={GAUGE.headLine} />
     {end}
   </View>
 );
@@ -59,7 +53,7 @@ const HIT_KIND_TEXT: Record<(typeof HIT_KINDS)[number], string> = {
   objects: "cubes, folded",
   decor: "decor",
 };
-const hit_kind_text = (k: number) => {
+const hitKindText = (k: number) => {
   const kind = HIT_KINDS[k];
   return kind === undefined ? "-" : HIT_KIND_TEXT[kind];
 };
@@ -95,12 +89,12 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Row k="alt" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
       <Row k="coord" v={coordinate(v.hover_x, v.hover_y, v.hover_z)} />
-      <Row k="drawn at" v={zoom_name(v.cell_zoom)} />
+      <Row k="drawn at" v={zoomName(v.cell_zoom)} />
       <Row
         k="hit"
         v={
           picked
-            ? hit_kind_text(v.hit_kind)
+            ? hitKindText(v.hit_kind)
             : Number.isNaN(v.hover_x)
               ? "-"
               : "nothing in reach"
@@ -110,7 +104,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         k="hit/drawn at"
         v={
           picked
-            ? `${zoom_name(v.pick_zoom)}/${zoom_name(v.ray_zoom)}${folded ? " folded" : ""}`
+            ? `${zoomName(v.pick_zoom)}/${zoomName(v.ray_zoom)}${folded ? " folded" : ""}`
             : "-"
         }
         warn={folded}
@@ -121,7 +115,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         v={
           Number.isNaN(v.place_zoom)
             ? "-"
-            : `${zoom_name(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
+            : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
         }
         warn={v.blocked === 1}
       />
@@ -129,22 +123,33 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
   );
 }
 
-export function PerfRec({ rec }: { rec: Gauge["rec"] }) {
+export function PerfRecording({
+  recordingState,
+}: {
+  recordingState: Gauge["recordingState"];
+}) {
   return (
-    <View style={GAUGE.rec}>
+    <View style={GAUGE.recording}>
       <View style={GAUGE.row}>
-        <View style={GAUGE.rec_state}>
-          <View style={[GAUGE.rec_dot, rec.recording && GAUGE.rec_dot_on]} />
-          <Text style={[GAUGE.text, rec.recording && GAUGE.warn]}>
-            {rec.recording ? "Recording" : "Stopped"}
+        <View style={GAUGE.recordingStatus}>
+          <View
+            style={[
+              GAUGE.recordingDot,
+              recordingState.recording && GAUGE.recordingDotOn,
+            ]}
+          />
+          <Text style={[GAUGE.text, recordingState.recording && GAUGE.warn]}>
+            {recordingState.recording ? "Recording" : "Stopped"}
           </Text>
         </View>
-        <Text style={GAUGE.text}>{`${fixed(rec.elapsed_ms / 1000, 1)} s`}</Text>
+        <Text
+          style={GAUGE.text}
+        >{`${fixed(recordingState.elapsedMs / 1000, 1)} s`}</Text>
       </View>
       <Row
         k="frames/tasks"
-        v={`${rec.frame_cnt}/${rec.task_cnt}${rec.truncated ? " truncated" : ""}`}
-        warn={rec.truncated}
+        v={`${recordingState.frameCount}/${recordingState.taskCount}${recordingState.truncated ? " truncated" : ""}`}
+        warn={recordingState.truncated}
       />
     </View>
   );
@@ -159,7 +164,7 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
       .sort((a, b) => by(b) - by(a))
       .slice(0, n)
       .filter((r) => by(r) > 0);
-  const failing = g.tasks.filter((t) => t.err > 0);
+  const failing = g.tasks.filter((t) => t.failed > 0);
 
   // The gauge is a glance: how smooth the frames are, where a frame's time
   // goes, the scale it is drawn at, and whether anything leaks or fails. The
@@ -192,16 +197,16 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
             was timed there is no measure, and it is shown as such, not as 0. */}
         <Row
           k="gpu busy p95"
-          v={f.gpu_timed > 0 ? `${n1(f.gpu_busy.p95)} ms` : "no timestamps"}
-          warn={f.gpu_timed > 0 && f.gpu_busy.p95 > f.last.paced_ms}
+          v={f.gpuTimed > 0 ? `${n1(f.gpuBusy.p95)} ms` : "no timestamps"}
+          warn={f.gpuTimed > 0 && f.gpuBusy.p95 > f.last.paced_ms}
         />
-        {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => (
+        {heaviest(f.gpuSpans, (s) => s.p95, SPAN_ROWS).map((s) => (
           <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />
         ))}
         <Row
           k="scale/drawn"
           v={`${fixed(f.last.scale, 2)}/${
-            f.gpu_px > 0 ? value_text("gpu_px", f.gpu_px) : "-"
+            f.gpuPx > 0 ? valueText("gpu_px", f.gpuPx) : "-"
           }`}
           warn={f.last.scale < 1}
         />
@@ -213,8 +218,8 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
     heap: f !== null && (
       <Row
         k="heap used change"
-        v={`${f.heap_used_delta_bytes >= 0 ? "+" : ""}${bytes(
-          f.heap_used_delta_bytes,
+        v={`${f.heapUsedDeltaBytes >= 0 ? "+" : ""}${bytes(
+          f.heapUsedDeltaBytes,
         )}`}
       />
     ),
@@ -236,9 +241,9 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
             <Row
               key={t.stream}
               k={`${t.stream} failed`}
-              v={`${t.err} of ${t.n}${
+              v={`${t.failed} of ${t.n}${
                 t.reasons.length > 0
-                  ? ` ${fail_text(t.reasons[0].fail, t.reasons[0].detail)}`
+                  ? ` ${failText(t.reasons[0].fail, t.reasons[0].detail)}`
                   : ""
               }`}
               warn
@@ -259,7 +264,7 @@ export const GAUGE = StyleSheet.create({
     color: alpha(COLOR.white, 0.9),
   },
   key: { color: alpha(COLOR.white, 0.45) },
-  warn: { color: COLOR.perf_halt },
+  warn: { color: COLOR.perfHalt },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   head: {
     flexDirection: "row",
@@ -268,19 +273,18 @@ export const GAUGE = StyleSheet.create({
     marginTop: 8,
     marginBottom: 2,
   },
-  // 10 is macOS's smallest text style: smaller text does not render on a 1x
-  // screen.
-  head_text: { fontSize: 10, color: alpha(COLOR.white, 0.3) },
-  rec: { marginTop: 8 },
-  rec_state: { flexDirection: "row", alignItems: "center", gap: 6 },
-  rec_dot: {
+  // 10 is the least text size Apple's guidelines give macOS.
+  headText: { fontSize: 10, color: alpha(COLOR.white, 0.3) },
+  recording: { marginTop: 8 },
+  recordingStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
+  recordingDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: alpha(COLOR.white, 0.25),
   },
-  rec_dot_on: { backgroundColor: COLOR.perf_halt },
-  head_line: {
+  recordingDotOn: { backgroundColor: COLOR.perfHalt },
+  headLine: {
     flex: 1,
     borderTopWidth: 1,
     borderTopColor: alpha(COLOR.white, 0.1),

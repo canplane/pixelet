@@ -16,28 +16,28 @@ import { PickedCharacter } from "./picked.tsx";
 import { SETTING } from "@/ui/shared/setting.ts";
 import {
   type Character,
-  gender_of,
+  genderOf,
   GENDER_LABEL_KEY,
   GENDERS,
-  person_at,
-  persons_of,
+  personAt,
+  personsOf,
   PETS,
-  pet_at,
+  petAt,
 } from "./character.ts";
 import type { Gender } from "@/ui/shared/asset/character.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/ui/shared/component/panel.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
-import { touch_outset } from "@/ui/shared/component/touch.ts";
+import { touchOutset } from "@/ui/shared/component/touch.ts";
 import * as setting from "@/service/core/setting.ts";
 
 const CHIP_HEIGHT = 32;
 const SURFACE_SIZE = 96;
 const CHIP_GAP_X = 8;
-const CHIP_GAP_Y = 2 * touch_outset(CHIP_HEIGHT);
+const CHIP_GAP_Y = 2 * touchOutset(CHIP_HEIGHT);
 const CHIP_TARGET = {
   paddingHorizontal: CHIP_GAP_X / 2,
-  paddingVertical: touch_outset(CHIP_HEIGHT),
+  paddingVertical: touchOutset(CHIP_HEIGHT),
 };
 
 function Chip({
@@ -56,23 +56,19 @@ function Chip({
       aria-checked={active}
       style={CHIP_TARGET}
     >
-      <View style={[STYLE.chip, active && STYLE.chip_on]}>
+      <View style={[STYLE.chip, active && STYLE.chipOn]}>
         {/* A hidden copy in the heavier weight sizes the chip, so a pick never rewraps the row. */}
         <Text
           aria-hidden
           maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-          style={[STYLE.chip_text, STYLE.chip_text_on, STYLE.sizer]}
+          style={[STYLE.chipText, STYLE.chipTextOn, STYLE.sizer]}
         >
           {label}
         </Text>
         <View style={STYLE.label}>
           <Text
             maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-            style={[
-              STYLE.chip_text,
-              STYLE.centered,
-              active && STYLE.chip_text_on,
-            ]}
+            style={[STYLE.chipText, STYLE.centered, active && STYLE.chipTextOn]}
           >
             {label}
           </Text>
@@ -94,9 +90,9 @@ function PickerCard({
   return (
     <View style={STYLE.picker}>
       <SectionTitle>{label}</SectionTitle>
-      <View style={STYLE.picker_row}>
+      <View style={STYLE.pickerRow}>
         <PickedCharacter character={selected} style={STYLE.surface} />
-        <View style={STYLE.chip_column}>{children}</View>
+        <View style={STYLE.chipColumn}>{children}</View>
       </View>
     </View>
   );
@@ -113,7 +109,7 @@ interface PersonPickerProps {
 function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();
-  const characters = persons_of(gender);
+  const characters = personsOf(gender);
 
   return (
     <PickerCard label={t("drawer.character.person_label")} selected={selected}>
@@ -170,18 +166,18 @@ function PetPicker(props: PetPickerProps) {
 /** A pick takes effect at once and the sheet stays open, so that characters
  * can be compared. */
 export function CharacterPicker() {
-  const person = person_at(useCore((s) => s.settings[SETTING.person.key]));
-  const pet = pet_at(useCore((s) => s.settings[SETTING.pet.key]));
+  const person = personAt(useCore((s) => s.settings[SETTING.person.key]));
+  const pet = petAt(useCore((s) => s.settings[SETTING.pet.key]));
 
   // The picker opens on the selected person's gender, so that a pick does not
   // look reset when the sheet opens again.
-  const [gender, set_gender] = useState<Gender>(gender_of(person));
+  const [gender, setGender] = useState<Gender>(genderOf(person));
 
   return (
     <View style={STYLE.pickers}>
       <PersonPicker
         gender={gender}
-        onGenderChange={set_gender}
+        onGenderChange={setGender}
         selected={person}
         onSelect={(v) => setting.set(SETTING.person.key, v.number)}
       />
@@ -196,7 +192,7 @@ export function CharacterPicker() {
 const STYLE = StyleSheet.create({
   pickers: { gap: PANEL_SECTION_GAP },
   picker: { gap: 8 },
-  picker_row: {
+  pickerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: PANEL_EDGE,
@@ -209,7 +205,7 @@ const STYLE = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: COLOR.backdrop,
   },
-  chip_column: {
+  chipColumn: {
     flexShrink: 1,
     minWidth: 0,
     gap: CHIP_GAP_Y / 2,
@@ -229,13 +225,13 @@ const STYLE = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: COLOR.faint,
   },
-  chip_on: { backgroundColor: COLOR.chosen },
-  chip_text: {
+  chipOn: { backgroundColor: COLOR.chosen },
+  chipText: {
     ...TEXT_STYLE.footnote,
     fontWeight: WEIGHT.medium,
     color: LABEL.primary,
   },
-  chip_text_on: { fontWeight: WEIGHT.semibold, color: COLOR.ground },
+  chipTextOn: { fontWeight: WEIGHT.semibold, color: COLOR.ground },
   sizer: { opacity: 0 },
   label: { ...StyleSheet.absoluteFill, justifyContent: "center" },
   centered: { textAlign: "center" },

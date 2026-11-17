@@ -33,15 +33,15 @@ export function Presence({
   style,
   children,
 }: PresenceProps) {
-  const [mounted, set_mounted] = useState(show);
-  if (show && !mounted) set_mounted(true);
+  const [mounted, setMounted] = useState(show);
+  if (show && !mounted) setMounted(true);
   if (!show && !mounted) return null;
   return (
     <Motion
       from={from}
       to={show ? to : exit}
       transition={show ? transition : exitTransition}
-      onSettled={show ? undefined : () => set_mounted(false)}
+      onSettled={show ? undefined : () => setMounted(false)}
       style={style}
     >
       {children}
@@ -55,7 +55,7 @@ interface Present<T> {
   item: T;
   key: Key;
   /** False while the item is leaving. A leaving item is drawn at its exit
-   * until `on_exited` drops it. */
+   * until `onExited` drops it. */
   present: boolean;
 }
 
@@ -67,29 +67,29 @@ interface Leaving<T> {
 /** `items` is compared by identity, so pass the same array until the list changes. */
 export function usePresent<T>(
   items: readonly T[],
-  key_of: (item: T) => Key,
-): { list: Present<T>[]; on_exited: (key: Key) => void } {
-  const [previous, set_previous] = useState(items);
-  const [leaving, set_leaving] = useState<Leaving<T>[]>([]);
+  keyOf: (item: T) => Key,
+): { list: Present<T>[]; onExited: (key: Key) => void } {
+  const [previous, setPrevious] = useState(items);
+  const [leaving, setLeaving] = useState<Leaving<T>[]>([]);
 
   let current = leaving;
   if (previous !== items) {
-    const keys = new Set(items.map(key_of));
-    const leaving_keys = new Set(leaving.map((l) => l.key));
+    const keys = new Set(items.map(keyOf));
+    const leavingKeys = new Set(leaving.map((l) => l.key));
     const left = previous
-      .map((item) => ({ item, key: key_of(item) }))
-      .filter((l) => !keys.has(l.key) && !leaving_keys.has(l.key));
+      .map((item) => ({ item, key: keyOf(item) }))
+      .filter((l) => !keys.has(l.key) && !leavingKeys.has(l.key));
     current = [...leaving.filter((l) => !keys.has(l.key)), ...left];
-    set_leaving(current);
-    set_previous(items);
+    setLeaving(current);
+    setPrevious(items);
   }
 
   return {
     list: [
-      ...items.map((item) => ({ item, key: key_of(item), present: true })),
+      ...items.map((item) => ({ item, key: keyOf(item), present: true })),
       ...current.map((l) => ({ ...l, present: false })),
     ],
-    on_exited: (key) => set_leaving((l) => l.filter((x) => x.key !== key)),
+    onExited: (key) => setLeaving((l) => l.filter((x) => x.key !== key)),
   };
 }
 
@@ -119,9 +119,9 @@ export function Swap({
   // What each id drew last, so that a leaving id keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());
   nodes.current.set(id, children);
-  const [init, set_init] = useState<Key | null>(id);
-  if (init !== null && init !== id) set_init(null);
-  const { list, on_exited } = usePresent(ids, (k) => k);
+  const [init, setInitial] = useState<Key | null>(id);
+  if (init !== null && init !== id) setInitial(null);
+  const { list, onExited } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);
   return list
     .filter((p) => !p.present || !leaving)
@@ -136,7 +136,7 @@ export function Swap({
             ? undefined
             : () => {
                 nodes.current.delete(key);
-                on_exited(key);
+                onExited(key);
               }
         }
         style={style}

@@ -12,10 +12,10 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 
-import { type Frame, is_list, COLUMNS, read } from "@/service/core/perf.ts";
+import { type Frame, isList, COLUMNS, read } from "@/service/core/perf.ts";
 import { LIST_NAMES } from "./column.ts";
-import { fail_text } from "./report.ts";
-import { long_frames_since } from "./long-frame.ts";
+import { failText } from "./report.ts";
+import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import * as share from "@/service/platform/share.ts";
 
@@ -37,7 +37,7 @@ interface TraceEvent {
 }
 
 const us = (ms: f64) => round(ms * 1000);
-const fixed_n = (n: number, d: number) => +fixed(n, d);
+const fixedN = (n: number, d: number) => +fixed(n, d);
 
 function event(
   name: string,
@@ -60,55 +60,54 @@ function event(
   };
 }
 
-const thread_name = (tid: u32, name: string) =>
+const threadName = (tid: u32, name: string) =>
   event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-function frame_args(f: Frame): ArgMap {
+function frameArgs(f: Frame): ArgMap {
   const args: ArgMap = {};
   for (const { name } of COLUMNS) {
-    if (!is_list(name)) {
-      args[name] = fixed_n(f[name], 2);
+    if (!isList(name)) {
+      args[name] = fixedN(f[name], 2);
       continue;
     }
     const names = LIST_NAMES[name];
-    f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
+    f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
   }
   return args;
 }
 
 /** The profiler's window as a trace, whole. */
-export async function perf_trace(): Promise<object> {
+export async function perfTrace(): Promise<object> {
   const [frames, tasks] = await Promise.all([read("frames"), read("tasks")]);
-  const longs = long_frames_since(-Infinity);
+  const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
   // Perfetto draws spans that overlap on one thread as nested. So each stream
   // has rows, and a task goes on the first of its stream's rows that is free
   // when the task is enqueued.
   const rows = new Map<string, f64[]>();
-  const row_tid = new Map<string, u32>();
-  const by_enqueue = [...tasks].sort((a, b) => a.enqueue_ms - b.enqueue_ms);
-  for (const r of by_enqueue) {
+  const rowTid = new Map<string, u32>();
+  const byEnqueue = [...tasks].sort((a, b) => a.enqueueMs - b.enqueueMs);
+  for (const r of byEnqueue) {
     const ends = rows.get(r.stream) ?? [];
     rows.set(r.stream, ends);
-    let k = ends.findIndex((end) => end <= r.enqueue_ms);
-    if (k < 0) k = ends.push(r.end_ms) - 1;
-    else ends[k] = r.end_ms;
+    let k = ends.findIndex((end) => end <= r.enqueueMs);
+    if (k < 0) k = ends.push(r.endMs) - 1;
+    else ends[k] = r.endMs;
     const row = `${r.stream} ${k + 1}`;
-    let tid = row_tid.get(row);
+    let tid = rowTid.get(row);
     if (tid === undefined) {
-      tid = TID_TASK_BASE + row_tid.size;
-      row_tid.set(row, tid);
-      events.push(thread_name(tid, `task: ${row}`));
+      tid = TID_TASK_BASE + rowTid.size;
+      rowTid.set(row, tid);
+      events.push(threadName(tid, `task: ${row}`));
     }
     const args: ArgMap = {
       priority: r.priority,
-      queued_ms:
-        r.start_ms === null ? null : fixed_n(r.start_ms - r.enqueue_ms, 1),
-      ran_ms: r.start_ms === null ? null : fixed_n(r.end_ms - r.start_ms, 1),
+      queued_ms: r.startMs === null ? null : fixedN(r.startMs - r.enqueueMs, 1),
+      ran_ms: r.startMs === null ? null : fixedN(r.endMs - r.startMs, 1),
     };
     if (r.fail !== 0) {
-      args.fail = fail_text(r.fail, r.detail);
+      args.fail = failText(r.fail, r.detail);
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
@@ -118,20 +117,20 @@ export async function perf_trace(): Promise<object> {
         `${r.stream}:${r.path}`,
         cat,
         "X",
-        us(r.enqueue_ms),
-        us(Math.max(0, r.end_ms - r.enqueue_ms)),
+        us(r.enqueueMs),
+        us(Math.max(0, r.endMs - r.enqueueMs)),
         tid,
         args,
       ),
     );
-    if (r.start_ms !== null) {
+    if (r.startMs !== null) {
       events.push(
         event(
           "run",
           cat,
           "X",
-          us(r.start_ms),
-          us(Math.max(0, r.end_ms - r.start_ms)),
+          us(r.startMs),
+          us(Math.max(0, r.endMs - r.startMs)),
           tid,
         ),
       );
@@ -139,18 +138,18 @@ export async function perf_trace(): Promise<object> {
   }
 
   if (frames.length > 0) {
-    events.push(thread_name(TID_FRAMES, "frames"));
+    events.push(threadName(TID_FRAMES, "frames"));
     for (const f of frames) {
       const ts = us(f.t);
       events.push(
-        event("frame", "frame", "C", ts, null, TID_FRAMES, frame_args(f)),
+        event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)),
       );
       // A frame's record is taken as its stage ends, at `t`. So the stage
       // ends at `t`, the tick ends where the stage starts, and the effects
       // end where the tick starts.
-      const span = (name: string, end_ms: f64, ms: f64) =>
+      const span = (name: string, endMs: f64, ms: f64) =>
         events.push(
-          event(name, "frame", "X", ts - us(end_ms + ms), us(ms), TID_FRAMES),
+          event(name, "frame", "X", ts - us(endMs + ms), us(ms), TID_FRAMES),
         );
       span("stage", 0, f.stage_ms);
       span("tick", f.stage_ms, f.tick_ms);
@@ -159,20 +158,20 @@ export async function perf_trace(): Promise<object> {
   }
 
   if (longs.length > 0) {
-    events.push(thread_name(TID_LONG, "long frames"));
+    events.push(threadName(TID_LONG, "long frames"));
     for (const l of longs) {
       const args = {
-        blocking_ms: fixed_n(l.blocking_ms, 1),
-        script_ms: fixed_n(l.script_ms, 1),
-        render_ms: fixed_n(l.render_ms, 1),
+        blocking_ms: fixedN(l.blockingMs, 1),
+        script_ms: fixedN(l.scriptMs, 1),
+        render_ms: fixedN(l.renderMs, 1),
       };
       events.push(
         event(
-          `${l.source} ${fixed(l.duration_ms, 0)}ms`,
+          `${l.source} ${fixed(l.durationMs, 0)}ms`,
           l.source,
           "X",
           us(l.t),
-          us(l.duration_ms),
+          us(l.durationMs),
           TID_LONG,
           args,
         ),
@@ -191,8 +190,8 @@ export async function perf_trace(): Promise<object> {
   };
 }
 
-export async function perf_trace_save(): Promise<string> {
-  const json = JSON.stringify(await perf_trace());
+export async function perfTraceSave(): Promise<string> {
+  const json = JSON.stringify(await perfTrace());
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `perf-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {

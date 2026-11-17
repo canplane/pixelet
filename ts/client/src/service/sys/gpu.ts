@@ -47,9 +47,9 @@ export function gpu(): Gpu {
   return state;
 }
 
-export function set_gpu(gpu: Gpu): void {
+export function setGpu(gpu: Gpu): void {
   state = gpu;
   listeners.notify();
 }
 
-export const watch_gpu = listeners.watch;
+export const watchGpu = listeners.watch;

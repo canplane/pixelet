@@ -30,7 +30,7 @@ export function ViewButtons() {
                 ? "world.controls.third_person"
                 : "world.controls.first_person",
             ),
-            on_press: () => setting.set(MODE.key, first ? ORBIT : FIRST_PERSON),
+            onPress: () => setting.set(MODE.key, first ? ORBIT : FIRST_PERSON),
           },
         ]}
       />
@@ -43,8 +43,8 @@ export function ViewButtons() {
                 ? "world.controls.hide_places"
                 : "world.controls.show_places",
             ),
-            on_press: () => setting.set(PLACE, places ? 0 : 1),
-            is_active: places,
+            onPress: () => setting.set(PLACE, places ? 0 : 1),
+            isActive: places,
           },
         ]}
       />

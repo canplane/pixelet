@@ -29,7 +29,7 @@ export function AttributionSection() {
       Open Database License
     </Link>
   );
-  const cc_by = (
+  const ccBy = (
     <Link href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</Link>
   );
   return (
@@ -68,7 +68,7 @@ export function AttributionSection() {
               <Link href="https://doi.org/10.5281/zenodo.18887460">
                 GEDTM30
               </Link>{" "}
-              by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under {cc_by}
+              by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under {ccBy}
             </Line>
           </Provider>
           <Provider name="Arnis">

@@ -24,9 +24,9 @@ const INSET = 12;
 const GROUP_BORDER = 1;
 
 const COST_COLOR: Record<SettingCost, string> = {
-  low: COLOR.cost_low,
-  med: COLOR.cost_medium,
-  high: COLOR.cost_high,
+  low: COLOR.costLow,
+  med: COLOR.costMedium,
+  high: COLOR.costHigh,
 };
 
 function Badge({ text, tint }: { text: string; tint: string }) {
@@ -34,7 +34,7 @@ function Badge({ text, tint }: { text: string; tint: string }) {
     <View style={[STYLE.badge, { backgroundColor: alpha(tint, 0.15) }]}>
       <Text
         maxFontSizeMultiplier={TEXT_SCALE_CAP.mark}
-        style={[STYLE.badge_text, { color: tint }]}
+        style={[STYLE.badgeText, { color: tint }]}
       >
         {text}
       </Text>
@@ -64,7 +64,7 @@ function Described({
 }) {
   return (
     <View style={STYLE.described}>
-      <View style={STYLE.name_line}>
+      <View style={STYLE.nameLine}>
         <Text style={STYLE.name}>{label}</Text>
         <Badges cost={cost} dev={dev} />
       </View>
@@ -121,14 +121,14 @@ export function SettingGroup(props: SettingGroupProps) {
       <View style={STYLE.legend}>
         <Text
           maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-          style={STYLE.legend_text}
+          style={STYLE.legendText}
         >
           {label}
         </Text>
         <Badges cost={cost} dev={dev} />
       </View>
       {description && (
-        <Text style={[SETTING_TEXT.small, STYLE.group_description]}>
+        <Text style={[SETTING_TEXT.small, STYLE.groupDescription]}>
           {description}
         </Text>
       )}
@@ -192,8 +192,8 @@ export function Section(props: SectionProps) {
   const { title, icon, caption, children } = props;
   return (
     <View style={STYLE.section}>
-      <View style={STYLE.title_block}>
-        <View style={STYLE.title_line}>
+      <View style={STYLE.titleBlock}>
+        <View style={STYLE.titleLine}>
           {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
           <SectionTitle>{title}</SectionTitle>
         </View>
@@ -243,7 +243,7 @@ const STYLE = StyleSheet.create({
   },
   bleed: { marginHorizontal: -INSET },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
-  name_line: { flexDirection: "row", alignItems: "center", gap: 8 },
+  nameLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { ...TEXT_STYLE.body, color: LABEL.primary },
 
   badge: {
@@ -252,7 +252,7 @@ const STYLE = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 4,
   },
-  badge_text: {
+  badgeText: {
     ...TEXT_STYLE.caption2,
     fontSize: 9,
     lineHeight: 10,
@@ -281,12 +281,12 @@ const STYLE = StyleSheet.create({
     paddingHorizontal: 8,
     backgroundColor: COLOR.ground,
   },
-  legend_text: {
+  legendText: {
     ...TEXT_STYLE.caption,
     fontWeight: WEIGHT.medium,
     color: LABEL.primary,
   },
-  group_description: {
+  groupDescription: {
     paddingHorizontal: INSET,
     paddingTop: 4,
     paddingBottom: 4,
@@ -298,6 +298,6 @@ const STYLE = StyleSheet.create({
   section: { gap: 4 },
   prose: { gap: 8, paddingVertical: 4 },
   link: { textDecorationLine: "underline" },
-  title_block: { gap: 4, marginBottom: 4 },
-  title_line: { flexDirection: "row", alignItems: "center", gap: 8 },
+  titleBlock: { gap: 4, marginBottom: 4 },
+  titleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
 });

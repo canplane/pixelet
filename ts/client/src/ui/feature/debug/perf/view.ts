@@ -1,11 +1,12 @@
 // @pxl/client/ui/feature/debug/perf/view.ts
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 import {
   type FrameSummary,
   read,
   type RecordingSection,
+  type RecordingState,
   start,
   type Step,
   type TaskRecord,
@@ -14,15 +15,15 @@ import {
   type Worst,
 } from "@/service/core/perf.ts";
 import type { LongFrame } from "@/service/platform/types.ts";
-import { long_frames_clear, long_frames_since } from "./long-frame.ts";
+import { longFramesClear, longFramesSince } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;
 
 /** Starts the profiler's window afresh: the core's tables and the platform's
  * long frames together, so both cover the same span. */
-export function perf_window_start(): void {
+export function perfWindowStart(): void {
   start();
-  long_frames_clear();
+  longFramesClear();
 }
 
 export interface PerfReport {
@@ -53,40 +54,28 @@ export const fps = (f: { n: f64; seconds: f64 }): f64 | null =>
  * frames not drawn, and the median interval stays at the display's refresh
  * until half the frames miss it, so neither shows this rate.
  */
-export const moving_fps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
-  f.moving >= 1 && f.moving_ms > 0 ? (1000 * f.moving) / f.moving_ms : null;
+export const movingFps = (f: { moving: f64; movingMs: f64 }): f64 | null =>
+  f.moving >= 1 && f.movingMs > 0 ? (1000 * f.moving) / f.movingMs : null;
 
 /** The span the panel title's frame rate is taken over. It is short so that
  * a dip shows as it happens. */
 const RECENT_MS = 1_000;
 
 export interface Gauge {
-  rec: {
-    recording: boolean;
-    elapsed_ms: f64;
-    task_cnt: u32;
-    frame_cnt: u32;
-    truncated: boolean;
-  };
+  recordingState: RecordingState;
   frames: FrameSummary | null;
   recent: FrameSummary | null;
   tasks: TaskSummary[];
   view: ViewSection;
 }
 
-export async function perf_gauge_read(window_ms: f64): Promise<Gauge> {
+export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
   const [s, recent] = await Promise.all([
-    read("summary", window_ms),
+    read("summary", windowMs),
     read("summary", RECENT_MS),
   ]);
   return {
-    rec: {
-      recording: s.recording_state.recording,
-      elapsed_ms: s.recording_state.elapsed_ms,
-      task_cnt: s.recording_state.task_cnt,
-      frame_cnt: s.recording_state.frame_cnt,
-      truncated: s.recording_state.truncated,
-    },
+    recordingState: s.recordingState,
     frames: s.frames,
     recent: recent.frames,
     tasks: s.tasks,
@@ -94,7 +83,7 @@ export async function perf_gauge_read(window_ms: f64): Promise<Gauge> {
   };
 }
 
-export async function perf_report_read(): Promise<PerfReport> {
+export async function perfReportRead(): Promise<PerfReport> {
   const [s, recent, worst] = await Promise.all([
     read("summary", null),
     read("tasks", RECENT_TASKS),
@@ -108,8 +97,8 @@ export async function perf_report_read(): Promise<PerfReport> {
     tasks: s.tasks,
     recent,
     worst,
-    longs: long_frames_since(-Infinity),
-    truncated: s.recording_state.truncated,
+    longs: longFramesSince(-Infinity),
+    truncated: s.recordingState.truncated,
     recording: s.recording,
     view: s.view,
   };

@@ -13,7 +13,7 @@ interface PxlPlatform {
   unpack(packed: Uint8Array): Promise<ArrayBuffer>;
   storage_get(key: string): string | null;
   storage_keys(): string[];
-  storage_set(key: string, val: string): void;
+  storage_set(key: string, value: string): void;
   clipboard_set(text: string): void;
   has_heading(): boolean;
   /** The part of the bottom inset that takes a touch, in dp: Android's bar of

@@ -1,60 +1,67 @@
 // pxl-core/link/export/input.rs
 
-//! The input interface's methods: the pointer, the wheel, a trackpad's pinch,
-//! the held movement keys and a tracker's pose.
+//! The input interface's methods: what the hand does to the view as the UI
+//! recognizes it, the held movement keys and a tracker's pose.
 
 use super::refuse_unless;
-use crate::abi::input::{Drag, PointerPhase};
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::input::{
-    camera_keys, camera_pinch, camera_pointer_down, camera_pointer_move, camera_pointer_out,
-    camera_pointer_up, camera_wheel, pinching,
+    camera_drag, camera_hover, camera_keys, camera_out, camera_pan, camera_tilt, camera_turn,
+    camera_zoom, hovering, tap_ndc,
 };
-use crate::pointer::tap;
+use crate::pointer;
 use xpute_kit::status::errno::Errno;
 
-pub(super) fn pointer(
-    phase: PointerPhase,
-    touch: bool,
-    id: i32,
-    drag: Drag,
-    x: f64,
-    y: f64,
-) -> Result<(), Errno> {
-    match phase {
-        PointerPhase::Down => {
-            camera_pointer_down(touch, id, drag, x, y);
-        }
-        PointerPhase::Move => camera_pointer_move(touch, id, x, y),
-        PointerPhase::Up => {
-            if let Some([x, y]) = camera_pointer_up(touch, id) {
-                tap(x, y);
-            }
-        }
-        PointerPhase::Out => {
-            camera_pointer_out();
-            clear_hover();
-        }
-        PointerPhase::Cancel => {
-            camera_pointer_up(touch, id);
-        }
-    }
-    // A pinch does not point at anything the tool could place.
-    if pinching() {
+pub(super) fn pan(dx: f64, dy: f64) -> Result<(), Errno> {
+    camera_pan(dx, dy);
+    Ok(())
+}
+
+pub(super) fn turn(rad: f64) -> Result<(), Errno> {
+    camera_turn(rad);
+    Ok(())
+}
+
+pub(super) fn tilt(rad: f64) -> Result<(), Errno> {
+    camera_tilt(rad);
+    Ok(())
+}
+
+pub(super) fn zoom(scale: f64) -> Result<(), Errno> {
+    refuse_unless(scale > 0.0, Errno::EINVAL)?;
+    camera_zoom(scale);
+    Ok(())
+}
+
+/// A hand dragging the view points at nothing the tool could place.
+pub(super) fn drag(dragging: bool) -> Result<(), Errno> {
+    camera_drag(dragging);
+    if dragging {
         clear_hover_coord();
     }
     Ok(())
 }
 
-pub(super) fn wheel(delta_y: f64) -> Result<(), Errno> {
-    camera_wheel(delta_y);
+pub(super) fn tap(x: f64, y: f64) -> Result<(), Errno> {
+    let [x, y] = tap_ndc(x, y);
+    pointer::tap(x, y);
+    // A tap leaves its hover only under a pointer that stays over the world,
+    // as a finger does not.
+    if !hovering() {
+        clear_hover();
+    }
     Ok(())
 }
 
-pub(super) fn pinch(scale: f64) -> Result<(), Errno> {
-    refuse_unless(scale > 0.0, Errno::EINVAL)?;
-    camera_pinch(scale);
+pub(super) fn hover(x: f64, y: f64) -> Result<(), Errno> {
+    camera_hover(x, y);
+    Ok(())
+}
+
+pub(super) fn out() -> Result<(), Errno> {
+    camera_out();
+    clear_hover();
     Ok(())
 }
 

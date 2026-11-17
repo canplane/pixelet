@@ -5,60 +5,75 @@ import { useSyncExternalStore } from "react";
 import type { Snapshot } from "@/abi/overlay.ts";
 import {
   type UiView,
-  watch_snapshot,
-  watch_view,
+  watchSnapshot,
+  watchView,
 } from "@/service/core/overlay.ts";
-import { gpu, watch_gpu, type Gpu } from "@/service/sys/gpu.ts";
-import { online, watch_online } from "@/service/origin/online.ts";
+import { gpu, watchGpu, type Gpu } from "@/service/sys/gpu.ts";
+import { online, watchOnline } from "@/service/origin/online.ts";
 import {
-  source_state,
-  source_versions,
-  watch_source,
+  sourceState,
+  sourceVersions,
+  watchSource,
   type Source,
 } from "@/service/sys/fs/source.ts";
 import * as overlay from "@/service/core/overlay.ts";
-import { watch_sensor } from "@/service/core/sensor.ts";
+import {
+  type DragMode,
+  dragMode,
+  watchDragMode,
+} from "@/service/core/input.ts";
+import { watchSensor } from "@/service/core/sensor.ts";
 import {
   type DeviceLocationStore,
   type DeviceOrientationStore,
-  device_location_store,
-  device_orient_store,
+  deviceLocationStore,
+  deviceOrientationStore,
 } from "@/service/core/sensor/reading.ts";
 
 /** `select` must return a primitive or a reference that already exists. A new
  * object on every call makes React render again forever. */
 export function useCore<T>(select: (s: Snapshot) => T): T {
-  return useSyncExternalStore(watch_snapshot, () => select(overlay.cur()));
+  return useSyncExternalStore(watchSnapshot, () =>
+    select(overlay.currentSnapshot()),
+  );
 }
 
 /** The view's azimuth and scale, which change apart from the snapshot.
  * `select` keeps the same rule as `useCore`'s. */
 export function useView<T>(select: (v: UiView) => T): T {
-  return useSyncExternalStore(watch_view, () => select(overlay.cur_view()));
+  return useSyncExternalStore(watchView, () => select(overlay.currentView()));
 }
 
 /** The device's sensors as their driver holds them. `select` keeps the same
  * rule as `useCore`'s. */
 export function useSensor<T>(
-  select: (location: DeviceLocationStore, orient: DeviceOrientationStore) => T,
+  select: (
+    location: DeviceLocationStore,
+    orientation: DeviceOrientationStore,
+  ) => T,
 ): T {
-  return useSyncExternalStore(watch_sensor, () =>
-    select(device_location_store(), device_orient_store()),
+  return useSyncExternalStore(watchSensor, () =>
+    select(deviceLocationStore(), deviceOrientationStore()),
   );
 }
 
+/** What the pointers hold the world for. */
+export function useDragMode(): DragMode {
+  return useSyncExternalStore(watchDragMode, dragMode);
+}
+
 export function useGpu(): Gpu {
-  return useSyncExternalStore(watch_gpu, gpu);
+  return useSyncExternalStore(watchGpu, gpu);
 }
 
 export function useOnline(): boolean {
-  return useSyncExternalStore(watch_online, online);
+  return useSyncExternalStore(watchOnline, online);
 }
 
-export function useSourceVersions(): ReturnType<typeof source_versions> {
-  return useSyncExternalStore(watch_source, source_versions);
+export function useSourceVersions(): ReturnType<typeof sourceVersions> {
+  return useSyncExternalStore(watchSource, sourceVersions);
 }
 
 export function useSource(): Source {
-  return useSyncExternalStore(watch_source, source_state);
+  return useSyncExternalStore(watchSource, sourceState);
 }

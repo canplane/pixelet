@@ -118,8 +118,6 @@ export interface Snapshot {
   companion_ready: boolean;
   drafting: boolean;
   is_follow_mode: boolean;
-  camera_busy: boolean;
-  zooming: boolean;
   over_marker: boolean;
   settings: Uint32Array<ArrayBuffer>;
   division: DivisionPart[];
@@ -129,7 +127,7 @@ export interface Snapshot {
   area_progress: number;
 }
 
-export const SNAPSHOT_SZ = 96;
+export const SNAPSHOT_SZ = 88;
 export const SNAPSHOT_ALIGN = 8;
 
 export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
@@ -137,13 +135,11 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
   w.bool(at + 40, v.companion_ready);
   w.bool(at + 41, v.drafting);
   w.bool(at + 42, v.is_follow_mode);
-  w.bool(at + 43, v.camera_busy);
-  w.bool(at + 44, v.zooming);
-  w.bool(at + 45, v.over_marker);
-  w.arr(at + 48, v.settings);
+  w.bool(at + 43, v.over_marker);
+  w.arr(at + 44, v.settings);
   {
     const b0 = w.list(
-      at + 56,
+      at + 52,
       v.division.length,
       DIVISION_PART_SZ,
       DIVISION_PART_ALIGN,
@@ -153,13 +149,13 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
         store_DivisionPart(w, b0 + i0 * DIVISION_PART_SZ, x0);
       });
   }
-  w.arr(at + 64, v.character_surfaces);
+  w.arr(at + 60, v.character_surfaces);
   if (v.stall !== null) {
-    w.u8(at + 72, 1);
-    w.u8(at + 72 + 1, v.stall);
+    w.u8(at + 68, 1);
+    w.u8(at + 68 + 1, v.stall);
   }
-  w.f64(at + 80, v.renderer_progress);
-  w.f64(at + 88, v.area_progress);
+  w.f64(at + 72, v.renderer_progress);
+  w.f64(at + 80, v.area_progress);
 }
 
 export function load_Snapshot(r: Lift, at: number): Snapshot {
@@ -168,17 +164,15 @@ export function load_Snapshot(r: Lift, at: number): Snapshot {
     companion_ready: r.bool(at + 40),
     drafting: r.bool(at + 41),
     is_follow_mode: r.bool(at + 42),
-    camera_busy: r.bool(at + 43),
-    zooming: r.bool(at + 44),
-    over_marker: r.bool(at + 45),
-    settings: r.arr(at + 48, Uint32Array),
-    division: r.map(at + 56, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
+    over_marker: r.bool(at + 43),
+    settings: r.arr(at + 44, Uint32Array),
+    division: r.map(at + 52, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
       load_DivisionPart(r, at),
     ),
-    character_surfaces: r.arr(at + 64, Uint32Array),
-    stall: r.case(at + 72, 2) === 0 ? null : load_Message(r, at + 72 + 1),
-    renderer_progress: r.f64(at + 80),
-    area_progress: r.f64(at + 88),
+    character_surfaces: r.arr(at + 60, Uint32Array),
+    stall: r.case(at + 68, 2) === 0 ? null : load_Message(r, at + 68 + 1),
+    renderer_progress: r.f64(at + 72),
+    area_progress: r.f64(at + 80),
   };
 }
 

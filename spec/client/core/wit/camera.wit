@@ -4,7 +4,6 @@ interface camera {
   enum tracking { recenter, follow, unfollow }
 
   track: func(tracking: tracking);
-  north-up: func();
   // Flies to (lon, lat), keeping the camera's dist, azimuth and polar.
   goto: func(lon: f64, lat: f64);
 }

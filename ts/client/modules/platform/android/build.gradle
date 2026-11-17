@@ -26,8 +26,6 @@ android {
 
 dependencies {
   implementation 'androidx.core:core-ktx:1.16.0'
-  // The world's surface subclasses the GPU's (WorldView.kt).
-  implementation project(':pxl-gpu')
 }
 
 // Each variant's library lies in a directory of its own, which that variant

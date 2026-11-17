@@ -17,15 +17,16 @@
 
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::world::{BOUNDS, ROUND};
-use pxl_spec::space::coord::zoom::{LEAF_ZOOM, Zoom, units};
+use pxl_spec::space::coord::world::{BOUNDS, ROUND, wrap_idx};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, Zoom, cnt, units};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
+use super::change;
 use super::ray::{Descent, Ray, Until, at_zoom, finest};
-use super::world::World;
+use super::world::{ColumnWalk, World};
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
 use pxl_engine::cast::{Detail, fill_bound};
@@ -279,7 +280,46 @@ impl<'w> SplitCell<'w> {
     }
 }
 
+/// Whether the shard a walk is in is empty, by the shard's index, with the
+/// column walk that asks one shard after another.
+#[derive(Default)]
+struct Emptiness {
+    shard: Option<([f64; 2], bool)>,
+    walk: ColumnWalk,
+}
+
 impl World {
+    /// The leaf cells around the leaf cell `at` that all answer a walker
+    /// alike, as their low corner and the corner past their high one, in
+    /// leaf cells: `at` alone, or every cell of a shard that is empty, its
+    /// column holding nothing (`bounds`). Only a shard past the service area
+    /// is empty, since the ground's bound is none there alone; each of its
+    /// cells is the Earth at sea level, and none of them is within the
+    /// area, so no wall stands among them. The shard is asked once for the
+    /// cells in it.
+    fn alike(&self, emptiness: &mut Emptiness, at: [f64; 2]) -> [[f64; 2]; 2] {
+        let across = f64::from(cnt(GROUND.leaf_cell_zoom(), SHARD_ZOOM));
+        let shard = at.map(|v| libm::floor(v / across));
+        let empty = match emptiness.shard {
+            Some((last, empty)) if last == shard => empty,
+            _ => {
+                let node = (
+                    SHARD_ZOOM,
+                    [wrap_idx(SHARD_ZOOM, shard[0] as i32), shard[1] as i32],
+                );
+                let bounds = self.bounds(&mut emptiness.walk, node, GROUND.leaf_cell_zoom());
+                let empty = matches!(bounds, Answer::Exact(None));
+                emptiness.shard = Some((shard, empty));
+                empty
+            }
+        };
+        if empty {
+            [shard.map(|v| v * across), shard.map(|v| (v + 1.0) * across)]
+        } else {
+            [at, at.map(|v| v + 1.0)]
+        }
+    }
+
     /// What is in the leaf cell at `at`, as the cast draws it (pxl-engine
     /// `world::node`), or void where nothing is.
     pub(crate) fn asset_of(&self, at: &Q3) -> Answer<u32> {
@@ -359,8 +399,9 @@ impl World {
     }
 
     /// Where a walker standing at the center `from` ends when it goes toward
-    /// `to`, one leaf cell at a time. A `from` whose height is not known
-    /// stands on the surface.
+    /// `to`, one leaf cell at a time, and across an empty shard in one step,
+    /// as a ray crosses a node that holds nothing (`alike`). A
+    /// `from` whose height is not known stands on the surface.
     ///
     /// The rule follows Quake III's PM_StepSlideMove (id Software,
     /// code/game/bg_slidemove.c), which steps up and slides a blocked axis
@@ -404,6 +445,7 @@ impl World {
         let mut end = [sx + way[0], sy + way[1]];
         let mut blocked = [false; 2];
         let mut at = [sx, sy].map(|v| libm::floor(v / s));
+        let mut emptiness = Emptiness::default();
         // The walker first climbs out of what fills its own cell, so only
         // what is over that counts as a ceiling.
         let mut path = Path::default();
@@ -413,14 +455,13 @@ impl World {
             path = c.path;
             c.answer(f).exact()?
         };
-        // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
+        // Amanatides and Woo's traversal: the share of `way` at each axis's
+        // next edge. The edges are those of the cells that all answer alike
+        // (`alike`): the leaf cell's, or an empty shard's.
         loop {
+            let [lo, hi] = self.alike(&mut emptiness, at);
             let edge = |k: usize| {
-                if way[k] > 0.0 {
-                    (at[k] + 1.0) * s
-                } else {
-                    at[k] * s
-                }
+                if way[k] > 0.0 { hi[k] * s } else { lo[k] * s }
             };
             let share = |k: usize| {
                 if blocked[k] || way[k] == 0.0 {
@@ -431,7 +472,37 @@ impl World {
             };
             let k = if share(0) <= share(1) { 0 } else { 1 };
             let t = share(k);
-            if t > 1.0 {
+            let last = t > 1.0;
+            // The cell the way reaches within these edges: where it ends, or
+            // the cell at the edge it crosses. It is another cell than `at`
+            // only among cells that all answer alike, so one step reaches it
+            // and nothing there stops it. A cell's edge the way lies on is
+            // crossed where the way ends on it, and not yet where it passes
+            // the other axis's edge there, as a walk a cell at a time has it.
+            let reach: [f64; 2] = core::array::from_fn(|j| {
+                let cell = |v: f64, crossed: bool| match (way[j] > 0.0) == crossed {
+                    true => libm::floor(v / s),
+                    false => libm::ceil(v / s) - 1.0,
+                };
+                let v = if blocked[j] || way[j] == 0.0 {
+                    at[j]
+                } else if last {
+                    cell(end[j], true)
+                } else if j != k {
+                    cell([sx, sy][j] + way[j] * t, false)
+                } else if way[k] > 0.0 {
+                    hi[k] - 1.0
+                } else {
+                    lo[k]
+                };
+                v.clamp(lo[j], hi[j] - 1.0)
+            });
+            if reach != at {
+                change::report_read(center(at), center(reach), GROUND.leaf_cell_zoom());
+                floor = self.step(center(at), floor, center(reach), walled, &mut path)??;
+                at = reach;
+            }
+            if last {
                 break;
             }
             let mut into = at;

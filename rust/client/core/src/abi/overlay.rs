@@ -139,8 +139,6 @@ pub struct Snapshot {
     pub companion_ready: bool,
     pub drafting: bool,
     pub is_follow_mode: bool,
-    pub camera_busy: bool,
-    pub zooming: bool,
     pub over_marker: bool,
     pub settings: Vec<u32>,
     pub division: Vec<DivisionPart>,
@@ -151,7 +149,7 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub const SZ: usize = 96;
+    pub const SZ: usize = 88;
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
@@ -159,12 +157,10 @@ impl Snapshot {
         w.bool(at + 40, self.companion_ready);
         w.bool(at + 41, self.drafting);
         w.bool(at + 42, self.is_follow_mode);
-        w.bool(at + 43, self.camera_busy);
-        w.bool(at + 44, self.zooming);
-        w.bool(at + 45, self.over_marker);
-        w.arr(at + 48, &self.settings);
+        w.bool(at + 43, self.over_marker);
+        w.arr(at + 44, &self.settings);
         if let Some(b) = w.list(
-            at + 56,
+            at + 52,
             self.division.len(),
             DivisionPart::SZ,
             DivisionPart::ALIGN,
@@ -173,13 +169,13 @@ impl Snapshot {
                 (x).store(w, b + i * DivisionPart::SZ);
             }
         }
-        w.arr(at + 64, &self.character_surfaces);
+        w.arr(at + 60, &self.character_surfaces);
         if let Some(v) = &self.stall {
-            w.u8(at + 72, 1);
-            w.u8(at + 72 + 1, *v as u8);
+            w.u8(at + 68, 1);
+            w.u8(at + 68 + 1, *v as u8);
         }
-        w.f64(at + 80, self.renderer_progress);
-        w.f64(at + 88, self.area_progress);
+        w.f64(at + 72, self.renderer_progress);
+        w.f64(at + 80, self.area_progress);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
@@ -188,29 +184,27 @@ impl Snapshot {
             companion_ready: r.bool(at + 40)?,
             drafting: r.bool(at + 41)?,
             is_follow_mode: r.bool(at + 42)?,
-            camera_busy: r.bool(at + 43)?,
-            zooming: r.bool(at + 44)?,
-            over_marker: r.bool(at + 45)?,
-            settings: r.arr::<u32>(at + 48)?,
+            over_marker: r.bool(at + 43)?,
+            settings: r.arr::<u32>(at + 44)?,
             division: r
-                .list(at + 56, DivisionPart::SZ, DivisionPart::ALIGN)
+                .list(at + 52, DivisionPart::SZ, DivisionPart::ALIGN)
                 .and_then(|(b, n)| {
                     (0..n)
                         .map(|i| DivisionPart::load(r, b + i * DivisionPart::SZ))
                         .collect::<Result<Vec<_>, _rt::Errno>>()
                 })?,
-            character_surfaces: r.arr::<u32>(at + 64)?,
-            stall: r.case(at + 72, 2).and_then(|d| {
+            character_surfaces: r.arr::<u32>(at + 60)?,
+            stall: r.case(at + 68, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
                 } else {
-                    r.case(at + 72 + 1, 2)
+                    r.case(at + 68 + 1, 2)
                         .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Some)
                 }
             })?,
-            renderer_progress: r.f64(at + 80)?,
-            area_progress: r.f64(at + 88)?,
+            renderer_progress: r.f64(at + 72)?,
+            area_progress: r.f64(at + 80)?,
         })
     }
 }
@@ -219,7 +213,7 @@ pub fn show(snapshot: &Snapshot) -> impl Future<Output = Result<(), _rt::Errno>>
     let sent = _rt::wait::wait(
         HANDLE,
         SHOW,
-        Some((96, &|w_: &mut _rt::Lower| {
+        Some((88, &|w_: &mut _rt::Lower| {
             (snapshot).store(w_, 0);
         })),
         (),

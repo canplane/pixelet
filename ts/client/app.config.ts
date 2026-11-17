@@ -39,6 +39,7 @@ export function app(root: string) {
               "pixelet shows you where you are in the world, and what you build stands there.",
           },
         ],
+        ["expo-font", { fonts: [at("public/font/uDIN1451Mittelschrift.ttf")] }],
         at("plugin/prebuilt-flavor.ts"),
         at("plugin/android-build.ts"),
         at("plugin/ios-build.ts"),

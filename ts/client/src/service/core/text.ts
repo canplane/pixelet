@@ -20,29 +20,29 @@ import type { Lent } from "@xpute/link/abi/types.ts";
 import * as text from "@/abi/text.ts";
 import * as platform from "@/service/platform/text.web.ts";
 
-/** Mounts the text on `link`, reading what the core lends in `mem`. */
-export function mount_text(link: Callee, mem: Memory): void {
+/** Mounts the text on `link`, reading what the core lends in `memory`. */
+export function mountText(link: Callee, memory: Memory): void {
   /** The text a call lends, which the core holds only until the call
    * returns. */
-  const text_of = (lent: Lent): string =>
-    td.decode(mem.bytes(lent.buf, lent.nbyte));
+  const textOf = (lent: Lent): string =>
+    td.decode(memory.bytes(lent.buf, lent.nbyte));
 
   text.mount(link, {
     width(weight, px, text) {
-      return platform.width(weight, px, text_of(text));
+      return platform.width(weight, px, textOf(text));
     },
     raster(weight, px, color, image, width, height, x, text) {
-      const len = width * height * 4;
-      if (len > image.nbyte) throw new XputeError(ERRNO_EINVAL);
+      const bytes = width * height * 4;
+      if (bytes > image.nbyte) throw new XputeError(ERRNO_EINVAL);
       platform.raster(
         weight,
         px,
         color,
-        text_of(text),
+        textOf(text),
         x,
         width,
         height,
-        mem.bytes(image.buf, len),
+        memory.bytes(image.buf, bytes),
       );
     },
   });

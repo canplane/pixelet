@@ -57,20 +57,20 @@ function NameTip({
     <View
       pointerEvents="none"
       style={[
-        STYLE.tip_anchor,
+        STYLE.tipAnchor,
         {
           left: named.x - TIP_SPAN / 2,
           bottom: sheetHeightPx - named.y,
         },
       ]}
     >
-      <View style={STYLE.tip_shape}>
+      <View style={STYLE.tipShape}>
         <View
           needsOffscreenAlphaCompositing
-          style={[StyleSheet.absoluteFill, STYLE.tip_fill]}
+          style={[StyleSheet.absoluteFill, STYLE.tipFill]}
         >
-          <View style={STYLE.tip_pill} />
-          <View style={STYLE.tip_point} />
+          <View style={STYLE.tipPill} />
+          <View style={STYLE.tipPoint} />
         </View>
         <Text numberOfLines={1} style={STYLE.tip}>
           {named.label}
@@ -82,8 +82,8 @@ function NameTip({
 
 export function NameTipLayer({ children }: { children: ReactNode }) {
   const sheet = useRef<ViewInstance>(null);
-  const [sheet_height, set_sheet_height] = useState(0);
-  const [named, set_named] = useState<Named | null>(null);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const [named, setNamed] = useState<Named | null>(null);
   // The sheet and the item are both measured in the window. Natively,
   // measureLayout against the sheet leaves out how far the content scrolled.
   // Each press takes a new number, so a measurement that answers after its
@@ -96,14 +96,14 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
         sheet.current?.measureInWindow((sx, sy) =>
           item.measureInWindow((x, y, w) => {
             if (press.current === at) {
-              set_named({ label, x: x - sx + w / 2, y: y - sy });
+              setNamed({ label, x: x - sx + w / 2, y: y - sy });
             }
           }),
         );
       },
       hide: () => {
         press.current++;
-        set_named(null);
+        setNamed(null);
       },
     }),
     [],
@@ -114,26 +114,26 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
       ref={sheet}
       style={STYLE.sheet}
       onLayout={(e: LayoutChangeEvent) =>
-        set_sheet_height(e.nativeEvent.layout.height)
+        setSheetHeight(e.nativeEvent.layout.height)
       }
     >
       <NamingContext.Provider value={naming}>{children}</NamingContext.Provider>
-      {named && <NameTip named={named} sheetHeightPx={sheet_height} />}
+      {named && <NameTip named={named} sheetHeightPx={sheetHeight} />}
     </View>
   );
 }
 
 const STYLE = StyleSheet.create({
   sheet: { flex: 1 },
-  tip_anchor: {
+  tipAnchor: {
     position: "absolute",
     width: TIP_SPAN,
     alignItems: "center",
     paddingBottom: 2,
   },
-  tip_shape: { alignItems: "center", paddingBottom: TIP_POINT },
-  tip_fill: { opacity: TIP_OPACITY, alignItems: "center" },
-  tip_pill: {
+  tipShape: { alignItems: "center", paddingBottom: TIP_POINT },
+  tipFill: { opacity: TIP_OPACITY, alignItems: "center" },
+  tipPill: {
     alignSelf: "stretch",
     flex: 1,
     backgroundColor: TIP_FILL,
@@ -145,7 +145,7 @@ const STYLE = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: TIP_PAD_Y,
   },
-  tip_point: {
+  tipPoint: {
     // The point overlaps the pill by a pixel, so that no rounding opens a gap
     // between them. They are faded as one layer, so the overlap does not show.
     marginTop: -1,

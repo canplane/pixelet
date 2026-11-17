@@ -11,17 +11,17 @@ export function online(): boolean {
   return state;
 }
 
-export function set_online(online: boolean): void {
+export function setOnline(online: boolean): void {
   state = online;
   listeners.notify();
 }
 
-export const watch_online = listeners.watch;
+export const watchOnline = listeners.watch;
 
-export function when_online(): Promise<void> {
+export function whenOnline(): Promise<void> {
   if (state) return Promise.resolve();
   return new Promise((resolve) => {
-    const stop = watch_online(() => {
+    const stop = watchOnline(() => {
       if (!state) return;
       stop();
       resolve();

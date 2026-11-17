@@ -8,25 +8,27 @@ import {
   SCENE_CONTENT_CHARACTER,
 } from "@/abi/scene.enum.ts";
 import { ui } from "@/service/core/core.ts";
-import { world_open } from "@/service/core/sensor.ts";
+import { worldOpen } from "@/service/core/sensor.ts";
 
-export function draw_world(surface: u32): void {
-  void scene.draw(ui, surface, SCENE_CONTENT_WORLD, null, null).catch(warn_err);
-  world_open(surface);
+export function drawWorld(surface: u32): void {
+  void scene
+    .draw(ui, surface, SCENE_CONTENT_WORLD, null, null)
+    .catch(warnError);
+  worldOpen(surface);
 }
 
 /** Draws the companion's character of `group` alone into `surface`, as it
  * looks in the world, over the color `bg` (0xRRGGBB). A second draw into the
  * same surface replaces the first. */
-export function draw_character(surface: u32, group: u32, bg: u32): void {
+export function drawCharacter(surface: u32, group: u32, bg: u32): void {
   void scene
     .draw(ui, surface, SCENE_CONTENT_CHARACTER, group, bg)
-    .catch(warn_err);
+    .catch(warnError);
 }
 
 /** Logs a draw's error case: its surface not open, or drawing another
  * scene. */
-function warn_err(e: unknown): void {
+function warnError(e: unknown): void {
   if (!(e instanceof ComponentError)) throw e;
   console.warn(`[scene] not drawn: ${e.payload}`);
 }

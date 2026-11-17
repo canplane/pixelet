@@ -26,7 +26,7 @@ import {
   SOURCE_REFUSED,
   type Source,
 } from "@/service/sys/fs/source.ts";
-import { message_key } from "@/ui/shared/locale/message-key.ts";
+import { messageKey } from "@/ui/shared/locale/message-key.ts";
 
 export interface Standing {
   boot: Boot;
@@ -36,7 +36,7 @@ export interface Standing {
   /** Why the server is not answering the world's reads, or null while it
    * answers. */
   stall: Message | null;
-  stop_code: string | null;
+  stopCode: string | null;
   /** The share of the renderer's pipelines made so far, from 0 to 1. */
   progress: number;
   /** The share of the view's ground that shows, from 0 to 1. */
@@ -69,16 +69,16 @@ export const UI_PANIC = panic("panic.app", "UI_ERROR");
 
 /** The panic for what breaks the world once it is made, or while it is being
  * made. */
-function panic_of(s: Standing): Cover | null {
+function panicOf(s: Standing): Cover | null {
   if (s.stall === MESSAGE_WORLD_UNAVAILABLE) {
-    return panic(message_key(s.stall), "WORLD_UNAVAILABLE");
+    return panic(messageKey(s.stall), "WORLD_UNAVAILABLE");
   }
   return null;
 }
 
 /** What keeps the app from showing, in the order it is to be told: a failure,
  * where the app will not come, before progress, while it may. */
-function block_of(s: Standing): Cover | null {
+function blockOf(s: Standing): Cover | null {
   switch (s.gpu) {
     case GPU_MISSING:
       return failed("failed.gpu");
@@ -101,7 +101,7 @@ function block_of(s: Standing): Cover | null {
 /** What the world waits on while it is made, once nothing blocks it. First
  * come the pipelines, which the renderer makes as soon as a GPU answers, with
  * the source asked for beside them. Then comes the view's area. */
-function wait_of(s: Standing): Cover {
+function waitOf(s: Standing): Cover {
   if (s.progress < 1) return progress(s, "progress.shaders");
   return progress(s, "progress.area");
 }
@@ -112,15 +112,15 @@ function wait_of(s: Standing): Cover {
  * a failure or progress, and it holds until the boot shows the app
  * (runtime/ui.ts), so neither ever comes up over the app. Once the app
  * shows, nothing but a panic covers it. */
-export function cover_of(s: Standing): Cover | null {
+export function coverOf(s: Standing): Cover | null {
   switch (s.boot) {
     case BOOT_TERMINATED:
-      return panic("panic.app", s.stop_code);
+      return panic("panic.app", s.stopCode);
     case BOOT_STARTED:
-      return panic_of(s);
+      return panicOf(s);
     case BOOT_LOADING:
     case BOOT_STARTING:
-      return panic_of(s) ?? block_of(s) ?? wait_of(s);
+      return panicOf(s) ?? blockOf(s) ?? waitOf(s);
     case BOOT_OPENING:
       return progress(s, "progress.app");
   }

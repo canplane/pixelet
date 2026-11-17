@@ -183,7 +183,6 @@
       "object_size": "サイズ {{n}}"
     },
     "controls": {
-      "reset_orientation": "北に合わせる",
       "move_to_location": "現在地へ",
       "start_compass_mode": "コンパスをオン",
       "exit_compass_mode": "コンパスをオフ",

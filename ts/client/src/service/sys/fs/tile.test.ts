@@ -8,33 +8,33 @@ import {
   tile_object,
   type BASE_KINDS,
 } from "@/abi/publication.spec.ts";
-import { decl } from "./source.ts";
-import { version_of } from "./tile.ts";
+import { declarationOf } from "./source.ts";
+import { versionOf } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
-const DECL = decl(FIXTURE.source)!;
+const DECLARATION = declarationOf(FIXTURE.source)!;
 
-test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the core made", () => {
+test("versionOf - each kind's tile at each zoom, a shard's own version or not, is the object the core made", () => {
   for (const { kind, object } of FIXTURE.tiles) {
     const k = kind as (typeof BASE_KINDS)[number];
     const name = object.split("/")[1]!;
     assert.deepStrictEqual(
-      tile_object(version_of(DECL, k, name), name),
+      tile_object(versionOf(DECLARATION, k, name), name),
       object,
       `${kind} ${name}`,
     );
   }
   assert.deepStrictEqual(
-    tile_object(version_of(DECL, "earth", TILE_SPHERE), TILE_SPHERE),
+    tile_object(versionOf(DECLARATION, "earth", TILE_SPHERE), TILE_SPHERE),
     FIXTURE.sphere,
   );
 });
 
-test("decl - one this client cannot read is not handed over", () => {
+test("declarationOf - one this client cannot read is not handed over", () => {
   const whole = FIXTURE.source;
   const { version } = whole;
   assert.deepStrictEqual(
-    decl(whole) !== null,
+    declarationOf(whole) !== null,
     true,
     "the fixture's own is read",
   );
@@ -56,5 +56,5 @@ test("decl - one this client cannot read is not handed over", () => {
     { ...whole, min_zoom: 4.5 },
     { ...whole, format: { ...whole.format, terrain: -1 } },
   ])
-    assert.deepStrictEqual(decl(bad), null, JSON.stringify(bad));
+    assert.deepStrictEqual(declarationOf(bad), null, JSON.stringify(bad));
 });

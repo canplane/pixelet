@@ -31,18 +31,18 @@ import * as local from "@/service/platform/storage.ts";
 /** A write the platform refuses keeps nothing and does not throw. */
 export interface Storage {
   get(key: string): string | null;
-  set(key: string, val: string): void;
+  set(key: string, value: string): void;
 }
 
 export let STORAGE: Storage = local;
 
 /** The web worker cannot reach the page's storage, so the core's worker keeps
  * a copy of it that writes back to the page (runtime/worker.ts). */
-export function set_storage(s: Storage): void {
+export function setStorage(s: Storage): void {
   STORAGE = s;
 }
 
-function bytes_of(text: string): U8Array {
+function bytesOf(text: string): U8Array {
   if (!is_b64url(text)) throw new ComponentError(ERROR_CODE_BAD_MESSAGE);
   try {
     return b64url_to_bytes(text);
@@ -58,23 +58,23 @@ const KEYS: ReadonlyMap<u32, string> = new Map([
 
 /** Whether `key` holds a storage file or one set aside. These are the keys a
  * page copies to its core's worker (runtime/worker.ts). */
-export function is_storage_key(key: string): boolean {
+export function isStorageKey(key: string): boolean {
   for (const k of KEYS.values()) {
     if (key === k || key.startsWith(`${k}:aside:`)) return true;
   }
   return false;
 }
 
-/** Copies what `key` holds to `<key>:aside:<now_ms>`, reads the copy back, and
+/** Copies what `key` holds to `<key>:aside:<nowMs>`, reads the copy back, and
  * then empties `key`. When the copy does not read back, the storage refused
  * the write, so `key` is left as it was and the set-aside fails `io`: the file
  * is never emptied without a copy. */
-function set_aside_key(s: Storage, key: string, now_ms: number): void {
+function setAsideKey(s: Storage, key: string, nowMs: number): void {
   const text = s.get(key);
   if (text !== null && text !== "") {
-    let aside = `${key}:aside:${now_ms}`;
+    let aside = `${key}:aside:${nowMs}`;
     for (let n = 1; s.get(aside) !== null; n++) {
-      aside = `${key}:aside:${now_ms}-${n}`;
+      aside = `${key}:aside:${nowMs}-${n}`;
     }
     s.set(aside, text);
     if (s.get(aside) !== text) throw new ComponentError(ERROR_CODE_IO);
@@ -82,30 +82,30 @@ function set_aside_key(s: Storage, key: string, now_ms: number): void {
   s.set(key, "");
 }
 
-export function set_aside(s: Storage, slot: u32, now_ms: number): void {
-  set_aside_key(s, key_of(slot), now_ms);
+export function setAside(s: Storage, slot: u32, nowMs: number): void {
+  setAsideKey(s, keyOf(slot), nowMs);
 }
 
-function key_of(slot: u32): string {
+function keyOf(slot: u32): string {
   const key = KEYS.get(slot);
   if (key === undefined) throw new ComponentError(ERROR_CODE_NO_ENTRY);
   return key;
 }
 
-export function open_storage(slot: u32, s: Storage = STORAGE): U8Array {
-  const text = s.get(key_of(slot));
+export function openStorage(slot: u32, s: Storage = STORAGE): U8Array {
+  const text = s.get(keyOf(slot));
   if (text === null) throw new ComponentError(ERROR_CODE_NO_ENTRY);
-  return bytes_of(text);
+  return bytesOf(text);
 }
 
 /** Writes `bytes` as the file in `slot`, and fails `io` where the platform
  * refused the write: what it holds then does not read back. */
-export function commit_storage(
+export function commitStorage(
   slot: u32,
   bytes: U8Array,
   s: Storage = STORAGE,
 ): void {
-  const key = key_of(slot);
+  const key = keyOf(slot);
   const text = bytes_to_b64url(bytes);
   s.set(key, text);
   if (s.get(key) !== text) throw new ComponentError(ERROR_CODE_IO);

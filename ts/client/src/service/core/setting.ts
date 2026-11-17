@@ -7,8 +7,8 @@ import { ui } from "@/service/core/core.ts";
 
 /** Sets the setting `key`; one set before the core has read its settings is
  * refused, and the read's value stands. */
-export function set(key: u32, val: u32): void {
-  void setting.set(ui, key, val).catch((e: unknown) => {
+export function set(key: u32, value: u32): void {
+  void setting.set(ui, key, value).catch((e: unknown) => {
     if (!(e instanceof ComponentError)) throw e;
     console.warn(`[setting] ${key} not set: ${e.payload}`);
   });

@@ -183,7 +183,6 @@
       "object_size": "Size {{n}}"
     },
     "controls": {
-      "reset_orientation": "Face north",
       "move_to_location": "Go to my location",
       "start_compass_mode": "Turn on compass",
       "exit_compass_mode": "Turn off compass",

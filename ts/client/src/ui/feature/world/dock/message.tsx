@@ -14,7 +14,7 @@ import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { Presence } from "@/ui/shared/component/motion/presence.tsx";
 import { FADE, SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { put_keyboard_away } from "@/ui/shared/component/keyboard.tsx";
+import { putKeyboardAway } from "@/ui/shared/component/keyboard.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { TextField } from "@/ui/shared/component/text-field.tsx";
 import {
@@ -27,12 +27,7 @@ import {
   CHAT_TEXT_CHARS,
   MARKER_TEXT_CHARS,
 } from "@/ui/shared/asset/marker.spec.ts";
-import {
-  append_chat_line,
-  DockMode,
-  text_fits,
-  set_dock_mode,
-} from "./store.ts";
+import { appendChatLine, DockMode, textFits, setDockMode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
 import * as edit from "@/service/core/edit.ts";
 import * as overlay from "@/service/core/overlay.ts";
@@ -41,17 +36,17 @@ import * as overlay from "@/service/core/overlay.ts";
  * drawn yet. */
 export function useMessage(mode: DockMode) {
   const drafting = useCore((s) => s.drafting);
-  const [message_text, set_message_text] = useState("");
-  const [is_sending, set_is_sending] = useState(false);
-  const input_ref = useRef<TextInputInstance | null>(null);
+  const [messageText, setMessageText] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const inputRef = useRef<TextInputInstance | null>(null);
 
   // The keyboard is up exactly while the dock is in message mode. A marker's
   // draft exists only in message mode, so leaving the mode cancels it.
   useEffect(() => {
-    if (mode === DockMode.MESSAGE) input_ref.current?.focus();
+    if (mode === DockMode.MESSAGE) inputRef.current?.focus();
     else {
-      put_keyboard_away();
-      if (drafting) edit.marker_cancel();
+      putKeyboardAway();
+      if (drafting) edit.markerCancel();
     }
   }, [mode]);
 
@@ -59,52 +54,52 @@ export function useMessage(mode: DockMode) {
   // draft's text. From then on the field owns the text and sends the core each
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
-    set_message_text(drafting ? overlay.cur_draft() : "");
-    if (drafting) set_dock_mode(DockMode.MESSAGE);
+    setMessageText(drafting ? overlay.currentDraft() : "");
+    if (drafting) setDockMode(DockMode.MESSAGE);
   }, [drafting]);
 
-  function change_text(text: string) {
-    set_message_text(text);
-    if (drafting) edit.marker_text(text.trim());
+  function changeText(text: string) {
+    setMessageText(text);
+    if (drafting) edit.markerText(text.trim());
   }
 
-  function send_message() {
-    const text = message_text.trim();
-    if (!can_send || !fits || is_sending) return;
-    set_is_sending(true);
+  function sendMessage() {
+    const text = messageText.trim();
+    if (!canSend || !fits || isSending) return;
+    setIsSending(true);
     setTimeout(() => {
       if (!drafting) {
         // The line stays in the field where the core refuses it.
-        void append_chat_line(text).then((taken) => {
-          set_is_sending(false);
+        void appendChatLine(text).then((taken) => {
+          setIsSending(false);
           if (!taken) return;
-          set_message_text("");
-          input_ref.current?.focus();
+          setMessageText("");
+          inputRef.current?.focus();
         });
         return;
       }
-      set_message_text("");
-      set_is_sending(false);
-      edit.marker_commit();
-      set_dock_mode(DockMode.PALETTE);
-    }, FADE.duration_ms);
+      setMessageText("");
+      setIsSending(false);
+      edit.markerCommit();
+      setDockMode(DockMode.PALETTE);
+    }, FADE.durationMs);
   }
 
-  const can_send = message_text.trim() !== "";
+  const canSend = messageText.trim() !== "";
   // A text past its kind's cap can be neither put up nor said.
-  const fits = text_fits(
-    message_text,
+  const fits = textFits(
+    messageText,
     drafting ? MARKER_TEXT_CHARS : CHAT_TEXT_CHARS,
   );
 
   return {
     drafting,
-    message_text,
-    is_sending,
-    input_ref,
-    change_text,
-    send_message,
-    can_send,
+    messageText,
+    isSending,
+    inputRef,
+    changeText,
+    sendMessage,
+    canSend,
     fits,
   };
 }
@@ -119,49 +114,49 @@ export function Message({
   const { t } = useTranslation();
   const {
     drafting,
-    message_text,
-    is_sending,
-    input_ref,
-    change_text,
-    send_message,
-    can_send,
+    messageText,
+    isSending,
+    inputRef,
+    changeText,
+    sendMessage,
+    canSend,
     fits,
   } = message;
 
   return (
     <View style={[STYLE.message, { width }]}>
-      <View style={STYLE.message_icon}>
+      <View style={STYLE.messageIcon}>
         <Glyph glyph="bubble.left" size={CHROME.glyph} color={LABEL.primary} />
       </View>
       <Motion
-        to={{ opacity: is_sending ? 0 : 1 }}
+        to={{ opacity: isSending ? 0 : 1 }}
         transition={FADE}
-        style={STYLE.field_fill}
+        style={STYLE.fieldFill}
       >
         <TextField
-          ref={input_ref}
-          value={message_text}
-          onChangeText={change_text}
-          onSubmit={send_message}
+          ref={inputRef}
+          value={messageText}
+          onChangeText={changeText}
+          onSubmit={sendMessage}
           placeholder={
             drafting
               ? t("world.dock.pin_placeholder")
               : t("world.dock.message_placeholder")
           }
           placeholderTextColor={LABEL.placeholder}
-          style={STYLE.message_input}
+          style={STYLE.messageInput}
         />
       </Motion>
       <Presence
-        show={can_send}
+        show={canSend}
         from={{ opacity: 0, scale: 0.5 }}
         exit={{ opacity: 0 }}
         transition={SNAP}
         style={STYLE.slot}
       >
         <Pressable
-          onPress={send_message}
-          disabled={is_sending || !fits}
+          onPress={sendMessage}
+          disabled={isSending || !fits}
           accessibilityRole="button"
           accessibilityLabel={
             drafting ? t("world.dock.put_pin") : t("world.dock.send")
@@ -169,8 +164,8 @@ export function Message({
           style={({ pressed }) => [
             STYLE.send,
             drafting && STYLE.confirm,
-            pressed && STYLE.send_pressed,
-            !fits && STYLE.send_refused,
+            pressed && STYLE.sendPressed,
+            !fits && STYLE.sendRefused,
           ]}
         >
           <Glyph
@@ -192,14 +187,14 @@ const STYLE = StyleSheet.create({
     height: CHROME.control,
     paddingRight: (CHROME.control - CHROME.target) / 2,
   },
-  message_icon: {
+  messageIcon: {
     width: CHROME.control,
     height: CHROME.control,
     alignItems: "center",
     justifyContent: "center",
   },
-  field_fill: { flex: 1, minWidth: 0 },
-  message_input: { width: "100%", color: LABEL.primary },
+  fieldFill: { flex: 1, minWidth: 0 },
+  messageInput: { width: "100%", color: LABEL.primary },
   send: {
     width: CHROME.selection,
     height: CHROME.selection,
@@ -209,7 +204,7 @@ const STYLE = StyleSheet.create({
     backgroundColor: COLOR.send,
   },
   confirm: { backgroundColor: COLOR.confirm },
-  send_pressed: { opacity: 0.7 },
-  send_refused: { opacity: DISABLED_CONTENT },
+  sendPressed: { opacity: 0.7 },
+  sendRefused: { opacity: DISABLED_CONTENT },
   slot: SLOT,
 });

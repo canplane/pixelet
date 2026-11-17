@@ -2,7 +2,7 @@
 
 import type { ComponentType } from "react";
 
-import { SETTING, type SettingName, settings_in } from "@/ui/shared/setting.ts";
+import { SETTING, type SettingName, settingsIn } from "@/ui/shared/setting.ts";
 import {
   CameraGizmoLegend,
   RayStepsLegend,
@@ -22,20 +22,20 @@ const PANEL = {
 
 type PanelName = keyof typeof PANEL;
 
-const is_panel = (name: SettingName): name is PanelName =>
+const isPanel = (name: SettingName): name is PanelName =>
   Object.hasOwn(PANEL, name);
 
 export function useDebugWindow(): boolean {
   return useCore((s) =>
-    settings_in("debug").some(
-      (name) => is_panel(name) && s.settings[SETTING[name].key] === 1,
+    settingsIn("debug").some(
+      (name) => isPanel(name) && s.settings[SETTING[name].key] === 1,
     ),
   );
 }
 
 export function DebugWindow() {
-  return settings_in("debug")
-    .filter(is_panel)
+  return settingsIn("debug")
+    .filter(isPanel)
     .map((name) => {
       const Panel = PANEL[name];
       return <Panel key={name} />;

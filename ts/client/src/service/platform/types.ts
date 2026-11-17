@@ -8,11 +8,11 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 
 /** A transaction on the place's database, which keeps files of bytes by key.
  * null stands for no file. */
-export interface Tx {
+export interface Transaction {
   get(key: string): Promise<U8Array | null>;
   put(key: string, bytes: U8Array | null): Promise<void>;
 }
@@ -32,7 +32,7 @@ export interface Viewport {
 }
 
 /** A position as the web API and the native one both give it. */
-export interface Coords {
+export interface Coordinates {
   longitude: f64;
   latitude: f64;
   altitude: f64 | null;
@@ -46,7 +46,7 @@ export interface Fix {
   lon: f64;
   lat: f64;
   alt: f64 | null;
-  alt_accuracy: f64 | null;
+  altitudeAccuracy: f64 | null;
   accuracy: f64 | null;
   heading: f64 | null;
 }
@@ -68,14 +68,17 @@ export interface SensorListener {
   /** `watching` says whether the watch runs on past the failure, which only
    * the platform knows: a web watch rides out all but a refusal, and a
    * native one ends on any. */
-  pos_err(err: GeolocationError, watching: boolean): void;
+  positionError(error: GeolocationError, watching: boolean): void;
   /** A heading, in degrees clockwise from north, or null for a reading with
    * no heading. */
-  orient(heading: f64 | null): void;
+  orientation(heading: f64 | null): void;
   /** The place has no compass: a web event with every field null. */
-  orient_unavailable(): void;
-  orient_err(): void;
-  permission(sensor: "geolocation" | "orient", answer: PermissionAnswer): void;
+  orientationUnavailable(): void;
+  orientationError(): void;
+  permission(
+    sensor: "geolocation" | "orientation",
+    answer: PermissionAnswer,
+  ): void;
 }
 
 export interface GeolocationSensor {
@@ -112,33 +115,19 @@ export interface SurfaceDriver {
   close(handle: u32): void;
 }
 
-/** A pointer's phase in the place's own words, the DOM's pointer events and a
- * native view's payload; service/core maps them to the core's enum
- * (input.ts `POINTER_PHASE`), so the platform names nothing of the core. */
-export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
-export type PointerKind = "mouse" | "touch" | "pen";
-
+/** What the world's surface hears that is not a gesture: the wheel, a
+ * trackpad's pinch on the web and the keys. The gestures are recognized
+ * above the surface (ui/feature/world/gesture.tsx). */
 export interface InputDriver {
-  /** A pointer event. `x` and `y` are in CSS pixels from the top left of the
-   * canvas's layout box, without its transforms. */
-  pointer(
-    phase: PointerPhase,
-    kind: PointerKind,
-    id: i32,
-    button: i32,
-    x: f64,
-    y: f64,
-  ): void;
-  wheel(delta_y: f64): void;
+  wheel(deltaY: f64): void;
   /** A trackpad's pinch: the factor its fingers' spread changed by since the
    * last, over one as they spread. */
   pinch(scale: f64): void;
   /** Returns whether the core took the key, in which case the page's default
    * action is prevented. */
-  key_down(code: string, at: { in_field: boolean }): boolean;
-  key_up(code: string): void;
-  release_keys(): void;
-  release_pointers(): void;
+  keyDown(code: string, at: { inField: boolean }): boolean;
+  keyUp(code: string): void;
+  releaseKeys(): void;
 }
 
 export interface WorldSurfaceProps {
@@ -162,10 +151,10 @@ export type LongFrameSource = "loaf" | "longtask";
 export interface LongFrame {
   source: LongFrameSource;
   t: f64;
-  duration_ms: f64;
-  blocking_ms: f64;
-  script_ms: f64;
-  render_ms: f64;
+  durationMs: f64;
+  blockingMs: f64;
+  scriptMs: f64;
+  renderMs: f64;
 }
 
 /** The CSS variable that the web `useVisualViewport` keeps on its root on

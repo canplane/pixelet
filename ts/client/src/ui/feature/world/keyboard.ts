@@ -12,19 +12,19 @@
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { type Tool, TOOL_ERASER, TOOL_POINTER } from "@/abi/edit.enum.ts";
 import { KIND_CUBE } from "@/ui/shared/asset/id.spec.ts";
-import { kind_of } from "@/ui/shared/asset/catalog.ts";
-import { close_modal, modal_open, open_modal } from "@/ui/shared/modal.ts";
+import { kindOf } from "@/ui/shared/asset/catalog.ts";
+import { closeModal, modalOpen, openModal } from "@/ui/shared/modal.ts";
 import {
   DockMode,
-  dock_mode,
-  flash_swatch,
-  select_tool,
+  dockMode,
+  flashSwatch,
+  selectTool,
   RECENT_PICKS,
-  recent_pick,
-  select_asset,
-  set_dock_mode,
-  step_scale,
-  switch_dock_mode,
+  recentPick,
+  selectAsset,
+  setDockMode,
+  stepScale,
+  switchDockMode,
 } from "@/ui/feature/world/dock/store.ts";
 import * as input from "@/service/core/input.ts";
 
@@ -55,7 +55,7 @@ const SIZE: Record<string, i32> = { BracketRight: 1, BracketLeft: -1 };
 const held = new Set<string>();
 let sent: [i32, i32] = [0, 0];
 
-function send_move(): void {
+function sendMove(): void {
   const to: [i32, i32] = [0, 0];
   for (const code of held) {
     to[0] += MOVE[code][0];
@@ -66,65 +66,65 @@ function send_move(): void {
   input.move(to[0], to[1]);
 }
 
-function pick_slot(slot: number): void {
-  const id = recent_pick(slot);
-  select_asset(id);
-  if (kind_of(id) === KIND_CUBE) flash_swatch(id, false);
+function pickSlot(slot: number): void {
+  const id = recentPick(slot);
+  selectAsset(id);
+  if (kindOf(id) === KIND_CUBE) flashSwatch(id, false);
 }
 
 /** Returns whether the UI answers the key, so that the caller can leave every
  * other key to its default. */
-export function key_down(
+export function keyDown(
   code: string,
-  { in_field }: { in_field: boolean },
+  { inField }: { inField: boolean },
 ): boolean {
   if (code === "Escape") {
-    if (modal_open()) {
-      close_modal();
+    if (modalOpen()) {
+      closeModal();
       return true;
     }
-    if (dock_mode() !== DockMode.MESSAGE) return false;
-    set_dock_mode(DockMode.PALETTE);
+    if (dockMode() !== DockMode.MESSAGE) return false;
+    setDockMode(DockMode.PALETTE);
     return true;
   }
-  if (modal_open()) return false;
+  if (modalOpen()) return false;
   if (code === "Tab") {
-    switch_dock_mode();
+    switchDockMode();
     return true;
   }
-  if (in_field) return false;
+  if (inField) return false;
   if (code in TOOL) {
-    select_tool(TOOL[code]);
+    selectTool(TOOL[code]);
     return true;
   }
   if (code === DRAWER) {
-    open_modal("drawer");
+    openModal("drawer");
     return true;
   }
   if (code in SIZE) {
-    step_scale(SIZE[code]);
+    stepScale(SIZE[code]);
     return true;
   }
   if (code in MOVE) {
     held.add(code);
-    send_move();
+    sendMove();
     return true;
   }
   const slot = Number(SLOT.exec(code)?.[1] ?? 0);
   if (slot >= 1 && slot <= RECENT_PICKS) {
-    pick_slot(slot - 1);
+    pickSlot(slot - 1);
     return true;
   }
   return false;
 }
 
-export function key_up(code: string): void {
-  if (held.delete(code)) send_move();
+export function keyUp(code: string): void {
+  if (held.delete(code)) sendMove();
 }
 
 /** Releases every held key. The caller calls it when focus leaves, because no
  * key up will come for the keys held then. */
-export function release_keys(): void {
+export function releaseKeys(): void {
   held.clear();
-  send_move();
+  sendMove();
 }

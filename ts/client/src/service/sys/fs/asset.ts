@@ -16,13 +16,13 @@ import { ERROR_CODE_NO_ENTRY } from "@xpute/host/abi/fs/types.enum.ts";
 import { CATALOG } from "@/abi/file.spec.ts";
 import { CATALOG_HEX } from "@/service/sys/fs/catalog.spec.ts";
 import { ASSET_FILES } from "@/service/origin/ingest.spec.ts";
-import { asset_url } from "@/service/origin/route.ts";
+import { assetUrl } from "@/service/origin/route.ts";
 import { get } from "@/service/sys/fs/read.ts";
 
-export function read_asset(id: u32, signal: AbortSignal): Promise<U8Array> {
+export function readAsset(id: u32, signal: AbortSignal): Promise<U8Array> {
   if (id === CATALOG) return Promise.resolve(hex_to_bytes(CATALOG_HEX));
   const key = ASSET_FILES[id - 1]?.key;
   if (key === undefined)
     return Promise.reject(new ComponentError(ERROR_CODE_NO_ENTRY));
-  return get(asset_url(key), signal);
+  return get(assetUrl(key), signal);
 }

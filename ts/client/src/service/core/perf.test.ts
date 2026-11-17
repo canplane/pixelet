@@ -5,11 +5,11 @@ import assert from "node:assert/strict";
 
 import { FRAME } from "@/abi/perf.spec.ts";
 import { GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
-import { frame_at } from "./perf.ts";
+import { frameAt } from "./perf.ts";
 
-test("frame_at - reads each column at its word", () => {
+test("frameAt - reads each column at its word", () => {
   const words = Float64Array.from({ length: FRAME.WORDS }, (_, k) => k);
-  const f = frame_at(words, 0);
+  const f = frameAt(words, 0);
   assert.deepStrictEqual(f.budget_ms, FRAME.budget_ms);
   assert.deepStrictEqual(f.gpu_spans[2], FRAME.gpu_spans + 2);
   assert.deepStrictEqual(f.gpu_spans.length, GPU_SPAN_NAMES.length);

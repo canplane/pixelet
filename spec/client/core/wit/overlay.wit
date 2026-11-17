@@ -41,9 +41,6 @@ interface overlay {
     // A marker's draft is open, its text told apart (`draft`).
     drafting: bool,
     is-follow-mode: bool,
-    camera-busy: bool,
-    // A zoom is in hand; the scale shows while it is.
-    zooming: bool,
     // The pointer is over a scene marker a tap would act on.
     over-marker: bool,
     // Every setting's value by its number; none until the core has read its

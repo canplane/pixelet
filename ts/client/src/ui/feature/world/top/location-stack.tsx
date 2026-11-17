@@ -15,7 +15,6 @@ import {
   SENSOR_STATUS_LOADING,
   SENSOR_STATUS_READY,
 } from "@/service/core/sensor/reading.ts";
-import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { SETTLE } from "@/ui/shared/component/motion/transition.ts";
@@ -42,13 +41,13 @@ const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
 export function LocationStack() {
   const { t } = useTranslation();
   const status = useSensor((l) => l.state.status);
-  const has_location = useSensor((l) => l.location !== null);
+  const hasLocation = useSensor((l) => l.location !== null);
   const following = useCore((s) => s.is_follow_mode);
-  const is_off_center = useCore((s) => s.pivot.is_off_center);
+  const isOffCenter = useCore((s) => s.pivot.is_off_center);
 
   const press = following
     ? TRACKING_UNFOLLOW
-    : is_off_center
+    : isOffCenter
       ? TRACKING_RECENTER
       : TRACKING_FOLLOW;
   const { glyph, label } = PRESS[press];
@@ -59,9 +58,9 @@ export function LocationStack() {
       items={[
         {
           label: t(label),
-          on_press: () => void camera.tracking(press),
-          is_active: following,
-          disabled: status !== SENSOR_STATUS_READY || !has_location,
+          onPress: () => void camera.tracking(press),
+          isActive: following,
+          disabled: status !== SENSOR_STATUS_READY || !hasLocation,
           face:
             status === SENSOR_STATUS_LOADING ? (
               <Spinner size={CHROME.glyph} color={LABEL.primary} />
@@ -79,12 +78,6 @@ export function LocationStack() {
                 />
               </Motion>
             ),
-        },
-        {
-          label: t("world.controls.reset_orientation"),
-          on_press: camera.north_up,
-          disabled: following,
-          face: <CompassFace />,
         },
       ]}
     />
