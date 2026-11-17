@@ -2,7 +2,8 @@
 
 /** A function without `async` the UI implements across its port refuses to
  * start, naming its interface, and the guest is never entered (worker.ts
- * `enter`), as xpute-runtime-native link.calls.test.rs holds a device's. */
+ * `enter`), as xpute-runtime-native link.calls.test.rs holds the native
+ * runtime's. */
 
 import { test, vi } from "vitest";
 import assert from "node:assert/strict";

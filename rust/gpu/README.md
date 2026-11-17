@@ -57,22 +57,22 @@ naming the other.
   (`GpuAsk`, `GpuConfig`).
 - `guest` (`pxl-gpu-guest`) is the guest's encoder of WebGPU's calls into the
   stream, with its bindings.
-- `host` (`pxl-gpu-host`) runs the stream on wgpu on a device, with its
+- `host` (`pxl-gpu-host`) runs the stream on wgpu natively, with its
   bindings, mounted on the side `xpute-runtime-native` makes. It opens the
   device when the guest asks, keeps its compiled pipelines in the app's caches,
   and exports its C ABI by `native_abi!`, which pxl-runtime expands. It draws
   with a fork of wgpu ([wgpu-fork.md](wgpu-fork.md)).
-- `ts/gpu/host` (`@pxl/gpu/host`) runs it on the browser's WebGPU in the page's
+- `ts/gpu/host` (`@pxl/gpu/host`) runs it on the browser's WebGPU in the web
   worker (`WebGpu`), with its bindings, takes the canvas the UI gives beside the
   link, and posts its state to the page (`GpuReport`).
-- `ts/gpu/expo` (`@pxl/gpu/expo`) is the device's module: the view the
+- `ts/gpu/expo` (`@pxl/gpu/expo`) is the native module: the view the
   guest's surface draws into (`SurfaceView`), the display's frames, and what
   the host has of a GPU as it changes, the state now first to a UI that
   starts later (`state_on`).
 
 The golden programs (`spec/golden/gpu/program.tsv`) hold the encoder and both
 hosts to one record: the guest's test writes it on this machine's GPU through
-the device's host, and the page's host is run on it in Chrome
+the native host, and the web host is run on it in Chrome
 (`pnpm --dir ts test:gpu:web`).
 
 The stream is taken from a GPU's command buffer as WebGPU's encoder records

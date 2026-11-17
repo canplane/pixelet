@@ -88,15 +88,6 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
         })
 }
 
-/// The inputs the zone's grounding is built from, compared by value: the fix,
-/// and where the fix is in the eye's frame. Beyond these, grounding depends
-/// only on the ground its queries read, which the memo tracks (`Memo`).
-#[derive(Clone, Copy, PartialEq)]
-struct Key {
-    device: Q3,
-    pos: V3,
-}
-
 static LOCATION: Global<LocationIndicator> = Global::new();
 
 fn location() -> &'static mut LocationIndicator {
@@ -141,8 +132,8 @@ fn lay_zone(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) -> Vec<f
                 let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
                 // Where a neighboring tile is not loaded, the cell takes the
                 // center's height.
-                let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
-                rise[idx(at)] = Some(ground - center_pos[2]);
+                let ele = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
+                rise[idx(at)] = Some(ele - center_pos[2]);
             }
         }
     }
@@ -223,12 +214,13 @@ pub(crate) struct LocationIndicator {
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, or None when no height was
     /// found, and whether every height it read was exact. It is kept while
-    /// the fix stays and no change touches the ground its grounding read
+    /// the fix stays in the ground's leaf cell it was grounded in, by the
+    /// cell's corner, and no change touches the ground its grounding read
     /// (`Memo`).
-    ground_center: Memo<Key, (Option<V3>, bool)>,
-    /// The zone's instances `block` holds. A grounding that comes out the
-    /// same as these writes nothing new.
-    drawn: Vec<f32>,
+    ground_center: Memo<[f64; 2], (Option<V3>, bool)>,
+    /// The zone's instances as last grounded, which `block` holds unless the
+    /// heap refused them.
+    instances: Vec<f32>,
     block: MirroredBlock,
     /// None when nothing is shown.
     zone: Option<Zone>,
@@ -247,26 +239,26 @@ impl LocationIndicator {
             return;
         };
 
-        let seen = Key {
-            device,
-            pos: coord::to_world(&device),
-        };
-        // The memo is checked every frame, so it sees each change once. A zone
-        // whose block the heap refused is laid again.
-        let mut grounded = core::mem::take(&mut self.ground_center);
-        if self.zone.is_some() && self.block.handle == 0 {
-            grounded = Memo::default();
+        let pos = coord::to_world(&device);
+        let [x, y, _] = v3::floor(&pos, units(GROUND.leaf_cell_zoom()));
+        let at = [x, y];
+        // A write the heap refused is tried again from the instances held,
+        // with nothing grounded again.
+        if self.block.handle == 0 && !self.instances.is_empty() {
+            self.write(draw);
         }
-        grounded.forget_touched_at_leaf(|&(_, exact)| exact);
+        // The memo is checked every frame, so it sees each change once.
+        let mut memo = core::mem::take(&mut self.ground_center);
+        memo.forget_touched_at_leaf(|&(_, exact)| exact);
         let w = World::now();
-        let (center, _) = grounded.of(seen, || self.ground(w, draw, seen));
-        self.ground_center = grounded;
+        let (center, _) = memo.of(at, || self.ground(w, draw, at));
+        self.ground_center = memo;
         let Some(center) = center else {
             return;
         };
         // The beacon adds back what the zone's cell flooring dropped, so it moves
         // smoothly rather than in whole-cell jumps.
-        let beacon_to = [seen.pos[0] - center[0], seen.pos[1] - center[1]];
+        let beacon_to = [pos[0] - center[0], pos[1] - center[1]];
         match self.zone.as_mut() {
             Some(zone) => zone.beacon_to = beacon_to,
             None => {
@@ -283,14 +275,17 @@ impl LocationIndicator {
         }
     }
 
-    /// Grounds the zone at the fix and writes it where it changed. Returns the
+    /// Grounds the zone on the ground's leaf cell at the corner `at`, the
+    /// fix's, and writes its instances where they changed. Returns the
     /// zone's center, or None while the fix has no height yet, and whether
     /// every height it read was exact.
-    fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> (Option<V3>, bool) {
-        let (device, pos) = (key.device, key.pos);
+    fn ground(&mut self, world: World, draw: &mut DrawList, at: [f64; 2]) -> (Option<V3>, bool) {
+        let cell = units(GROUND.leaf_cell_zoom());
         // The fix names a place but not its altitude, so the elevation is the
-        // ground's under it, and the last one found stands until a new one is.
-        let center = world.surface_support(&device);
+        // ground's under its cell, which the query reads whole
+        // (`surface_support`), and the last one found stands until a new one is.
+        let mid = v3::center(&[at[0], at[1], 0.0], cell);
+        let center = world.surface_support(&world::point(mid[0], mid[1], 0.0));
         let mut exact = center.exact().is_some();
         if let Some(z) = center.val().flatten() {
             self.last_known_center_z = Some(z);
@@ -298,30 +293,36 @@ impl LocationIndicator {
         let Some(center_z) = self.last_known_center_z else {
             return (None, exact);
         };
-        let raw = [pos[0], pos[1], center_z];
-        let center_pos = v3::floor(&raw, units(GROUND.leaf_cell_zoom()));
+        let center_pos = v3::floor(&[at[0], at[1], center_z], cell);
 
         let instances = lay_zone(center_pos, |at| {
             let support = world.surface_support(at);
             exact &= support.exact().is_some();
             support.val().flatten()
         });
-        let changed = self.zone.as_ref().is_some_and(|z| z.center != center_pos);
-        if self.block.handle == 0 || changed || self.drawn != instances {
-            self.block.write(draw, bytes(&instances));
-            // The beacon's shown place moves with the center, so a whole-cell
-            // move of the zone does not play as the beacon sliding back.
-            if let Some(z) = self.zone.as_mut() {
-                if let Some(s) = z.beacon_at.as_mut() {
-                    s[0] -= center_pos[0] - z.center[0];
-                    s[1] -= center_pos[1] - z.center[1];
-                }
-                z.center = center_pos;
+        if self.instances != instances {
+            self.instances = instances;
+            self.write(draw);
+        }
+        // The beacon's shown place moves with the center, so a whole-cell
+        // move of the zone does not play as the beacon sliding back.
+        if let Some(z) = self.zone.as_mut().filter(|z| z.center != center_pos) {
+            if let Some(s) = z.beacon_at.as_mut() {
+                s[0] -= center_pos[0] - z.center[0];
+                s[1] -= center_pos[1] - z.center[1];
             }
-            self.drawn = instances;
+            z.center = center_pos;
             invalidate();
         }
         (Some(center_pos), exact)
+    }
+
+    /// Writes the instances into the block and asks for a frame either way:
+    /// to draw them, or, where the heap refused them, to try again, as the
+    /// ghost does.
+    fn write(&mut self, draw: &mut DrawList) {
+        self.block.write(draw, bytes(&self.instances));
+        invalidate();
     }
 
     /// Advances the beacon by one frame. Returns whether it slides and wants
@@ -382,7 +383,7 @@ impl LocationIndicator {
         // time. When either draw changes, it marks where it was and where it
         // is (pxl-render pass/mark.rs).
         if p.zone_drawn {
-            let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
+            let cnt = (self.instances.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(
                 &self.zone_id,
                 PIPELINE_LOCATION_ZONE,

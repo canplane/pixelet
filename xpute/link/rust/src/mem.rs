@@ -32,7 +32,7 @@ pub fn addr<T>(v: &T) -> u64 {
 
 /// Where the range `s` lies and how many bytes it takes, as a lent span
 /// (link/wit/types.wit `lent`). An empty range has no address, and lends
-/// (0, 0), on a page and on a device alike.
+/// (0, 0), on the web and natively alike.
 pub fn span<T>(s: &[T]) -> (u64, u32) {
     let Some(first) = s.first() else {
         return (0, 0);

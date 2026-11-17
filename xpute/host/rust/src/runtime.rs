@@ -2,7 +2,7 @@
 
 //! What the host needs of the runtime it runs in, which the runtime implements
 //! and gives it once, on the guest's thread, before it mounts any
-//! implementation (`init`), as a page's runtime gives @xpute/host its own: the
+//! implementation (`init`), as the web runtime gives @xpute/host its own: the
 //! way back to the guest's thread (`post`), the timers there (`after`,
 //! `clear`), where the guest's stop is told (`stopped`), and where a log record
 //! is written (`log`).
@@ -43,10 +43,10 @@ pub struct Runtime {
     /// runs the guest's thread can give.
     pub post: fn(Task),
     /// Answers the `Return` once the time has passed, on the guest's thread,
-    /// and returns the timer that will, as a page's `setTimeout` returns its
+    /// and returns the timer that will, as the web's `setTimeout` returns its
     /// id.
     pub after: fn(Duration, Return<()>) -> Timer,
-    /// Clears a timer before it answers, as a page's `clearTimeout` does, and
+    /// Clears a timer before it answers, as the web's `clearTimeout` does, and
     /// hands back what it would have answered; none once it has answered.
     pub clear: fn(Timer) -> Option<Return<()>>,
     /// Reports the guest's stop.

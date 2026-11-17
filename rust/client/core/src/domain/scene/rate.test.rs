@@ -43,7 +43,7 @@ fn the_target_is_paced_to_the_cap() {
 }
 
 /// Paces `n` vsyncs `gap_ms` apart, each with the next of `jitter_ms` added,
-/// as the frame task and a device's host do: a frame that costs `cost_ms`
+/// as the frame task and the native host do: a frame that costs `cost_ms`
 /// asks, once it has run, for the first vsync from when the next is due, and
 /// the host answers it with its gap since the vsync before, which it saw.
 /// Answers which vsyncs opened a frame.

@@ -2,7 +2,7 @@
 
 //! The log the host implements for the guest (wit/log/log.wit), and its own:
 //! each record, a level, a context and a message, is handed to its runtime
-//! (runtime.rs `log`), which writes it, as log.ts hands a page's.
+//! (runtime.rs `log`), which writes it, as log.ts hands the web's.
 
 use std::rc::Rc;
 

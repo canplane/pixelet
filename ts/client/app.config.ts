@@ -1,7 +1,8 @@
 // @pxl/client/app.config.ts
 
-/** The page is one HTML file over one bundle (`output: "single"`), filled from
- * the template public/index.html, which script/web.ts makes from index.html. */
+/** The web build is one HTML file over one bundle (`output: "single"`), filled
+ * from the template public/index.html, which script/web.ts makes from
+ * index.html. */
 
 /** The app's table, every path in it named from `root`, where this folder
  * stands from the app being built. A path is relative, as the table is shipped

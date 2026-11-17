@@ -40,7 +40,7 @@ export function Dock() {
 
   const shown_popover = mode === DockMode.PALETTE ? popover : null;
   // Every card is as wide as the palette's strip. The cards stand on whole
-  // pixels, because only there does a pill on a page cut its shadow cleanly.
+  // pixels, because only there does a pill on the web cut its shadow cleanly.
   const width = Math.min(strip_width, bar_width);
   const x = PixelRatio.roundToNearestPixel((bar_width - width) / 2);
 

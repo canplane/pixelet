@@ -69,7 +69,7 @@ export function CompassFace() {
       </Svg>
       {
         // The needle turns by React Native's transform on a view, because a
-        // device's SVG refuses a CSS transform string.
+        // native SVG refuses a CSS transform string.
       }
       <View
         style={[

@@ -501,7 +501,7 @@ const READERS = {
 
 export type PerfRead = keyof typeof READERS;
 
-/** Runs a read over the UI's end, on a page and on a device alike. */
+/** Runs a read over the UI's end, on the web and natively alike. */
 export function read<K extends PerfRead>(
   what: K,
   ...args: Parameters<(typeof READERS)[K]>

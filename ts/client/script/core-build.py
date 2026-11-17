@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-# Builds an app's native crate for a device as the app is built, and the app
-# links what it leaves: so the core in an app is always the tree's, built for
-# the configuration and the system the app is.
+# Builds an app's native crate for iOS and Android as the app is built, and
+# the app links what it leaves: so the core in an app is always the tree's,
+# built for the configuration and the system the app is.
 #
 # The app names its core, xpute's guest, in its package.json, and the crate a
-# device links, the guest with the runtime the app composes around it:
+# native app links, the guest with the runtime the app composes around it:
 #
 #   "xpute": { "guest": {
 #     "workspace": "<the cargo workspace, from the app>",
 #     "package": "<the guest's crate>",
-#     "runtime": "<the crate a device links>",
+#     "runtime": "<the crate a native app links>",
 #     "profile": { "debug": "<cargo profile>", "release": "<cargo profile>" },
 #     "args": { "debug": [...], "release": [...] }
 #   } }
 #
 # `profile` defaults to cargo's dev and release, `args` (more of cargo's
-# arguments, features among them) to none. The page's build (wasm-build.py)
+# arguments, features among them) to none. The web build (wasm-build.py)
 # builds `package` with the same `workspace` and `args`, and keeps profiles of
 # its own.
 #
@@ -28,7 +28,7 @@
 #   core-build.py --app <dir> --android --variant release --out <jniLibs dir> --ndk <dir> --api 24
 #
 # An iPhone links a static library; an Android app loads a shared one. Each
-# is asked of cargo by name, so a build makes only the library its device
+# is asked of cargo by name, so a build makes only the library its platform
 # takes, whatever crate types the crate declares.
 #
 # Xcode and Gradle name no Python of their own, so this runs under the

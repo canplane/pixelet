@@ -1,7 +1,7 @@
 // @pxl/client/ui/feature/setting/toggle-row.tsx
 
 /**
- * A settings row on a page and on Android. The whole row is the switch,
+ * A settings row on the web and on Android. The whole row is the switch,
  * because a switch inside a row that also takes the press would toggle twice.
  * It is drawn as iOS 26's switch, since React Native for Web draws Material's
  * older one.

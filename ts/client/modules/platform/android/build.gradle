@@ -1,6 +1,6 @@
 // @pxl/client/modules/platform/android/build.gradle
 //
-// The device's half of the app's platform on Android, in src/main/java/.
+// The native half of the app's platform on Android, in src/main/java/.
 // This module builds and packs the core (script/core-build.py).
 
 plugins {

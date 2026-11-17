@@ -7,9 +7,9 @@ import { ui } from "@/service/core/core.ts";
 import { start_orient } from "@/service/core/sensor.ts";
 
 /** Follow starts the heading first, and the view turns with it once it comes;
- * a heading not permitted leaves the tracking as it was. A page may ask the
- * compass's permission only during a press, so this must be called from the
- * press itself. */
+ * a heading not permitted leaves the tracking as it was. On the web the
+ * compass's permission may be asked only during a press, so this must be
+ * called from the press itself. */
 export async function tracking(tracking: Tracking): Promise<void> {
   if (tracking === TRACKING_FOLLOW && !(await start_orient())) return;
   void camera.track(ui, tracking);

@@ -1,9 +1,9 @@
 ---
 name: device-build
-description: Build the device app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator or an Android phone — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one. Running the page is CONTRIBUTING.md's.
+description: Build the native app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator or an Android phone — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a native build is asked for, when one fails, or when a machine is set up for one. Running on the web is CONTRIBUTING.md's.
 ---
 
-# Building for a device
+# Building the native app
 
 Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `expo prebuild` and are not committed. Each platform's build builds the core

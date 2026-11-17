@@ -3,8 +3,8 @@
 export {};
 
 declare global {
-  // Constants that babel.config.ts writes into the code at build time, on a
-  // page and on a device. A branch on one is folded away in the bundle. The
+  // Constants that babel.config.ts writes into the code at build time, on the
+  // web and natively. A branch on one is folded away in the bundle. The
   // deployment's values are read through build.ts.
 
   /** Where the tiles come from: `delivery` for the deployment's, or `oven` or

@@ -5,7 +5,7 @@
 //! runtime.rs): only the job's id and its result cross, and what hears the
 //! result stays on the guest's thread.
 //!
-//! It is the GPU's: on a device the GPU host runs its device and presents on
+//! It is the GPU's: natively the GPU host runs its device and presents on
 //! a thread of its own (native.rs `on_gpu` says why). That thread is the
 //! GPU's; the way back to the guest's thread is the runtime's (`post`), which
 //! this host takes from xpute-host and does not name the runtime for.

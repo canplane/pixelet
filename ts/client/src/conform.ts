@@ -1,13 +1,13 @@
 // @pxl/client/conform.ts
 
 /**
- * Makes `tsc` hold every platform file to the file beside it: a device's file
- * (`x.native.ts`) to the page's (`x.web.ts`), and a piece of the UI's override
+ * Makes `tsc` hold every platform file to the file beside it: the native file
+ * (`x.native.ts`) to the web one (`x.web.ts`), and a piece of the UI's override
  * (`x.ios.tsx`, `x.android.tsx`) to its default. The bundler swaps a platform
  * file in by its suffix, so no import names it, and without this file nothing
  * would check that it exports what the other does. A file that has no twin
- * and is imported by its name, a device's own module
- * (service/platform/pxl-platform.native.ts) and a page's text
+ * and is imported by its name, a native module of its own
+ * (service/platform/pxl-platform.native.ts) and the web text
  * (service/platform/text.web.ts), is none of the files this one holds.
  * Nothing imports this file; `tsc` alone reads it.
  */

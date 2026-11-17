@@ -42,8 +42,8 @@ export const stream = {
 } as const;
 
 /** What the GPU's host runs the renderer's stream by (pxl-gpu-link and @pxl/gpu/link
- * `GpuConfig`), the same on a device, where the runtime hands it (pxl-runtime lib.rs `GPU`),
- * and on a page, where the page's worker hands it (ts/client runtime/worker.ts). */
+ * `GpuConfig`), the same natively, where the runtime hands it (pxl-runtime lib.rs `GPU`),
+ * and on the web, where the web worker hands it (ts/client runtime/worker.ts). */
 export const device = {
   /** The frames drawn and not yet finished on the GPU at once: a frame draws only
    * while fewer are (pxl-gpu-guest `admit::frame`), and a surface queues as

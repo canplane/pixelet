@@ -61,7 +61,7 @@ interface SwipeHandler {
  * A swipe's callbacks. A swipe up turns the front card back, and a swipe down
  * brings the back one forward. The deck turns once, when the swipe crosses
  * `SWIPE_PX`. The card does not follow the finger: that would set a pose on
- * every move, and on a device the UI shares its thread with the core.
+ * every move, and natively the UI shares its thread with the core.
  */
 export function deck_swipe(
   turn: (delta: i32) => void,

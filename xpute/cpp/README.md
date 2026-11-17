@@ -45,16 +45,16 @@ It then exports its memory and the link's three exports, and imports
 `make -C cpp module GUEST="<sources>" MODULE=<file> [STACK_SZ=<bytes>]` links
 one so; `dev/guest.cpp`, the smallest guest, is what `make -C cpp wasm` links.
 
-## On a device
+## Natively
 
-A device links its guest into a Rust crate, which holds the runtime
-(`runtime/native/README.md`), so a C++ guest reaches a device by the same
-rule. The crate's build script compiles the guest's sources and the
-amalgamation's `xpute.cpp` for the device, with the flags a module is compiled
-with, into a static library the crate links, as the `cc` crate does:
+A native app links its guest into a Rust crate, which holds the runtime
+(`runtime/native/README.md`), so a C++ guest runs natively by the same rule. The
+crate's build script compiles the guest's sources and the amalgamation's
+`xpute.cpp` for the device, with the flags a module is compiled with, into a
+static library the crate links, as the `cc` crate does:
 
 ```rust
-// build.rs of the device's crate.
+// build.rs of the native crate.
 fn main() {
     cc::Build::new()
         .cpp(true)

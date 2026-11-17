@@ -4,9 +4,9 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# The device's library (lib.rs): the core linked with what xpute's runtime
-# starts it with, as ts/client/src/runtime/worker.ts is a page's. An iPhone app links it static (staticlib), an Android app loads it
-# shared (cdylib); the device's build asks cargo for the one it takes by name
+# The native library (lib.rs): the core linked with what xpute's runtime
+# starts it with, as ts/client/src/runtime/worker.ts is the web's. An iPhone app links it static (staticlib), an Android app loads it
+# shared (cdylib); the native build asks cargo for the one it takes by name
 # (`cargo rustc --crate-type`, ts/client/script/core-build.py).
 [lib]
 path = "src/lib.rs"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib"]
 doctest = false
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# The guest, linked into the library as a page instantiates its module.
+# The guest, linked into the library as the web instantiates its module.
 pxl-core.workspace = true
 # The device's GPU settings and the text's color (lib.rs, text.rs).
 pxl-render.workspace = true
@@ -22,8 +22,8 @@ pxl-spec.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 xpute-link.workspace = true
 pxl-gpu-link.workspace = true
-# The runtime the core runs in on a device, what its host implements, and the
-# GPU's host that runs the renderer's stream around each entry, as the page's
+# The runtime the core runs in natively, what its host implements, and the
+# GPU's host that runs the renderer's stream around each entry, as the web's
 # runs it on WebGPU. Metal on an iPhone, Vulkan on Android; each backend
 # compiles to nothing on the other's system.
 xpute-runtime-native.workspace = true

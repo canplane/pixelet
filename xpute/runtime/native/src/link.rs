@@ -2,11 +2,11 @@
 
 //! The guest linked into the app, and the host's side of the link over it
 //! (link/wit/types.wit), which the runtime makes and gives to each mount it
-//! runs (native.rs `run`), as a page's worker makes its side over the
+//! runs (native.rs `run`), as the web worker makes its side over the
 //! module and gives it (worker.ts `instantiate`): the same machine as the
 //! guest's (xpute-link link.rs `Side`) over the other box. It lays its frames
 //! in the guest's inbox and crosses by entering the guest, which is linked
-//! into the app as a module is on a page (worker.ts `Instance`): its three
+//! into the app as a module is on the web (worker.ts `Instance`): its three
 //! exports, as C symbols, and `link_out`, which the guest imports. The
 //! guest's memory is the process's, which the guest set before it laid its
 //! link. The side is the guest thread's (`side`), where `link_out` finds it,
@@ -68,7 +68,7 @@ const GUEST_TRAPPED: &str = "the guest trapped";
 pub(crate) const HOST_STOPPED: &str = "the host stopped";
 
 /// Stops the link for good, where it has not trapped already, writes `err`,
-/// what stopped it, and tells the platform, as a page's worker tells its
+/// what stopped it, and tells the platform, as the web worker tells its
 /// trap with its error (worker.ts `tell_trap`). On the guest's thread.
 pub(crate) fn trap(err: &str) {
     let s = side();
@@ -137,7 +137,7 @@ pub(crate) fn init(imports: &[(&str, Handle)], over: &[Handle]) -> bool {
 }
 
 /// The guest's import: the frame it laid at `at`, taken by the host's side
-/// of the link on this thread, as a page's `link_out` is (@xpute/runtime-web
+/// of the link on this thread, as the web's `link_out` is (@xpute/runtime-web
 /// worker.ts `instantiate`). A panic of the host's while it answers, which its
 /// hook has reported, unwinds no further: the link is trapped, and the
 /// guest's call is answered ENOTRECOVERABLE. Once trapped, a frame is not

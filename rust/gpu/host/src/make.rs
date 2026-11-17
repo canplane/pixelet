@@ -1,6 +1,6 @@
 // pxl-gpu-host/make.rs
 
-//! This is WebGPU's async pipeline call on a native device. A browser compiles
+//! This is WebGPU's async pipeline call natively. A browser compiles
 //! such a pipeline apart from the page; here a thread of the host's own
 //! compiles it apart from the stream, and a later poll puts it at its handle
 //! and answers its fence.

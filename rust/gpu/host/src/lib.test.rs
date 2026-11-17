@@ -188,7 +188,7 @@ fn recs_read_back() {
             || {},
         );
         g.each(&format!("{p}.turn"), |turn| {
-            // An address is a native pointer on a device, and so differs
+            // An address is a pointer natively, and so differs
             // every run: the record holds each relative to its block, and
             // the addresses the stream spec's ops name move to this block.
             let mut words: Vec<u32> = g

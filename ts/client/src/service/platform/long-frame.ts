@@ -1,7 +1,7 @@
 // @pxl/client/service/platform/long-frame.ts
 
 /** A place reports long animation frames, which Safari, WKWebView and React
- * Native lack, and long tasks. On a device, the long tasks are the JavaScript
+ * Native lack, and long tasks. Natively, the long tasks are the JavaScript
  * thread's, which React Native's native performance API reports
  * (RuntimeScheduler_Modern.cpp `reportLongTasks`). Both platforms read the
  * same performance API, so it is one file and no pair: a pair keeps only what

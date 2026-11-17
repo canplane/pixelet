@@ -2,7 +2,7 @@
 
 /** The runtime enters the guest only once every interface its world imports
  * is mounted (worker.ts `enter`), as xpute-runtime-native link.test.rs holds
- * a device's. */
+ * the native runtime's. */
 
 import { test, vi } from "vitest";
 import assert from "node:assert/strict";

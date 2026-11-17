@@ -1,8 +1,8 @@
 // @pxl/gpu/host/src/vsync.ts
 
 /** The display's vsync the host implements for the guest beside its GPU
- * (spec/gpu/wit/vsync.wit), on the platform's animation frames, as a
- * device's host takes the display link's (pxl-gpu-host vsync.rs). A frame's
+ * (spec/gpu/wit/vsync.wit), on the platform's animation frames, as the
+ * native host takes the display link's (pxl-gpu-host vsync.rs). A frame's
  * start is the animation frame's timestamp, which lies on the line of
  * `performance.now()` in the same scope, the monotonic clock's (@xpute/host
  * clock.ts `mark`). The host asks for every animation frame while it is

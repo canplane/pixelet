@@ -121,8 +121,8 @@ link.
 - **Found:** 2026-11-11. **Seen on:** Safari 27.0.1, macOS 27.0.1, an M1 Max.
 - **Evidence:** [the Safari stall](./gpu/experiment/20261111-the-safari-stall/README.md):10-14, 81-82;
   [the GPU is shared](./gpu/lesson/the-gpu-is-shared.md).
-- **In the tree:** the page stages its writes on a belt, as a device does
-  ([belt.ts](../ts/gpu/host/src/belt.ts)).
+- **In the tree:** the web host stages its writes on a belt, as the native
+  host does ([belt.ts](../ts/gpu/host/src/belt.ts)).
 
 ### WebKit processes left exiting hold the GPU until a reboot
 
@@ -268,7 +268,7 @@ link.
   as another layout: every skinned character lay on the ground, with no error.
   Read as `array<vec4f>` and assembled column by column, it drew right.
 - **Found:** 2026-09-27. **Seen on:** a Galaxy S23 (Adreno 740), One UI 8.5,
-  the device app (wgpu on Vulkan); the iPhone app and Chrome on a Mac drew it.
+  the native app (wgpu on Vulkan); the iPhone app and Chrome on a Mac drew it.
   Chrome on the S23 was not tried.
 - **Evidence:** [a matrix the driver reads its own way](./gpu/minutes/archive/20260927-a-matrix-the-driver-reads-its-own-way.md):1-74,
   which cites gfx-rs/wgpu#914 and baldurk/renderdoc#2378 as reports of the same

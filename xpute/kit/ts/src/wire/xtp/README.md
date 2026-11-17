@@ -2,7 +2,7 @@
 
 XTP is the kit's tree packet: a tree of values laid in one buffer and read in
 place, child by child, with no decode up front. It is the format of the data a
-program stores and serves, and of a device's runtime's batches to its UI on
+program stores and serves, and of the native runtime's batches to its UI on
 the JavaScript thread. The kit implements it in TypeScript (here), Rust
 (`kit/rust/src/wire/xtp/`) and C++ (`cpp/xpute/kit/wire/xtp/`), and the golden
 records under `kit/spec/golden/wire/xtp/` hold the three to the same bytes.

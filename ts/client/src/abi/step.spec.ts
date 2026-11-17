@@ -12,6 +12,7 @@ export const STEP_NAMES = [
   "camera",
   "edit",
   "ghost",
+  "location",
   "environment",
   "companion",
   "demand",
@@ -24,6 +25,7 @@ export type StepName =
   | typeof STEP_NAME_CAMERA
   | typeof STEP_NAME_EDIT
   | typeof STEP_NAME_GHOST
+  | typeof STEP_NAME_LOCATION
   | typeof STEP_NAME_ENVIRONMENT
   | typeof STEP_NAME_COMPANION
   | typeof STEP_NAME_DEMAND
@@ -33,10 +35,11 @@ export const STEP_NAME_INPUT = 1;
 export const STEP_NAME_CAMERA = 2;
 export const STEP_NAME_EDIT = 3;
 export const STEP_NAME_GHOST = 4;
-export const STEP_NAME_ENVIRONMENT = 5;
-export const STEP_NAME_COMPANION = 6;
-export const STEP_NAME_DEMAND = 7;
-export const STEP_NAME_SCENE = 8;
+export const STEP_NAME_LOCATION = 5;
+export const STEP_NAME_ENVIRONMENT = 6;
+export const STEP_NAME_COMPANION = 7;
+export const STEP_NAME_DEMAND = 8;
+export const STEP_NAME_SCENE = 9;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_StepName(val: number): StepName | null {
@@ -45,6 +48,7 @@ export function of_StepName(val: number): StepName | null {
     val === STEP_NAME_CAMERA ||
     val === STEP_NAME_EDIT ||
     val === STEP_NAME_GHOST ||
+    val === STEP_NAME_LOCATION ||
     val === STEP_NAME_ENVIRONMENT ||
     val === STEP_NAME_COMPANION ||
     val === STEP_NAME_DEMAND ||
@@ -66,6 +70,8 @@ export function name_StepName(val: StepName): string {
       return "edit";
     case STEP_NAME_GHOST:
       return "ghost";
+    case STEP_NAME_LOCATION:
+      return "location";
     case STEP_NAME_ENVIRONMENT:
       return "environment";
     case STEP_NAME_COMPANION:
@@ -84,7 +90,6 @@ export const EFFECT_NAMES = [
   "dst",
   "decor",
   "object",
-  "location",
   "setting",
 ] as const;
 
@@ -95,7 +100,6 @@ export type EffectName =
   | typeof EFFECT_NAME_DST
   | typeof EFFECT_NAME_DECOR
   | typeof EFFECT_NAME_OBJECT
-  | typeof EFFECT_NAME_LOCATION
   | typeof EFFECT_NAME_SETTING;
 export const EFFECT_NAME_NAVIGATION = 0;
 export const EFFECT_NAME_BOOTSTRAP = 1;
@@ -103,8 +107,7 @@ export const EFFECT_NAME_FOLLOW = 2;
 export const EFFECT_NAME_DST = 3;
 export const EFFECT_NAME_DECOR = 4;
 export const EFFECT_NAME_OBJECT = 5;
-export const EFFECT_NAME_LOCATION = 6;
-export const EFFECT_NAME_SETTING = 7;
+export const EFFECT_NAME_SETTING = 6;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_EffectName(val: number): EffectName | null {
@@ -114,7 +117,6 @@ export function of_EffectName(val: number): EffectName | null {
     val === EFFECT_NAME_DST ||
     val === EFFECT_NAME_DECOR ||
     val === EFFECT_NAME_OBJECT ||
-    val === EFFECT_NAME_LOCATION ||
     val === EFFECT_NAME_SETTING
     ? val
     : null;
@@ -135,8 +137,6 @@ export function name_EffectName(val: EffectName): string {
       return "decor";
     case EFFECT_NAME_OBJECT:
       return "object";
-    case EFFECT_NAME_LOCATION:
-      return "location";
     case EFFECT_NAME_SETTING:
       return "setting";
   }

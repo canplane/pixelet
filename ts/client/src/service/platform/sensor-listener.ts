@@ -16,7 +16,7 @@ export function listen(to: SensorListener): void {
 }
 
 /** CoreLocation reports "no course" and "no accuracy" as a negative number,
- * where the page's API gives null. */
+ * where the web API gives null. */
 function null_if_negative(v: f64 | null): f64 | null {
   return v !== null && v >= 0 ? v : null;
 }
@@ -35,7 +35,7 @@ export const MEASURE_PLACE: Fix = {
   heading: null,
 };
 
-/** The fix a page's or a device's position reads as. */
+/** The fix a web or a native position reads as. */
 export function coords_fix(c: Coords): Fix {
   return {
     lon: c.longitude,

@@ -97,8 +97,8 @@ bool in_guest() noexcept;
 // native guest's process, where a module traps.
 #ifdef __wasm__
 // The module's static initializers, which wasm-ld gathers into one function.
-// The guest's first export runs them, before anything of the program, as a
-// device's loader runs a library's; a module that calls it is a reactor to
+// The guest's first export runs them, before anything of the program, as the
+// native loader runs a library's; a module that calls it is a reactor to
 // wasm-ld, whose exports it leaves as they are.
 extern "C" void __wasm_call_ctors();
 #define XPUTE_LINK(cap_, boot_, enter_, end_)                                                                                                      \

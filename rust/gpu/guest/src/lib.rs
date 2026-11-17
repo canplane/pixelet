@@ -5,8 +5,8 @@
 //! and lends them to its host, which runs them on a device; spec/gpu/
 //! gives each op's words and the enumerations they carry, and spec/gpu/wit/ the
 //! link's interfaces: the host's `gpu` and its device, the guest's surfaces.
-//! `admit` says whether the host takes another frame now. The host for a
-//! native device is pxl-gpu-host. A program that draws nothing links
+//! `admit` says whether the host takes another frame now. The native host
+//! is pxl-gpu-host. A program that draws nothing links
 //! none of it.
 
 pub mod abi;

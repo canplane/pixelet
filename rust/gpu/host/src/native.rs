@@ -1,7 +1,7 @@
 // pxl-gpu-host/native.rs
 
-//! This is the GPU's host for a guest on a native device, as web.ts is a
-//! page's: the host implements `gpu` and the guest's `device`
+//! This is the GPU's host for a native guest, as web.ts is the web's: the
+//! host implements `gpu` and the guest's `device`
 //! (spec/gpu/wit/gpu.wit) on the host's side its runtime gives (`mount`), and
 //! binds the platform's windows to the guest's surfaces (`bind`); `vsync` is
 //! vsync.rs's. The device, the windows and everything run on them live on a
@@ -12,15 +12,15 @@
 //! there (`poll`). wgpu calls a mapping's or the queue's callbacks only as the
 //! device is polled, so a thread of the device's own waits on its queue after
 //! each run and wakes the GPU's thread as the work lands (`poller`), as a
-//! browser fires them on a page, while the GPU's thread goes on. What the GPU
+//! browser fires them on the web, while the GPU's thread goes on. What the GPU
 //! answers reaches the guest's thread as a task, by the request's job id, by
 //! its own job (job.rs `job`, `complete`), over the way back the runtime gives
 //! every host: this thread is the GPU's own, and the guest's thread is the
 //! runtime's, which this host does not name. A device the system loses is let go with
 //! the block it was lent, and the guest is told (`device.lost`); the guest asks
-//! it ready again, as a page asks for a new device, and the next device binds
+//! it ready again, as the web asks for a new device, and the next device binds
 //! every window again. The platform is told what the host has of a GPU as it
-//! changes (`state_on`), as a page's host reports it. There is one host a
+//! changes (`state_on`), as the web host reports it. There is one host a
 //! process, as there is one guest.
 
 use core::ffi::c_void;
@@ -93,8 +93,8 @@ impl Drop for Window {
 }
 
 /// What a device is opened by: the program's ask and config, and where the
-/// platform keeps compiled pipelines (`mount`), as a page's `WebGpu` holds
-/// its own.
+/// platform keeps compiled pipelines (`mount`), as the web's `WebGpu`
+/// holds its own.
 struct OpenArgs {
     ask: Ask,
     cfg: Config,
@@ -181,7 +181,7 @@ fn device() -> MutexGuard<'static, Option<Device>> {
 }
 
 /// Makes `state` be told what the host has of a GPU from the next change on,
-/// as a page's host reports it (gpu.ts `GpuState`): `present` once the guest's
+/// as the web host reports it (gpu.ts `GpuState`): `present` once the guest's
 /// ask finds a device open, `missing` once it finds none opens, and `waiting`
 /// once a device is lost and the guest told, as it asks again. With none,
 /// nothing is told. It is called on the GPU's thread, and must not call into
@@ -207,7 +207,7 @@ fn report(state: &'static str) {
 }
 
 /// Runs `job` on the GPU's thread, which the first job starts. The GPU has a
-/// thread of its own on a device because a present can wait on the frame
+/// thread of its own natively because a present can wait on the frame
 /// before, and the guest's thread must go on answering touches and
 /// completions meanwhile, so the stream and the present run apart from it, as
 /// a browser runs them outside the page.
@@ -281,8 +281,8 @@ struct Gpu {
 
 impl abi::gpu::Host for Gpu {
     /// Runs the lent records on the GPU's thread, and answers once they are
-    /// submitted, as a page's run resolves once they have run; with no
-    /// device, unrun, as a page's host does. The frames they drew are
+    /// submitted, as the web's run resolves once they have run; with no
+    /// device, unrun, as the web host does. The frames they drew are
     /// presented after the answer.
     fn run(&self, recs: Lent, task_return: Return<()>) {
         let id = job(Box::new(move |()| task_return.answer(Ok(()))));

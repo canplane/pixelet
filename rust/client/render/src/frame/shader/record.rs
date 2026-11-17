@@ -261,7 +261,7 @@ pub const fn compute(id: u32) -> (u32, &'static str, &'static Layout) {
 include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
 /// A shader that runs the world's one query over a list of asks and writes what it tells,
-/// word for word, for tests/world.rs and for Tint (world_asked.wgsl). No shader the page runs
+/// word for word, for tests/world.rs and for Tint (world_asked.wgsl). No shader the app runs
 /// includes it.
 pub const WORLD_ASKED: &str = include_str!(concat!(
     env!("OUT_DIR"),

@@ -1,7 +1,7 @@
 // @pxl/client/service/core/surface.ts
 
 /** The surfaces the UI lends the GPU (spec/gpu/wit/surface.wit): each an
- * object the core implements, opened over the UI's end of the link, a page's
+ * object the core implements, opened over the UI's end of the link, a web
  * canvas given beside the link under its handle (service/platform
  * surface.web.tsx), and dropped to close it, which takes the canvas back. */
 

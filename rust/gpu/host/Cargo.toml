@@ -1,6 +1,6 @@
 [package]
 name = "pxl-gpu-host"
-description = "The GPU's host on a native device: it runs the records the guest writes on wgpu"
+description = "The GPU's native host: it runs the records the guest writes on wgpu"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

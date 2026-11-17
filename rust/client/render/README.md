@@ -139,7 +139,7 @@ over        markers → debug lines → camera grid → character surfaces
 ```
 
 The calls are written through the GPU's encoder into one stream (`gpu/api.rs`),
-which the page runs on WebGPU and the device on wgpu. A frame where only the
+which the web runs on WebGPU and the native app on wgpu. A frame where only the
 draws the core bounds moved is drawn again in the screen's tiles alone
 (`gpu/tile.rs`): what moved marks the tiles it covered and covers, the light's
 change is carried to the screen's tiles that read it (`pass/propagate.rs`), and a
@@ -169,7 +169,7 @@ call, which compiles off that thread and reports through a ticket's word; and no
 frame is drawn until every word says its pipeline is made. The snapshot carries
 how far it has come (`renderer_progress`), which the UI's bar shows. A pipeline
 asked for once the renderer draws is a bug (`EBUSY`). wgpu has no async call,
-and the device's host answers the same op at once.
+and the native host answers the same op at once.
 
 ## The shaders, held to the engine
 

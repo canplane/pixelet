@@ -64,7 +64,7 @@ make dev
 ```
 
 `make dev` serves the page and takes the tiles from the live site.
-[CONTRIBUTING.md](./CONTRIBUTING.md) has the rest: the local servers, the device
+[CONTRIBUTING.md](./CONTRIBUTING.md) has the rest: the local servers, the native
 builds and the checks.
 
 ## Learn more

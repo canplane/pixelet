@@ -14,8 +14,8 @@ use crate::link::{in_guest, in_init};
 /// Tells the host a bug or a panic in the guest's own code, by its stop,
 /// before the guest stops; `link!` runs it as the guest's first export
 /// starts, so that it covers the guest's whole run, `init` too, where the
-/// failure is told by the trap alone, as on a page. Both hooks are the
-/// process's on a device, so what is not the guest's own (another thread's,
+/// failure is told by the trap alone, as on the web. Both hooks are the
+/// process's natively, so what is not the guest's own (another thread's,
 /// or the host's while the guest is out on `link_out`) goes on to the hook
 /// before, its runtime's (xpute-runtime-native native.rs `hook`), as it
 /// would have. A bug has no message; a panic `bug` did not raise, the

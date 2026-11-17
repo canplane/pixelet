@@ -1,7 +1,7 @@
 // @pxl/client/runtime/ui.ts
 
 /**
- * What the boot does alike on a page (boot.web.ts) and a device
+ * What the boot does alike on the web (boot.web.ts) and natively
  * (boot.native.ts): it mounts the interfaces the UI implements for the core
  * before the core starts, and moves where the boot stands as the core answers
  * and the world arrives. The UI only reads where the boot stands

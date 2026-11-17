@@ -15,7 +15,7 @@ afterEach(() => vi.unstubAllGlobals());
 /** The display's frames this many ms apart. */
 const FRAME_MS = 1000 / 60;
 
-/** The page's vsync over a link that keeps each answer by its request's tag,
+/** The web vsync over a link that keeps each answer by its request's tag,
  * on animation frames the test runs by hand (`frame`). */
 function mounted(): {
   wait: (tag: Tag, after: bigint) => void;

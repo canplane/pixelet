@@ -23,7 +23,7 @@ import {
   TEXT_STYLE,
 } from "@/ui/shared/component/theme.ts";
 
-/** Whether the platform's field draws its own clear button: on a page and on
+/** Whether the platform's field draws its own clear button: on the web and on
  * Android it does not, and the caller draws one; an iPhone's does
  * (text-field.ios.tsx). */
 export const SYSTEM_CLEAR: boolean = false;
@@ -53,7 +53,7 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
 const STYLE = StyleSheet.create({
   field: TEXT_STYLE.input,
   size: { fontSize: TEXT_STYLE.input.fontSize },
-  // react-native-web writes `caretColor` out as CSS. A device reads
+  // react-native-web writes `caretColor` out as CSS. A native field reads
   // `selectionColor` and `cursorColor` instead.
   caret: { caretColor: COLOR.chosen } as TextStyle,
 });

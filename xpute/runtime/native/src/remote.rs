@@ -1,11 +1,11 @@
 // xpute-runtime-native/remote.rs
 
 //! The guest's thread's half of the UI's crossing, as @xpute/runtime-web
-//! remote.ts is a page's: the runtime stands in for the UI on the JavaScript
+//! remote.ts is the web's: the runtime stands in for the UI on the JavaScript
 //! thread on the guest's link, and the UI's half is @xpute/expo ui.ts,
 //! over the C ABI. The UI's methods come through the queue (lib.rs `post`),
 //! and what the UI hears is batched and handed over on one notify (`take`),
-//! as a page's port posts.
+//! as the web's port posts.
 //!
 //! What the UI implements is mounted before the guest boots: its named
 //! interfaces under their handles, and an opener at each prefix it implements
@@ -280,8 +280,8 @@ pub(crate) fn mount(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>) {
 }
 
 /// Sends the method of the UI of the handle `u` on the link, its answer told
-/// back to that UI alone, as @xpute/runtime-web remote.ts `attach` posts a
-/// page's; a packet past the cap is refused whole, EMSGSIZE (xpute-link
+/// back to that UI alone, as @xpute/runtime-web remote.ts `attach` posts the
+/// web UI's; a packet past the cap is refused whole, EMSGSIZE (xpute-link
 /// link.rs `Side::send`). A method of a UI that is not the one attached
 /// reaches nothing. The guest's object an open answers is owned under that
 /// UI until it drops it, or dropped at once where the UI is dropped since.

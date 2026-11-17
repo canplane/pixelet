@@ -1,15 +1,15 @@
 // pxl-runtime/lib.rs
 
-//! pixelet's library on a device: the core (pxl-core), linked in as a page
+//! pixelet's native library: the core (pxl-core), linked in as the web
 //! instantiates its module, and what xpute's runtime starts it with, as
-//! ts/client/src/runtime/worker.ts is a page's. `start` lists the mounts of
+//! ts/client/src/runtime/worker.ts is the web's. `start` lists the mounts of
 //! what the host implements, the stop, the clocks, the text and the GPU, and
 //! the runtime runs them, then mounts what the UI implements, enters the core
 //! once every import of its world is implemented, and runs the loop for the
 //! core's life (xpute-runtime-native native.rs `Boot`). The text is pixelet's
 //! own, implemented on the host's side as ts/client/src/service implements it
-//! on a page (text.rs); the UI implements the files, the settings among them,
-//! and the objects, which a page's worker implements. Beside them is the
+//! on the web (text.rs); the UI implements the files, the settings among them,
+//! and the objects, which the web worker implements. Beside them is the
 //! decoder the app's fetch calls (unpack.rs).
 
 #![cfg(not(target_arch = "wasm32"))]
@@ -41,12 +41,12 @@ xpute_runtime_native::native_abi!(start);
 
 // The core's heap, the library's global allocator (pxl-core sys/heap.rs):
 // pixelet's memory policy, not xpute's. It takes this whole library's
-// allocations, not the core's alone as on a page (pxl-core sys/README.md
+// allocations, not the core's alone as on the web (pxl-core sys/README.md
 // "The memory, laid out once").
 #[global_allocator]
 static HEAP: Heap = Heap;
 
-/// How a device's GPU host paces the renderer's stream, as
+/// How the native GPU host paces the renderer's stream, as
 /// spec/client/render/api.json5 `device` sets it.
 const GPU: GpuConfig = GpuConfig {
     frame_latency: device::FRAME_LATENCY,

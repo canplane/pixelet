@@ -2,6 +2,6 @@
 
 import type { ViewStyle } from "react-native";
 
-/** A strip that scrolls sideways on a page: the browser scrolls it itself and
+/** A strip that scrolls sideways on the web: the browser scrolls it itself and
  * leaves holds and vertical drags to the view's own gestures. */
 export const PAN_X: ViewStyle = { touchAction: "pan-x" } as ViewStyle;

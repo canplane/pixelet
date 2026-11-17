@@ -5,7 +5,7 @@
 //! nanoseconds, as clock.ts: the monotonic one from the host's start, its waits
 //! on its runtime's timers (runtime.rs `after`), and the system clock from the
 //! Unix epoch. A platform's timestamp of an event takes its mark on the
-//! monotonic clock by `mark`, as a page's does by clock.ts's.
+//! monotonic clock by `mark`, as the web's does by clock.ts's.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -19,7 +19,7 @@ use crate::abi::clocks::monotonic_clock;
 use crate::abi::clocks::system_clock::{self, Instant as SystemInstant};
 use crate::runtime::runtime;
 
-/// Where the monotonic time counts from, as a page's `performance.now()`
+/// Where the monotonic time counts from, as the web's `performance.now()`
 /// counts from its time origin: the host's first mount of the clocks.
 static ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 

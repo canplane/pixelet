@@ -29,7 +29,7 @@ func textRaster(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32, 
   context.textPosition = CGPoint(x: x, y: Double(height) / 2 - Double(f.ascender + f.descender) / 2)
   CTLineDraw(line(text, weight, px, rgba), context)
   // CoreGraphics draws premultiplied, and the core reads straight alpha, which
-  // is what a page's canvas always hands back. So the colors are divided by
+  // is what the web canvas always hands back. So the colors are divided by
   // alpha here, and both platforms give the same.
   let bytes = out.assumingMemoryBound(to: UInt8.self)
   for i in stride(from: 0, to: width * height * 4, by: 4) {

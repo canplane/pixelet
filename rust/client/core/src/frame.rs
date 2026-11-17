@@ -112,6 +112,13 @@ fn ghost_tick(_: &mut TickContext) {
     }
 }
 
+/// The indicator is handed the device's coordinate as reported, None
+/// included. It keeps showing its last coordinate while the device briefly
+/// reports none.
+fn location_tick(_: &mut TickContext) {
+    location_step(off_center().device_coord);
+}
+
 fn companion_tick(ctx: &mut TickContext) {
     companion_step(ctx, companion_camera());
 }
@@ -199,6 +206,7 @@ const STEPS: [(Phase, &[Step]); 2] = [
             (StepName::Camera, camera_tick),
             (StepName::Edit, edit_tick),
             (StepName::Ghost, ghost_tick),
+            (StepName::Location, location_tick),
             // The environment runs after the camera, so it sees this tick's
             // camera.
             (StepName::Environment, environment_tick),
@@ -272,10 +280,6 @@ pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
     });
     effect!(times, Decor, decor_models_step());
     effect!(times, Object, repository::step());
-    // The indicator is handed the device's coordinate as reported, None
-    // included. It keeps showing its last coordinate while the device briefly
-    // reports none.
-    effect!(times, Location, location_step(off_center().device_coord));
     effect!(times, Setting, setting::settings_keep_step());
     (now() - at, times.unwrap_or_default())
 }

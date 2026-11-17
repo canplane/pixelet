@@ -1,15 +1,15 @@
 // @xpute/runtime-web/worker.ts
 
-/** The worker's end: the guest's module instantiated with a link laid over
- * it, the guest run on it from the program's mounts, and what the runtime
- * tells the page, the guest's stop and its trap, each posted to the page
- * (`tell`), where the UI hears them (page.ts), as a device's runtime tells
- * its app through the functions the app sets (xpute-runtime-native
- * listener.rs). Its writer (`log`) is the one place a page's xpute writes to
- * the console: the log records its host hands it, and the stop and the trap
- * it tells. Each record it writes is told the page as well (`Log`), where a
- * tool that measures the page reads its lines; a device's tool reads the
- * process's log, which xpute-runtime-native log.rs writes. */
+/** The worker's end: the guest's module instantiated with a link laid over it,
+ * the guest run on it from the program's mounts, and what the runtime tells the
+ * page, the guest's stop and its trap, each posted to the page (`tell`), where
+ * the UI hears them (page.ts), as the native runtime tells its app through the
+ * functions the app sets (xpute-runtime-native listener.rs). Its writer (`log`)
+ * is the one place web xpute writes to the console: the log records its host
+ * hands it, and the stop and the trap it tells. Each record it writes is told
+ * the page as well (`Log`), where a tool that measures the page reads its
+ * lines; natively the tool reads the process's log, which xpute-runtime-native
+ * log.rs writes. */
 
 import type { i32, u64 } from "@xpute/kit/abi/word.ts";
 import { XputeBug, frames } from "@xpute/kit/status/bug.ts";
@@ -50,10 +50,10 @@ function tell(m: Trap | Stopped | Log): void {
 /** The console's method each level is written by, in `Level`'s order. */
 const CONSOLE = ["debug", "debug", "info", "warn", "error", "error"] as const;
 
-/** Writes `message` at `level`, about `context`, as xpute-runtime-native
- * log.rs writes a device's: a log record the host hands the runtime
- * (@xpute/host `Runtime`), and the stop and the trap it tells. The record
- * is told the page too (`Log`), which writes nothing of it. */
+/** Writes `message` at `level`, about `context`, as xpute-runtime-native log.rs
+ * writes the native runtime's: a log record the host hands the runtime
+ * (@xpute/host `Runtime`), and the stop and the trap it tells. The record is
+ * told the page too (`Log`), which writes nothing of it. */
 function log(level: Level, context: string, message: string): void {
   console[CONSOLE[level]](`[${context}] ${message}`);
   tell({ kind: "log", level, context, message });
@@ -61,7 +61,7 @@ function log(level: Level, context: string, message: string): void {
 
 /** Writes the stop of `context`, the guest or the host, with its message
  * where it has one, then tells the page the guest stopped, the message left
- * out, as xpute-runtime-native native.rs `tell_stop` tells a device's app. */
+ * out, as xpute-runtime-native native.rs `tell_stop` tells the native app. */
 function tell_stop(context: string, stop: Stop): void {
   const { message, ...report } = stop;
   const { errnum, file, line, n1, n2 } = report;
@@ -79,7 +79,7 @@ function stopped(stop: Stop): void {
 }
 
 /** Writes the trap, with what stopped it, then tells the page, as
- * xpute-runtime-native link.rs `trap` tells a device's app. */
+ * xpute-runtime-native link.rs `trap` tells the native app. */
 function tell_trap(e: unknown): void {
   const err = line(e);
   log(LEVEL_ERROR, "link", `trapped: ${err}`);
@@ -107,7 +107,7 @@ function trap(side: Side, e: unknown): void {
  * grown as the module asks, so the side reads it through the buffer it has at
  * each access. An instantiation that fails is a failure of the host's own
  * before the guest's first entry, told as a trap with its error, and answers
- * null, as a device's runtime traps on its own failure before it enters the
+ * null, as the native runtime traps on its own failure before it enters the
  * guest. A trap out of any export stops the guest for good (`trap`), as does
  * a failure of the host's own (`hook`), from before any implementation is
  * mounted: the page hears it, with the error, as a native host tells its
@@ -117,7 +117,7 @@ function trap(side: Side, e: unknown): void {
  * `link_out` does: a throw out of the host while it answers is a failure of
  * its own, made a stop, and its call answered ENOTRECOVERABLE, so nothing
  * unwinds through it; once trapped, a frame is not run, EPIPE. The worker
- * lives on after a trap, as a device's guest thread does. */
+ * lives on after a trap, as the native guest thread does. */
 export async function instantiate(
   module: string,
   init: RequestInit | undefined,
@@ -179,7 +179,7 @@ export async function instantiate(
  * told the page as a stop, with its errno, a bug's or ENOTRECOVERABLE, where
  * it was thrown and a throw's own message; then the link traps, so that no
  * answer the failed host owed leaves the guest waiting, and the page hears
- * the trap after the stop, as on a device. A throw after the guest trapped
+ * the trap after the stop, as it does natively. A throw after the guest trapped
  * is no failure of the host's. */
 function hook(side: Side): (e: unknown) => void {
   const fail = (e: unknown): boolean => {
@@ -195,8 +195,8 @@ function hook(side: Side): (e: unknown) => void {
     trap(side, e);
     return true;
   };
-  // A failure the hook writes is not reported again by the browser, as a
-  // device's hook replaces Rust's.
+  // A failure the hook writes is not reported again by the browser, as the
+  // native hook replaces Rust's.
   addEventListener("error", (ev) => {
     if (fail(ev.error)) ev.preventDefault();
   });
@@ -263,8 +263,8 @@ export interface Boot {
   taker: Taker;
 }
 
-/** Runs the guest on `g`, as xpute-runtime-native native.rs `run` does on a
- * device: gives the host what it needs of the runtime (@xpute/host
+/** Runs the guest on `g`, as xpute-runtime-native native.rs `run` does
+ * natively: gives the host what it needs of the runtime (@xpute/host
  * `Runtime`), runs each mount, attaches the UI across the port `ui` names
  * (`attach`), enters the guest, which an import with no implementation and a
  * call the UI implements refuse (`enter`), and tells it the UI attached. */

@@ -2,7 +2,7 @@
 
 /**
  * The UI's one theme. Its colors and sizes are plain values rather than CSS
- * variables, so that a style is the same on the page and on a device.
+ * variables, so that a style is the same on the web and natively.
  */
 
 import { GROUND } from "@/ui/shared/component/ground.ts";

@@ -20,14 +20,14 @@ export interface GpuAsk {
 }
 
 /** These are the settings of the GPU's host that the program chooses, the
- * same on a page and a device. It crosses no link, so no spec owns it: it is
+ * same on the web and natively. It crosses no link, so no spec owns it: it is
  * defined in Rust and TypeScript alike, the same fields and types
  * (pxl-gpu-link `GpuConfig`). */
 export interface GpuConfig {
   /** How many frames may be admitted and unfinished on the GPU at once, at
    * least one. The host tells it the guest in the device's block (spec
    * DEVICE), which the guest admits frames by (pxl-gpu-guest
-   * `admit::frame`); a page's browser paces the frames themselves. */
+   * `admit::frame`); on the web the browser paces the frames themselves. */
   frame_latency: u32;
   /** The size of one chunk that buffer and texture writes are staged
    * through, of a belt that starts with one chunk more than the frame

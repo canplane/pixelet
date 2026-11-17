@@ -4,9 +4,9 @@
  * The platform owns the watch itself, and says with each failure whether the
  * watch runs on (`SensorListener.pos_err`'s `watching`): a W3C watch rides out
  * all but `PERMISSION_DENIED`
- * (https://www.w3.org/TR/geolocation/#watchposition-method), and a device's
- * ends on any. Nothing is retried here. A watch that ended starts again on a
- * grant, a return to the foreground or a press of the location card. */
+ * (https://www.w3.org/TR/geolocation/#watchposition-method), and a native
+ * one ends on any. Nothing is retried here. A watch that ended starts again
+ * on a grant, a return to the foreground or a press of the location card. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { GeolocationError } from "@/service/platform/types.ts";

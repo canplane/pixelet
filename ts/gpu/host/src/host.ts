@@ -2,7 +2,7 @@
 
 /**
  * This is the host's end of a guest's GPU calls on the web, as
- * rust/gpu/host/src/run.rs is on a native device. It runs a stream's records
+ * rust/gpu/host/src/run.rs is natively. It runs a stream's records
  * (spec/gpu/api.json5) on a WebGPU device, and keeps each object the guest
  * made at its handle's slot. An enumeration's number is its place in the
  * spec's list, which gives WebGPU's string. The host is told the guest's
@@ -100,7 +100,7 @@ function place(): Place {
 }
 
 /** What a host says where its belt has no chunk for a write, a mapping gone
- * or refused or a chunk not made, as a device's host says it (pxl-gpu-host
+ * or refused or a chunk not made, as the native host says it (pxl-gpu-host
  * lib.rs `CHUNK_GONE`). */
 const CHUNK_GONE = "device lost: an upload chunk is gone or cannot be made";
 
@@ -232,7 +232,7 @@ export class GpuHost {
   private _lost = false;
 
   /** Every buffer and texture write is staged through the belt and copied by
-   * `_uploads`, which is submitted ahead of what follows, as a device's host
+   * `_uploads`, which is submitted ahead of what follows, as the native host
    * stages its writes. */
   private readonly _belt: Belt;
   private _uploads: GPUCommandEncoder | null = null;
@@ -260,7 +260,7 @@ export class GpuHost {
     this._wake = wake;
     this._drop = drop;
     this._frame_latency = cfg.frame_latency;
-    // The belt starts with a device's chunks, one more than the frame
+    // The belt starts with the native host's chunks, one more than the frame
     // latency (pxl-gpu-host lib.rs `GpuHost::new`).
     this._belt = new Belt(
       device,
@@ -400,7 +400,7 @@ export class GpuHost {
    * `place`, read from `bytes` by its bytes per row `row_sz` and its
    * `rows_per_image`, a row being a row of texel blocks. Each image goes a
    * band of whole rows at a time, each row padded to the copy's row
-   * alignment, as a device's host stages it (pxl-gpu-host run.rs
+   * alignment, as the native host stages it (pxl-gpu-host run.rs
    * `write_texture`). An empty `size` writes nothing, as in WebGPU, and any
    * other has bytes per row (pxl-gpu-guest `call::write_texture`). */
   private _write_texture(
@@ -978,7 +978,7 @@ export class GpuHost {
         const id = r.u();
         const o = this._get<GpuObject>(id);
         // The writes staged so far reach the queue before what they write
-        // goes, as a device's host submits them.
+        // goes, as the native host submits them.
         if (
           (o instanceof GPUBuffer || o instanceof GPUTexture) &&
           this._uploads
@@ -1040,7 +1040,7 @@ export class GpuHost {
         }).then(
           (source) => {
             if (this._objects.includes(to.texture)) {
-              // The host places an image the browser decoded, as a device's
+              // The host places an image the browser decoded, as the native
               // host places one it decoded (pxl-gpu-host image.rs): no write
               // of the guest's, so it takes nothing of the belt, whose chunks
               // the guest counts.
@@ -1357,7 +1357,7 @@ export class GpuHost {
       case op.QUEUE_DONE: {
         const [word, ticket] = [r.addr(), r.u()];
         // Staged writes are the queue's work as much as what was submitted,
-        // so they are submitted first, as a device's host does.
+        // so they are submitted first, as the native host does.
         this._submit([]);
         d.queue.onSubmittedWorkDone().then(() => this._signal(word, ticket));
         return;

@@ -145,6 +145,10 @@ and does real work is the hazard.
     alike.
 - pixelet-44 runs places' `show` under the pass, nearest first, with what is
   left carried to the next turn, in the form the cells' read already takes.
+
+  > Since 2026-11-17 (`ff07ca506e`): taken up only then. A place's surface is asked
+  > under `sched::run`, the nearest first and only where Carto shows it, standing on
+  > its last surface until asked; a pin crowd's stand alike.
 - pixelet-53 makes the grounding ask each cell's height once, from a grid of
   the zone's cells and their ring, about 57 asks instead of 185, the
   instances byte-identical. Before that, 53 counts `ground` calls on a still

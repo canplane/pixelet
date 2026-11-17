@@ -1,14 +1,14 @@
 // pxl-core/sys/heap.rs
 
-//! The core's memory, fixed at the manifest's `mem.sz`: on a page the
+//! The core's memory, fixed at the manifest's `mem.sz`: on the web the
 //! module's memory, which its link holds at that size from its start to its
-//! end (build.rs), and on a device a block the core reserves of the process
+//! end (build.rs), and natively a block the core reserves of the process
 //! at that size (`mem_at`). `.fixed`, the core's fixed ranges
 //! (sys/range.rs), begins on the page past the module's data, or at the
 //! block's base, and the heap on the page past `.fixed` and runs to the
 //! memory's end. The heap is
 //! xpute-kit's (`HeapMalloc`), the core's global allocator, which the core's
-//! terminal crates declare (lib.rs on a page, pxl-runtime on a device). The
+//! terminal crates declare (lib.rs on the web, pxl-runtime natively). The
 //! memory is never grown, so a full heap refuses.
 
 use xpute_kit::alloc::ADDR_BITS;
@@ -17,8 +17,8 @@ use xpute_kit::alloc::heap::HeapMalloc;
 
 use crate::spec::manifest::mem;
 
-/// The heap's counters, as its allocator reports them: on a device the whole
-/// library's allocations, on a page the core's (sys/README.md).
+/// The heap's counters, as its allocator reports them: natively the whole
+/// library's allocations, on the web the core's (sys/README.md).
 #[derive(Clone, Copy, Default)]
 pub(crate) struct HeapStat {
     pub range: usize,

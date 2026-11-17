@@ -1,17 +1,17 @@
 // xpute-runtime-native/lib.rs
 
-//! xpute's runtime on a native device, the environment its host runs in, as
-//! @xpute/runtime-web and the browser are a page's. The runtime runs on the
-//! guest's thread, as a page's worker holds the runtime and the guest
-//! together: that thread waits on one queue and enters the guest when work
-//! arrives (`event_loop`), and every other thread only waits long and pushes
-//! into the queue. It gives its host (xpute-host) what the host needs
-//! of it (xpute-host runtime.rs `Runtime`): the way back to the guest's
-//! thread, the timers there, where a stop is told, and its writer, which
-//! alone writes to the platform's output (`log`).
+//! xpute's native runtime, the environment its host runs in, as
+//! @xpute/runtime-web and the browser are the web's. The runtime runs on the
+//! guest's thread, as the web worker holds the runtime and the guest together:
+//! that thread waits on one queue and enters the guest when work arrives
+//! (`event_loop`), and every other thread only waits long and pushes into the
+//! queue. It gives its host (xpute-host) what the host needs of it (xpute-host
+//! runtime.rs `Runtime`): the way back to the guest's thread, the timers there,
+//! where a stop is told, and its writer, which alone writes to the platform's
+//! output (`log`).
 //!
 //! It starts the guest from what the program lists (native.rs `Boot`), as
-//! @xpute/runtime-web starts a page's: the program's mounts, xpute-host's
+//! @xpute/runtime-web starts the web's: the program's mounts, xpute-host's
 //! among them, each mounting on the link its implementations, and the
 //! interfaces the guest's world imports, which are all mounted before the
 //! guest is entered. It runs the steps itself, in their order: the mounts,
@@ -19,7 +19,7 @@
 //! which an import with no implementation and a function without `async` the
 //! UI implements refuse, and the loop for the guest's life. It exports itself
 //! to the platform's module over the program's start (`native`,
-//! `native_abi!`), as @xpute/runtime-web is the page's.
+//! `native_abi!`), as @xpute/runtime-web is the web's.
 //!
 //! It makes the host's side of the link over the guest (`link`), from
 //! xpute-link's machine (`Side`), and takes the rest of the contract both

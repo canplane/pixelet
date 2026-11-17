@@ -58,7 +58,7 @@ pub struct WitTarget<'a> {
     pub cpp: Option<&'a str>,
     /// The side the bindings are for, or none for a package of types alone,
     /// which takes nothing of a side. The Rust is written per side, as two
-    /// Rust sides share one process on a device; the TypeScript is a host's,
+    /// Rust sides share one process natively; the TypeScript is a host's,
     /// taking the link it sends on as an argument, from `link.ts` beside
     /// xpute:link's bindings.
     pub side: Option<Side>,

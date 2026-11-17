@@ -1,6 +1,6 @@
 # @xpute/runtime-web
 
-@xpute/runtime-web is xpute's runtime on a page: the guest runs as a
+@xpute/runtime-web is xpute's runtime on the web: the guest runs as a
 WebAssembly module in a worker of its own, so that it holds up none of the
 UI's events, and the UI reaches it from the page's main thread over a
 MessagePort. It has two halves, one for each thread, which a program's own
@@ -18,7 +18,7 @@ module does not load, which the page hears as a trap. `run` then starts the
 guest from the program's `Boot`, by the steps the ARCHITECTURE gives: its
 mounts, each of which mounts on the link its implementations; the bindings'
 `IMPORTS` and `CALLS`; and a `taker`, which takes what the UI gives beside its
-calls under a handle, a canvas for one, which a page's port can move. Here the
+calls under a handle, a canvas for one, which the web's port can move. Here the
 program mounts a plugin of its own beside xpute's host:
 
 ```ts
@@ -47,7 +47,7 @@ each access, so a growth of the module's memory detaches nothing.
 
 ## The page
 
-The UI meets the runtime as a device's UI meets its own (`expo/README.md`): it
+The UI meets the runtime as the native UI meets its own (`expo/README.md`): it
 opens its end (`open_ui`), hears the guest's stop and its trap (`stopped_on`,
 `trap_on`), mounts on its end what it implements, and starts the guest
 (`start`). Two things differ by the platform. It names the worker's module as

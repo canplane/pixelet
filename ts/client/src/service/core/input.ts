@@ -51,7 +51,7 @@ export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
   out: POINTER_PHASE_OUT,
 };
 
-/** What a press drags by its button, as a page numbers buttons: the primary
+/** What a press drags by its button, as the web numbers buttons: the primary
  * pans, the secondary turns, and any other drags nothing. */
 export function drag_of(button: i32): Drag {
   return button === 0 ? DRAG_PAN : button === 2 ? DRAG_ROTATE : DRAG_NONE;

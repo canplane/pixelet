@@ -4,7 +4,7 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 
 import { PLATFORM } from "./pxl-platform.native.ts";
 
-/** A device's app has no origin of its own: it reads from the site's. The
+/** The native app has no origin of its own: it reads from the site's. The
  * platform says only whether the origin is remote; the site's address is
  * service/origin's (route.ts `href`). */
 export const REMOTE: boolean = true;
@@ -13,7 +13,7 @@ export const REMOTE: boolean = true;
  * objects arrive as stored. */
 const ZSTD = "zstd";
 
-/** Rejects with a TypeError on a transport failure, as the page's fetch does,
+/** Rejects with a TypeError on a transport failure, as the web fetch does,
  * where Expo's FetchError stands for both a failure and a stop. A body sent
  * zstd is decoded off this thread, as a browser decodes its own, so no reader
  * ever sees an encoding: on Android Expo's fetch decodes it in its transport

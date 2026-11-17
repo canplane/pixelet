@@ -71,16 +71,22 @@ impl Set {
         };
     }
 
+    /// Whether a block holds what was last written: false before the first
+    /// write, after a free, and after a write the heap refused.
+    pub(super) fn has_block(&self) -> bool {
+        self.block.handle != 0
+    }
+
     /// Frees the block. Returns whether there was one.
     pub(super) fn free(&mut self, draw: &mut DrawList) -> bool {
-        let had_block = self.block.handle != 0;
+        let had_block = self.has_block();
         self.block.free(draw);
         self.cnt = 0;
         had_block
     }
 
     pub(super) fn draw(&self, draw: &mut DrawList) {
-        if self.cnt > 0 && self.block.handle != 0 {
+        if self.cnt > 0 && self.has_block() {
             draw.draw_as(
                 &self.id,
                 PIPELINE_MARKER,

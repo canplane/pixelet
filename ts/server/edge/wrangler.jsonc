@@ -44,7 +44,7 @@
     "API_ORIGIN": "https://api.plei.me",
   },
 
-  // The page's bundle, built by the web app and staged here before a deploy
+  // The web bundle, built by the web app and staged here before a deploy
   // (script/deploy.py), so that this config names nothing outside its
   // package.
   "assets": {

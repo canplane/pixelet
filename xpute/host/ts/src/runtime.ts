@@ -2,7 +2,7 @@
 
 /** What the host needs of the runtime it runs in, which the runtime
  * implements and gives it once, before it mounts any implementation (`init`),
- * as a device's runtime gives xpute-host its own (runtime.rs `Runtime`):
+ * as the native runtime gives xpute-host its own (runtime.rs `Runtime`):
  * where the guest's stop is reported, and where a log record is written. */
 
 import { bug } from "@xpute/kit/status/bug.ts";
@@ -28,7 +28,7 @@ export interface Stop {
 }
 
 /** A stop as the UI hears it: the report without its message, which the
- * runtime alone writes, as a device's listener carries it. It sits here with
+ * runtime alone writes, as the native listener carries it. It sits here with
  * `Stop`, whose shape it takes, and the UI end takes it from the host. */
 export type UiStop = Omit<Stop, "message">;
 

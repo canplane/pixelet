@@ -7,15 +7,16 @@ plan is never written as the user's decision.
 
 ## What was found
 
-- **The host names the runtime.** On a device the host serves on the
-  runtime's link (`xpute-native-runtime` `link.rs`), takes its generated
-  bindings from the runtime's `abi`, wakes through its `event_loop`, `job` and
-  `done`, and logs and reaches JNI through it; on a page `@xpute/web-host`
-  takes `tell_stop` from `@xpute/web-runtime`. The user set on 2026-11-14 that
+- **The host names the runtime.** Natively the host serves on the runtime's
+  link (`xpute-native-runtime` `link.rs`), takes its generated bindings from
+  the runtime's `abi`, wakes through its `event_loop`, `job` and `done`, and
+  logs and reaches JNI through it; on the web `@xpute/web-host` takes
+  `tell_stop` from `@xpute/web-runtime`. The user set on 2026-11-14 that
   nothing references the runtime. That rule was written nowhere but
-  `rule.rs`'s order, and the commit that split the device's host from its
-  runtime (`12e5875916`) rewrote that order to fit its split. `xpute/ARCHITECTURE.md`
-  then wrote the result as the design: the runtime holds the host's `Side`.
+  `rule.rs`'s order, and the commit that split the native host from its
+  runtime (`12e5875916`) rewrote that order to fit its split.
+  `xpute/ARCHITECTURE.md` then wrote the result as the design: the runtime
+  holds the host's `Side`.
   `ARCHITECTURE.md` already held that an import never points up a level.
 - **The host was cut by platform.** It varies by language: the TypeScript
   host uses only `performance.now`, `Date.now` and the timers, which every JS
@@ -51,7 +52,7 @@ What the user reproved in the agents' work, to be kept clear of:
   adopt, when the user pointed at how it was designed, top-down, in a different
   topology.
 - Closing each small correction by asking whether to proceed.
-- Answering for one cell, Rust on a device, instead of every language,
+- Answering for one cell, Rust natively, instead of every language,
   platform and shell the parts run in.
 - Taking each correction as a new absolute rule, its opposite end, instead of
   checking it against the whole: the log sent to the kit, then the host, then
@@ -59,7 +60,7 @@ What the user reproved in the agents' work, to be kept clear of:
 - Searching again for what was already established in the session.
 
 - **A first launch on the S23 refused the tile source** (the agents,
-  investigating). On Android a device's `fetch` is Expo's, and when the
+  investigating). On Android the native `fetch` is Expo's, and when the
   connection drops while a body comes in it marks the error and then marks the
   body complete (`expo/android/.../fetch/NativeResponse.kt`, the pump's catch
   and `onResponse`), so `text()` resolves with a short or empty body; the
@@ -70,7 +71,7 @@ What the user reproved in the agents' work, to be kept clear of:
   Not reproduced on the phone, which was not attached. Reporting it to Expo is
   open. On Android Expo's fetch decodes zstd in its transport, off the
   JavaScript thread, as a browser's does, which is what the 2026-10-16 decision
-  (`f6a5b3b7a0`) asks of a device's transport; `origin.native.ts`'s own decode
+  (`f6a5b3b7a0`) asks of a native transport; `origin.native.ts`'s own decode
   serves where a transport passes zstd through, as iOS's did then.
 - **Gaps noted beside the Figma comparison, not pursued** (the agents). The
   comparison found our boundary already in Figma's shape. Unmeasured, and our
@@ -89,7 +90,7 @@ What the user reproved in the agents' work, to be kept clear of:
 > when its frame is due (`vsync.next(after)`), so a skipped or refused frame costs
 > no entry at each vsync.
 
-> Since 2026-11-16 (`738224d277`): a page's wait of 0 answers by a posted message,
+> Since 2026-11-16 (`738224d277`): a web wait of 0 answers by a posted message,
 > which no timer nesting clamps, so a yield is no timer's round trip. Each answer
 > still runs the core's whole `end`, left so: its two flushes, the GPU's run and
 > the UI's post, each hold one in flight, and the rest reads as microseconds an
@@ -100,10 +101,10 @@ What the user reproved in the agents' work, to be kept clear of:
 
 - **The entities** (**the user**). xpute's parts are the kit, the link, the
   guest, the host, the runtime and a shell's UI end; a plugin repeats the link,
-  the guest, the host and the UI end under its own name. The kit, the link, the guest and the host vary by
-  language; the runtime by platform, a page's worker or a device's thread; the
-  UI end by shell, the page's inside the web runtime and React Native's an Expo
-  module.
+  the guest, the host and the UI end under its own name. The kit, the link, the
+  guest and the host vary by language; the runtime by platform, a web worker or
+  a native thread; the UI end by shell, the web's inside the web runtime and
+  React Native's an Expo module.
 - **Dependencies point down** (**the user**). A lower layer provides an
   interface; an upper one implements it and injects it. The runtime injects
   into the host what the host needs of it, the link's `Side`, a way back to the
@@ -164,7 +165,7 @@ What the user reproved in the agents' work, to be kept clear of:
 - **The UI is a handle** (**the user**). The channel to the UI is a general
   one, and the UI one remote party on it: its connection is a handle the
   runtime opens, which every message names and whose drop clears what it
-  opened and owed. The device runtime's "UI generation", a number threaded
+  opened and owed. The native runtime's "UI generation", a number threaded
   through every C ABI call to drop what an old UI sent, was that handle in
   disguise and goes. The WIT between the guest and the UI is unchanged. One
   remote at a time for now; several need only the runtime to hold a set, a
@@ -223,16 +224,16 @@ In this order (**the user**: the documents and the rules first):
    the parts' names in them (`xpute/ARCHITECTURE.md`'s codemap, the READMEs,
    the device-build skill) change with the moves in 5.
 2. The injection: the host's end of the link and the host's bindings move to
-   the host; the runtime injects what the host needs; a page's stop is
+   the host; the runtime injects what the host needs; the web's stop is
    injected as well; the GPU's host takes the NDK itself. With it, the error's
    optional message in the three languages, the bug's in the stop, and the log
    (`xpute:log`, each end's `log`, the runtime's injected log).
 3. The memory: xpute lays out none. `lent.at` and the GPU stream's address
    and fence words are a u64, a module's offset or a native pointer, and the
-   golden records are written again; the module owns and grows its memory, and the page's host
-   and UI read it through a view made at each access; the device runtime's
-   region, `xpute_mem`, `mem_sz` and the share go, and a device UI reads a lent
-   span through a buffer over its pointer; the guests' heaps and `link!`'s
+   golden records are written again; the module owns and grows its memory,
+   and the web host and UI read it through a view made at each access; the
+   native runtime's region, `xpute_mem`, `mem_sz` and the share go, and a
+   native UI reads a lent span through a buffer over its pointer; the guests' heaps and `link!`'s
    global allocator leave xpute; pixelet declares its own memory policy in its
    code. Built apart in a worktree while step 2 is reviewed.
 4. The UI's connection as a handle, and the link's one end over a medium
@@ -242,7 +243,7 @@ In this order (**the user**: the documents and the rules first):
    old handle through the link's drop, and the generation goes; after the
    memory step, which touches the same runtime.
 5. The moves and the renames of the table, the three crates removed, and the
-   GPU's page-side state heard by the program's assembly.
+   GPU's web-side state heard by the program's assembly.
 6. `rule.rs`'s order set to the layers above, with the moves, so main passes at
    each commit.
 7. Every target's `cargo check`, the TypeScript check and bundle, the

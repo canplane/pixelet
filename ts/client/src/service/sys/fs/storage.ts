@@ -36,7 +36,7 @@ export interface Storage {
 
 export let STORAGE: Storage = local;
 
-/** A page's worker cannot reach the page's storage, so the core's worker keeps
+/** The web worker cannot reach the page's storage, so the core's worker keeps
  * a copy of it that writes back to the page (runtime/worker.ts). */
 export function set_storage(s: Storage): void {
   STORAGE = s;

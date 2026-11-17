@@ -1,7 +1,7 @@
 // @xpute/expo/ui.ts
 
 /**
- * The UI's end of the runtime, as a page's is of its worker
+ * The UI's end of the runtime, as the web's is of its worker
  * (@xpute/runtime-web page.ts): the link's end (@xpute/link `End`) over the
  * JavaScript half of the UI's crossing, this module, on which the UI calls
  * the guest and implements its imports by the generated bindings as any end
@@ -15,7 +15,7 @@
  * method and its drop of an object; and the answer to a call of the UI's. A
  * buffer the guest lends is read and written through a buffer the module
  * makes over its span (`bytes`). The module names the UI's handle on the
- * runtime in each of these (xpute.h `xpute_start`). A device's module moves
+ * runtime in each of these (xpute.h `xpute_start`). The native module moves
  * no object beside the calls: the GPU's module binds a surface to its view
  * itself.
  */

@@ -1,6 +1,6 @@
 // pxl-gpu-host/image.rs
 
-//! This is `COPY_EXTERNAL_IMAGE` on a native device. The web asks its browser
+//! This is `COPY_EXTERNAL_IMAGE` natively. The web asks its browser
 //! to decode the image (createImageBitmap); here a thread of the host's own
 //! decodes it, and a later poll lands it in its texture. The formats are PNG,
 //! JPEG and WebP, the ones every browser is sure to read, so a guest can count
@@ -107,7 +107,7 @@ impl GpuHost {
                 height: image.height,
                 depth_or_array_layers: 1,
             };
-            // The host places an image it decoded itself, as a page's
+            // The host places an image it decoded itself, as the web's
             // `copyExternalImageToTexture` does: no write of the guest's, so
             // it takes nothing of the belt, whose chunks the guest counts.
             self.queue

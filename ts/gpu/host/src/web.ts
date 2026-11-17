@@ -1,7 +1,7 @@
 // @pxl/gpu/host/src/web.ts
 
 /**
- * A page's GPU, implemented for a guest in the page's worker
+ * The web GPU, implemented for a guest in the web worker
  * (spec/gpu/wit/gpu.wit): the host (host.ts) runs the records the guest lends
  * to `gpu.run` on the device the guest's `device` holds, and draws on the
  * canvases given beside the link under their surface's handle
@@ -9,7 +9,7 @@
  * ready, and a refusal is answered, not retried: the guest asks again when it
  * sees fit. A WebAssembly module reaches WebGPU no other way. What the page has
  * of a GPU this host tells the page itself as that changes, posted from the
- * worker (`GpuReport`), as a device's GPU host tells its app through its own
+ * worker (`GpuReport`), as the native GPU host tells its app through its own
  * module (pxl-gpu-host native.rs `state_on`); the program's assembly hears it
  * on the page.
  */

@@ -1,7 +1,10 @@
 // pxl-core/domain/scene/indicator/location.test.rs
 
 use super::*;
+use crate::domain::layer::object::store::Store;
+use crate::domain::query::test::{flat_at_five, placed, write};
 use crate::sys::host::set_clock;
+use pxl_render::gpu::draw::{lists_sz, set_lists};
 use pxl_spec::space::coord::q3;
 
 /// The zone laid the plain way, asking the ground again for every box and for
@@ -114,4 +117,50 @@ fn beacon_holds_on_stall() {
     });
     let time = location.zone.as_ref().map_or(f64::NAN, |z| z.clock.time());
     assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
+}
+
+/// The zone stands on the fix's leaf cell, so a move within the cell grounds
+/// nothing again and keeps the zone, while the beacon follows the fix; a move
+/// into the next cell grounds the zone there. A cube written into the fix's
+/// cell without a change noted would raise a zone grounded again.
+#[test]
+fn a_move_within_a_cell_grounds_nothing_again() {
+    const LIVE: usize = 4;
+    set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
+    let [x, y] = flat_at_five();
+    placed(Store::default());
+    let cell = units(GROUND.leaf_cell_zoom());
+    let [x, y, _] = v3::floor(&[x, y, 0.0], cell);
+    let mut location = LocationIndicator::default();
+    location.step(
+        draw_list(),
+        Some(world::point(x + 0.25 * cell, y + 0.25 * cell, 0.0)),
+    );
+    let center = location.zone.as_ref().map(|z| z.center).unwrap();
+    let mut store = Store::default();
+    write(
+        &mut store,
+        [x, y, center[2] + 0.5 * cell],
+        GROUND.leaf_cell_zoom(),
+        1,
+    );
+    placed(store);
+    let within = world::point(x + 0.75 * cell, y + 0.75 * cell, 0.0);
+    location.step(draw_list(), Some(within));
+    let zone = location.zone.as_ref().unwrap();
+    assert_eq!(zone.center, center);
+    assert_eq!(zone.beacon_to, [0.75 * cell, 0.75 * cell]);
+    let mut fresh = LocationIndicator::default();
+    fresh.step(draw_list(), Some(within));
+    let raised = fresh.zone.as_ref().map(|z| z.center).unwrap();
+    assert!(
+        raised[2] > center[2],
+        "the cube raises a zone grounded again"
+    );
+    location.step(
+        draw_list(),
+        Some(world::point(x + 1.25 * cell, y + 0.25 * cell, 0.0)),
+    );
+    let next = location.zone.as_ref().map(|z| z.center).unwrap();
+    assert_eq!([next[0], next[1]], [center[0] + cell, center[1]]);
 }

@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/component/backing.tsx
 
-/** A page and Android have no system glass, so the backing is a plain fill
+/** The web and Android have no system glass, so the backing is a plain fill
  * that fades in and out by its opacity. */
 
 import type { ReactNode } from "react";

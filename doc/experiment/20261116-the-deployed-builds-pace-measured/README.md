@@ -23,7 +23,7 @@ tree) on the S23, where the change alone differs.
 All release builds with `PXL_PERF_DRIVE=1`, each tree built apart (a worktree under
 `tmp/` and its own cargo target directory):
 
-- **The page:** `script/build-number.py`, then `pnpm --dir ts/client build:web`, the
+- **The web:** `script/build-number.py`, then `pnpm --dir ts/client build:web`, the
   wasm in cargo's `release` profile, served by `node script/web.ts serve` on its own
   `PXL_PREVIEW_PORT`, the tiles from the default source.
 - **The apps:** Android `./gradlew :app:assembleRelease` (#98's `mobile` flavor), iOS
@@ -191,6 +191,12 @@ process held 280 to 380 MiB on #98 and 280 to 330 on HEAD.
   number of measured intervals
   ([xpute as objects](../../minutes/20261112-xpute-as-objects-references-and-methods.md)).
 
+  > Since 2026-11-17 (`3ac60df141`): not the loop above. The web host now runs an
+  > animation frame loop and gives the gap between frames it saw back to back; in the
+  > Mac's Safari that gap read 31 to 32 ms on HEAD too ("Then: the night's quick
+  > comparison" below). Safari ran the dedicated worker's animation frames at about
+  > 30 Hz; why (a low-power mode, a worker's limit) was not read.
+
 ## One S23 app run
 
 HEAD's third run against #98 began at an AP of 38.5 °C. Its world was shown at about
@@ -239,15 +245,15 @@ reproduced, and not traced.
   same or lower.
 - **The shaders since #98 made it slower.** At the same clock the passes cost the same
   but the lights', which trade between them, and a frame's cycles are 3% fewer.
-- **The page's belt grew and WebKit killed the page.** Read in the change's diff alone:
+- **The web belt grew and WebKit killed the page.** Read in the change's diff alone:
   the pool is three chunks of 1 MiB (`FRAME_LATENCY` 2 plus 1), a chunk is made beyond it
   only where none is free and destroyed once its mapping comes back, so no more than the
-  frames in flight are made; the guest's packing and the page host's agree, row padding
+  frames in flight are made; the guest's packing and the web host's agree, row padding
   and every submit within a run included; the link reuses its frames and makes its views
   again only when the guest's memory is another buffer, and drains the later answers it
   held in the next microtask. Mac Safari's WebKit memory moved alike on both builds.
 - **A submit before `QUEUE_DONE` cost each run a chunk more.** The change submits the
-  staged writes before it on the page as the device's host already did, but the
+  staged writes before it on the web as the native host already did, but the
   renderer asks for no `QUEUE_DONE`.
 - **HEAD's page crashed on the iPhone.** Its lost runs stopped at the phone's auto-lock,
   with the private tab waiting for the passcode; the drawing until then was whole
@@ -370,3 +376,64 @@ memory but on the Mac's Safari; the deployed build itself, which carries no
 ## Kept
 
 The change. The runs were under `tmp/perf/cmp/`, not kept; the figures above are theirs.
+
+## Then: the night's quick comparison (2026-11-17)
+
+The tree measured above (`72226f95af`) against HEAD after the day's further changes
+(`6de67851df`: the vsync answering `next(after)` with the frame's gap, a web wait of 0
+on a posted message, the location indicator's cells and the markers asked under the
+budget). Release web builds with `PXL_PERF_DRIVE=1`, both under HEAD's scripts, a warm-up
+and one ABBA round each: the S23's Chrome cooled to 38.5 °C before each run, the Mac's
+Chrome, then its Safari.
+
+> Since 2026-11-17 (`600037b61c`, `aff9dfde09`, `63f0ec4499`): the code these figures
+> measure for the location indicator and the markers was taken back. The location is
+> again one memo for the zone, keyed by the fix's leaf cell, and runs as a tick after
+> the ghost; the markers ask as before, a brick's shown until it is read again. The
+> tree since is not measured; the figures below are the taken-back code's.
+
+| platform | build | frames | GPU p50 / p95 | tick p50 / p95 | effects p95 | scene p50 / p95 |
+| --- | --- | --- | --- | --- | --- | --- |
+| S23 Chrome | 72226f95af | 292, 297 | 53.3–55.2 / 110–113 | 4.1 / 8.8–12.3 | 5.9–7.5 | 2.8–3.3 / 7.4–9.0 |
+| | 6de67851df | 306, 307 | 52.0–52.3 / 106–111 | 5.9–6.2 / 11.9–12.1 | 0.2 | 4.3–4.4 / 11.8–12.0 |
+| Mac Chrome | 72226f95af | 862–879 | 20.4–20.6 / 28.8–29.3 | 1.7 / 2.0 | 0.9 | 1.2–1.3 / 1.7–2.2 |
+| | 6de67851df | 859–862 | 20.3–20.8 / 29.1–29.2 | 1.9–2.0 / 2.7–2.8 | 0.1 | 1.6 / 2.5–2.6 |
+| Mac Safari | 72226f95af | 565–579 | 21.4–21.5 / 31.7–32.0 | 2 / 2 | 1.0 | 1.2–1.3 / 2.0–3.0 |
+| | 6de67851df | 576–585 | 21.2–21.3 / 32.0 | 2 / 3 | 0.0 | 1.5–1.6 / 3.0 |
+
+Frames and the GPU held or improved; the location effect's spikes (its p95) left the
+effects. The tick rose at both percentiles, its scene step about 1.2 ms at p50 on the S23
+and 0.3 on the Mac, every frame alike.
+
+**Which commit.** Each build once in an order and once in its reverse, the Mac's Chrome,
+the scene step's p50 / p95 in ms: `72226f95af` 1.2/2.2, 1.3/2.3; `bec3061dc4` (the vsync and
+the wait of 0 in) 1.3/1.8, 1.3/2.4; `cfc72c4ac5` (the location's cells) 1.5/2.7, 1.5/2.7;
+`ff07ca506e` (the markers) 1.6/2.8, 1.6/2.8; HEAD 1.5/2.6, 1.6/3.0. The rise came with the
+location's cells; the markers' share is within 0.1 ms.
+
+**What it was not.**
+- A clock read for each item of the location's pass, `sched::run` reading `spent()` after
+  a step has worked: the location's pass was cut to the cells due alone, and the S23 read
+  the same (tick p50 5.9 and 6.2 against 3.9 and 4.0; scene 4.2 and 4.3 against 2.7).
+- Each cell's memo tested against the frame's changes: a test of the zone's span first,
+  each cell only where a change touched it, and the Mac read the same (scene 1.5 against
+  1.2–1.3).
+- The step's own cost on a settled world: 18 µs natively, 10.6 of it the list of cells
+  made again (a throwaway test).
+
+**Where it was.** A diagnostic build ran the same location code as an effect, timed under
+the `setting` effect's slot, and the Mac's Chrome read the base's figures again: scene
+1.2 and 1.3, tick 1.7 / 2.0, effects p50 0.1 and p95 1.0. So the cost is the code's in
+the visible phase, where the terrain's demand has spent most of the budget before it: its
+pass then asks a cell a frame, and the zone is laid again in every frame that asked one,
+a zone of some new and some old tops each time. Supposed from that, not traced.
+
+**A toast while the Mac's Chrome ran.** The page showed that the server was hard to
+reach, for a moment. The core shows it on one read the client counts as the server's
+failure: a status but 200, 204 and 404, or a fetch that threw while online
+(`service/sys/fs/read.ts`, `sys/io/policy.rs` `fault`). A read the core stopped is not one:
+the scheduler ends its attempt as it stops it, and the late answer finds none
+(`request.rs` `settle`). The page ran on `web.ts serve`, which forwards every tile request
+to the deployment through Node (`script/proxy.ts` `forward`) and answers 502, unlogged,
+when that leg fails; the run reads none of the page's console. A failed leg is the likely
+cause; not shown.

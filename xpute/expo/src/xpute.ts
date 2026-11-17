@@ -76,7 +76,7 @@ export function stopped_on(hear: (stop: UiStop) => void): { remove(): void } {
 }
 
 /** Adds `hear` to what is told that the guest trapped, with what stopped it,
- * as a page's trap carries its error, over the module's `onTrap`, which
+ * as the web's trap carries its error, over the module's `onTrap`, which
  * xpute.h `xpute_trap_on` sends, and tells it the trap the runtime keeps, as
  * `stopped_on` tells the stop. */
 export function trap_on(hear: (err: string) => void): { remove(): void } {

@@ -4,10 +4,9 @@
 # its way (an entry at a time, a deadline measured from the frame, I/O asked of
 # its host), and it depends on `kit` and the link, never the reverse.
 # `host/rust` is the host in Rust: its end of the link, the bindings mounted
-# there and what it implements; `runtime/native` is the runtime on a native
-# device, the environment the host runs in, which injects into the host what
-# it needs of it: the way back to the guest's thread, where a report goes and
-# the log.
+# there and what it implements; `runtime/native` is the native runtime, the
+# environment the host runs in, which injects into the host what it needs of
+# it: the way back to the guest's thread, where a report goes and the log.
 # A program may bring
 # plugins of its own, in its own tree, each repeating the link, the guest and
 # the host. `gen` is the data specs' generator, and `gen-targets` what it makes

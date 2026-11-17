@@ -80,8 +80,8 @@ export function tree_file(from: string, spec: string): string | null {
 }
 
 /** The file that `spec`, imported from the file `from`, names on `platform`:
- * beside the file it names, `pill.ios.tsx` or else `motion.native.tsx` on a
- * device, and `motion.web.tsx` on the page, or the file itself when none
+ * beside the file it names, `pill.ios.tsx` or else `motion.native.tsx`
+ * natively, and `motion.web.tsx` on the web, or the file itself when none
  * exists, as the type-checks' `moduleSuffixes` take it. Every import names
  * the plain file with its extension, which Metro's own platform lookup does
  * not handle. An override's import of its own default gets the default, which

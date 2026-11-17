@@ -1,6 +1,6 @@
 // pxl-render/examples/assembled.rs
 
-//! Writes into the named directory every shader as the page receives it, one file each, and
+//! Writes into the named directory every shader as the app receives it, one file each, and
 //! the world's asked module. It also writes pipelines.json: every pipeline the renderer makes
 //! over those shaders, render and compute, with its entry points named as the renderer names
 //! them. Tint compiles them in ts/tool/shader/shader.test.ts, and a device's own browser

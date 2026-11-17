@@ -26,7 +26,7 @@ export const ORIENTATION_COMMAND_STOP = 1;
 export interface OrientationPlatform {
   supported: boolean;
   /** Whether silence means the sensor is lost. A browser's sensor talks even
-   * while the device is still. A device's sensor (Core Location) speaks only
+   * while the device is still. A native sensor (Core Location) speaks only
    * on change and reports its own failure. */
   silence_is_loss: boolean;
 }
@@ -61,7 +61,7 @@ export function orient_event(heading: f64 | null): void {
   set_orient(device_orient_store(), heading);
 }
 
-/** The place has no compass, as a page's event with every field null says: its
+/** The place has no compass, as a web event with every field null says: its
  * listener stops, and the compass reads unavailable, which `request_orient`
  * keeps until the world's surface closes. */
 export function orient_unavailable(): void {

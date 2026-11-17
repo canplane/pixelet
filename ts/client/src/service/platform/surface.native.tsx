@@ -1,9 +1,9 @@
 // @pxl/client/service/platform/surface.native.tsx
 
-/** The core's surfaces on a device are the GPU's native view (@pxl/gpu/expo
+/** The core's surfaces natively are the GPU's native view (@pxl/gpu/expo
  * `SurfaceView`), which wgpu draws into directly; the world's is the subclass
  * that gives its touches as pointer events (modules/platform `WorldView`),
- * fed to the input as a page's canvas feeds its own. The view's layer arrives
+ * fed to the input as the web canvas feeds its own. The view's layer arrives
  * after the view mounts, so the view reports when its layer is bound. */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";

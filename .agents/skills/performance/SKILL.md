@@ -18,10 +18,10 @@ Make the program faster while keeping every condition the design met.
   the settings, the path and the window. A script holds none of it.
 - A measured build takes `PXL_PERF_DRIVE=1` where it is built and served, and is
   dev or release, always said with its figures and never mixed:
-  - dev: a page's is `PXL_PERF_DRIVE=1 make dev`; a device's is the device-build
-    skill's Debug build on `PXL_PERF_DRIVE=1 make dev-native` (`METRO_PORT` when
-    that Metro is not on 8081).
-  - release: a page's is `PXL_PERF_DRIVE=1 make preview`; a device's is the
+  - dev: the web's is `PXL_PERF_DRIVE=1 make dev`; the native one is the
+    device-build skill's Debug build on `PXL_PERF_DRIVE=1 make dev-native`
+    (`METRO_PORT` when that Metro is not on 8081).
+  - release: the web's is `PXL_PERF_DRIVE=1 make preview`; the native one is the
     device-build skill's Release build with the variable set.
 
   When the measuring ends, the device takes a Release built without it.

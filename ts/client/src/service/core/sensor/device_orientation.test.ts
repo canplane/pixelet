@@ -22,7 +22,7 @@ import {
   SENSOR_STATUS_UNAVAILABLE,
 } from "./reading.ts";
 
-/** A page's compass: silence is a loss. */
+/** The web compass: silence is a loss. */
 function page_compass(): void {
   Object.assign(platform(), { supported: true, silence_is_loss: true });
 }

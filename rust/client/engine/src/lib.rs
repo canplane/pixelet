@@ -40,7 +40,7 @@ pub mod world;
 use pxl_spec::space::coord::zoom::FINEST_ZOOM;
 
 /// The most workgroups a dispatch takes on an axis: WebGPU's
-/// `maxComputeWorkgroupsPerDimension` at its default. The page's device keeps the default,
+/// `maxComputeWorkgroupsPerDimension` at its default. The web's device keeps the default,
 /// because it asks for no limits, and a native device's adapter allows at least as many.
 /// Every count a pass writes for an indirect dispatch stays under it, because the room the
 /// pass lists into is no larger.
