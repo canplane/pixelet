@@ -11,6 +11,7 @@
 //! is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
+use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -652,7 +653,7 @@ pub(crate) fn admit_arrived() {
         true
     });
     if stat.stopped_early {
-        sched::invalidate();
+        sched::invalidate(InvalidationReason::Pending);
     }
 }
 

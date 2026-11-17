@@ -14,6 +14,7 @@
 //! reads are given up. A read that is out is never stopped for one ranked
 //! higher.
 
+use crate::spec::step::InvalidationReason;
 use std::collections::VecDeque;
 
 use crate::sys::io::demand::{Order, PhaseList, Source, Stream};
@@ -335,7 +336,7 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     }
     // A frame's pump shows the failure and starts a probe at once where the
     // hold has already ended or this failure began none.
-    sched::invalidate();
+    sched::invalidate(InvalidationReason::Completion);
 }
 
 /// Whether `stream`'s want of `id` is held back because its object failed.

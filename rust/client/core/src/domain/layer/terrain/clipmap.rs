@@ -33,6 +33,7 @@ use crate::domain::layer::terrain::fixed::{
 };
 use crate::domain::layer::terrain::pool::{PoolRefusal, Run, way_pool};
 use crate::domain::layer::tile_cache::TileCache;
+use crate::spec::step::InvalidationReason;
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::Exit;
@@ -668,7 +669,7 @@ pub(crate) fn upload(write: &mut TerrainWrite<'_>) {
             run: &pieces,
         });
         if !fits {
-            invalidate();
+            invalidate(InvalidationReason::Pending);
             break;
         }
         (w.slots[b as usize].present, w.slots[b as usize].fill) = (true, Fill::Idle);
@@ -978,7 +979,7 @@ pub(crate) fn fill_share() {
         }
     }
     if ran {
-        invalidate();
+        invalidate(InvalidationReason::Pending);
     }
 }
 

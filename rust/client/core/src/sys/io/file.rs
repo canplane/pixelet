@@ -25,6 +25,7 @@
 //! known (`read_whole`): a body slot (sys/io/body.rs) or a heap buffer
 //! (`heap`). Either lies in the core's memory, so its offset holds.
 
+use crate::spec::step::InvalidationReason;
 use core::fmt;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -247,7 +248,7 @@ async fn storage_read() {
         Err(_) => StorageRead::Unreadable,
     };
     files().storage_read = Some(read);
-    invalidate();
+    invalidate(InvalidationReason::Completion);
 }
 
 /// What the storage file held, once it is read whole, or None until then.
@@ -306,7 +307,7 @@ async fn setting_aside(r: Refused) {
         return;
     }
     files().set_aside.push_back(r);
-    invalidate();
+    invalidate(InvalidationReason::Completion);
 }
 
 /// A refused file set aside since, for its owner to take back: the settings

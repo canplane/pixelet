@@ -3,7 +3,7 @@
 // GENERATED from spec/client/core/perf/step.json5 (xpute-gen data.rs)
 //
 // The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs
-// registers them, and the effects a frame runs around them. The profiler records and
+// registers them, the effects a frame runs around them, and the reasons a frame is asked for. The profiler records and
 // reports them by these names (spec/client/core/perf/perf.json5).
 
 export const STEP_NAMES = [
@@ -139,5 +139,59 @@ export function name_EffectName(val: EffectName): string {
       return "object";
     case EFFECT_NAME_SETTING:
       return "setting";
+  }
+}
+
+/** Why a frame is asked for (pxl-core sys/sched.rs `invalidate`): `method` a method of the UI's applied, `view` the camera or the screen moved, `scene` what is shown changed, `completion` something outside the frame finished and a frame takes it (a read, a parse, a write, the GPU's), `pending` a frame stopped short of its work or put it off and a later one goes on, `animation` an animation's step or a frame of its motion. */
+export const INVALIDATION_REASONS = [
+  "method",
+  "view",
+  "scene",
+  "completion",
+  "pending",
+  "animation",
+] as const;
+
+export type InvalidationReason =
+  | typeof INVALIDATION_REASON_METHOD
+  | typeof INVALIDATION_REASON_VIEW
+  | typeof INVALIDATION_REASON_SCENE
+  | typeof INVALIDATION_REASON_COMPLETION
+  | typeof INVALIDATION_REASON_PENDING
+  | typeof INVALIDATION_REASON_ANIMATION;
+export const INVALIDATION_REASON_METHOD = 0;
+export const INVALIDATION_REASON_VIEW = 1;
+export const INVALIDATION_REASON_SCENE = 2;
+export const INVALIDATION_REASON_COMPLETION = 3;
+export const INVALIDATION_REASON_PENDING = 4;
+export const INVALIDATION_REASON_ANIMATION = 5;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_InvalidationReason(val: number): InvalidationReason | null {
+  return val === INVALIDATION_REASON_METHOD ||
+    val === INVALIDATION_REASON_VIEW ||
+    val === INVALIDATION_REASON_SCENE ||
+    val === INVALIDATION_REASON_COMPLETION ||
+    val === INVALIDATION_REASON_PENDING ||
+    val === INVALIDATION_REASON_ANIMATION
+    ? val
+    : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_InvalidationReason(val: InvalidationReason): string {
+  switch (val) {
+    case INVALIDATION_REASON_METHOD:
+      return "method";
+    case INVALIDATION_REASON_VIEW:
+      return "view";
+    case INVALIDATION_REASON_SCENE:
+      return "scene";
+    case INVALIDATION_REASON_COMPLETION:
+      return "completion";
+    case INVALIDATION_REASON_PENDING:
+      return "pending";
+    case INVALIDATION_REASON_ANIMATION:
+      return "animation";
   }
 }

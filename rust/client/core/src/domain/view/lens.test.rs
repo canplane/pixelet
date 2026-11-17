@@ -52,8 +52,8 @@ fn step_clock_reports() {
 #[test]
 fn decor_edges_cell_shares() {
     use crate::domain::view::frame::pose::view_resize;
-    use crate::domain::view::param::{DECOR_IMPOSTOR_CELLS, DECOR_MODEL_CELLS};
-    let edges = (DECOR_MODEL_CELLS * CELL, DECOR_IMPOSTOR_CELLS * CELL);
+    use crate::domain::view::param::DECOR_IMPOSTOR_CELLS;
+    let edges = (f64::from(SPANS) * CELL, DECOR_IMPOSTOR_CELLS * CELL);
     for h in [600.0, 844.0, 1080.0, 1440.0, 2160.0] {
         view_resize(h * 16.0 / 9.0, h);
         let (model, impostor) = (decor_model_angle(), decor_impostor_angle());

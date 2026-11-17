@@ -14,7 +14,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { PHASES } from "@/abi/phase.spec.ts";
 import { FRAME_GROUP } from "@/abi/perf.spec.ts";
 import type { FrameColumn, ListColumn } from "@/service/core/perf.ts";
-import { EFFECT_NAMES } from "@/abi/step.spec.ts";
+import { INVALIDATION_REASONS, EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 
@@ -26,6 +26,7 @@ export const zoom_name = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 export const LIST_NAMES: Record<ListColumn, readonly string[]> = {
   phases: PHASES,
   effects: EFFECT_NAMES,
+  invalidations: INVALIDATION_REASONS,
   gpu_spans: GPU_SPAN_NAMES,
 };
 

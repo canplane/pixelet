@@ -65,7 +65,7 @@ pub(super) fn draw(
                     );
                 }
             }
-            applied().map(Ok)
+            Ok(Ok(()))
         }
     }
 }

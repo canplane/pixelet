@@ -13,9 +13,10 @@ agenda, its minutes and its reports beside its rules.
   on, by upstream project, each with the records it rests on and what the tree
   does about it; an entry goes when it is found fixed or found to be ours.
 - [minutes/](./minutes/) — one meeting's record a file, `YYYYMMDD-topic.md`:
-  what was asked, what was weighed, and what was resolved, if anything was. A
-  design or a report written for a meeting becomes its minutes once the meeting
-  is over.
+  the meeting's conclusions, each with whose it is and the reason that decided
+  it, and not the turns of the talk that led there. While the meeting lasts the
+  file is written whole each time a conclusion changes; a design or a report
+  written for a meeting becomes its minutes once the meeting is over.
 - [minutes/archive/](./minutes/archive/) — older minutes, moved here on the
   user's word.
 - [experiment/](./experiment/) — measurements, dated, each with its procedure,
@@ -38,9 +39,9 @@ before the documents catch up.
 Where the code and a stated contract disagree, neither the code nor an old
 record settles it alone.
 
-A record is not rewritten. Where one defers something or leaves it open, or
-decides something since reversed, and that is found when the record is read, a
-note goes beneath it: `> Since <date> (<commit>): …`, saying what holds now.
+Once its meeting or its measurement is over, a record is not rewritten. Where
+one defers something or leaves it open, or decides something since reversed, and
+that is found when the record is read, a note goes beneath it: `> Since <date> (<commit>): …`, saying what holds now.
 
 A report or a request from outside the project is a GitHub issue. What is
 resolved in one is written here, and the issue links to it.

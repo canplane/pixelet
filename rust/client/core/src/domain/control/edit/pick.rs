@@ -12,7 +12,6 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::zoom::{Zoom, of_side, units};
 
-use crate::domain::control::camera::controller;
 use crate::domain::control::edit::collision::object_aabb;
 use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
@@ -158,12 +157,12 @@ impl Pick {
     }
 }
 
-/// The ray is cast from the camera's pose as it is now, which a link event or
-/// a controller may have moved since the frame composed the view.
+/// The ray is cast from the view, so it strikes what is shown. None until the
+/// camera stands somewhere.
 pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
-    let pose = controller::pose()?;
+    eye()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
-    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
+    ray_of(ndc_x, ndc_y, &mut origin, &mut dir);
     let mut p = Pick {
         hit: ray_pick(origin, dir)?,
         ray_zoom: None,

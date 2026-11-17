@@ -391,7 +391,7 @@ impl<L: Base> TileCache<L> {
         }
     }
 
-    fn is_asked(&self, p: Quadrant) -> bool {
+    pub(crate) fn is_asked(&self, p: Quadrant) -> bool {
         self.entry(p).is_some_and(|e| e.asked)
     }
 

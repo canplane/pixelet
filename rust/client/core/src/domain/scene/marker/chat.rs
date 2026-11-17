@@ -6,6 +6,7 @@
 //! (domain/scene/character/companion.rs `line_hangs`). `line.rs` hands the
 //! line to the arrangement.
 
+use crate::spec::step::InvalidationReason;
 use std::rc::Rc;
 
 use pxl_global::Global;
@@ -57,7 +58,7 @@ pub(super) fn shown_line() -> Option<Design> {
     if line.at_ms + SHOWN_MS <= now() {
         return None;
     }
-    invalidate_at(line.at_ms + SHOWN_MS);
+    invalidate_at(line.at_ms + SHOWN_MS, InvalidationReason::Scene);
     Some(Design::Bubble {
         text: line.text.clone(),
     })

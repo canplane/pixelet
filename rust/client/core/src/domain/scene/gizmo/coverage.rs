@@ -9,6 +9,7 @@
 //! every edge on it, and each stretch between cuts is drawn once, in the
 //! highest mark over it, straight between its ends on the ground.
 
+use crate::spec::step::InvalidationReason;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::brick;
 
@@ -122,7 +123,7 @@ struct Outline {
 #[derive(Default)]
 struct Coverage {
     /// The origin the drawn lines are laid about, or None while the gizmo is
-    /// hidden.
+    /// hidden and where the heap refused them.
     drawn: Option<V3>,
     /// The line vertices followed by the face vertices, and the index where
     /// the faces begin.
@@ -150,7 +151,7 @@ pub(crate) fn coverage_gizmo_step(show: bool) {
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::min_zoom()) else {
         if c.drawn.take().is_some() {
             c.mesh.set(draw, [0.0; 3], &[], 0);
-            invalidate();
+            invalidate(InvalidationReason::Scene);
         }
         return;
     };
@@ -181,10 +182,14 @@ pub(crate) fn coverage_gizmo_step(show: bool) {
     c.next.0.clear();
     c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
     if c.drawn != Some(about) || c.next != c.vertices {
-        c.mesh.set(draw, about, &c.next.0, c.next.1);
-        c.drawn = Some(about);
+        // An outline the heap refused is not the one drawn, so the next step
+        // sets it again.
+        c.drawn = c
+            .mesh
+            .set(draw, about, &c.next.0, c.next.1)
+            .then_some(about);
         core::mem::swap(&mut c.next, &mut c.vertices);
-        invalidate();
+        invalidate(InvalidationReason::Scene);
     }
 }
 

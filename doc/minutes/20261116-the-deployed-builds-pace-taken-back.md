@@ -199,7 +199,7 @@ to smooth.
 
   > Since 2026-11-17: taken back on the user's word, the location and the markers as at
   > `bec3061dc4`
-  > ([the location zone, by the code's own axioms](./20261117-the-location-zone-by-the-codes-own-axioms.md)).
+  > ([the location zone, and the observation quantized](./20261117-the-location-zone-by-the-codes-own-axioms.md)).
 - The C++ heap's branch for wasm without atomics has not been compiled.
 
   > Since 2026-11-16 (`deb1fbb08c`): it is the branch `make -C xpute/cpp wasm` compiles,

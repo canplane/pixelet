@@ -7,6 +7,7 @@
 //! either controller while it holds the pose, because a tracked turn can
 //! roll and neither controller has a roll.
 
+use crate::spec::step::InvalidationReason;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -64,7 +65,7 @@ pub(crate) fn put_pivot(to: Q3, motion: Motion) {
     if motion == Motion::Snap {
         snap();
     }
-    invalidate();
+    invalidate(InvalidationReason::View);
 }
 
 /// Puts the active controller's camera at the pivot's `to` at once.
@@ -243,9 +244,7 @@ pub(crate) fn pinch_by(scale: f64) {
 }
 
 pub(crate) fn controller_step(_: &mut TickContext) {
-    if switch() {
-        invalidate();
-    }
+    switch();
 }
 
 pub(crate) fn camera_step(ctx: &mut TickContext) {
@@ -255,16 +254,14 @@ pub(crate) fn camera_step(ctx: &mut TickContext) {
         Active::Tracked => false,
     };
     if moving {
-        invalidate();
+        invalidate(InvalidationReason::View);
     }
 }
 
-fn switch() -> bool {
-    if !take_mode(settings().camera_mode) {
-        return false;
+fn switch() {
+    if take_mode(settings().camera_mode) {
+        invalidate(InvalidationReason::View);
     }
-    invalidate();
-    true
 }
 
 /// Switches to the controller `want` and returns whether it switched. The
@@ -322,12 +319,12 @@ pub(crate) fn tracked_pose(at: V3, q: [f64; 4]) {
     } else if let Some(t) = &mut c.tracker {
         (t.rot, t.at) = (rot, at);
     }
-    invalidate();
+    invalidate(InvalidationReason::View);
 }
 
 pub(crate) fn tracked_end() {
     if controller().tracker.take().is_some() {
-        invalidate();
+        invalidate(InvalidationReason::View);
     }
 }
 

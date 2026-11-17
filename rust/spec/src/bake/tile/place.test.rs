@@ -82,6 +82,13 @@ fn parent_from_children() {
     children[leaf().slot()] = &child;
     let parent = fold(p, children);
     assert_eq!(shown_at(&parent, p.zoom), ["Peak"]);
+    // A place stands in one ground leaf cell whatever tile holds it, which a
+    // reader names it by.
+    let peak = |tile: &PlaceTile| tile.iter().find(|h| h.name == "Peak").map(|h| h.off);
+    assert_eq!(
+        peak(&parent).map(|off| stands(p, off)),
+        peak(&child).map(|off| stands(leaf(), off)),
+    );
     // The cafe shows only deeper, so the leaf stays a tile under it.
     assert!(parent.occupancy.has_child(leaf().slot()));
     assert!(!parent.occupancy.has_child((leaf().slot() + 1) % 4));

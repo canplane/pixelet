@@ -10,6 +10,7 @@ pub(crate) mod celestial;
 pub(crate) mod cloud;
 pub(crate) mod param;
 
+use crate::spec::step::InvalidationReason;
 use pxl_content::cloud::drift;
 use pxl_content::param::night;
 use pxl_render::look::environment::{FLOATS, Light, write_environment};
@@ -35,8 +36,9 @@ use xpute_guest::clock::system;
 /// sky moves with the wall clock while nothing else asks for a frame, so
 /// without this wake a still view would never show it move.
 pub(crate) fn environment_step() {
-    let next_ms = environment().observe(system());
-    invalidate_at(now() + next_ms);
+    let now_ms = now();
+    let next_ms = environment().observe(system(), now_ms);
+    invalidate_at(now_ms + next_ms, InvalidationReason::Scene);
 }
 
 static ENVIRONMENT: Global<EnvironmentDraw> = Global::new();
@@ -196,9 +198,11 @@ impl EnvironmentDraw {
         self.started && v3::norm(&self.sun)[2] < f64::from(night::FALL[1])
     }
 
-    /// Observes the sky at the wall clock's time `unix_ms`. Returns how many
-    /// milliseconds remain until the earlier of the sky's and the clouds'
-    /// next steps. Each is a clock that holds still and steps a quantum at a
+    /// Observes the sky at the wall clock's time `unix_ms`, with the monotonic
+    /// clock at `now_ms`. Returns how many milliseconds remain until the sky's
+    /// next step, or, before the sky starts, the earlier of its and the
+    /// clouds'; once it has started the clouds wake the frame at their own
+    /// (`animation::read`). Each is a clock that holds still and steps a quantum at a
     /// time (`lens::StepClock`), so their words do not change between steps.
     /// A quantum is measured where its clock last stepped, at the rate things
     /// moved there. The sky's quantum is the time the sun or the moon takes
@@ -208,7 +212,7 @@ impl EnvironmentDraw {
     /// steps both clocks. The sky's clock reads the hour the `sky_time`
     /// setting shows (`sky_clock`), and a held hour never steps it. The
     /// clouds' clock reads the wall clock.
-    pub(crate) fn observe(&mut self, unix_ms: f64) -> f64 {
+    pub(crate) fn observe(&mut self, unix_ms: f64, now_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.sky_anchor();
         let (sky_ms, fixed) = sky_clock(settings().sky_time, unix_ms, at[0]);
@@ -241,20 +245,27 @@ impl EnvironmentDraw {
             self.days = j2000_days(sky);
             self.aim();
         }
-        let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
-        // A step of the clouds is an animation: the wake this observation
-        // sets brings their next step, so the frame drawn for this one need
-        // ask for no more (`animation`).
-        if drifted && self.started {
-            animation::note_animation();
-        }
+        // Once the sky has started, the clouds' drift is an animation. Before
+        // it, every observation sets their clock anew, which is no
+        // animation's step.
+        let (clouds, clouds_in) = match self.started {
+            true => {
+                let (clouds, _) =
+                    animation::read(&mut self.clouds_at, now_ms, unix_ms, 1.0, clouds_next);
+                (clouds, f64::INFINITY)
+            }
+            false => {
+                let (clouds, due, _) = self.clouds_at.at(unix_ms, clouds_next);
+                (clouds, due - unix_ms)
+            }
+        };
         self.drift = drift((clouds - first) / 1000.0);
         let sky_in = if fixed {
             f64::INFINITY
         } else {
             rate(sky, f64::INFINITY) - sky_ms
         };
-        sky_in.min(clouds_due - unix_ms).max(0.0)
+        sky_in.min(clouds_in).max(0.0)
     }
 
     fn aim(&mut self) {

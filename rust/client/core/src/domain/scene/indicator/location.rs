@@ -4,6 +4,7 @@
 //! each cell set on the ground under it, and a beacon above the zone that
 //! eases toward the fix, spins and bobs.
 
+use crate::spec::step::InvalidationReason;
 use pxl_render::frame::shader::record::PIPELINE_LOCATION_ZONE;
 use pxl_render::gpu::api::bytes;
 use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, ReceiverBox};
@@ -28,7 +29,7 @@ use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{StepClock, visible_step_s};
-use crate::sys::sched::{invalidate, invalidate_at};
+use crate::sys::sched::invalidate;
 use pxl_global::Global;
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
@@ -234,7 +235,7 @@ impl LocationIndicator {
     fn step(&mut self, draw: &mut DrawList, device_coord: Option<Q3>) {
         let Some(device) = device_coord else {
             if self.zone.take().is_some() {
-                invalidate();
+                invalidate(InvalidationReason::Scene);
             }
             return;
         };
@@ -312,7 +313,7 @@ impl LocationIndicator {
                 s[1] -= center_pos[1] - z.center[1];
             }
             z.center = center_pos;
-            invalidate();
+            invalidate(InvalidationReason::Scene);
         }
         (Some(center_pos), exact)
     }
@@ -322,7 +323,7 @@ impl LocationIndicator {
     /// ghost does.
     fn write(&mut self, draw: &mut DrawList) {
         self.block.write(draw, bytes(&self.instances));
-        invalidate();
+        invalidate(InvalidationReason::Scene);
     }
 
     /// Advances the beacon by one frame. Returns whether it slides and wants
@@ -357,15 +358,12 @@ impl LocationIndicator {
         // The step is measured at the beacon, which stands over the zone's
         // center by its bias.
         let beacon = v3::add(&to, &[shown[0], shown[1], BEACON_Z_BIAS]);
-        let mut stepped = false;
         if p.visible && 2.0 * BEACON_BOB >= cell_there {
             p.run += dt;
             let step = visible_step_s(v3::len(&beacon), beacon_speed());
-            let (_, next, s) = p.clock.at(p.run, |at| at + step);
-            stepped = s;
-            invalidate_at(now() + (next - p.run) * 1000.0);
+            animation::read(&mut p.clock, now(), p.run, 1000.0, |at| at + step);
         }
-        if slides || stepped {
+        if slides {
             animation::note_animation();
         }
         slides

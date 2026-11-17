@@ -6,7 +6,7 @@
 //! apart from the frame.
 
 use crate::domain::layer::Base as _;
-use crate::spec::step::{EffectName, StepName};
+use crate::spec::step::{EffectName, InvalidationReason, StepName};
 use pxl_spec::space::coord::q3::{self, Q3};
 
 use crate::domain::control::input::{camera_input_step, rehover_at};
@@ -101,14 +101,14 @@ fn edit_tick(_: &mut TickContext) {
     // A changed preview changes the world as drawn, both where the old
     // preview was and where the new one is.
     if write::render_edit_step() {
-        invalidate();
+        invalidate(InvalidationReason::Scene);
     }
 }
 
 fn ghost_tick(_: &mut TickContext) {
     use crate::domain::control::edit::ghost::ghost;
     if ghost_set(draw_list(), &ghost()) {
-        invalidate();
+        invalidate(InvalidationReason::Scene);
     }
 }
 
@@ -153,14 +153,15 @@ fn demand_tick(_: &mut TickContext) {
 }
 
 /// Runs the scene's frame with what control decided. The world gizmo is drawn
-/// about the camera's pivot, and in third person also about its heading.
+/// about the camera's pivot, and in third person also about the view's
+/// heading.
 /// Decor leaves out what the edit's preview takes away.
 fn scene_tick(ctx: &mut TickContext) {
     let third_person = controller::active() == Active::Orbit;
     scene_step(
         ctx,
         controller::pivot(),
-        third_person.then(camera::azimuth),
+        third_person.then(pose::azimuth).flatten(),
         &write::render_edit(),
         write::draft(),
     );
@@ -170,8 +171,9 @@ fn camera_input_tick(_: &mut TickContext) {
     camera_input_step();
 }
 
-/// Writes the camera for the last time this frame and composes the view where
-/// it now stands. It must run after every writer of the pose (the link's
+/// Writes the camera for the last time this frame and has the view take its
+/// pose where it differs by what can be told apart (`view_compose`). It must
+/// run after every writer of the pose (the link's
 /// events, the frame's effects, the controllers) and before every phase that
 /// observes the view. The pointer is picked again from the new view, so what
 /// it is over stays right when the view moves under a still pointer.
@@ -332,7 +334,7 @@ async fn frame_task() {
         };
         if let Some(cnt) = why {
             *cnt += 1.0;
-            invalidate();
+            invalidate(InvalidationReason::Pending);
             continue;
         }
         run(at, display_ms, target_ms);
@@ -394,6 +396,7 @@ fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
         effects_ms,
         effects,
         stage_ms: end - after_tick,
+        invalidations: sched::take_invalidations(),
     });
     LAST.set(Some((at, moving)));
     report

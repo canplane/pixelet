@@ -15,7 +15,7 @@ use pxl_spec::space::coord::world::nearest;
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_global::Global;
-use pxl_spec::space::camera::grid::fov;
+use pxl_spec::space::camera::grid::{HALF_TAN, fov};
 use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
 
 /// `rot` is a pure rotation: it turns the world's axes into the camera's
@@ -27,8 +27,10 @@ pub(crate) struct ObserverPose {
 }
 
 pub(crate) struct View {
-    /// The camera's pose as this frame composed it. None until the camera
-    /// stands somewhere.
+    /// The pose the view is seen from: the camera's as it was last taken
+    /// (`view_compose`), which the camera's own may differ from by less than
+    /// can be told apart on the screen. None until the camera stands
+    /// somewhere.
     pub pose: Option<ObserverPose>,
 
     /// The view's size in CSS pixels. Code outside the frame reads it only
@@ -98,6 +100,15 @@ pub(crate) fn eye() -> Option<V3> {
     Some(view().pose?.eye)
 }
 
+/// The view's heading: radians about Z from north toward east, read off
+/// its right, which lies level at any pitch for a camera that does not roll
+/// (the orbit and first person; a tracked pose may roll, and has no heading
+/// by this). None until the camera stands somewhere.
+pub(crate) fn azimuth() -> Option<f64> {
+    let rot = view().pose?.rot;
+    Some(libm::atan2(-rot[4], rot[0]))
+}
+
 /// The point at sea level under the eye, which a frame is drawn about. What
 /// is drawn relative to it in f32 stays precise near the eye.
 pub(crate) fn sea_under_eye() -> V3 {
@@ -147,24 +158,55 @@ pub(crate) fn view_resize(width: f64, height: f64) {
     compose();
 }
 
-/// Takes the pose the controllers hold and, if it moved, composes the
-/// matrices from it. Returns whether the view moved.
+/// Takes the pose the controllers hold where it differs from the view's by
+/// what can be told apart, and composes the matrices from it. Returns
+/// whether the view moved. The camera moves in reals; the view is what is
+/// seen from it, and everything that looks reads the view.
 ///
 /// The eye is snapped to the lattice steps the cast's rays start from
 /// (pxl-spec `world::origin`). The world the rays draw and what is
 /// rasterized on its faces (the location indicator's zone, the ghosts, the
-/// markers' anchors) are then seen from the same eye.
+/// markers' anchors) are then seen from the same eye. The view moves when
+/// the snapped eye does, or when the camera has turned from the view's pose
+/// by more than `turn_step`; a smaller turn is not taken, so it adds up against
+/// the pose the view keeps until it passes.
 pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
     let pose = pose.map(|p| ObserverPose {
         eye: p.eye.map(|v| to_real(from_real(v))),
         ..p
     });
-    let moved = view().pose != pose;
+    let v = view();
+    let moved = match (v.pose, pose) {
+        (Some(cur), Some(p)) => cur.eye != p.eye || turn(&cur.rot, &p.rot) > turn_step(v),
+        (cur, p) => cur.is_some() != p.is_some(),
+    };
     if moved {
         view_mut().pose = pose;
         compose();
     }
     moved
+}
+
+/// The angle between two rotations, as 2(1 − cos) of it, which for a small
+/// angle is its square: 3 less the trace of one's transpose times the other,
+/// over their 3×3 parts.
+fn turn(a: &Mat4, b: &Mat4) -> f64 {
+    let dot: f64 = [0, 1, 2, 4, 5, 6, 8, 9, 10]
+        .iter()
+        .map(|&k| a[k] * b[k])
+        .sum();
+    3.0 - dot
+}
+
+/// The turn that moves the screen's corner, where a turn moves a point most,
+/// by `TURN_STEP_PX` CSS pixels, in the measure `turn` gives. A point at the
+/// tangent `t` from the screen's middle moves 1 + t² times the angle turned.
+fn turn_step(v: &View) -> f64 {
+    let half_tan = f64::from(HALF_TAN);
+    let aspect = v.width / v.height;
+    let tan2 = half_tan * half_tan * (1.0 + aspect * aspect);
+    let angle = param::TURN_STEP_PX * (2.0 * half_tan / v.height) / (1.0 + tan2);
+    2.0 * (1.0 - libm::cos(angle))
 }
 
 fn compose() {
@@ -186,17 +228,16 @@ fn compose() {
     mat4::frustum_planes(&mut v.frustum.planes, &lvp);
 }
 
-/// Writes the ray from `pose` through the screen point `ndc_x`, `ndc_y` in
-/// [−1, 1], x right and y up, into `origin` and the unit `dir`. The pose is
-/// framed as `compose` frames the view's, and the screen's half-angle
-/// tangents come from the view's lens as the cast's eye reads them (pxl-spec
-/// `Frustum::lens`). Without a screen the ray runs along the pose's forward.
-///
-/// A pick passes the pose its controller holds, which may have moved since
-/// the frame composed the view. The lens's tangents depend on the screen
-/// alone, so they hold for any pose.
-pub(crate) fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
-    let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
+/// Writes the view's ray through the screen point `ndc_x`, `ndc_y` in
+/// [−1, 1], x right and y up, into `origin` and the unit `dir`, so a pick
+/// strikes what is shown. The screen's half-angle tangents come from the
+/// view's lens as the cast's eye reads them (pxl-spec `Frustum::lens`).
+/// Without a screen the ray runs along the view's forward.
+pub(crate) fn ray_of(ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
+    let (pose, tan) = (
+        view().at(),
+        view().frustum.lens().map_or([0.0; 2], |l| l.tan),
+    );
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();

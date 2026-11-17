@@ -15,6 +15,7 @@ mod setting;
 mod source;
 mod surface;
 
+use crate::spec::step::InvalidationReason;
 use std::rc::Rc;
 
 use crate::abi;
@@ -44,10 +45,11 @@ fn bearing(deg: Option<f64>) -> bool {
     deg.is_none_or(|d| (0.0..=360.0).contains(&d))
 }
 
-/// Answers a method applied: the next frame shows it, and the entry's end
-/// posts to the UI (link.rs `end`).
+/// Answers a method applied, for one whose state asks for no frame of its
+/// own: the next frame shows it, and the entry's end posts to the UI (link.rs
+/// `end`). A method whose state asks when it changes answers without it.
 fn applied() -> Result<(), Errno> {
-    invalidate();
+    invalidate(InvalidationReason::Method);
     Ok(())
 }
 

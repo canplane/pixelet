@@ -6,6 +6,7 @@
 //! nearest it, and a place without one goes on the surface. A place named
 //! with its own height is put as it is (`go_to`).
 
+use crate::spec::step::InvalidationReason;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::{GROUND, Grid};
@@ -29,7 +30,7 @@ fn dst() -> &'static mut Option<(Q3, Motion)> {
 /// unknown, the pivot stands on the surface.
 pub(crate) fn go_to_ground(at: Q3, motion: Motion) {
     *dst() = Some((at, motion));
-    sched::invalidate();
+    sched::invalidate(InvalidationReason::View);
 }
 
 /// Puts the pivot at `at` as it is. A pending destination is dropped,

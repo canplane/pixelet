@@ -10,11 +10,15 @@
   apart from the others, or a step one path takes and another does not), or that
   carries ad hoc pieces (a branch, a flag, a retry or a workaround for one case):
   warn the user when you meet it, before working beside it, and fix it only on
-  their word.
+  their word. A fault met is first asked whether such a piece made it: where one
+  did, the piece goes and the fault with it, and nothing is patched on where
+  the fault shows.
 - `doc/` is notes, not rules: a minute or an experiment is what was said or
   measured then, and no renaming reaches it. Read what it holds on the subject
-  before proposing, to know what was tried and why it was dropped. A deferral
-  found settled gets a note beneath it, as `doc/README.md` says.
+  before proposing, to know what was tried and why it was dropped. A minute
+  holds its meeting's conclusions, written whole while the meeting lasts; once
+  it is over, a deferral found settled gets a note beneath it, as
+  `doc/README.md` says.
 - The user's machine is theirs: ask before taking its screen, a browser or a
   device, and never raise a window by force. Work goes to another session only
   on the user's word.
@@ -25,8 +29,10 @@
   change, and the name agent (`.agents/agents/name.md`) the names it adds or
   renames, each briefed with its goal and its code, not its author's
   conclusions.
-  Each finding is checked against the code or its source before it is acted on
-  or passed on; one of correctness, a contract or structure is fixed by the
+  Each finding is checked against the code or its source, and judged by the
+  user's decisions and the system's own rules, before it is acted on or passed
+  on: an agent's verdict that departs from them is refused, however it is
+  argued. One of correctness, a contract or structure is fixed by the
   change's author, one of lint or format alone is not, and a fix is no larger
   than its finding. The fix's diff alone gets a second round, and there is no
   third; the report says how many rounds it took. Whoever hands work to an agent
@@ -61,6 +67,8 @@
 ## Working
 
 - Read the skill the task needs (`.agents/skills/`).
+- A task is divided into problems that stand apart, and one is finished, built
+  and reviewed, before the next is touched.
 - The code is agents' work, not the user's intent: judge it against the user's
   decisions. A comment, a structure or a pattern in it is no reason to keep it.
 - Work in the main checkout, and a worktree only for a tree that must be built

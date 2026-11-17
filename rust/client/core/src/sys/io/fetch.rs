@@ -6,6 +6,7 @@
 //! asked, and so is an absence. The layer decides what an absence means and
 //! settles the fetch, and what it does with the packet is its own.
 
+use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use xpute_guest::clock::now;
 use xpute_kit::collection::list::List;
@@ -103,7 +104,7 @@ fn arrive(key: u64, at_ms: f64, body: Result<Option<Body>, Exit>) {
                 pkt,
                 phases,
             });
-            invalidate();
+            invalidate(InvalidationReason::Completion);
         }
         Err(exit) => settle(key, exit, Some(phases)),
     }

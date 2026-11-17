@@ -14,6 +14,7 @@
 
 use super::selection::select_visible;
 use super::{Brick, Instance, Key, MarkerHit, line, pin, place};
+use crate::spec::step::InvalidationReason;
 
 use crate::domain::preview::Draft;
 use crate::domain::scene::marker::candidate::CandidateTable;
@@ -40,7 +41,7 @@ use pxl_render::gpu::draw::DrawList;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::BOUNDS;
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The box over `brick` between `heights`.
@@ -72,11 +73,15 @@ struct Arrangement {
     shown: Vec<Instance>,
     /// The drawn bricks read since a change last touched them, which need no
     /// read, so an eye that moves casts rays only in the bricks it enters.
-    /// `pins` and `places` also hold what a touched brick last read, until it
-    /// is read again.
+    /// `pins` and `places` also hold what was read before, of a touched brick
+    /// or of one that split or merged, until the drawn brick over it is read.
     found_for: Option<Read>,
     /// The same, for the bricks read this frame.
     now: Read,
+    /// The drawn bricks whose places are incomplete: a tile of theirs was
+    /// still to come when they were last read. What was shown over them
+    /// stays until it lands.
+    incomplete: Vec<Brick>,
     /// Whether places, ground or objects changed since they were read.
     changed: bool,
     /// The place tiles whose answer changed, besides the ground's changes
@@ -154,7 +159,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
     if pose::eye().is_none() {
         if p.set.free(model::draw_list()) {
-            sched::invalidate();
+            sched::invalidate(InvalidationReason::Scene);
         }
         // Nothing is drawn now, so every brick is read again once it comes
         // back, its markers shown as last read until then.
@@ -169,7 +174,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // asks a frame until it is taken, as the location's zone does.
     if !p.instances.is_empty() && !p.set.has_block() {
         p.set.write(model::draw_list(), &p.instances);
-        sched::invalidate();
+        sched::invalidate(InvalidationReason::Scene);
     }
     // With no observation yet, the source's reach is not declared. Every
     // brick is read again once there is one, so the tiles that changed
@@ -219,9 +224,11 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // (domain/query/change.rs), as long as the places setting did not turn,
     // needs no read. Only bricks entered or touched are read, nearest the eye
     // first, as many a frame as one pass of the tick's budget reads and at
-    // least one; the rest are read by a later frame. What was read from a
-    // brick stays while the brick is drawn, until it is read again; a brick
-    // left drops it, and places go when the setting is off.
+    // least one; the rest are read by a later frame. What was read stays
+    // shown until the drawn brick over where it stands is read: its own brick
+    // read again, or, once its brick split or merged, the brick that took its
+    // place. What no drawn brick stands over goes, and places go when the
+    // setting is off.
     p.changed = false;
     let last_bricks = match &p.found_for {
         Some(f) if f.place == place_on => f.bricks.as_slice(),
@@ -240,11 +247,11 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
                 && !change::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
-    let drawn = |s: &Brick| now.bricks.binary_search(s).is_ok();
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
-    pins.retain(|s| drawn(&s.brick));
-    read_places.retain(|s| place_on && drawn(&s.brick));
+    if !place_on {
+        read_places.clear();
+    }
     let entering = &mut p.entering;
     entering.clear();
     entering.extend(
@@ -264,36 +271,61 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     );
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let held = (pins.len(), read_places.len());
+    // The bricks whose places are incomplete: a tile of theirs was still to
+    // come at their last read, and its landing reads them again
+    // (`on_changed`).
+    let mut incomplete = core::mem::take(&mut p.incomplete);
     let read = sched::run(entering.iter(), |&(_, brick, columns)| {
         pin::read(brick, &columns, &mut pins);
-        if place_on {
-            place::read(brick, &mut read_places);
+        let whole = !place_on || place::read(brick, &mut read_places);
+        match (whole, incomplete.binary_search(&brick)) {
+            (true, Ok(k)) => drop(incomplete.remove(k)),
+            (false, Err(k)) => incomplete.insert(k, brick),
+            _ => {}
         }
         true
     })
     .step_cnt as usize;
-    // A brick read again replaces what it read before: of what was held
-    // before the reads, the first `held` entries, those of a brick read now go.
-    let done = &mut entering[..read];
-    done.sort_unstable_by_key(|e| e.1);
-    let read_now = |b: &Brick| done.binary_search_by_key(b, |e| e.1).is_ok();
+    incomplete.retain(|b| place_on && now.bricks.binary_search(b).is_ok());
+    let unread_cnt = entering.len() - read;
+    let (read_bricks, unread_bricks) = entering.split_at_mut(read);
+    read_bricks.sort_unstable_by_key(|e| e.1);
+    unread_bricks.sort_unstable_by_key(|e| e.1);
+    let contains =
+        |bricks: &[(f64, Brick, Aabb)], b: &Brick| bricks.binary_search_by_key(b, |e| e.1).is_ok();
+    // Of what was held before the reads, the first `held` entries, a marker
+    // is the latest while the drawn brick over it is not read: its own,
+    // until it is read now, or another, while that one is not read yet. A
+    // brick's places are read once none of its tiles is still to come.
+    let zooms = now.bricks.first().zip(now.bricks.last());
+    let latest = |brick: Brick, brick_at: &dyn Fn(Zoom) -> Brick, place: bool| {
+        let over = zooms
+            .into_iter()
+            .flat_map(|(first, last)| first.0..=last.0)
+            .map(brick_at)
+            .find(|over| now.bricks.binary_search(over).is_ok());
+        over.is_some_and(|over| {
+            let to_come = place && incomplete.binary_search(&over).is_ok();
+            match over == brick {
+                true => to_come || !contains(read_bricks, &over),
+                false => to_come || contains(unread_bricks, &over),
+            }
+        })
+    };
     let mut k = 0;
     pins.retain(|s| {
         k += 1;
-        k > held.0 || !read_now(&s.brick)
+        k > held.0 || latest(s.brick, &|z| s.brick_at(z), false)
     });
     let mut k = 0;
     read_places.retain(|s| {
         k += 1;
-        k > held.1 || !read_now(&s.brick)
+        k > held.1 || latest(s.brick, &|z| s.brick_at(z), true)
     });
-    let unread = entering.len() - read;
     // The bricks not read yet are not among those the markers were read
     // from.
-    let later = &mut entering[read..];
-    later.sort_unstable_by_key(|e| e.1);
-    now.bricks
-        .retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
+    now.bricks.retain(|d| !contains(unread_bricks, d));
+    p.incomplete = incomplete;
     p.changed_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
         let now = core::mem::take(&mut p.now);
@@ -381,9 +413,9 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // (`design::coming`), when a freed slot may make room for a design that
     // had none, or when a hold given up frees the old slot.
     let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
-    p.waiting = pending || refused || unlaid || unread > 0;
+    p.waiting = pending || refused || unlaid || unread_cnt > 0;
     if p.waiting {
-        sched::invalidate();
+        sched::invalidate(InvalidationReason::Pending);
     }
     p.draw_order.clear();
     for &i in &p.visible {
@@ -427,7 +459,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // changed.
     if instances != p.instances {
         p.set.write(model::draw_list(), &instances);
-        sched::invalidate();
+        sched::invalidate(InvalidationReason::Scene);
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
     (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);

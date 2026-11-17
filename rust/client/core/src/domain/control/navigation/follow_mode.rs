@@ -1,5 +1,6 @@
 // pxl-core/domain/control/navigation/follow_mode.rs
 
+use crate::spec::step::InvalidationReason;
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::abi::camera::Tracking;
@@ -10,7 +11,7 @@ use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::param::SENSOR_GRACE_MS;
-use crate::sys::sched::invalidate_at;
+use crate::sys::sched::{invalidate, invalidate_at};
 use crate::sys::sensor;
 use pxl_global::Global;
 use xpute_guest::clock::now;
@@ -44,8 +45,13 @@ pub(crate) fn following() -> bool {
     follow().on
 }
 
+/// Whether the camera follows the device. A change asks for a frame, since
+/// the follow mode acts on it only in one (`follow_mode_step`, which ends
+/// following itself at the grace's end, inside its frame).
 pub(crate) fn set_following(on: bool) {
-    follow().on = on;
+    if core::mem::replace(&mut follow().on, on) != on {
+        invalidate(InvalidationReason::View);
+    }
 }
 
 pub(crate) fn follow_mode_step() {
@@ -74,7 +80,7 @@ pub(crate) fn follow_mode_step() {
             f.grace = None;
             f.on = false;
         } else {
-            invalidate_at(due);
+            invalidate_at(due, InvalidationReason::Pending);
         }
     } else {
         f.grace = None;

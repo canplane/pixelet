@@ -28,6 +28,7 @@ use crate::domain::scene::transform::Transform;
 use crate::domain::setting::settings;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
+use crate::spec::step::InvalidationReason;
 use crate::sys::sched::invalidate_at;
 use crate::sys::sched::tick::TickContext;
 use pxl_global::Global;
@@ -382,7 +383,10 @@ impl Walk {
             }
             let just_settled = self.settle.update(target, now, SETTLE_DELAY_S);
             if self.settle.last_seen != self.settle.settled_at {
-                invalidate_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
+                invalidate_at(
+                    (self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0,
+                    InvalidationReason::Pending,
+                );
             }
             // A release fixes the destination at once. A pan begun within the
             // settle delay keeps the target moving, so waiting for it to settle

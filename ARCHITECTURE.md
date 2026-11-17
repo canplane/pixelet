@@ -168,6 +168,32 @@ its position as a `Q3` and a small remainder in floating point, and the shader
 takes the wrapping integer difference from the eye, so precision is always
 spent where the eye is.
 
+### What is seen holds until it can be told apart
+
+The camera moves in reals: its pose is control's, eased and turned by any
+amount. What is seen from it is an observation, and an observation is sampled:
+the world by the camera grid, a motion by its steps in time, the picture by the
+viewer's eye. A difference its sampler cannot tell apart is no change, so one
+rule decides what is drawn, how often something that moves on its own steps,
+and when the screen is drawn again: **the screen holds its last observation, and
+changes it only when a new one, different enough to tell apart, is ready.**
+
+- The **view** is the camera's observation, taken at one place
+  (`pxl-core domain/view/frame/pose.rs`): the eye at the lattice step the rays
+  start from, and the turn once it moves the screen by half a CSS pixel, the
+  unit that stands for the eye's own grid. Everything that looks reads the view,
+  the screen's rays and the pointer's pick alike, never the camera.
+- Something that moves on its own, a character, the clouds, the location's
+  beacon, steps a clock by what its motion shows at its distance, wakes the
+  frame at its next step and draws its own region again, whatever the view did
+  (`pxl-core domain/scene/animation.rs`).
+- Until the new is ready the old stands: a marker stays until the ground over
+  it is read again, as a coarser tile answers until the finer one arrives.
+
+The barrier stands before the cast because the cast is what a frame costs and
+the drawing remembers what it found; a renderer that rasterizes anew each frame
+has no such place to stop.
+
 ### The query, the only seam
 
 Everything that looks at the world asks it the same question, and the **query**

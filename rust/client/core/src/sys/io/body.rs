@@ -15,6 +15,7 @@
 //! `Refusal::bodies`), and the next slot given back asks for a frame, in which
 //! the want is asked again.
 
+use crate::spec::step::InvalidationReason;
 use core::ops::{Deref, DerefMut};
 
 use pxl_global::Global;
@@ -128,7 +129,7 @@ impl Drop for Slot {
         s.out &= !(1 << self.idx);
         s.release_cnt = s.release_cnt.wrapping_add(1);
         if core::mem::take(&mut s.waited) {
-            sched::invalidate();
+            sched::invalidate(InvalidationReason::Completion);
         }
     }
 }

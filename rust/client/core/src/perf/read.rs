@@ -166,6 +166,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         effects_p95: core::array::from_fn(|k| {
             percentile(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
+        invalidations: core::array::from_fn(|k| frames.iter().map(|f| f.invalidations[k]).sum()),
         gpu_timed: cnt(&|f| f.gpu.timed != 0.0),
         gpu_busy: percentile(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
@@ -280,8 +281,7 @@ fn view() -> ViewSection {
     // whatever the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
-        let pose = pose::view();
-        pose::ray_of(pose.at(), x, y, &mut origin, &mut dir);
+        pose::ray_of(x, y, &mut origin, &mut dir);
         let ray = Ray {
             origin,
             dir,

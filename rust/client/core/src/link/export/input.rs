@@ -77,10 +77,10 @@ pub(super) fn xr_pose(
     // rotation and is refused.
     refuse_unless(qx * qx + qy * qy + qz * qz + qw * qw > 0.0, Errno::EINVAL)?;
     controller::tracked_pose([x, y, z], [qx, qy, qz, qw]);
-    applied()
+    Ok(())
 }
 
 pub(super) fn xr_pose_end() -> Result<(), Errno> {
     controller::tracked_end();
-    applied()
+    Ok(())
 }

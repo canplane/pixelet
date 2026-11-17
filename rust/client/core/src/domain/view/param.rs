@@ -12,16 +12,18 @@ pub(crate) const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 /// The near plane's distance from the eye, in world units.
 pub(crate) const NEAR: f64 = 0.1;
 
+/// The least turn of the camera the view takes, as what it moves on the
+/// screen, in CSS pixels: half the reference pixel, which is a visual angle
+/// and so stands for the spacing of the viewer's eye. A change the eye's grid
+/// cannot tell apart is no change of what is seen (Nyquist).
+pub(crate) const TURN_STEP_PX: f64 = 0.5;
+
 /// How far a motion that is stepped a quantum at a time moves what it
 /// carries in one step, as a share of the camera grid cell at the nearest
 /// distance it is drawn (`lens::visible_step_s`). The value was chosen by
 /// watching the clouds: a step of a twelfth of a cell, 1/1152 rad, is not
 /// seen as a jump.
 pub(crate) const VISIBLE_STEP_CELLS: f64 = 1.0 / 12.0;
-
-/// A decor is drawn as a model while it spans at least this many camera grid
-/// cells, and as an impostor below that.
-pub(crate) const DECOR_MODEL_CELLS: f64 = 2.0;
 
 /// A decor's impostor is not drawn when it spans less than this share of a
 /// camera grid cell, because an instance that small reads as pixel noise. The

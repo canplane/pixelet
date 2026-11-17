@@ -5,6 +5,7 @@
 //! handed to it here.
 
 use crate::domain::scene::frame::Frame;
+use crate::spec::step::InvalidationReason;
 use crate::sys::sched::tick::TickContext;
 use pxl_global::Global;
 use pxl_render::frame::shader::word::{DECOR_GROUP_CNT, DRAW_FLOATS};
@@ -201,7 +202,7 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         animated,
     });
     if out.redraw {
-        invalidate();
+        invalidate(InvalidationReason::Pending);
     }
     // An image the frame has taken into a texture needs its file no more.
     api::take_complete(loader::on_image_complete);
@@ -220,7 +221,8 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
 }
 
 /// The scene's part of a frame (frame.rs `scene_tick`), handed what control
-/// decided. `pivot` and `heading` are the camera's and place the world gizmo.
+/// decided. `pivot` is the camera's and `heading` the view's, and they place
+/// the world gizmo.
 /// `edit` is the pointer's preview, and decor leaves out what it hides. `draft` is the
 /// marker tool's draft, which the markers show.
 pub(crate) fn scene_step(
@@ -256,6 +258,6 @@ pub(crate) fn scene_step(
     marker::step(&frame, draft);
     marker::draw(draw_list());
     if animating {
-        invalidate();
+        invalidate(InvalidationReason::Animation);
     }
 }

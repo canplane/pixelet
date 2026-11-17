@@ -10,6 +10,7 @@
 //! changes under a still pointer, its hover is picked again
 //! (`camera_rehover`).
 
+use crate::spec::step::InvalidationReason;
 use std::collections::BTreeMap;
 
 use crate::domain::control::param::{
@@ -503,7 +504,7 @@ pub(crate) fn camera_input_step() {
         // screen and the pan's runs up it, so y changes sign.
         let way = [s.key_dir[0] * share, -s.key_dir[1] * share];
         by_hand(|| controller::pan_across(way[0], way[1]));
-        invalidate();
+        invalidate(InvalidationReason::View);
     }
     if s.drag_pending {
         s.drag_pending = false;
