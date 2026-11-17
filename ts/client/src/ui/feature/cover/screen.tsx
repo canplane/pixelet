@@ -46,10 +46,10 @@ function Panic({ of, code }: { of: string; code: string | null }) {
     <View style={[STYLE.cover, STYLE.panic]}>
       <View style={STYLE.column}>
         <Text style={STYLE.face}>:(</Text>
-        <Text accessibilityRole="header" style={STYLE.panic_title}>
+        <Text accessibilityRole="header" style={STYLE.panicTitle}>
           {t(`${of}.title`)}
         </Text>
-        <Text style={STYLE.panic_body}>{t(`${of}.body`)}</Text>
+        <Text style={STYLE.panicBody}>{t(`${of}.body`)}</Text>
         {code !== null && (
           <Text selectable style={STYLE.code}>
             {t("panic.stop_code", { code })}
@@ -105,7 +105,7 @@ const STYLE = StyleSheet.create({
     lineHeight: 112,
     color: COLOR.white,
   },
-  panic_title: { ...TEXT_STYLE.title2, color: COLOR.white },
-  panic_body: { ...TEXT_STYLE.body, color: COLOR.white },
+  panicTitle: { ...TEXT_STYLE.title2, color: COLOR.white },
+  panicBody: { ...TEXT_STYLE.body, color: COLOR.white },
   code: { ...TEXT_STYLE.footnote, marginTop: 16, color: COLOR.white },
 });

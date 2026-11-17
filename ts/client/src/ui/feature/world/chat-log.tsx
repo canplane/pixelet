@@ -11,23 +11,23 @@ import {
   TEXT_STYLE,
   WEIGHT,
 } from "@/ui/shared/component/theme.ts";
-import { text_halo } from "@/ui/shared/component/typeface.ts";
+import { textHalo } from "@/ui/shared/component/typeface.ts";
 
 export function ChatLog() {
   const { t } = useTranslation();
-  const chat_lines = useChatLines();
+  const chatLines = useChatLines();
 
-  if (chat_lines.length === 0) return null;
+  if (chatLines.length === 0) return null;
 
   return (
     <View style={STYLE.lines}>
-      {chat_lines.map((line, i) => (
+      {chatLines.map((line, i) => (
         <View
           key={line.id}
           style={[
             STYLE.line,
             {
-              opacity: 0.4 + 0.6 * ((i + 1) / chat_lines.length),
+              opacity: 0.4 + 0.6 * ((i + 1) / chatLines.length),
             },
           ]}
         >
@@ -52,7 +52,7 @@ const STYLE = StyleSheet.create({
   text: {
     ...TEXT_STYLE.caption,
     fontWeight: WEIGHT.semibold,
-    ...text_halo(alpha(COLOR.black, 0.9)),
+    ...textHalo(alpha(COLOR.black, 0.9)),
   },
   self: { flexShrink: 0, color: COLOR.self },
   said: { flexShrink: 1, color: COLOR.white },

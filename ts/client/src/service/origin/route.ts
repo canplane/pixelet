@@ -7,7 +7,7 @@ import { SITE_URL, TILE_ROOT } from "./route.spec.ts";
 /** The URL of a bake's object, `<tile root>/<layer>/<version>/<name>`. The
  * object carries the version the source declares for it
  * (service/sys/fs/tile.ts). */
-export function tile_url(
+export function tileUrl(
   layer: (typeof BASE_KINDS)[number],
   object: string,
 ): string {
@@ -32,6 +32,6 @@ export function get(route: string, signal?: AbortSignal): Promise<Response> {
 /** An asset's URL is its key with a leading slash, because the route's root
  * and the bucket's prefix are the same word on purpose. Assets are addressed
  * by their content, so their URLs carry no version. */
-export function asset_url(key: string): string {
+export function assetUrl(key: string): string {
   return `/${key}`;
 }

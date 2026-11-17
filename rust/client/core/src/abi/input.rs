@@ -5,109 +5,38 @@
 /// The interface's handle, named by `pxl:core/input` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
-/// `pointer`
-pub const POINTER: _rt::Method = 0;
-/// `wheel`
-pub const WHEEL: _rt::Method = 1;
-/// `pinch`
-pub const PINCH: _rt::Method = 2;
+/// `pan`
+pub const PAN: _rt::Method = 0;
+/// `turn`
+pub const TURN: _rt::Method = 1;
+/// `tilt`
+pub const TILT: _rt::Method = 2;
+/// `zoom`
+pub const ZOOM: _rt::Method = 3;
+/// `drag`
+pub const DRAG: _rt::Method = 4;
+/// `tap`
+pub const TAP: _rt::Method = 5;
+/// `hover`
+pub const HOVER: _rt::Method = 6;
+/// `out`
+pub const OUT: _rt::Method = 7;
 /// `move`
-pub const MOVE: _rt::Method = 3;
+pub const MOVE: _rt::Method = 8;
 /// `xr-pose`
-pub const XR_POSE: _rt::Method = 4;
+pub const XR_POSE: _rt::Method = 9;
 /// `xr-pose-end`
-pub const XR_POSE_END: _rt::Method = 5;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum PointerPhase {
-    Down = 0,
-    Move = 1,
-    Up = 2,
-    Out = 3,
-    /// The pointer's gesture ends with no tap: the platform took it, or the UI
-    /// spent it on something of its own.
-    Cancel = 4,
-}
-
-impl PointerPhase {
-    /// Every member, in its source's own order.
-    pub const ALL: [PointerPhase; 5] = [
-        PointerPhase::Down,
-        PointerPhase::Move,
-        PointerPhase::Up,
-        PointerPhase::Out,
-        PointerPhase::Cancel,
-    ];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<PointerPhase> {
-        match val {
-            0 => Some(PointerPhase::Down),
-            1 => Some(PointerPhase::Move),
-            2 => Some(PointerPhase::Up),
-            3 => Some(PointerPhase::Out),
-            4 => Some(PointerPhase::Cancel),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            PointerPhase::Down => "Down",
-            PointerPhase::Move => "Move",
-            PointerPhase::Up => "Up",
-            PointerPhase::Out => "Out",
-            PointerPhase::Cancel => "Cancel",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum Drag {
-    None = 0,
-    Pan = 1,
-    Rotate = 2,
-}
-
-impl Drag {
-    /// Every member, in its source's own order.
-    pub const ALL: [Drag; 3] = [Drag::None, Drag::Pan, Drag::Rotate];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<Drag> {
-        match val {
-            0 => Some(Drag::None),
-            1 => Some(Drag::Pan),
-            2 => Some(Drag::Rotate),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            Drag::None => "None",
-            Drag::Pan => "Pan",
-            Drag::Rotate => "Rotate",
-        }
-    }
-}
+pub const XR_POSE_END: _rt::Method = 10;
 
 pub trait Guest {
-    fn pointer(
-        &self,
-        phase: PointerPhase,
-        touch: bool,
-        id: i32,
-        drag: Drag,
-        x: f64,
-        y: f64,
-    ) -> Result<(), _rt::Errno>;
-    fn wheel(&self, delta_y: f64) -> Result<(), _rt::Errno>;
-    fn pinch(&self, scale: f64) -> Result<(), _rt::Errno>;
+    fn pan(&self, dx: f64, dy: f64) -> Result<(), _rt::Errno>;
+    fn turn(&self, rad: f64) -> Result<(), _rt::Errno>;
+    fn tilt(&self, rad: f64) -> Result<(), _rt::Errno>;
+    fn zoom(&self, scale: f64) -> Result<(), _rt::Errno>;
+    fn drag(&self, dragging: bool) -> Result<(), _rt::Errno>;
+    fn tap(&self, x: f64, y: f64) -> Result<(), _rt::Errno>;
+    fn hover(&self, x: f64, y: f64) -> Result<(), _rt::Errno>;
+    fn out(&self) -> Result<(), _rt::Errno>;
     fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::Errno>;
     #[expect(
         clippy::too_many_arguments,
@@ -132,36 +61,62 @@ impl _rt::Object for _Object {
     fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
         let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
-                POINTER => {
-                    let phase = args_
-                        .case(0, 5)
-                        .and_then(|v| PointerPhase::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let touch = args_.bool(1)?;
-                    let id = args_.i32(4)?;
-                    let drag = args_
-                        .case(8, 3)
-                        .and_then(|v| Drag::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let x = args_.f64(16)?;
-                    let y = args_.f64(24)?;
-                    match self.0.pointer(phase, touch, id, drag, x, y) {
+                PAN => {
+                    let dx = args_.f64(0)?;
+                    let dy = args_.f64(8)?;
+                    match self.0.pan(dx, dy) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }
                 }
-                WHEEL => {
-                    let delta_y = args_.f64(0)?;
-                    match self.0.wheel(delta_y) {
+                TURN => {
+                    let rad = args_.f64(0)?;
+                    match self.0.turn(rad) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }
                 }
-                PINCH => {
+                TILT => {
+                    let rad = args_.f64(0)?;
+                    match self.0.tilt(rad) {
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
+                    }
+                }
+                ZOOM => {
                     let scale = args_.f64(0)?;
-                    match self.0.pinch(scale) {
+                    match self.0.zoom(scale) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }
                 }
+                DRAG => {
+                    let dragging = args_.bool(0)?;
+                    match self.0.drag(dragging) {
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
+                    }
+                }
+                TAP => {
+                    let x = args_.f64(0)?;
+                    let y = args_.f64(8)?;
+                    match self.0.tap(x, y) {
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
+                    }
+                }
+                HOVER => {
+                    let x = args_.f64(0)?;
+                    let y = args_.f64(8)?;
+                    match self.0.hover(x, y) {
+                        Ok(()) => 0,
+                        Err(e) => e as i32,
+                    }
+                }
+                OUT => match self.0.out() {
+                    Ok(()) => 0,
+                    Err(e) => e as i32,
+                },
                 MOVE => {
                     let x = args_.i32(0)?;
                     let y = args_.i32(4)?;

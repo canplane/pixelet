@@ -1,24 +1,24 @@
 package pxl:core@0.1.0;
 
+// What the hand does to the view, as the UI recognizes it from its pointers:
+// each a change since the last, in the view's logical pixels and radians.
 interface input {
-  enum pointer-phase {
-    down,
-    move,
-    up,
-    out,
-    // The pointer's gesture ends with no tap: the platform took it, or the UI
-    // spent it on something of its own.
-    cancel,
-  }
-  // What a press that is not a finger's drags, by the button the UI gives
-  // it.
-  enum drag { none, pan, rotate }
-
-  // `touch`: the pointer is a finger on a screen, which pans and pinches by
-  // how many are down; any other pointer drags as its `drag` says.
-  pointer: func(phase: pointer-phase, touch: bool, id: s32, drag: drag, x: f64, y: f64);
-  wheel: func(delta-y: f64);
-  pinch: func(scale: f64);
+  // A drag of `dx`, `dy` pixels, which the ground under the hand follows.
+  pan: func(dx: f64, dy: f64);
+  // A turn of the view about the up axis, by `rad` radians.
+  turn: func(rad: f64);
+  // A tilt of the view by `rad` radians, toward the horizon as it grows.
+  tilt: func(rad: f64);
+  // A spread of the hands by `scale`; the view comes closer as it grows.
+  zoom: func(scale: f64);
+  // Whether a hand drags the view, from its press to its release.
+  drag: func(dragging: bool);
+  // A tap at (`x`, `y`), in the view's logical pixels.
+  tap: func(x: f64, y: f64);
+  // A pointer over the world at (`x`, `y`) that holds nothing, and its leaving.
+  hover: func(x: f64, y: f64);
+  out: func();
+  // The held movement keys: each axis -1, 0 or 1, x to the right and y down.
   move: func(x: s32, y: s32);
   // Reserved for a headset's UI (ts/xr) and kept on purpose, though nothing
   // sends it yet: the head's

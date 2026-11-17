@@ -22,7 +22,7 @@ interface Dimmed {
 export function useDim(
   fade: f64,
   transition: Transition,
-  fade_from?: f64,
+  fadeFrom?: f64,
 ): Dimmed {
   const dim = useContext(Dim);
   const last = useRef(dim);
@@ -34,7 +34,7 @@ export function useDim(
   return {
     level,
     motion: {
-      from: fade_from === undefined ? undefined : { opacity: fade_from },
+      from: fadeFrom === undefined ? undefined : { opacity: fadeFrom },
       to: { opacity: level },
       transition: dimming ? DIM : transition,
     },

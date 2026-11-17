@@ -103,8 +103,8 @@ const CORE_ORDER: [(&str, u8); 16] = [
 const CORE_HEADS: [&[&str]; 2] = [&["scene"], &["control"]];
 const CORE_BESIDE: [&str; 1] = ["perf"];
 
-/// Control's own order (domain/control.rs): the pointer's edits and its
-/// gestures, then navigation, the camera, and under them where the pivot
+/// Control's own order (domain/control.rs): the pointer's edits and what
+/// the hand asks of the camera, then navigation, the camera, and under them where the pivot
 /// stands.
 const CONTROL_ORDER: [(&str, u8); 6] = [
     ("edit", 4),
@@ -115,19 +115,18 @@ const CONTROL_ORDER: [(&str, u8); 6] = [
     ("param", 0),
 ];
 
-/// The camera's own order (domain/control/camera.rs). At the bottom are the camera itself,
-/// the folder's root, and beside it a gesture's anchor; above them, what the controls ask;
+/// The camera's own order (domain/control/camera.rs). At the bottom is the camera itself,
+/// the folder's root; above it, what the controls ask;
 /// then the orbit and how far terrain lets it go, the first-person camera, with the tests'
 /// fixture that places them; and
 /// above them, which controller moves the camera.
-const CAMERA_ORDER: [(&str, u8); 7] = [
+const CAMERA_ORDER: [(&str, u8); 6] = [
     ("controller", 3),
     ("orbit", 2),
     ("collision", 2),
     ("first_person", 2),
     ("fixture", 2),
     ("state", 1),
-    ("gesture", 0),
 ];
 
 /// The view's own order (domain/view.rs): demand and the lens over the

@@ -34,10 +34,10 @@ const PREFIX_STEP = `
     end
 `;
 
-const plugin: ConfigPlugin = (cfg) => {
-  cfg = withPodfile(cfg, (cfg) => {
-    const podfile = cfg.modResults.contents;
-    if (podfile.includes(PREFIX_MARK)) return cfg;
+const plugin: ConfigPlugin = (config) => {
+  config = withPodfile(config, (config) => {
+    const podfile = config.modResults.contents;
+    if (podfile.includes(PREFIX_MARK)) return config;
     const call = podfile.indexOf("react_native_post_install(");
     const close = podfile.indexOf("\n    )\n", call);
     if (call < 0 || close < 0) {
@@ -46,17 +46,17 @@ const plugin: ConfigPlugin = (cfg) => {
       );
     }
     const end = close + "\n    )\n".length;
-    cfg.modResults.contents =
+    config.modResults.contents =
       podfile.slice(0, end) + PREFIX_STEP.slice(1) + podfile.slice(end);
-    return cfg;
+    return config;
   });
-  cfg = withPodfileProperties(cfg, (cfg) => {
-    cfg.modResults["ios.deploymentTarget"] = DEPLOYMENT_TARGET;
-    return cfg;
+  config = withPodfileProperties(config, (config) => {
+    config.modResults["ios.deploymentTarget"] = DEPLOYMENT_TARGET;
+    return config;
   });
-  return withXcodeProject(cfg, (cfg) => {
-    const cfgs = cfg.modResults.pbxXCBuildConfigurationSection();
-    for (const entry of Object.values(cfgs) as {
+  return withXcodeProject(config, (config) => {
+    const configurations = config.modResults.pbxXCBuildConfigurationSection();
+    for (const entry of Object.values(configurations) as {
       name?: string;
       buildSettings?: Record<string, string>;
     }[]) {
@@ -68,7 +68,7 @@ const plugin: ConfigPlugin = (cfg) => {
         entry.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = DEPLOYMENT_TARGET;
       }
     }
-    return cfg;
+    return config;
   });
 };
 

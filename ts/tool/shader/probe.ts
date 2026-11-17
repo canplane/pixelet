@@ -51,8 +51,8 @@ function entry(code: string, stage: string): string | undefined {
 }
 
 function first(name: string, code: string): Pipeline[] {
-  const cs = entry(code, "compute");
-  if (cs) return [{ module: name, compute: cs }];
+  const compute = entry(code, "compute");
+  if (compute) return [{ module: name, compute }];
   const vertex = entry(code, "vertex");
   if (!vertex) return [];
   return [{ module: name, vertex, fragment: entry(code, "fragment") }];
@@ -139,23 +139,23 @@ function cuts(
   for (let i = best.from + 1; i < best.to; i++) {
     const t = lines[i].trim();
     const prev = lines[i - 1].trim();
-    const in_continuing = stack.includes(true);
+    const inContinuing = stack.includes(true);
     if (range && i === range[0] - 1) depth = stack.length;
-    const in_range =
+    const inRange =
       !range ||
       (i >= range[0] - 1 && i <= range[1] - 1 && stack.length === depth);
     if (
-      in_range &&
-      !in_continuing &&
+      inRange &&
+      !inContinuing &&
       !t.startsWith("}") &&
       !t.startsWith("var ") &&
       /[;{}]$/.test(prev)
     ) {
       at.push(i);
     }
-    for (const ch of t) {
-      if (ch === "{") stack.push(t.startsWith("continuing"));
-      else if (ch === "}") stack.pop();
+    for (const c of t) {
+      if (c === "{") stack.push(t.startsWith("continuing"));
+      else if (c === "}") stack.pop();
     }
   }
   return { from: best.from, at };

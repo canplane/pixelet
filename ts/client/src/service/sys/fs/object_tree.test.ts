@@ -7,8 +7,8 @@ import * as fs from "node:fs";
 import {
   fold,
   lay,
-  shard_of,
-  top_of,
+  shardOf,
+  topOf,
   type Leaf,
   type TopRow,
 } from "./object_tree.ts";
@@ -29,14 +29,14 @@ function records(): Map<string, string> {
   return map;
 }
 
-test("top_of - each case's writes fold to the store's rows", () => {
+test("topOf - each case's writes fold to the store's rows", () => {
   const g = records();
   let cases = 0;
   for (; g.has(`case.${cases}.write.0`); cases++) {
     const writes: Leaf[] = [];
     for (let j = 0; g.has(`case.${cases}.write.${j}`); j++) {
       const [key, id] = g.get(`case.${cases}.write.${j}`)!.split(" ");
-      writes.push({ key: key!, asset_id: Number(id), text: null });
+      writes.push({ key: key!, assetId: Number(id), text: null });
     }
     const want: TopRow[] = [];
     for (let j = 0; g.has(`case.${cases}.top.${j}`); j++) {
@@ -45,13 +45,13 @@ test("top_of - each case's writes fold to the store's rows", () => {
     }
     const shards = new Map<string, Map<string, Leaf>>();
     for (const w of writes) {
-      const shard = shard_of(w.key);
+      const shard = shardOf(w.key);
       if (!shards.has(shard)) shards.set(shard, new Map());
       lay(shards.get(shard)!, w);
     }
     const got = [...shards.keys()]
       .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-      .flatMap((s) => top_of(s, shards.get(s)!.values()));
+      .flatMap((s) => topOf(s, shards.get(s)!.values()));
     assert.deepStrictEqual(got, want, `case ${cases}`);
   }
   assert.ok(cases > 0);
@@ -63,13 +63,13 @@ test("lay - a write splits the leaf over it and takes what is under it", () => {
   // beside the one written.
   const leaves = new Map<string, Leaf>();
   const coarse = "000000000";
-  lay(leaves, { key: coarse, asset_id: 7, text: null });
+  lay(leaves, { key: coarse, assetId: 7, text: null });
   const fine = "0000000000";
-  lay(leaves, { key: fine, asset_id: 8, text: null });
+  lay(leaves, { key: fine, assetId: 8, text: null });
   assert.deepStrictEqual(leaves.size, 8);
-  assert.deepStrictEqual(leaves.get(fine)?.asset_id, 8);
+  assert.deepStrictEqual(leaves.get(fine)?.assetId, 8);
   assert.ok(![...leaves.values()].some((l) => l.key === coarse));
-  lay(leaves, { key: coarse, asset_id: 0, text: null });
+  lay(leaves, { key: coarse, assetId: 0, text: null });
   assert.deepStrictEqual(leaves.size, 0);
 });
 

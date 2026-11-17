@@ -9,22 +9,18 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, COLOR, DISABLED_CONTENT } from "@/ui/shared/component/theme.ts";
-import { GAUGE, PerfGauge, PerfRec } from "./perf/gauge.tsx";
+import { GAUGE, PerfGauge, PerfRecording } from "./perf/gauge.tsx";
 import { Accordion, HINT_INK } from "./accordion.tsx";
 import { n1 } from "./perf/column.ts";
-import { perf_report_copy, perf_report_text } from "./perf/report.ts";
-import {
-  moving_fps,
-  perf_report_read,
-  perf_window_start,
-} from "./perf/view.ts";
+import { perfReportCopy, perfReportText } from "./perf/report.ts";
+import { movingFps, perfReportRead, perfWindowStart } from "./perf/view.ts";
 import { LIVE_WINDOW_MS, usePerfGauge } from "./perf/poll.ts";
 import {
-  install_long_frame_observers,
-  long_frames_clear,
+  installLongFrameObservers,
+  longFramesClear,
 } from "./perf/long-frame.ts";
-import { perf_trace_save } from "./perf/trace.ts";
-import { SETTING, type SettingName, settings_in } from "@/ui/shared/setting.ts";
+import { perfTraceSave } from "./perf/trace.ts";
+import { SETTING, type SettingName, settingsIn } from "@/ui/shared/setting.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as perf from "@/service/core/perf.ts";
 import * as setting from "@/service/core/setting.ts";
@@ -40,7 +36,7 @@ interface TintLook {
   ground: string;
   ink: string;
   lit: string;
-  lit_ink: string;
+  litInk: string;
 }
 
 function hued(hue: string): TintLook {
@@ -49,7 +45,7 @@ function hued(hue: string): TintLook {
     ground: alpha(hue, 0.1),
     ink: hue,
     lit: alpha(hue, 0.2),
-    lit_ink: hue,
+    litInk: hue,
   };
 }
 
@@ -59,16 +55,16 @@ const TINT: Record<Tint, TintLook> = {
     ground: alpha(COLOR.white, 0.05),
     ink: alpha(COLOR.white, 0.6),
     lit: alpha(COLOR.white, 0.1),
-    lit_ink: alpha(COLOR.white, 0.9),
+    litInk: alpha(COLOR.white, 0.9),
   },
-  [GO]: hued(COLOR.perf_go),
-  [HALT]: hued(COLOR.perf_halt),
+  [GO]: hued(COLOR.perfGo),
+  [HALT]: hued(COLOR.perfHalt),
   [OFF]: {
     border: alpha(COLOR.white, 0.1),
     ground: alpha(COLOR.white, 0.05),
     ink: alpha(COLOR.white, 0.25),
     lit: alpha(COLOR.white, 0.05),
-    lit_ink: alpha(COLOR.white, 0.25),
+    litInk: alpha(COLOR.white, 0.25),
   },
 };
 
@@ -89,17 +85,17 @@ function PanelButton({
   onHint: (hint: string | null) => void;
   disabled?: boolean;
 }) {
-  const [hovered, set_hovered] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const t = TINT[tint];
   return (
     <Pressable
       onPress={onPress}
       onHoverIn={() => {
-        set_hovered(true);
+        setHovered(true);
         onHint(hint);
       }}
       onHoverOut={() => {
-        set_hovered(false);
+        setHovered(false);
         onHint(null);
       }}
       onLongPress={() => onHint(hint)}
@@ -121,7 +117,7 @@ function PanelButton({
         <Text
           style={[
             GAUGE.text,
-            { color: hovered || pressed ? t.lit_ink : t.ink },
+            { color: hovered || pressed ? t.litInk : t.ink },
             disabled && { opacity: DISABLED_CONTENT },
           ]}
         >
@@ -141,7 +137,7 @@ type Own = {
 /** Each own setting is a checkbox under the buttons. It can change only while
  * the window is stopped, because a change in the middle of a window would
  * leave the window's frames counted in two ways. A setting that exists only
- * in development is missing from a production build (`settings_in`), and so
+ * in development is missing from a production build (`settingsIn`), and so
  * is its box. */
 const OWN: Record<Own, { label: string; note: string }> = {
   ray_cnt: { label: "Ray counts", note: "into the report; slows the casts" },
@@ -164,7 +160,7 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
         disabled && { opacity: DISABLED_CONTENT },
       ]}
     >
-      <View style={STYLE.check_label}>
+      <View style={STYLE.checkLabel}>
         <Box
           size={18}
           color={GAUGE.text.color}
@@ -181,15 +177,15 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
 
 export function PerfPanel() {
   const show = useCore((s) => s.settings[SETTING.perf.key] === 1);
-  const [hint, set_hint] = useState<string | null>(null);
-  const [said, set_said] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
   // The gauge is read while the panel is shown, open or closed, because the
   // title shows the frame rate.
   const g = usePerfGauge(show);
 
   useEffect(() => {
     if (said === null) return;
-    const id = setTimeout(() => set_said(null), SAID_MS);
+    const id = setTimeout(() => setSaid(null), SAID_MS);
     return () => clearTimeout(id);
   }, [said]);
 
@@ -198,14 +194,14 @@ export function PerfPanel() {
     // The table is cleared before the observers are installed. The observers
     // replay the long frames the page has buffered since it loaded, so a
     // panel that is on from boot shows the boot's long frames.
-    long_frames_clear();
-    install_long_frame_observers();
+    longFramesClear();
+    installLongFrameObservers();
   }, [show]);
 
   if (!show) return null;
-  const recording = g?.rec.recording === true;
+  const recording = g?.recordingState.recording === true;
   const r = g?.recent ?? null;
-  const rate = r === null ? null : moving_fps(r);
+  const rate = r === null ? null : movingFps(r);
   const note =
     rate !== null ? `${n1(rate)} fps` : recording ? "idle" : undefined;
 
@@ -225,14 +221,14 @@ export function PerfPanel() {
             offer only "Stop" for a window that opened at boot, until the
             window was first stopped. */}
         <PanelButton
-          onHint={set_hint}
+          onHint={setHint}
           label={recording ? "Restart" : "Start"}
           hint="clear everything and begin a fresh window"
           tint={recording ? PLAIN : GO}
-          onPress={perf_window_start}
+          onPress={perfWindowStart}
         />
         <PanelButton
-          onHint={set_hint}
+          onHint={setHint}
           label="Stop"
           hint="freeze the window so exports are stable while you read them"
           tint={recording ? HALT : OFF}
@@ -240,23 +236,23 @@ export function PerfPanel() {
           onPress={perf.stop}
         />
         <PanelButton
-          onHint={set_hint}
+          onHint={setHint}
           label="Report"
           hint="copy the window's summary as text"
           onPress={() =>
-            void perf_report_read()
-              .then((r) => perf_report_copy(perf_report_text(r)))
-              .then(set_said)
+            void perfReportRead()
+              .then((r) => perfReportCopy(perfReportText(r)))
+              .then(setSaid)
           }
         />
         <PanelButton
-          onHint={set_hint}
+          onHint={setHint}
           label="Trace"
           hint="save the window as a timeline for ui.perfetto.dev"
-          onPress={() => void perf_trace_save().then(set_said)}
+          onPress={() => void perfTraceSave().then(setSaid)}
         />
       </View>
-      {(settings_in("perf") as Own[]).map((name) => (
+      {(settingsIn("perf") as Own[]).map((name) => (
         <OwnCheck key={name} name={name} disabled={recording} />
       ))}
       {/* The hint shows under the buttons. Above them, a hint that wraps to two
@@ -264,7 +260,7 @@ export function PerfPanel() {
       {(said ?? hint) !== null && (
         <Text style={[GAUGE.text, STYLE.hint]}>{said ?? hint}</Text>
       )}
-      {g !== null && <PerfRec rec={g.rec} />}
+      {g !== null && <PerfRecording recordingState={g.recordingState} />}
       <ScrollView style={STYLE.body} showsVerticalScrollIndicator={false}>
         <PerfGauge g={g} />
       </ScrollView>
@@ -281,7 +277,7 @@ const STYLE = StyleSheet.create({
   },
   body: { flexShrink: 1 },
   check: { alignItems: "center", marginTop: 6 },
-  check_label: { flexDirection: "row", alignItems: "center", gap: 6 },
+  checkLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
   note: { flexShrink: 1, textAlign: "right" },
   buttons: { flexDirection: "row", gap: 4, marginTop: 8 },
   button: {

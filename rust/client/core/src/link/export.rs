@@ -106,31 +106,35 @@ impl abi::camera::Guest for Core {
     fn track(&self, tracking: abi::camera::Tracking) -> Result<(), Errno> {
         with_frame(camera::track(tracking))
     }
-    fn north_up(&self) -> Result<(), Errno> {
-        with_frame(camera::north_up())
-    }
     fn goto(&self, lon: f64, lat: f64) -> Result<(), Errno> {
         with_frame(camera::goto(lon, lat))
     }
 }
 
 impl abi::input::Guest for Core {
-    fn pointer(
-        &self,
-        phase: abi::input::PointerPhase,
-        touch: bool,
-        id: i32,
-        drag: abi::input::Drag,
-        x: f64,
-        y: f64,
-    ) -> Result<(), Errno> {
-        with_frame(input::pointer(phase, touch, id, drag, x, y))
+    fn pan(&self, dx: f64, dy: f64) -> Result<(), Errno> {
+        with_frame(input::pan(dx, dy))
     }
-    fn wheel(&self, delta_y: f64) -> Result<(), Errno> {
-        with_frame(input::wheel(delta_y))
+    fn turn(&self, rad: f64) -> Result<(), Errno> {
+        with_frame(input::turn(rad))
     }
-    fn pinch(&self, scale: f64) -> Result<(), Errno> {
-        with_frame(input::pinch(scale))
+    fn tilt(&self, rad: f64) -> Result<(), Errno> {
+        with_frame(input::tilt(rad))
+    }
+    fn zoom(&self, scale: f64) -> Result<(), Errno> {
+        with_frame(input::zoom(scale))
+    }
+    fn drag(&self, dragging: bool) -> Result<(), Errno> {
+        with_frame(input::drag(dragging))
+    }
+    fn tap(&self, x: f64, y: f64) -> Result<(), Errno> {
+        with_frame(input::tap(x, y))
+    }
+    fn hover(&self, x: f64, y: f64) -> Result<(), Errno> {
+        with_frame(input::hover(x, y))
+    }
+    fn out(&self) -> Result<(), Errno> {
+        with_frame(input::out())
     }
     fn r#move(&self, x: i32, y: i32) -> Result<(), Errno> {
         with_frame(input::r#move(x, y))

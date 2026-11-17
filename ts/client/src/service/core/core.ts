@@ -8,6 +8,6 @@ import type { Sender } from "@xpute/link";
 export let ui: Sender;
 
 /** Makes `end` the UI's end, before the core boots. */
-export function set_ui(end: Sender): void {
+export function setUi(end: Sender): void {
   ui = end;
 }

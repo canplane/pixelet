@@ -20,26 +20,26 @@ import {
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
 import { BASE_KINDS, TILE_SPHERE } from "@/abi/publication.spec.ts";
-import { read_asset } from "@/service/sys/fs/asset.ts";
+import { readAsset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS, TOP_KEY } from "@/service/sys/fs/object.ts";
-import { when_source_declared } from "@/service/sys/fs/source.ts";
+import { whenSourceDeclared } from "@/service/sys/fs/source.ts";
 import {
-  commit_storage,
-  open_storage,
-  set_aside,
+  commitStorage,
+  openStorage,
+  setAside,
   STORAGE,
 } from "@/service/sys/fs/storage.ts";
-import { read_object } from "@/service/sys/fs/tile.ts";
+import { readObject } from "@/service/sys/fs/tile.ts";
 
 /** A file's path: a tuple of tokens, as the URI the core opens it by. */
 export type Path = readonly (number | string)[];
 
 /** What the paths are bound to: a file's bytes to read, the bytes a written
- * file commits, and a file set aside at `now_ms`, out of its path. */
-export interface Binding {
+ * file commits, and a file set aside at `nowMs`, out of its path. */
+interface Binding {
   open(p: Path, signal: AbortSignal): U8Array | Promise<U8Array>;
   commit(p: Path, bytes: U8Array): void | Promise<void>;
-  set_aside(p: Path, now_ms: number): void | Promise<void>;
+  setAside(p: Path, nowMs: number): void | Promise<void>;
 }
 
 /** A node of the generated tree: its own number under `ID`, and each child a
@@ -51,7 +51,7 @@ type Node = { readonly ID?: number; readonly [child: string]: unknown };
 interface Handler {
   open?(rest: Path, signal: AbortSignal): U8Array | Promise<U8Array>;
   commit?(rest: Path, bytes: U8Array): void | Promise<void>;
-  set_aside?(rest: Path, now_ms: number): void | Promise<void>;
+  setAside?(rest: Path, nowMs: number): void | Promise<void>;
 }
 
 /** A tile's quadkey, at most a leaf's zoom long. */
@@ -63,12 +63,12 @@ const none = (): never => {
   throw new ComponentError(ERROR_CODE_NO_ENTRY);
 };
 
-const read_only = (): never => {
+const readOnly = (): never => {
   throw new ComponentError(ERROR_CODE_READ_ONLY);
 };
 
 /** The one string left, where `form` matches it. */
-function string_of(rest: Path, form: RegExp): string | undefined {
+function stringOf(rest: Path, form: RegExp): string | undefined {
   const [s] = rest;
   return rest.length === 1 && typeof s === "string" && form.test(s)
     ? s
@@ -79,10 +79,10 @@ function string_of(rest: Path, form: RegExp): string | undefined {
 function base(layer: (typeof BASE_KINDS)[number]): Handler {
   return {
     open(rest, signal) {
-      const key = string_of(rest, QUADKEY);
+      const key = stringOf(rest, QUADKEY);
       if (key === undefined) return none();
-      return when_source_declared(signal).then((d) =>
-        read_object(d, layer, key, signal),
+      return whenSourceDeclared(signal).then((d) =>
+        readObject(d, layer, key, signal),
       );
     },
   };
@@ -100,8 +100,8 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
     {
       open: (rest, signal) =>
         rest.length === 0
-          ? when_source_declared(signal).then((d) =>
-              read_object(d, BASE_KINDS[path.EARTH.ID], TILE_SPHERE, signal),
+          ? whenSourceDeclared(signal).then((d) =>
+              readObject(d, BASE_KINDS[path.EARTH.ID], TILE_SPHERE, signal),
             )
           : none(),
     },
@@ -110,14 +110,14 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
     path.STORAGE.SETTINGS,
     {
       open: (rest) =>
-        rest.length === 0 ? open_storage(path.STORAGE.SETTINGS.ID) : none(),
+        rest.length === 0 ? openStorage(path.STORAGE.SETTINGS.ID) : none(),
       commit: (rest, bytes) =>
         rest.length === 0
-          ? commit_storage(path.STORAGE.SETTINGS.ID, bytes)
-          : read_only(),
-      set_aside: (rest, now_ms) =>
+          ? commitStorage(path.STORAGE.SETTINGS.ID, bytes)
+          : readOnly(),
+      setAside: (rest, nowMs) =>
         rest.length === 0
-          ? set_aside(STORAGE, path.STORAGE.SETTINGS.ID, now_ms)
+          ? setAside(STORAGE, path.STORAGE.SETTINGS.ID, nowMs)
           : none(),
     },
   ],
@@ -127,7 +127,7 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
       open(rest, signal) {
         const [id] = rest;
         return rest.length === 1 && typeof id === "number"
-          ? read_asset(id, signal)
+          ? readAsset(id, signal)
           : none();
       },
     },
@@ -135,17 +135,17 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
   [
     path.OBJECT,
     {
-      open: (rest) => OBJECTS.open(string_of(rest, SHARD) ?? none()),
-      set_aside: (rest, now_ms) =>
-        OBJECTS.set_aside(string_of(rest, SHARD) ?? none(), now_ms),
+      open: (rest) => OBJECTS.open(stringOf(rest, SHARD) ?? none()),
+      setAside: (rest, nowMs) =>
+        OBJECTS.setAside(stringOf(rest, SHARD) ?? none(), nowMs),
     },
   ],
   [
     path.OBJECT.TOP,
     {
       open: (rest) => (rest.length === 0 ? OBJECTS.open(TOP_KEY) : none()),
-      set_aside: (rest, now_ms) =>
-        rest.length === 0 ? OBJECTS.set_aside(TOP_KEY, now_ms) : none(),
+      setAside: (rest, nowMs) =>
+        rest.length === 0 ? OBJECTS.setAside(TOP_KEY, nowMs) : none(),
     },
   ],
 ]);
@@ -164,27 +164,27 @@ export function walk(p: Path, at: Node = path): [Node, Path] | undefined {
 }
 
 /** The handler of the node `p` leads to, and the tokens left past it. */
-function handler_of(p: Path): [Handler | undefined, Path] {
+function handlerOf(p: Path): [Handler | undefined, Path] {
   const [node, rest] = walk(p) ?? [undefined, []];
   return [node && HANDLERS.get(node), rest];
 }
 
-export function binding(): Binding {
-  return {
-    open(p, signal) {
-      const [h, rest] = handler_of(p);
-      if (h?.open === undefined) return none();
-      return h.open(rest, signal);
-    },
-    commit(p, bytes) {
-      const [h, rest] = handler_of(p);
-      if (h?.commit === undefined) return read_only();
-      return h.commit(rest, bytes);
-    },
-    set_aside(p, now_ms) {
-      const [h, rest] = handler_of(p);
-      if (h?.set_aside === undefined) return read_only();
-      return h.set_aside(rest, now_ms);
-    },
-  };
-}
+/** The paths bound to the handlers mounted on them, each call going to the
+ * handler of its path's node. */
+export const BINDING: Binding = {
+  open(p, signal) {
+    const [h, rest] = handlerOf(p);
+    if (h?.open === undefined) return none();
+    return h.open(rest, signal);
+  },
+  commit(p, bytes) {
+    const [h, rest] = handlerOf(p);
+    if (h?.commit === undefined) return readOnly();
+    return h.commit(rest, bytes);
+  },
+  setAside(p, nowMs) {
+    const [h, rest] = handlerOf(p);
+    if (h?.setAside === undefined) return readOnly();
+    return h.setAside(rest, nowMs);
+  },
+};

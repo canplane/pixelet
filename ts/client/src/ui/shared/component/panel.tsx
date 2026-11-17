@@ -1,21 +1,21 @@
 // @pxl/client/ui/shared/component/panel.tsx
 
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useRef,
-  useState,
-} from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
   type ViewProps,
 } from "react-native";
+
+import {
+  GestureDetector,
+  usePanGesture,
+  useSimultaneousGestures,
+  useTapGesture,
+} from "react-native-gesture-handler";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing, BackingPlace } from "@/ui/shared/component/backing.tsx";
@@ -60,12 +60,12 @@ export interface PanelProps {
   children: ReactNode;
 }
 
-/** The panel's host tells it whether it is open. The panel calls `on_exited` once
+/** The panel's host tells it whether it is open. The panel calls `onExited` once
  * it has slid away, and only then does the host stop drawing it. */
 export const PanelPresence = createContext<{
   open: boolean;
-  on_exited: () => void;
-}>({ open: true, on_exited: () => {} });
+  onExited: () => void;
+}>({ open: true, onExited: () => {} });
 
 /** The row shows no title: the panel's `label` names the sheet to assistive
  * technology. */
@@ -79,7 +79,7 @@ export function PanelBar({
 }) {
   return (
     <View {...rest} style={STYLE.bar}>
-      <View style={STYLE.bar_main}>{children}</View>
+      <View style={STYLE.barMain}>{children}</View>
       <PanelClose onClose={onClose} />
     </View>
   );
@@ -127,9 +127,9 @@ export function PanelScroll({ children }: { children: ReactNode }) {
   const { bottom } = useSafeArea();
   return (
     <ScrollView
-      style={STYLE.tab_scroll}
+      style={STYLE.tabScroll}
       contentContainerStyle={[
-        STYLE.tab_content,
+        STYLE.tabContent,
         {
           paddingBottom: bottom + PANEL_EDGE,
         },
@@ -147,9 +147,9 @@ const STYLE = StyleSheet.create({
     paddingHorizontal: PANEL_EDGE,
     flexDirection: "row",
     alignItems: "center",
-    gap: CHROME.control_gap,
+    gap: CHROME.controlGap,
   },
-  bar_main: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
+  barMain: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
   body: { flex: 1 },
   head: {
     position: "absolute",
@@ -158,8 +158,8 @@ const STYLE = StyleSheet.create({
     right: 0,
     height: PANEL_HEAD_HEIGHT,
   },
-  tab_scroll: { flex: 1 },
-  tab_content: {
+  tabScroll: { flex: 1 },
+  tabContent: {
     paddingHorizontal: PANEL_EDGE,
     paddingTop: PANEL_CONTENT_TOP,
     gap: PANEL_SECTION_GAP,
@@ -170,13 +170,13 @@ const STYLE = StyleSheet.create({
 /** The width of an iPad form sheet, which the sheet never exceeds. */
 const MAX_WIDTH = 540;
 const WHOLE_GAP = 12;
-/** The speed, in points per millisecond, past which a released drag flings
- * the sheet on to the next stop. */
-const FLING = 0.5;
+/** The speed, in points per second, past which a released drag flings the
+ * sheet on to the next stop. */
+const FLING_PX_PER_S = 500;
 const FOLLOW = ease(0, [0, 0, 1, 1]);
 /** The size of an iPhone sheet's grabber. */
 const HANDLE = { width: 36, height: 5 };
-const TAP_SLOP = 8;
+const TAP_SLOP_PX = 8;
 
 /**
  * Only the header drags the sheet. The sheet is always laid out at full height
@@ -185,80 +185,67 @@ const TAP_SLOP = 8;
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const window = useWindowSize();
   const { top } = useSafeArea();
-  const { open, on_exited } = useContext(PanelPresence);
+  const { open, onExited } = useContext(PanelPresence);
   const width = Math.min(window.width, MAX_WIDTH);
-  const full_height = window.height - top - WHOLE_GAP;
-  const half_height = window.height / 2;
+  const fullHeight = window.height - top - WHOLE_GAP;
+  const halfHeight = window.height / 2;
 
-  const [full, set_full] = useState(!half);
+  const [full, setFull] = useState(!half);
   // The body is as tall as the part of the sheet in view, so that its scroll
   // can reach its end. It grows as soon as the sheet does, and shrinks only
   // once the sheet has slid down to half.
-  const [body_full, set_body_full] = useState(full);
-  const [drag, set_drag] = useState<f64 | null>(null);
-  const shown = full ? full_height : half_height;
+  const [bodyFull, setBodyFull] = useState(full);
+  const [drag, setDrag] = useState<f64 | null>(null);
+  const shown = full ? fullHeight : halfHeight;
 
-  const detent = (to_full: boolean) => {
-    set_full(to_full);
-    if (to_full) set_body_full(true);
+  const detent = (toFull: boolean) => {
+    setFull(toFull);
+    if (toFull) setBodyFull(true);
   };
   const stops = [
     { height: 0, settle: onClose },
-    ...(half ? [{ height: half_height, settle: () => detent(false) }] : []),
-    { height: full_height, settle: () => detent(true) },
+    ...(half ? [{ height: halfHeight, settle: () => detent(false) }] : []),
+    { height: fullHeight, settle: () => detent(true) },
   ];
 
-  const now = {
-    top: window.height - shown,
-    center: window.width / 2,
-    shown,
-    full,
-    half,
-    stops,
-  };
-  const live = useRef(now);
-  live.current = now;
+  // Only the header takes the drag and the handle's tap. The handle is not a
+  // button, because a button would take its drags as well.
+  const head = { top: 0, height: PANEL_HEAD_HEIGHT };
+  const pull = usePanGesture({
+    hitSlop: head,
+    minDistance: TAP_SLOP_PX,
+    onUpdate: (e) => setDrag(e.translationY),
+    onDeactivate: (e) => {
+      if (e.canceled) return;
+      const height = shown - e.translationY;
+      const stop =
+        e.velocityY < -FLING_PX_PER_S
+          ? stops.find((s) => s.height > shown)
+          : e.velocityY > FLING_PX_PER_S
+            ? stops.findLast((s) => s.height < shown)
+            : stops.reduce((a, b) =>
+                Math.abs(b.height - height) < Math.abs(a.height - height)
+                  ? b
+                  : a,
+              );
+      stop?.settle();
+    },
+    onFinalize: () => setDrag(null),
+  });
+  const tap = useTapGesture({
+    hitSlop: head,
+    maxDistance: TAP_SLOP_PX,
+    onActivate: (e) => {
+      const onHandle =
+        e.y < CHROME.target && Math.abs(e.x - width / 2) < CHROME.target / 2;
+      if (half && onHandle) detent(!full);
+    },
+  });
+  const gestures = useSimultaneousGestures(pull, tap);
 
-  const responder = useRef(
-    PanResponder.create({
-      // The header claims a touch at the press. A drag upward soon leaves the
-      // sheet, and its moves would then go to the world. The handle is not a
-      // button, because a button would take its drags as well.
-      onStartShouldSetPanResponder: (e) =>
-        e.nativeEvent.pageY - live.current.top < PANEL_HEAD_HEIGHT,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => set_drag(g.dy),
-      onPanResponderRelease: (_, g) => {
-        set_drag(null);
-        const { top, center, shown, full, half, stops } = live.current;
-        const tap = Math.abs(g.dx) < TAP_SLOP && Math.abs(g.dy) < TAP_SLOP;
-        if (tap) {
-          const on_handle =
-            g.y0 - top < CHROME.target &&
-            Math.abs(g.x0 - center) < CHROME.target / 2;
-          if (half && on_handle) detent(!full);
-          return;
-        }
-        const height = shown - g.dy;
-        const stop =
-          g.vy < -FLING
-            ? stops.find((s) => s.height > shown)
-            : g.vy > FLING
-              ? stops.findLast((s) => s.height < shown)
-              : stops.reduce((a, b) =>
-                  Math.abs(b.height - height) < Math.abs(a.height - height)
-                    ? b
-                    : a,
-                );
-        stop?.settle();
-      },
-      onPanResponderTerminate: () => set_drag(null),
-    }),
-  ).current;
-
-  const rest = full_height - shown;
+  const rest = fullHeight - shown;
   const offset = drag === null ? rest : Math.max(0, rest + drag);
-  const away = { translateY: full_height + 16 };
+  const away = { translateY: fullHeight + 16 };
 
   return (
     <View style={[SHEET_STYLE.layer, open ? TOUCH.pass : TOUCH.block]}>
@@ -278,32 +265,31 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         from={away}
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
-        onSettled={
-          open ? () => drag === null && set_body_full(full) : on_exited
-        }
+        onSettled={open ? () => drag === null && setBodyFull(full) : onExited}
         style={[
           SHEET_STYLE.sheet,
           {
             width,
-            height: full_height,
+            height: fullHeight,
             left: (window.width - width) / 2,
           },
         ]}
       >
-        <View
-          {...responder.panHandlers}
-          accessibilityViewIsModal
-          accessibilityLabel={label}
-          style={[
-            SHEET_STYLE.body,
-            {
-              height: body_full ? full_height : half_height,
-            },
-          ]}
-        >
-          {children}
-          <View style={SHEET_STYLE.handle} />
-        </View>
+        <GestureDetector gesture={gestures}>
+          <View
+            accessibilityViewIsModal
+            accessibilityLabel={label}
+            style={[
+              SHEET_STYLE.body,
+              {
+                height: bodyFull ? fullHeight : halfHeight,
+              },
+            ]}
+          >
+            {children}
+            <View style={SHEET_STYLE.handle} />
+          </View>
+        </GestureDetector>
       </Motion>
     </View>
   );

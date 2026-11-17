@@ -24,7 +24,6 @@ use crate::domain::scene::indicator::param::{
     BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
     ZONE_FOOTPRINT_U,
 };
-use crate::domain::scene::model::draw_list;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
@@ -96,13 +95,14 @@ fn location() -> &'static mut LocationIndicator {
 }
 
 pub(crate) fn location_step(device_coord: Option<Q3>) {
-    location().step(draw_list(), device_coord);
+    location().step(device_coord);
 }
 
-/// Advances the beacon by one frame (`LocationIndicator::tick`). Returns
-/// whether it wants more frames.
-pub(crate) fn location_animate(frame: &Frame) -> bool {
-    location().tick(frame)
+/// Advances the beacon by one frame and lays the zone's cells while the zone
+/// is drawn (`LocationIndicator::tick`). Returns whether the beacon wants
+/// more frames.
+pub(crate) fn location_animate(draw: &mut DrawList, frame: &Frame) -> bool {
+    location().tick(draw, frame)
 }
 
 pub(crate) fn location_draw(draw: &mut DrawList) {
@@ -213,13 +213,19 @@ struct Zone {
 pub(crate) struct LocationIndicator {
     /// The last height found under the fix, or None until one is found.
     last_known_center_z: Option<f64>,
-    /// The center the zone was last grounded at, or None when no height was
-    /// found, and whether every height it read was exact. It is kept while
-    /// the fix stays in the ground's leaf cell it was grounded in, by the
-    /// cell's corner, and no change touches the ground its grounding read
+    /// Where the zone is: the center it was last grounded at, or None when no
+    /// height was found, and whether the height it read was exact. It is
+    /// kept while the fix stays in the ground's leaf cell it was grounded in,
+    /// by the cell's corner, and no change touches the ground it read
     /// (`Memo`).
     ground_center: Memo<[f64; 2], (Option<V3>, bool)>,
-    /// The zone's instances as last grounded, which `block` holds unless the
+    /// What the zone draws: its cells laid about the center this is kept
+    /// for, each on the ground under it, and whether every height they read
+    /// was exact. The cells are laid only while the zone is drawn, and kept,
+    /// drawn or not, until the center moves, a change touches the ground
+    /// they read or the fix goes.
+    ground_cells: Memo<V3, bool>,
+    /// The zone's instances as last laid, which `block` holds unless the
     /// heap refused them.
     instances: Vec<f32>,
     block: MirroredBlock,
@@ -232,27 +238,26 @@ pub(crate) struct LocationIndicator {
 impl LocationIndicator {
     /// Stands at the device's location as the store keeps it, which outlives
     /// a dropout and a hidden spell, and is gone where the location ends.
-    fn step(&mut self, draw: &mut DrawList, device_coord: Option<Q3>) {
+    fn step(&mut self, device_coord: Option<Q3>) {
         let Some(device) = device_coord else {
             if self.zone.take().is_some() {
                 invalidate(InvalidationReason::Scene);
             }
+            // With no fix nothing checks the memos, so neither is kept.
+            (self.ground_center, self.ground_cells) = (Memo::NONE, Memo::NONE);
             return;
         };
 
         let pos = coord::to_world(&device);
         let [x, y, _] = v3::floor(&pos, units(GROUND.leaf_cell_zoom()));
         let at = [x, y];
-        // A write the heap refused is tried again from the instances held,
-        // with nothing grounded again.
-        if self.block.handle == 0 && !self.instances.is_empty() {
-            self.write(draw);
-        }
-        // The memo is checked every frame, so it sees each change once.
+        // The memos are checked every frame, here both, so each sees a change
+        // once and in the same frame.
+        self.ground_cells.forget_touched_at_leaf(|&exact| exact);
         let mut memo = core::mem::take(&mut self.ground_center);
         memo.forget_touched_at_leaf(|&(_, exact)| exact);
         let w = World::now();
-        let (center, _) = memo.of(at, || self.ground(w, draw, at));
+        let (center, _) = memo.of(at, || self.ground(w, at));
         self.ground_center = memo;
         let Some(center) = center else {
             return;
@@ -276,18 +281,17 @@ impl LocationIndicator {
         }
     }
 
-    /// Grounds the zone on the ground's leaf cell at the corner `at`, the
-    /// fix's, and writes its instances where they changed. Returns the
-    /// zone's center, or None while the fix has no height yet, and whether
-    /// every height it read was exact.
-    fn ground(&mut self, world: World, draw: &mut DrawList, at: [f64; 2]) -> (Option<V3>, bool) {
+    /// Grounds the zone's center on the ground's leaf cell at the corner
+    /// `at`, the fix's. Returns the center, or None while the fix has no
+    /// height yet, and whether the height it read was exact.
+    fn ground(&mut self, world: World, at: [f64; 2]) -> (Option<V3>, bool) {
         let cell = units(GROUND.leaf_cell_zoom());
         // The fix names a place but not its altitude, so the elevation is the
         // ground's under its cell, which the query reads whole
         // (`surface_support`), and the last one found stands until a new one is.
         let mid = v3::center(&[at[0], at[1], 0.0], cell);
         let center = world.surface_support(&world::point(mid[0], mid[1], 0.0));
-        let mut exact = center.exact().is_some();
+        let exact = center.exact().is_some();
         if let Some(z) = center.val().flatten() {
             self.last_known_center_z = Some(z);
         }
@@ -295,16 +299,6 @@ impl LocationIndicator {
             return (None, exact);
         };
         let center_pos = v3::floor(&[at[0], at[1], center_z], cell);
-
-        let instances = lay_zone(center_pos, |at| {
-            let support = world.surface_support(at);
-            exact &= support.exact().is_some();
-            support.val().flatten()
-        });
-        if self.instances != instances {
-            self.instances = instances;
-            self.write(draw);
-        }
         // The beacon's shown place moves with the center, so a whole-cell
         // move of the zone does not play as the beacon sliding back.
         if let Some(z) = self.zone.as_mut().filter(|z| z.center != center_pos) {
@@ -318,6 +312,34 @@ impl LocationIndicator {
         (Some(center_pos), exact)
     }
 
+    /// Lays the zone's cells about `center`, each on the ground under it, and
+    /// writes its instances where they changed. It is called only while the
+    /// zone is drawn, so nothing is asked of the ground for cells not seen,
+    /// and what was laid is kept (`ground_cells`, which `step` checks). A
+    /// write the heap refused is tried again from the instances held, with
+    /// nothing laid again.
+    fn lay(&mut self, draw: &mut DrawList, center: V3) {
+        if self.block.handle == 0 && !self.instances.is_empty() {
+            self.write(draw);
+        }
+        let mut memo = core::mem::take(&mut self.ground_cells);
+        let world = World::now();
+        memo.of(center, || {
+            let mut exact = true;
+            let instances = lay_zone(center, |at| {
+                let support = world.surface_support(at);
+                exact &= support.exact().is_some();
+                support.val().flatten()
+            });
+            if self.instances != instances {
+                self.instances = instances;
+                self.write(draw);
+            }
+            exact
+        });
+        self.ground_cells = memo;
+    }
+
     /// Writes the instances into the block and asks for a frame either way:
     /// to draw them, or, where the heap refused them, to try again, as the
     /// ghost does.
@@ -326,16 +348,17 @@ impl LocationIndicator {
         invalidate(InvalidationReason::Scene);
     }
 
-    /// Advances the beacon by one frame. Returns whether it slides and wants
-    /// more frames. The indicator is drawn when it is in the frustum and
-    /// spans a camera cell at its distance. Its zone is drawn only where the
-    /// ground under it is drawn in leaf cells or finer (`zone_drawn`). The
-    /// beacon slides toward its target, a step each frame, only while the
-    /// slide spans a camera cell, and snaps otherwise. The bob and the spin
-    /// step a seen step at a time while the bob spans a camera cell, and the
-    /// frame is woken for the next step (`lens::StepClock`). Otherwise they
-    /// hold still.
-    pub(crate) fn tick(&mut self, frame: &Frame) -> bool {
+    /// Advances the beacon by one frame and lays the zone's cells while the
+    /// zone is drawn. Returns whether the beacon slides and wants more
+    /// frames. The indicator is drawn when it is in the frustum and spans a
+    /// camera cell at its distance. Its zone is drawn only where the ground
+    /// under it is drawn in leaf cells or finer (`zone_drawn`). The beacon
+    /// slides toward its target, a step each frame, only while the slide
+    /// spans a camera cell, and snaps otherwise. The bob and the spin step a
+    /// seen step at a time while the bob spans a camera cell, and the frame
+    /// is woken for the next step (`lens::StepClock`). Otherwise they hold
+    /// still.
+    pub(crate) fn tick(&mut self, draw: &mut DrawList, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {
             return false;
         };
@@ -366,12 +389,17 @@ impl LocationIndicator {
         if slides {
             animation::note_animation();
         }
+        // The cells are laid while the zone is drawn, in this frame, so that
+        // the first frame that draws it draws them.
+        if let (true, center) = (p.zone_drawn, p.center) {
+            self.lay(draw, center);
+        }
         slides
     }
 
     pub(crate) fn draw(&self, draw: &mut DrawList) {
         let Some(p) = &self.zone else { return };
-        let Some(shown) = p.beacon_at.filter(|_| p.visible && self.block.handle != 0) else {
+        let Some(shown) = p.beacon_at.filter(|_| p.visible) else {
             return;
         };
         let time = p.clock.time();
@@ -380,7 +408,7 @@ impl LocationIndicator {
         // The bob and the slide move only the beacon, since the zone reads no
         // time. When either draw changes, it marks where it was and where it
         // is (pxl-render pass/mark.rs).
-        if p.zone_drawn {
+        if p.zone_drawn && self.block.handle != 0 {
             let cnt = (self.instances.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(
                 &self.zone_id,

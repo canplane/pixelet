@@ -30,7 +30,7 @@ export type LocationSensorStatus = Exclude<
 
 interface DeviceLocation {
   /** Longitude and latitude, in degrees. */
-  lon_lat: [f64, f64];
+  coord: [f64, f64];
   /** Meters over the ellipsoid. Null where the device gives no altitude. */
   alt: f64 | null;
   /** The fix's accuracy, in meters. */
@@ -46,7 +46,7 @@ interface DeviceOrientation {
 
 /** Whether `a` lies more than `eps` from `b` by `dist`; a value that appears
  * or goes is always a change. */
-function is_delta_over(
+function isDeltaOver(
   a: f64 | null,
   b: f64 | null,
   eps: f64,
@@ -56,77 +56,77 @@ function is_delta_over(
   return a !== b;
 }
 
-function plain_delta(a: f64, b: f64): f64 {
+function plainDelta(a: f64, b: f64): f64 {
   return Math.abs(a - b);
 }
 
 /** How far apart two headings lie on the circle: 359° and 1° are 2° apart,
  * where a plain difference would make them 358°. */
-function heading_delta(a: f64, b: f64): f64 {
+function headingDelta(a: f64, b: f64): f64 {
   return Math.abs(wrap(a - b, -180, 180));
 }
 
 /** The location's state as the UI shows it: its status, and the locale key of
- * what failed when it failed. `err` is null except at `SENSOR_STATUS_ERROR`. */
+ * what failed when it failed. `error` is null except at `SENSOR_STATUS_ERROR`. */
 export interface SensorState {
   status: LocationSensorStatus;
-  err: string | null;
+  error: string | null;
 }
 
-export function of_SensorState(status: LocationSensorStatus): SensorState {
-  return { status, err: null };
+export function ofSensorState(status: LocationSensorStatus): SensorState {
+  return { status, error: null };
 }
 
-export function failed_SensorState(err: string): SensorState {
-  return { status: SENSOR_STATUS_ERROR, err };
+export function failedSensorState(error: string): SensorState {
+  return { status: SENSOR_STATUS_ERROR, error };
 }
 
 export interface DeviceLocationStore {
-  is_tracking_location: boolean;
+  isTrackingLocation: boolean;
   location: DeviceLocation | null;
   state: SensorState;
 }
 
 /** A sensor is idle until it is asked to start. */
-export function default_DeviceLocationStore(): DeviceLocationStore {
+export function defaultDeviceLocationStore(): DeviceLocationStore {
   return {
-    is_tracking_location: false,
+    isTrackingLocation: false,
     location: null,
-    state: of_SensorState(SENSOR_STATUS_IDLE),
+    state: ofSensorState(SENSOR_STATUS_IDLE),
   };
 }
 
 /** Takes a fix. The location changes only on a significant change, but any
  * fix marks the sensor Ready, since it shows the watch delivers. */
-export function set_location(
+export function setLocation(
   s: DeviceLocationStore,
-  lon_lat: [f64, f64],
+  coord: [f64, f64],
   alt: f64 | null,
   accuracy: f64,
   course: f64 | null,
 ): void {
-  s.state = of_SensorState(SENSOR_STATUS_READY);
+  s.state = ofSensorState(SENSOR_STATUS_READY);
   const prev = s.location;
   if (prev === null) {
-    s.location = { lon_lat, alt, accuracy, course };
+    s.location = { coord, alt, accuracy, course };
     return;
   }
 
   // A fix is accepted when its accuracy is within 100 m, or when the
   // accuracy improves.
-  const is_improving = accuracy < prev.accuracy;
-  if (accuracy > 100 && !is_improving) return;
+  const isImproving = accuracy < prev.accuracy;
+  if (accuracy > 100 && !isImproving) return;
 
   // The dead zone is about 1.1 m horizontally and 0.5 m in altitude.
-  const lon_diff = Math.abs(prev.lon_lat[0] - lon_lat[0]);
-  const lat_diff = Math.abs(prev.lon_lat[1] - lon_lat[1]);
-  const is_significant_change =
-    lat_diff > 0.00001 ||
-    lon_diff > 0.00001 ||
-    is_delta_over(prev.alt, alt, 0.5, plain_delta);
+  const longitudeDelta = Math.abs(prev.coord[0] - coord[0]);
+  const latitudeDelta = Math.abs(prev.coord[1] - coord[1]);
+  const isSignificantChange =
+    latitudeDelta > 0.00001 ||
+    longitudeDelta > 0.00001 ||
+    isDeltaOver(prev.alt, alt, 0.5, plainDelta);
 
   if (
-    !is_significant_change &&
+    !isSignificantChange &&
     prev.accuracy === accuracy &&
     prev.course === course
   )
@@ -135,60 +135,60 @@ export function set_location(
   // Without movement, the accuracy and course still refresh, so the UI shows
   // the freshest signal.
   s.location = {
-    lon_lat: is_significant_change ? lon_lat : prev.lon_lat,
-    alt: is_significant_change ? alt : prev.alt,
+    coord: isSignificantChange ? coord : prev.coord,
+    alt: isSignificantChange ? alt : prev.alt,
     accuracy,
     course,
   };
 }
 
 export interface DeviceOrientationStore {
-  is_tracking_orient: boolean;
-  orient: DeviceOrientation | null;
+  isTrackingOrientation: boolean;
+  orientation: DeviceOrientation | null;
   status: SensorStatus;
 }
 
 /** The device's orientation is idle until it is asked to start. */
-export function default_DeviceOrientationStore(): DeviceOrientationStore {
+export function defaultDeviceOrientationStore(): DeviceOrientationStore {
   return {
-    is_tracking_orient: false,
-    orient: null,
+    isTrackingOrientation: false,
+    orientation: null,
     status: SENSOR_STATUS_IDLE,
   };
 }
 
 /** Takes a reading, ignoring a change of heading within a dead zone of 1.5°.
  * The first reading makes the sensor Ready, even one without a heading. */
-export function set_orient(
+export function setOrientation(
   s: DeviceOrientationStore,
   heading: f64 | null,
 ): void {
-  const prev = s.orient;
+  const prev = s.orientation;
   if (prev === null) {
-    s.orient = { heading };
+    s.orientation = { heading };
     s.status = SENSOR_STATUS_READY;
     return;
   }
-  if (is_delta_over(heading, prev.heading, 1.5, heading_delta))
-    s.orient = { heading };
+  if (isDeltaOver(heading, prev.heading, 1.5, headingDelta))
+    s.orientation = { heading };
 }
 
-export function set_is_tracking_orient(
+export function setIsTrackingOrientation(
   s: DeviceOrientationStore,
   enabled: boolean,
 ): void {
-  if (s.is_tracking_orient === enabled) return;
-  s.is_tracking_orient = enabled;
-  if (!enabled) s.orient = null;
+  if (s.isTrackingOrientation === enabled) return;
+  s.isTrackingOrientation = enabled;
+  if (!enabled) s.orientation = null;
 }
 
-const LOCATION: DeviceLocationStore = default_DeviceLocationStore();
-const ORIENT: DeviceOrientationStore = default_DeviceOrientationStore();
+const LOCATION: DeviceLocationStore = defaultDeviceLocationStore();
+const ORIENTATION: DeviceOrientationStore = defaultDeviceOrientationStore();
 
-export function device_location_store(): DeviceLocationStore {
+export function deviceLocationStore(): DeviceLocationStore {
   return LOCATION;
 }
 
-export function device_orient_store(): DeviceOrientationStore {
-  return ORIENT;
+export function deviceOrientationStore(): DeviceOrientationStore {
+  return ORIENTATION;
 }

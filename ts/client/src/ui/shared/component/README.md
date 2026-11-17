@@ -5,7 +5,7 @@ overrides beside it, as React Native names them: `motion/motion.web.tsx` is the
 web's and `motion/motion.native.tsx` both iOS's and Android's;
 `segmented.tsx` is the web's and Android's, `segmented.ios.tsx` an iPhone's.
 Metro takes the file of the platform it builds for (`ts/build/path.ts`
-`platform_file`), and every import names the plain file (`motion.tsx`,
+`platformFile`), and every import names the plain file (`motion.tsx`,
 `segmented.tsx`). An override re-exports the default and replaces only what it
 draws itself, and `ts/client/src/conform.ts` holds each native file to the web
 file's exports and each override to its default's.

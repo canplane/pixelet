@@ -7,10 +7,8 @@ pub const HANDLE: _rt::Handle = 0x5a7108;
 
 /// `track`
 pub const TRACK: _rt::Method = 0;
-/// `north-up`
-pub const NORTH_UP: _rt::Method = 1;
 /// `goto`
-pub const GOTO: _rt::Method = 2;
+pub const GOTO: _rt::Method = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -52,11 +50,6 @@ pub fn track(side_: &_rt::Side, tracking: Tracking) -> Result<(), _rt::Errno> {
             w_.u8(0, tracking as u8);
         }))),
     );
-    _rt::answer(r)
-}
-
-pub fn north_up(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, NORTH_UP, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 

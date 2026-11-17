@@ -5,7 +5,7 @@ import {
   MESSAGE_WORLD_READ_FAILING,
   MESSAGE_WORLD_UNAVAILABLE,
 } from "@/abi/overlay.enum.ts";
-export function message_key(message: Message): string {
+export function messageKey(message: Message): string {
   switch (message) {
     case MESSAGE_WORLD_READ_FAILING:
       return "toast.server_unstable";

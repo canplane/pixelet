@@ -25,7 +25,7 @@ import process from "node:process";
 import { stamp } from "@pxl/build/stamp.ts";
 import { SITE_URL } from "@pxl/client/service/origin/route.spec.ts";
 import { GROUND } from "@pxl/client/ui/shared/component/ground.ts";
-import { forward, route_target } from "./proxy.ts";
+import { forward, routeTarget } from "./proxy.ts";
 
 const APP = path.dirname(import.meta.dirname);
 
@@ -39,7 +39,7 @@ function html(): void {
   fs.writeFileSync(path.join(APP, "public/index.html"), page);
 }
 
-function build_json(): void {
+function buildJson(): void {
   const { official, id, time } = stamp();
   fs.writeFileSync(
     path.join(APP, "dist/build.json"),
@@ -65,7 +65,7 @@ function serve(): void {
   http
     .createServer((req, res) => {
       const url = req.url ?? "/";
-      const target = route_target(url);
+      const target = routeTarget(url);
       if (target) return forward(target, req, res);
       const name = path.normalize(decodeURIComponent(url.split("?")[0]));
       let file = path.join(dist, name);
@@ -85,6 +85,6 @@ function serve(): void {
 
 const STEP = process.argv[2];
 if (STEP === "html") html();
-else if (STEP === "stamp") build_json();
+else if (STEP === "stamp") buildJson();
 else if (STEP === "serve") serve();
 else throw new Error(`web.ts: no step ${STEP ?? ""}; html, stamp or serve`);

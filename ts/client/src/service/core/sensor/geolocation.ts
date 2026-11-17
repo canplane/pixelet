@@ -2,7 +2,7 @@
 
 /** The GPS sensor's decisions: when a watch runs and what an error means.
  * The platform owns the watch itself, and says with each failure whether the
- * watch runs on (`SensorListener.pos_err`'s `watching`): a W3C watch rides out
+ * watch runs on (`SensorListener.positionError`'s `watching`): a W3C watch rides out
  * all but `PERMISSION_DENIED`
  * (https://www.w3.org/TR/geolocation/#watchposition-method), and a native
  * one ends on any. Nothing is retried here. A watch that ended starts again
@@ -11,10 +11,10 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { GeolocationError } from "@/service/platform/types.ts";
 import {
-  device_location_store,
-  failed_SensorState,
-  of_SensorState,
-  set_location,
+  deviceLocationStore,
+  failedSensorState,
+  ofSensorState,
+  setLocation,
   SENSOR_STATUS_IDLE,
   SENSOR_STATUS_LOADING,
 } from "./reading.ts";
@@ -27,10 +27,10 @@ export const GEOLOCATION_COMMAND_STOP = 1;
 interface Geolocation {
   /** The last command. The platform's watch follows it and ignores a
    * repeated command. */
-  cmd: GeolocationCommand | null;
+  command: GeolocationCommand | null;
 }
 
-const geolocation: Geolocation = { cmd: null };
+const geolocation: Geolocation = { command: null };
 
 /** The location as the platform reports it once the client starts: whether
  * the platform has one. */
@@ -46,48 +46,48 @@ export function platform(): GeolocationPlatform {
 }
 
 /** A watch runs while the store tracks the location
- * (`DeviceLocationStore.is_tracking_location`). */
-export function start_watching(): void {
-  const store = device_location_store();
-  if (store.is_tracking_location) return;
+ * (`DeviceLocationStore.isTrackingLocation`). */
+export function startWatching(): void {
+  const store = deviceLocationStore();
+  if (store.isTrackingLocation) return;
   if (!PLATFORM.supported) {
-    store.state = failed_SensorState("device.geolocation.unsupported");
+    store.state = failedSensorState("device.geolocation.unsupported");
     return;
   }
   // A watch started again after a hidden spell keeps the location it had and
   // reads as Loading until it gives a fix of its own.
-  store.state = of_SensorState(SENSOR_STATUS_LOADING);
-  store.is_tracking_location = true;
-  geolocation.cmd = GEOLOCATION_COMMAND_START;
+  store.state = ofSensorState(SENSOR_STATUS_LOADING);
+  store.isTrackingLocation = true;
+  geolocation.command = GEOLOCATION_COMMAND_START;
 }
 
 /** The location is kept: a watch stopped while the app is hidden is not the
- * location gone. It is dropped where the location ends (`geolocation_close`,
- * `geolocation_err`). */
-export function stop_watching(): void {
-  const store = device_location_store();
-  if (store.is_tracking_location) {
-    store.is_tracking_location = false;
-    geolocation.cmd = GEOLOCATION_COMMAND_STOP;
+ * location gone. It is dropped where the location ends (`geolocationClose`,
+ * `geolocationError`). */
+export function stopWatching(): void {
+  const store = deviceLocationStore();
+  if (store.isTrackingLocation) {
+    store.isTrackingLocation = false;
+    geolocation.command = GEOLOCATION_COMMAND_STOP;
   }
 }
 
-export function geolocation_close(): void {
-  stop_watching();
-  const store = device_location_store();
+export function geolocationClose(): void {
+  stopWatching();
+  const store = deviceLocationStore();
   store.location = null;
-  store.state = of_SensorState(SENSOR_STATUS_IDLE);
+  store.state = ofSensorState(SENSOR_STATUS_IDLE);
 }
 
 /** A location fix, its altitude over the ellipsoid as GPS gives it. */
-export function geolocation_fix(
+export function geolocationFix(
   lon: f64,
   lat: f64,
   alt: f64 | null,
   accuracy: f64,
   course: f64 | null,
 ): void {
-  set_location(device_location_store(), [lon, lat], alt, accuracy, course);
+  setLocation(deviceLocationStore(), [lon, lat], alt, accuracy, course);
 }
 
 /** Each error's words, by their locale key. */
@@ -103,20 +103,20 @@ const ERR_KEY: Readonly<Record<GeolocationError, string>> = {
  * location reads as failed until the next fix. One that ended it leaves
  * nothing watching and no location, and a grant, a return to the foreground
  * or a press starts the watch again. */
-export function geolocation_err(
-  err: GeolocationError,
+export function geolocationError(
+  error: GeolocationError,
   watching: boolean,
 ): void {
-  const store = device_location_store();
-  store.state = failed_SensorState(ERR_KEY[err]);
+  const store = deviceLocationStore();
+  store.state = failedSensorState(ERR_KEY[error]);
   if (!watching) {
-    store.is_tracking_location = false;
+    store.isTrackingLocation = false;
     store.location = null;
   }
 }
 
-export function take_geolocation_cmd(): GeolocationCommand | null {
-  const c = geolocation.cmd;
-  geolocation.cmd = null;
+export function takeGeolocationCommand(): GeolocationCommand | null {
+  const c = geolocation.command;
+  geolocation.command = null;
   return c;
 }

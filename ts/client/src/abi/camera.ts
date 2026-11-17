@@ -13,10 +13,8 @@ export const HANDLE: Handle = 0x5a7108;
 
 /** `track` */
 export const TRACK: Method = 0;
-/** `north-up` */
-export const NORTH_UP: Method = 1;
 /** `goto` */
-export const GOTO: Method = 2;
+export const GOTO: Method = 1;
 
 export function load_Tracking(r: Lift, at: number): Tracking {
   const v = of_Tracking(r.case(at, 3));
@@ -31,11 +29,6 @@ export async function track(link_: Sender, tracking: Tracking): Promise<void> {
       w_.u8(0, tracking);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
-}
-
-export async function north_up(link_: Sender): Promise<void> {
-  const a_ = await link_.send(HANDLE, NORTH_UP, null);
   if (a_.result !== 0) throw new XputeError(a_.result);
 }
 

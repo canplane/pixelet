@@ -183,7 +183,6 @@
       "object_size": "크기 {{n}}"
     },
     "controls": {
-      "reset_orientation": "북쪽으로 정렬",
       "move_to_location": "내 위치로",
       "start_compass_mode": "나침반 켜기",
       "exit_compass_mode": "나침반 끄기",

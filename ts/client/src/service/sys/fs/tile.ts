@@ -11,7 +11,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { tile_object, type BASE_KINDS } from "@/abi/publication.spec.ts";
-import { tile_url } from "@/service/origin/route.ts";
+import { tileUrl } from "@/service/origin/route.ts";
 import { get } from "@/service/sys/fs/read.ts";
 import type { Declaration } from "@/service/sys/fs/source.ts";
 
@@ -19,7 +19,7 @@ import type { Declaration } from "@/service/sys/fs/source.ts";
  * prefixes `name` and that declare their own version of `kind`, the finest
  * gives it. Without such a shard, the kind's own version does. No shard
  * declares a version of the Earth (pxl-geo-bake source.rs). */
-export function version_of(
+export function versionOf(
   d: Declaration,
   kind: (typeof BASE_KINDS)[number],
   name: string,
@@ -37,12 +37,12 @@ export function version_of(
   return finest?.[1] ?? d.version[kind];
 }
 
-export function read_object(
-  decl: Declaration,
+export function readObject(
+  declaration: Declaration,
   kind: (typeof BASE_KINDS)[number],
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {
-  const object = tile_object(version_of(decl, kind, name), name);
-  return get(tile_url(kind, object), signal);
+  const object = tile_object(versionOf(declaration, kind, name), name);
+  return get(tileUrl(kind, object), signal);
 }

@@ -12,6 +12,6 @@ export function keys(): string[] {
   return PLATFORM.storage_keys();
 }
 
-export function set(key: string, val: string): void {
-  PLATFORM.storage_set(key, val);
+export function set(key: string, value: string): void {
+  PLATFORM.storage_set(key, value);
 }

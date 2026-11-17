@@ -44,7 +44,6 @@
 //!   | climb | Climb | Climb |
 //!   | climb, its way hit | Dive | Stop |
 
-use crate::domain::control::camera::gesture::{Anchor, spread};
 use crate::domain::control::camera::state::{
     Intent, IntentPatch, camera_state, camera_state_mut, ease_pivot, resolved_to,
 };
@@ -52,7 +51,6 @@ use crate::domain::control::camera::{
     camera, ease_facing, eases_toward, facing_dir, facing_domain, set_eye_world,
 };
 use crate::domain::control::param;
-use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP};
 use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
@@ -71,7 +69,6 @@ use xpute_kit::math::scalar::wrap;
 
 pub(crate) struct OrbitState {
     pub dist: f64,
-    pinch_from: Anchor,
 }
 
 static ORBIT: Global<OrbitState> = Global::new();
@@ -79,7 +76,6 @@ static ORBIT: Global<OrbitState> = Global::new();
 pub(crate) fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
         dist: param::DEFAULT_DIST,
-        pinch_from: Anchor::new(param::DEFAULT_DIST, 1.0),
     })
 }
 
@@ -110,31 +106,9 @@ pub(crate) fn ask(partial: IntentPatch) -> Intent {
     c.intent
 }
 
-/// Whether the distance is still to reach the intent's, which it takes
-/// whole when the ease ends (`step`).
-pub(crate) fn zoom_settling() -> bool {
-    camera_state().intent.dist != orbit().dist
-}
-
-/// A wheel turn of `delta_y` CSS pixels.
-pub(crate) fn wheel(delta_y: f64) {
-    zoom_by(libm::exp(delta_y * DOLLY_GAIN));
-}
-
 /// A `factor` under one zooms closer.
 pub(crate) fn zoom_by(factor: f64) {
     zoom_to(camera_state().intent.dist * factor);
-}
-
-pub(crate) fn pinch_begin(span: f64) {
-    orbit().pinch_from = Anchor::new(camera_state().intent.dist, span);
-}
-
-/// The fingers are `span` apart. Spreading them zooms in.
-pub(crate) fn pinch(span: f64) {
-    let asked = orbit().pinch_from.ask(span, spread);
-    let took = zoom_to(asked);
-    orbit().pinch_from.settle(asked, took, span);
 }
 
 /// Returns the distance taken, which terrain may hold short of `dist`.

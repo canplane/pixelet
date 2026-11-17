@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::control::camera::fixture::place;
 use crate::domain::control::param;
-use crate::domain::setting::{OrbitObstacleMode, settings_mut};
+use crate::domain::setting::settings_mut;
 use crate::domain::view::frame::coord::to_world;
 
 struct Rng(u64);
@@ -55,29 +55,6 @@ fn pivot_along_facing() {
         );
         controller().base = CameraMode::Orbit;
     }
-}
-
-/// A trackpad's pinch takes the camera as near as two touches spread by the
-/// same factor do, and first person ignores it.
-#[test]
-fn a_trackpad_pinch_zooms_as_two_touches() {
-    third_person();
-    let was = settings().orbit_obstacle;
-    settings_mut().orbit_obstacle = OrbitObstacleMode::Through;
-    let at = [0.0, 0.0, 10.0];
-    place(at, 400.0, 1.0, 0.0);
-    pinch_by(2.0);
-    let by_trackpad = camera_state().intent.dist;
-    place(at, 400.0, 1.0, 0.0);
-    pinch_begin(100.0);
-    pinch(200.0);
-    assert_eq!(by_trackpad, camera_state().intent.dist);
-    assert!((by_trackpad - 200.0).abs() < 1e-9, "{by_trackpad}");
-    controller().base = CameraMode::FirstPerson;
-    pinch_by(2.0);
-    assert_eq!(camera_state().intent.dist, 200.0, "first person zoomed");
-    controller().base = CameraMode::Orbit;
-    settings_mut().orbit_obstacle = was;
 }
 
 /// A change of person moves the camera about the pivot and never moves the

@@ -17,12 +17,10 @@ export const LABEL: {
   placeholder: string;
 } = {
   primary: COLOR.black,
-  secondary: alpha(COLOR.label_gray, SECONDARY),
-  tertiary: alpha(COLOR.label_gray, 0.3),
-  placeholder: alpha(COLOR.label_gray, 0.3),
+  secondary: alpha(COLOR.labelGray, SECONDARY),
+  tertiary: alpha(COLOR.labelGray, 0.3),
+  placeholder: alpha(COLOR.labelGray, 0.3),
 };
-
-export const NORTH: string = SYSTEM.red;
 
 export const STATUS: { ready: string; pending: string; failed: string } = {
   ready: SYSTEM.green,

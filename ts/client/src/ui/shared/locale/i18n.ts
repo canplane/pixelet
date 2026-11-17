@@ -22,13 +22,13 @@ interface Catalog {
 
 /** A shallow merge would let a dev branch replace the base's branch of the
  * same name and lose the base's keys under it. */
-function deep_merge(base: Catalog, extra: Catalog): Catalog {
+function deepMerge(base: Catalog, extra: Catalog): Catalog {
   const out: Catalog = { ...base };
   for (const [key, value] of Object.entries(extra)) {
     const current = out[key];
     out[key] =
       typeof value === "object" && typeof current === "object"
-        ? deep_merge(current, value)
+        ? deepMerge(current, value)
         : value;
   }
   return out;
@@ -39,11 +39,11 @@ function deep_merge(base: Catalog, extra: Catalog): Catalog {
  * passed to a helper that tests the flag. */
 const CATALOGS = __DEV__
   ? {
-      en: deep_merge(en, enDev) as typeof en,
-      ko: deep_merge(ko, koDev) as typeof ko,
-      ja: deep_merge(ja, jaDev) as typeof ja,
-      "zh-Hans": deep_merge(zhHans, zhHansDev) as typeof zhHans,
-      "zh-Hant": deep_merge(zhHant, zhHantDev) as typeof zhHant,
+      en: deepMerge(en, enDev) as typeof en,
+      ko: deepMerge(ko, koDev) as typeof ko,
+      ja: deepMerge(ja, jaDev) as typeof ja,
+      "zh-Hans": deepMerge(zhHans, zhHansDev) as typeof zhHans,
+      "zh-Hant": deepMerge(zhHant, zhHantDev) as typeof zhHant,
     }
   : { en, ko, ja, "zh-Hans": zhHans, "zh-Hant": zhHant };
 
@@ -63,7 +63,7 @@ const LANG_KEY = "pxl:lang";
 
 /** A Chinese tag that names no script reads Traditional for Taiwan, Hong Kong
  * and Macau, and Simplified elsewhere. */
-function language_of(tag: string): string {
+function languageOf(tag: string): string {
   const [language] = tag.split("-");
   if (language !== "zh") return language;
   return /^zh-(Hant|TW|HK|MO)/.test(tag) ? "zh-Hant" : "zh-Hans";
@@ -76,7 +76,7 @@ const LANGUAGE_DETECTOR: LanguageDetectorModule = {
   // The system's tags are cut to their languages. Given whole tags, i18next
   // prefers a later exact match to an earlier tag's region, so ["en-US", "ko"]
   // would read as Korean.
-  detect: () => storage.get(LANG_KEY) ?? locale.list().map(language_of),
+  detect: () => storage.get(LANG_KEY) ?? locale.list().map(languageOf),
   cacheUserLanguage: (lng) => storage.set(LANG_KEY, lng),
 };
 

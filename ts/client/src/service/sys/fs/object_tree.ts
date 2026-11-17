@@ -31,7 +31,7 @@ import {
  * made it. `text` is a marker's words, the one record a leaf can carry. */
 export interface Leaf {
   key: string;
-  asset_id: number;
+  assetId: number;
   text: string | null;
 }
 
@@ -42,7 +42,7 @@ export interface TopRow {
   fold: number;
 }
 
-export function shard_of(key: string): string {
+export function shardOf(key: string): string {
   return key.slice(0, SHARD_ZOOM);
 }
 
@@ -77,13 +77,13 @@ export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
         for (let s = 0; s < 8; s++) {
           const key = `${parent}${s}`;
           if (key !== w.key.slice(0, d)) {
-            leaves.set(key, { key, asset_id: l.asset_id, text: l.text });
+            leaves.set(key, { key, assetId: l.assetId, text: l.text });
           }
         }
       }
     }
   }
-  if (w.asset_id !== SENTINEL_VOID) leaves.set(w.key, w);
+  if (w.assetId !== SENTINEL_VOID) leaves.set(w.key, w);
 }
 
 /** A share is how much of a cube is filled, and this is a whole cube
@@ -92,7 +92,7 @@ const FULL = 1 << 15;
 
 /** A fold's word holds its kind in the low 16 bits and its share in the high
  * 16 (pxl-engine object.rs `fold_word`). */
-function fold_word(kind: number, share: number): number {
+function foldWord(kind: number, share: number): number {
   return ((kind & 0xffff) | (share << 16)) >>> 0;
 }
 
@@ -102,15 +102,15 @@ const CUBES: ReadonlySet<number> = new Set(
 );
 
 /** Whether a value is drawn as a voxel (pxl-engine object.rs `voxel`). */
-function voxel(val: number): boolean {
-  return val === SENTINEL_AIR || CUBES.has(val);
+function voxel(value: number): boolean {
+  return value === SENTINEL_AIR || CUBES.has(value);
 }
 
 /** The word a leaf of `id` gives its parent's fold (pxl-engine object.rs
  * `share`). A voxel fills its cube whole, and any other value fills none of
  * it. */
 function share(id: number): number {
-  return voxel(id) ? fold_word(id, FULL) : 0;
+  return voxel(id) ? foldWord(id, FULL) : 0;
 }
 
 /** Folds the words of a node's eight children into the word of the node, which
@@ -134,14 +134,14 @@ export function fold(children: readonly number[], zoom: number): number {
       most = w;
     }
   }
-  return fold_word(best, Math.floor(sum / 8));
+  return foldWord(best, Math.floor(sum / 8));
 }
 
 /** The word in the tree of the node that lies `j` zooms past the shard and
  * holds the leaves `under`. */
 function word(under: readonly Leaf[], j: number): number {
   if (under.length === 1 && depth(under[0]!.key) === j) {
-    return share(under[0]!.asset_id);
+    return share(under[0]!.assetId);
   }
   const children: Leaf[][] = Array.from({ length: 8 }, () => []);
   for (const l of under) children[slot(l.key, j + 1)]!.push(l);
@@ -151,7 +151,7 @@ function word(under: readonly Leaf[], j: number): number {
   );
 }
 
-export function top_of(shard: string, leaves: Iterable<Leaf>): TopRow[] {
+export function topOf(shard: string, leaves: Iterable<Leaf>): TopRow[] {
   const under = [...leaves];
   return under.length > 0 ? [{ shard, fold: word(under, 0) }] : [];
 }

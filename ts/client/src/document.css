@@ -20,6 +20,13 @@ body,
   background-color: #000;
 }
 
+/* The gauges' face (theme.ts `GAUGE_FACE`). */
+@font-face {
+  font-family: "uDIN1451Mittelschrift";
+  src: url("/font/uDIN1451Mittelschrift.ttf") format("truetype");
+  font-display: swap;
+}
+
 body {
   letter-spacing: -0.01em;
   background-color: #000;

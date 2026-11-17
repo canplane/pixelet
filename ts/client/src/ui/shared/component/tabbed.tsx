@@ -21,12 +21,12 @@ export function Tabbed<T extends string | number>({
   onClose: () => void;
   children: (tab: T) => ReactNode;
 }) {
-  const [tab, set_tab] = useState<T>(tabs[0].value);
+  const [tab, setTab] = useState<T>(tabs[0].value);
   return (
     <PanelBody
       bar={
         <PanelBar onClose={onClose}>
-          <Segmented value={tab} onChange={set_tab} segments={tabs} />
+          <Segmented value={tab} onChange={setTab} segments={tabs} />
         </PanelBar>
       }
     >

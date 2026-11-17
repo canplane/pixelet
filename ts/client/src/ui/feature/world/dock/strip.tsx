@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,17 +11,24 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import {
+  GestureDetector,
+  usePanGesture,
+  useSimultaneousGestures,
+  useTapGesture,
+} from "react-native-gesture-handler";
+
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
 import { alpha, CHROME, COLOR } from "@/ui/shared/component/theme.ts";
-import { PAN_X } from "@/ui/shared/component/pan.ts";
-import { open_modal } from "@/ui/shared/modal.ts";
+import { openModal } from "@/ui/shared/modal.ts";
+import { SLOP_PX } from "@/ui/feature/world/deck.ts";
 import {
-  select_tool,
-  select_asset,
+  selectTool,
+  selectAsset,
   useTool,
   useInHand,
   useRecentPicks,
@@ -33,103 +39,65 @@ import { KIND_DECOR, KIND_MARKER } from "@/ui/shared/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
-  cube_label,
-  decor_label,
-  kind_of,
+  cubeLabel,
+  decorLabel,
+  kindOf,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
 import { PIN_LABEL } from "@/ui/shared/asset/marker.spec.ts";
 import {
   CubeSwatch,
-  decor_glyph,
-  selection_ring,
+  decorGlyph,
+  selectionRing,
 } from "@/ui/shared/asset/swatch.tsx";
 
 const ITEM = 24;
 
+/** How long a swatch is held before its sizes open. A finger that moves
+ * before then drags instead: sideways it scrolls the strip, and up or down
+ * it turns the deck. */
 const LONG_PRESS_MS = 300;
-/** A finger that moves this far before the hold time is a drag, not a press.
- * Sideways it scrolls the strip; up or down it turns the deck. */
-export const DRAG_PX = 12;
 
-const PENDING = 0;
-const POPOVER = 1;
-const DRAG = 2;
-type Gesture = typeof PENDING | typeof POPOVER | typeof DRAG;
-
-/** The handlers of a swatch's gesture. `press`, `press_in` and `long_press` mean
+/** The handlers of a swatch's gesture. `press`, `pressIn` and `longPress` mean
  * what they mean on React Native's `Pressable`. `release` is a lift while the
  * sizes are open. `end` closes the sizes; it comes on every lift, on a drag,
  * and when the gesture is taken away. */
 export interface SizeGesture {
   press: () => void;
-  press_in: (swatch: ViewInstance) => void;
+  pressIn: (swatch: ViewInstance) => void;
   /** A key picked the cube or stepped its size. Shows the seed, or the sizes
    * when `open`, over the swatch for a moment, as a press would. */
   flash: (swatch: ViewInstance, open: boolean) => void;
-  long_press: () => void;
+  longPress: () => void;
   move: (x: f64, y: f64) => void;
   release: (x: f64, y: f64) => void;
   end: () => void;
 }
 
+/** A swatch's gesture: a lift before `LONG_PRESS_MS` presses, and a hold that
+ * long opens the sizes, which the finger then moves over and lifts on. */
 function useSizeGesture(
   swatch: React.RefObject<ViewInstance | null>,
   g: SizeGesture,
 ) {
-  const handlers = useRef(g);
-  handlers.current = g;
-  const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
-  if (!responder.current) {
-    let state: Gesture = PENDING;
-    let hold: ReturnType<typeof setTimeout> | null = null;
-    const stop_hold = () => {
-      if (hold !== null) clearTimeout(hold);
-      hold = null;
-    };
-    const long_press = () => {
-      stop_hold();
-      if (state !== PENDING) return;
-      state = POPOVER;
-      handlers.current.long_press();
-    };
-    responder.current = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        state = PENDING;
-        if (swatch.current) handlers.current.press_in(swatch.current);
-        hold = setTimeout(long_press, LONG_PRESS_MS);
-      },
-      onPanResponderMove: (_e, s) => {
-        if (state === POPOVER) {
-          return handlers.current.move(s.moveX, s.moveY);
-        }
-        if (
-          state === DRAG ||
-          (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)
-        )
-          return;
-        state = DRAG;
-        stop_hold();
-        handlers.current.end();
-      },
-      onPanResponderRelease: (_e, s) => {
-        stop_hold();
-        if (state === POPOVER) {
-          handlers.current.release(s.moveX, s.moveY);
-        } else if (state === PENDING) handlers.current.press();
-        handlers.current.end();
-        state = PENDING;
-      },
-      onPanResponderTerminate: () => {
-        stop_hold();
-        handlers.current.end();
-        state = PENDING;
-      },
-      onPanResponderTerminationRequest: () => state !== POPOVER,
-    });
-  }
-  return responder.current.panHandlers;
+  const hold = usePanGesture({
+    activateAfterLongPress: LONG_PRESS_MS,
+    onBegin: () => {
+      if (swatch.current) g.pressIn(swatch.current);
+    },
+    onActivate: g.longPress,
+    onUpdate: (e) => g.move(e.absoluteX, e.absoluteY),
+    onDeactivate: (e) => {
+      if (!e.canceled) g.release(e.absoluteX, e.absoluteY);
+    },
+    onFinalize: g.end,
+  });
+  const press = useTapGesture({
+    maxDuration: LONG_PRESS_MS,
+    maxDistance: SLOP_PX,
+    onActivate: g.press,
+  });
+  return useSimultaneousGestures(hold, press);
 }
 
 function SwatchButton({
@@ -141,39 +109,40 @@ function SwatchButton({
 }) {
   const selected = useInHand(cube);
   const ref = useRef<ViewInstance | null>(null);
-  const swatch_flash = useSwatchFlash();
+  const swatchFlash = useSwatchFlash();
   useEffect(() => {
-    if (swatch_flash.cube === cube && ref.current) {
-      gesture.flash(ref.current, swatch_flash.open);
+    if (swatchFlash.cube === cube && ref.current) {
+      gesture.flash(ref.current, swatchFlash.open);
     }
-  }, [swatch_flash]);
+  }, [swatchFlash]);
 
-  const handlers = useSizeGesture(ref, {
+  const sizeGesture = useSizeGesture(ref, {
     ...gesture,
-    press: () => select_asset(cube),
-    long_press: () => {
-      select_asset(cube);
-      gesture.long_press();
+    press: () => selectAsset(cube),
+    longPress: () => {
+      selectAsset(cube);
+      gesture.longPress();
     },
   });
 
   return (
-    <View
-      ref={ref}
-      {...handlers}
-      accessibilityRole="button"
-      accessibilityLabel={cube_label(cube)}
-      style={[STYLE.slot, STYLE.swatch_slot]}
-    >
-      <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
-        <CubeSwatch
-          cube={cube}
-          size={ITEM}
-          radius={ITEM / 2}
-          style={selected ? STYLE.swatch_selected : STYLE.swatch_idle}
-        />
-      </Motion>
-    </View>
+    <GestureDetector gesture={sizeGesture} touchAction="pan-x">
+      <View
+        ref={ref}
+        accessibilityRole="button"
+        accessibilityLabel={cubeLabel(cube)}
+        style={STYLE.slot}
+      >
+        <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
+          <CubeSwatch
+            cube={cube}
+            size={ITEM}
+            radius={ITEM / 2}
+            style={selected ? STYLE.swatchSelected : STYLE.swatchIdle}
+          />
+        </Motion>
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -182,22 +151,22 @@ function DecorIconButton({ id }: { id: AssetId }) {
 
   return (
     <Pressable
-      onPress={() => select_asset(id)}
+      onPress={() => selectAsset(id)}
       accessibilityRole="button"
-      accessibilityLabel={decor_label(id)}
+      accessibilityLabel={decorLabel(id)}
       style={STYLE.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View
           style={[
-            STYLE.decor_disc,
-            active ? STYLE.swatch_selected : STYLE.swatch_idle,
+            STYLE.decorDisc,
+            active ? STYLE.swatchSelected : STYLE.swatchIdle,
           ]}
         >
           <Glyph
-            glyph={decor_glyph(id)}
+            glyph={decorGlyph(id)}
             size={16}
-            color={active ? STRIP.glyph_on : STRIP.glyph}
+            color={active ? STRIP.glyphOn : STRIP.glyph}
           />
         </View>
       </Motion>
@@ -212,7 +181,7 @@ function PickButton({
   id: AssetId;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  switch (kind_of(id)) {
+  switch (kindOf(id)) {
     case KIND_DECOR:
       return <DecorIconButton id={id} />;
     case KIND_MARKER:
@@ -227,7 +196,7 @@ function MarkerButton() {
 
   return (
     <Pressable
-      onPress={() => select_asset(MARKER)}
+      onPress={() => selectAsset(MARKER)}
       accessibilityRole="button"
       accessibilityLabel={PIN_LABEL}
       style={STYLE.slot}
@@ -235,14 +204,14 @@ function MarkerButton() {
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View
           style={[
-            STYLE.decor_disc,
-            active ? STYLE.swatch_selected : STYLE.swatch_idle,
+            STYLE.decorDisc,
+            active ? STYLE.swatchSelected : STYLE.swatchIdle,
           ]}
         >
           <Glyph
             glyph="bubble.left"
             size={16}
-            color={active ? STRIP.glyph_on : STRIP.glyph}
+            color={active ? STRIP.glyphOn : STRIP.glyph}
           />
         </View>
       </Motion>
@@ -273,12 +242,12 @@ function ToolButton({
           rounded corners. */}
       <View
         collapsable={false}
-        style={[STYLE.highlight, active && STYLE.tool_active]}
+        style={[STYLE.highlight, active && STYLE.toolActive]}
       >
         <Glyph
           glyph={glyph}
           size={CHROME.glyph}
-          color={active ? STRIP.glyph_on : STRIP.glyph}
+          color={active ? STRIP.glyphOn : STRIP.glyph}
         />
       </View>
     </Pressable>
@@ -297,8 +266,8 @@ export function Strip({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const { t } = useTranslation();
-  const active_tool = useTool();
-  const recent_picks = useRecentPicks();
+  const activeTool = useTool();
+  const recentPicks = useRecentPicks();
 
   return (
     <View style={[STYLE.strip, { maxWidth: spanPx }]}>
@@ -306,14 +275,14 @@ export function Strip({
         <ToolButton
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
-          active={active_tool === TOOL_POINTER}
-          onPress={() => select_tool(TOOL_POINTER)}
+          active={activeTool === TOOL_POINTER}
+          onPress={() => selectTool(TOOL_POINTER)}
         />
         <ToolButton
           label={t("world.dock.eraser")}
           glyph="eraser"
-          active={active_tool === TOOL_ERASER}
-          onPress={() => select_tool(TOOL_ERASER)}
+          active={activeTool === TOOL_ERASER}
+          onPress={() => selectTool(TOOL_ERASER)}
         />
       </View>
 
@@ -324,9 +293,9 @@ export function Strip({
         scrollEnabled={scrolls}
         showsHorizontalScrollIndicator={false}
         style={STYLE.picks}
-        contentContainerStyle={STYLE.picks_content}
+        contentContainerStyle={STYLE.picksContent}
       >
-        {recent_picks.map((id) => (
+        {recentPicks.map((id) => (
           <PickButton key={id} id={id} gesture={gesture} />
         ))}
       </ScrollView>
@@ -337,7 +306,7 @@ export function Strip({
         <ToolButton
           label={t("world.dock.drawer_tooltip")}
           glyph="archivebox"
-          onPress={() => open_modal("drawer")}
+          onPress={() => openModal("drawer")}
         />
       </View>
     </View>
@@ -346,11 +315,11 @@ export function Strip({
 
 export const STRIP = {
   glyph: alpha(COLOR.white, 0.6),
-  glyph_on: COLOR.white,
+  glyphOn: COLOR.white,
   mark: COLOR.white,
   highlight: alpha(COLOR.white, 0.2),
   line: alpha(COLOR.white, 0.15),
-  swatch_line: alpha(COLOR.white, 0.3),
+  swatchLine: alpha(COLOR.white, 0.3),
   ground: COLOR.band,
 };
 
@@ -379,13 +348,12 @@ const STYLE = StyleSheet.create({
   },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
-  picks_content: {
+  picksContent: {
     alignItems: "center",
     paddingHorizontal: (CHROME.control - CHROME.target) / 2,
   },
 
   slot: SLOT,
-  swatch_slot: PAN_X,
   highlight: {
     width: CHROME.selection,
     height: CHROME.selection,
@@ -393,8 +361,8 @@ const STYLE = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tool_active: { backgroundColor: STRIP.highlight },
-  decor_disc: {
+  toolActive: { backgroundColor: STRIP.highlight },
+  decorDisc: {
     width: ITEM,
     height: ITEM,
     borderRadius: ITEM / 2,
@@ -402,6 +370,6 @@ const STYLE = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: STRIP.highlight,
   },
-  swatch_idle: { boxShadow: `0 0 0 1px ${STRIP.swatch_line}` },
-  swatch_selected: { boxShadow: selection_ring(STRIP.ground, STRIP.mark, 1) },
+  swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
+  swatchSelected: { boxShadow: selectionRing(STRIP.ground, STRIP.mark, 1) },
 });

@@ -58,8 +58,12 @@ Kept by the law before the meeting: the level of detail, and a coarser answer of
 ground standing in for a finer one not held, which the query gives (`Answer::Coarser`).
 
 Brought under it at the meeting:
-- **The location's zone** (`600037b61c`, `aff9dfde09`): keyed by the fix's cell, run as
-  the ghost runs.
+- **The location's zone** (`600037b61c`, `aff9dfde09`, `8cb606094e`): keyed by the
+  fix's cell, run as the ghost runs; its center is grounded each step, the one query
+  that tells where it is, and its cells are laid only in the frames that draw it.
+  That a zone at the same cell asks nothing again held only where the ground's leaf
+  was held: far from the eye any tile landing dropped the grounding, and on the S23
+  the step cost a millisecond a frame for a zone not drawn.
 - **What stands while it is read again** (`63f0ec4499`, `64e4fae492`, `948b7b3889`,
   `bbd6b5e5af`, `8b39a6b078`): a block the heap refused is written again from what is
   held, the zone's, the marker set's and the debug meshes' as the ghost's; a marker
@@ -89,6 +93,13 @@ Brought under it at the meeting:
   changes. A rule tried in between (`b8c835dcc8`), that an event asks once, so a
   method whose state asks adds none, was taken back: it made who asks depend on
   whether a state happened to ask, and an ask is a flag, so two draw one frame.
+- **The walk and the ray cross the world alike** (`18598cc6e8`): the step-slide walk the pan
+  and the companions share crossed a shard that holds nothing one leaf cell at a time,
+  where a ray crosses it in one step. Past the service area every answer is exact, so
+  nothing ended the walk, and from the orbit's largest distance, where a CSS pixel is
+  about 146 leaf cells, a drag stopped single frames for 100 to 560 ms. The walk now
+  takes the cells that answer alike as its cell: a leaf cell, or the whole of an empty
+  shard.
 - **One fact, one name** (`c95305007c`): a decor opens into its model at the grid's
   `SPANS`, as the ground's cell opens into its finer ones.
 
@@ -102,7 +113,12 @@ place's tile and index, and the asks for a frame written in each method's body.
 
 Measured: the Mac's Chrome, by turns with the tree before, five times over the day,
 read the same (tick p50 1.8 ms; the GPU within the runs' own spread; the runs late in a
-series slower on both builds). The phones were not measured.
+series slower on both builds). The S23's Chrome against the deployed build #98 drew a
+tenth fewer frames, as the day before, its GPU's p95 and longest frame the lower; and
+with the location's zone laid only while drawn its tick fell from 5.9 to 7.1 ms at
+p50 to 4.8 to 5.8, and from 13.1 to 14.1 at p95 to 10.1 to 11.4
+([the experiment](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+The iPhone was not measured.
 
 What stands as it is, and why:
 - **A place stands on the ground as drawn**, asked again when the detail drawn where

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 
 import { BASE_KINDS } from "@/abi/publication.spec.ts";
-import { decl } from "./source.ts";
+import { declarationOf } from "./source.ts";
 
 /** pxl-spec is tested against the same record (bake/source.test.rs
  * `is_version_golden`). */
@@ -34,13 +34,13 @@ function declaring(version: string): unknown {
   };
 }
 
-test("decl - refused where a version is no segment of a URL", () => {
+test("declarationOf - refused where a version is no segment of a URL", () => {
   const g = records();
   let cases = 0;
   for (; g.has(`case.${cases}.version`); cases++) {
     const version = g.get(`case.${cases}.version`)!;
     const want = g.get(`case.${cases}.is_version`) === "true";
-    assert.equal(decl(declaring(version)) !== null, want, version);
+    assert.equal(declarationOf(declaring(version)) !== null, want, version);
   }
   assert.ok(cases > 0);
 });

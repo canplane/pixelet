@@ -14,12 +14,12 @@ export * from "./panel.tsx";
 
 export function Panel(props: PanelProps) {
   const { open } = useContext(PanelPresence);
-  const on_close = useRef(props.onClose);
-  on_close.current = props.onClose;
+  const onClose = useRef(props.onClose);
+  onClose.current = props.onClose;
   useEffect(() => {
     if (!open) return;
     const back = BackHandler.addEventListener("hardwareBackPress", () => {
-      on_close.current();
+      onClose.current();
       return true;
     });
     return () => back.remove();

@@ -5,140 +5,111 @@
 /// The interface's handle, named by `pxl:core/input` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
-/// `pointer`
-pub const POINTER: _rt::Method = 0;
-/// `wheel`
-pub const WHEEL: _rt::Method = 1;
-/// `pinch`
-pub const PINCH: _rt::Method = 2;
+/// `pan`
+pub const PAN: _rt::Method = 0;
+/// `turn`
+pub const TURN: _rt::Method = 1;
+/// `tilt`
+pub const TILT: _rt::Method = 2;
+/// `zoom`
+pub const ZOOM: _rt::Method = 3;
+/// `drag`
+pub const DRAG: _rt::Method = 4;
+/// `tap`
+pub const TAP: _rt::Method = 5;
+/// `hover`
+pub const HOVER: _rt::Method = 6;
+/// `out`
+pub const OUT: _rt::Method = 7;
 /// `move`
-pub const MOVE: _rt::Method = 3;
+pub const MOVE: _rt::Method = 8;
 /// `xr-pose`
-pub const XR_POSE: _rt::Method = 4;
+pub const XR_POSE: _rt::Method = 9;
 /// `xr-pose-end`
-pub const XR_POSE_END: _rt::Method = 5;
+pub const XR_POSE_END: _rt::Method = 10;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum PointerPhase {
-    Down = 0,
-    Move = 1,
-    Up = 2,
-    Out = 3,
-    /// The pointer's gesture ends with no tap: the platform took it, or the UI
-    /// spent it on something of its own.
-    Cancel = 4,
-}
-
-impl PointerPhase {
-    /// Every member, in its source's own order.
-    pub const ALL: [PointerPhase; 5] = [
-        PointerPhase::Down,
-        PointerPhase::Move,
-        PointerPhase::Up,
-        PointerPhase::Out,
-        PointerPhase::Cancel,
-    ];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<PointerPhase> {
-        match val {
-            0 => Some(PointerPhase::Down),
-            1 => Some(PointerPhase::Move),
-            2 => Some(PointerPhase::Up),
-            3 => Some(PointerPhase::Out),
-            4 => Some(PointerPhase::Cancel),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            PointerPhase::Down => "Down",
-            PointerPhase::Move => "Move",
-            PointerPhase::Up => "Up",
-            PointerPhase::Out => "Out",
-            PointerPhase::Cancel => "Cancel",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum Drag {
-    None = 0,
-    Pan = 1,
-    Rotate = 2,
-}
-
-impl Drag {
-    /// Every member, in its source's own order.
-    pub const ALL: [Drag; 3] = [Drag::None, Drag::Pan, Drag::Rotate];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<Drag> {
-        match val {
-            0 => Some(Drag::None),
-            1 => Some(Drag::Pan),
-            2 => Some(Drag::Rotate),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            Drag::None => "None",
-            Drag::Pan => "Pan",
-            Drag::Rotate => "Rotate",
-        }
-    }
-}
-
-pub fn pointer(
-    side_: &_rt::Side,
-    phase: PointerPhase,
-    touch: bool,
-    id: i32,
-    drag: Drag,
-    x: f64,
-    y: f64,
-) -> Result<(), _rt::Errno> {
+pub fn pan(side_: &_rt::Side, dx: f64, dy: f64) -> Result<(), _rt::Errno> {
     let (r, _) = side_.call(
         HANDLE,
-        POINTER,
-        _rt::Packet::Args(Some((32, &|w_: &mut _rt::Lower| {
-            w_.u8(0, phase as u8);
-            w_.bool(1, touch);
-            w_.i32(4, id);
-            w_.u8(8, drag as u8);
-            w_.f64(16, x);
-            w_.f64(24, y);
+        PAN,
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
+            w_.f64(0, dx);
+            w_.f64(8, dy);
         }))),
     );
     _rt::answer(r)
 }
 
-pub fn wheel(side_: &_rt::Side, delta_y: f64) -> Result<(), _rt::Errno> {
+pub fn turn(side_: &_rt::Side, rad: f64) -> Result<(), _rt::Errno> {
     let (r, _) = side_.call(
         HANDLE,
-        WHEEL,
+        TURN,
         _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
-            w_.f64(0, delta_y);
+            w_.f64(0, rad);
         }))),
     );
     _rt::answer(r)
 }
 
-pub fn pinch(side_: &_rt::Side, scale: f64) -> Result<(), _rt::Errno> {
+pub fn tilt(side_: &_rt::Side, rad: f64) -> Result<(), _rt::Errno> {
     let (r, _) = side_.call(
         HANDLE,
-        PINCH,
+        TILT,
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
+            w_.f64(0, rad);
+        }))),
+    );
+    _rt::answer(r)
+}
+
+pub fn zoom(side_: &_rt::Side, scale: f64) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
+        HANDLE,
+        ZOOM,
         _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.f64(0, scale);
         }))),
     );
+    _rt::answer(r)
+}
+
+pub fn drag(side_: &_rt::Side, dragging: bool) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
+        HANDLE,
+        DRAG,
+        _rt::Packet::Args(Some((1, &|w_: &mut _rt::Lower| {
+            w_.bool(0, dragging);
+        }))),
+    );
+    _rt::answer(r)
+}
+
+pub fn tap(side_: &_rt::Side, x: f64, y: f64) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
+        HANDLE,
+        TAP,
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
+            w_.f64(0, x);
+            w_.f64(8, y);
+        }))),
+    );
+    _rt::answer(r)
+}
+
+pub fn hover(side_: &_rt::Side, x: f64, y: f64) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
+        HANDLE,
+        HOVER,
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
+            w_.f64(0, x);
+            w_.f64(8, y);
+        }))),
+    );
+    _rt::answer(r)
+}
+
+pub fn out(side_: &_rt::Side) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(HANDLE, OUT, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 

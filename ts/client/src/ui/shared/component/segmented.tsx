@@ -41,7 +41,7 @@ export function Segmented<T extends string | number>({
             <View collapsable={false} style={[STYLE.segment, on && STYLE.on]}>
               <Text
                 maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-                style={[STYLE.label, on && STYLE.label_on]}
+                style={[STYLE.label, on && STYLE.labelOn]}
               >
                 {s.label}
               </Text>
@@ -79,5 +79,5 @@ const STYLE = StyleSheet.create({
     fontWeight: WEIGHT.medium,
     color: LABEL.secondary,
   },
-  label_on: { color: LABEL.primary },
+  labelOn: { color: LABEL.primary },
 });

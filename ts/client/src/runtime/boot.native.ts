@@ -18,21 +18,21 @@ import { state_on } from "@pxl/gpu/expo";
 import { sender } from "@xpute/link";
 import { open_ui, start, stopped_on, trap_on } from "@xpute/expo";
 import { stopped } from "@/service/sys/abort.ts";
-import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
-import { mount_files } from "@/service/sys/fs/file.ts";
-import { mount_objects } from "@/service/sys/fs/object.ts";
-import { declare_source } from "@/service/sys/fs/source.ts";
-import { mount_ui, start_client, trapped } from "@/runtime/ui.ts";
+import { GPU_STATE, setGpu } from "@/service/sys/gpu.ts";
+import { mountFiles } from "@/service/sys/fs/file.ts";
+import { mountObjects } from "@/service/sys/fs/object.ts";
+import { declareSource } from "@/service/sys/fs/source.ts";
+import { mountUi, startClient, trapped } from "@/runtime/ui.ts";
 
 export function boot(): void {
   const ui = open_ui();
   stopped_on(stopped);
   trap_on(trapped);
-  state_on((state) => set_gpu(GPU_STATE[state]));
-  mount_ui(ui);
-  mount_files(ui, ui);
-  mount_objects(ui, ui);
+  state_on((state) => setGpu(GPU_STATE[state]));
+  mountUi(ui);
+  mountFiles(ui, ui);
+  mountObjects(ui, ui);
   start();
-  start_client();
-  void declare_source(sender(ui));
+  startClient();
+  void declareSource(sender(ui));
 }

@@ -27,13 +27,13 @@ export type Boot =
 let state: Boot = BOOT_OPENING;
 const listeners = new ListenerSet();
 
-export function boot_state(): Boot {
+export function bootState(): Boot {
   return state;
 }
 
-export function set_boot(next: Boot): void {
+export function setBoot(next: Boot): void {
   state = next;
   listeners.notify();
 }
 
-export const watch_boot = listeners.watch;
+export const watchBoot = listeners.watch;

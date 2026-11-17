@@ -26,7 +26,6 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'ExpoUI'
   s.dependency 'Xpute'
-  s.dependency 'PxlGpu'
   s.source_files = '*.swift'
 
   # This runs on every build: cargo is what knows whether the core is current,

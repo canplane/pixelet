@@ -68,7 +68,7 @@ export const COLOR = {
   panic: "#0069DC",
 
   /** iOS's label gray in light mode. */
-  label_gray: "#3C3C43",
+  labelGray: "#3C3C43",
   band: SYSTEM.dark,
   send: CORAL.base,
   /** The send button takes this color when it sets a marker's words, so that
@@ -80,8 +80,8 @@ export const COLOR = {
   self: CORAL.mark,
   /** The status colors mixed toward white, for a sensor glyph drawn over the
    * world. */
-  pending_glyph: tint(SYSTEM.orange, 0.6),
-  alarm_glyph: tint(SYSTEM.red, 0.6),
+  pendingGlyph: tint(SYSTEM.orange, 0.6),
+  alarmGlyph: tint(SYSTEM.red, 0.6),
 
   fill: FILL,
   /** iOS's tertiary system fill. */
@@ -93,12 +93,12 @@ export const COLOR = {
   /** The backdrop behind a character drawn on its own surface. */
   backdrop: tint(FILL, 0.4, GROUND),
 
-  cost_low: SYSTEM.green,
-  cost_medium: SYSTEM.orange,
-  cost_high: SYSTEM.red,
+  costLow: SYSTEM.green,
+  costMedium: SYSTEM.orange,
+  costHigh: SYSTEM.red,
   dev: SYSTEM.purple,
-  perf_go: SYSTEM.green,
-  perf_halt: SYSTEM.yellow,
+  perfGo: SYSTEM.green,
+  perfHalt: SYSTEM.yellow,
 } as const;
 
 /** Colors of a surface that an iPhone draws as system glass and the other
@@ -148,7 +148,7 @@ export const HALO_RINGS: readonly number[] = Array.from(
   (_, i) => HALO.width - i,
 );
 
-export const HAIRLINE = alpha(COLOR.label_gray, 0.1);
+export const HAIRLINE = alpha(COLOR.labelGray, 0.1);
 
 export const WEIGHT = {
   regular: "400",
@@ -193,13 +193,20 @@ export const TEXT_STYLE = {
     lineHeight: 16,
     fontWeight: WEIGHT.regular,
   },
-  /** 11 is the smallest size iOS sets text in. */
+  /** 11 is the least text size Apple's guidelines give iOS. */
   caption2: {
     fontSize: 11,
     lineHeight: 13,
     fontWeight: WEIGHT.medium,
   },
 } as const;
+
+export const GAUGE_FACE = {
+  fontFamily: "uDIN1451Mittelschrift",
+  fontWeight: WEIGHT.regular,
+} as const;
+
+export const GAUGE_TRACKING_EM = 0.1;
 
 /** The most a text grows with the system's text size. A control's text grows
  * to 1.2×. A mark, such as a setting's badge, does not grow, because its size
@@ -227,7 +234,7 @@ export const LAYER = {
 export const CHROME = {
   inset: 16,
   control: 48,
-  control_gap: 8,
+  controlGap: 8,
   /** The smallest touch target Apple's guidelines allow. */
   target: 44,
   glyph: 20,

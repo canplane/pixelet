@@ -65,7 +65,7 @@ const MODULES = `${path.sep}node_modules${path.sep}`;
  * package.json `exports` maps it to, as Node resolves it, including a
  * package's import of its own name. It is null for a relative specifier, for
  * an installed package, and for an import made from an installed package. */
-export function tree_file(from: string, spec: string): string | null {
+export function treeFile(from: string, spec: string): string | null {
   const hit = PREFIXES.find(([prefix]) => spec.startsWith(prefix));
   if (hit) return hit[1] + spec.slice(hit[0].length);
   if (spec.startsWith(".") || path.isAbsolute(spec) || from.includes(MODULES)) {
@@ -88,8 +88,8 @@ export function tree_file(from: string, spec: string): string | null {
  * the override extends; Metro caches the answer for a relative name by folder,
  * and for an alias across the whole bundle, so an override must name its
  * default by `./`, and nothing else in its folder may. It is null where
- * `tree_file` is, and for a relative name without an extension. */
-export function platform_file(
+ * `treeFile` is, and for a relative name without an extension. */
+export function platformFile(
   from: string,
   spec: string,
   platform: string | null,
@@ -98,7 +98,7 @@ export function platform_file(
     ? path.extname(spec) !== ""
       ? path.resolve(path.dirname(from), spec)
       : null
-    : tree_file(from, spec);
+    : treeFile(from, spec);
   const ext = file ? path.extname(file) : "";
   if (!file || !platform || ext === "") return file;
   const stem = file.slice(0, -ext.length);

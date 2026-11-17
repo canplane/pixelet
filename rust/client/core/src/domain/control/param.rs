@@ -54,25 +54,6 @@ pub(crate) const CLIMB_PASS_CNT: u32 = 2;
 
 // ---- input ----
 
-/// The share of the screen's height a drag crosses to tilt the camera by π.
-/// It is stated against the screen to match the azimuth's arcball, which
-/// turns one to one with the hand.
-pub(crate) const TILT_SWEEP_FRACTION: f64 = 0.5;
-pub(crate) const DOLLY_GAIN: f64 = 0.0022;
-/// Within this radius of the screen's center, a rotate drag does not turn
-/// the azimuth, because the hand's angle about the center (`atan2`) swings
-/// wildly there.
-pub(crate) const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
-pub(crate) const MIN_TWIST_DIST_PX: f64 = 24.0;
-/// Once a rotate drag moves this far, its dominant axis locks for the rest
-/// of the gesture. Without the lock, an off-center vertical drag would start
-/// to spin the camera once the tilt reaches its limit. It is smaller than
-/// `MIN_ROTATE_RADIUS_PX`, because it only has to tell vertical from
-/// horizontal.
-pub(crate) const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
-/// How far a pointer may move and still count as a tap. Real pointers
-/// jitter a pixel or two on a still click.
-pub(crate) const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
 /// The share of the distance to the pivot that a held movement key pans
 /// each second (`controller::pan_across`). It is a product decision. At any
 /// distance and pitch, the pan crosses the width of a 16:9 view at the

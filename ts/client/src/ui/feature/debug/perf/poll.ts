@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { read as perf_read } from "@/service/core/perf.ts";
-import { type Gauge, perf_gauge_read } from "./view.ts";
+import { read as perfRead } from "@/service/core/perf.ts";
+import { type Gauge, perfGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;
 
@@ -19,11 +19,11 @@ let timer: ReturnType<typeof setInterval> | undefined;
 
 function read(): void {
   if (readers.gauge > 0) {
-    void perf_gauge_read(LIVE_WINDOW_MS).then((gauge) =>
+    void perfGaugeRead(LIVE_WINDOW_MS).then((gauge) =>
       store.setState({ gauge, view: gauge.view }),
     );
   } else if (readers.view > 0) {
-    void perf_read("view").then((view) => store.setState({ view }));
+    void perfRead("view").then((view) => store.setState({ view }));
   }
 }
 

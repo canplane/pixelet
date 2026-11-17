@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { cube_hex, cube_label, CUBES } from "./catalog.ts";
+import { cubeHex, cubeLabel, CUBES } from "./catalog.ts";
 import {
   DECOR_BOAT,
   DECOR_CAR,
@@ -16,8 +16,8 @@ test("ALL_CUBES - every cube is listed once and has a color and a name", () => {
   for (const cube of CUBES) {
     assert.ok(!seen.has(cube), `a cube listed twice: ${cube}`);
     seen.add(cube);
-    assert.ok(cube_hex(cube) !== null, `no color for ${cube}`);
-    assert.ok(cube_label(cube) !== "", `no name for ${cube}`);
+    assert.ok(cubeHex(cube) !== null, `no color for ${cube}`);
+    assert.ok(cubeLabel(cube) !== "", `no name for ${cube}`);
   }
 });
 

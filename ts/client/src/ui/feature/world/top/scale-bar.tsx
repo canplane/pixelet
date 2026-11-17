@@ -1,100 +1,98 @@
 // @pxl/client/ui/feature/world/top/scale-bar.tsx
 
 import { StyleSheet, View } from "react-native";
-import { Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { Presence } from "@/ui/shared/component/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/ui/shared/component/motion/transition.ts";
-import { HaloPath, HaloText } from "./halo.tsx";
+import { HaloPath, HaloSvg, HaloText } from "./halo.tsx";
 import {
   COLOR,
-  HALO,
+  GAUGE_FACE,
+  GAUGE_TRACKING_EM,
   TEXT_STYLE,
-  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { useView } from "@/ui/shared/watch.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
-const PAD_PX = LINE_PX + HALO.width + 1;
-const LABEL_GAP_PX = 8;
+/** Between the ticks and the label's line, so that the label's digits stand 6
+ * pixels below the ticks, as a compass direction stands above its own. */
+const LABEL_GAP_PX = 3.5;
 const BAR_MAX_PX = 80;
+const LABEL_FONT_PX = 11;
 
 /** The length nearest to `m` of the form 1, 2 or 5 × 10ⁿ. */
-function nice_length(m: f64): f64 {
+function niceLength(m: f64): f64 {
   if (!(m > 0)) return 0;
   const base = 10 ** Math.floor(Math.log10(m));
   const f = m / base;
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * base;
 }
 
-/** The line and its ticks are one path under one halo, so that the halo is no
- * darker where they meet. */
-export function MapScaleBar({ show }: { show: boolean }) {
-  const m_per_px = useView((v) => v.m_per_px);
-  const total_m = nice_length(BAR_MAX_PX * m_per_px);
-  const bar_width_px = m_per_px > 0 ? total_m / m_per_px : 0;
-
+/** What the bar draws where a logical pixel spans `mPerPx` meters: its
+ * width, 0 where there is no scale, and the length it stands for. */
+function scaleOf(mPerPx: f64): { width: f64; label: string } {
+  const totalM = niceLength(BAR_MAX_PX * mPerPx);
   // SI units are case-sensitive: never upper-case the label.
-  const label: string = total_m >= 1000 ? `${total_m / 1000}km` : `${total_m}m`;
+  return {
+    width: mPerPx > 0 ? round(totalM / mPerPx) : 0,
+    label: totalM >= 1000 ? `${totalM / 1000}km` : `${totalM}m`,
+  };
+}
 
-  const width = bar_width_px + PAD_PX * 2;
-  const left = PAD_PX + 0.5;
-  const right = left + bar_width_px - 1;
+/** The line and its ticks hang above its length. They are one path under
+ * one halo, so that the halo is no darker where they meet. It shows only
+ * where there is a scale. */
+export function MapScaleBar({ show }: { show: boolean }) {
+  const { width, label } = scaleOf(useView((v) => v.mPerPx));
+
+  // The line lies along the first row of pixels, and the ticks hang from it.
+  // A square cap ends each stroke half a pixel past its end, so that the
+  // drawing fills `width` by `TICK_PX`.
+  const [left, right] = [0.5, width - 0.5];
   const at = (f: f64) => round(left + (right - left) * f - 0.5) + 0.5;
-  const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
+  const tick = (f: f64, px: f64) => `M${at(f)} 0.5V${px - 0.5}`;
   const d =
-    `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}` +
+    `M${left} ${TICK_PX - 0.5}V0.5H${right}V${TICK_PX - 0.5}` +
     tick(0.5, TICK_PX) +
     tick(0.25, QUARTER_TICK_PX) +
     tick(0.75, QUARTER_TICK_PX);
-  const svg_height_px = PAD_PX + TICK_PX + PAD_PX;
 
   return (
     <Presence
-      show={show}
+      show={show && width > 0}
       from={{ opacity: 0 }}
       exit={{ opacity: 0 }}
       transition={SETTLE}
       exitTransition={LEAVE}
       style={STYLE.root}
     >
-      <View style={STYLE.above}>
+      <HaloSvg width={width} height={TICK_PX}>
+        <HaloPath d={d} width={LINE_PX} />
+      </HaloSvg>
+      <View style={STYLE.below}>
         <HaloText style={SCALE_LABEL}>{label}</HaloText>
       </View>
-      <Svg
-        width={width}
-        height={svg_height_px}
-        viewBox={`0 0 ${width} ${svg_height_px}`}
-      >
-        <HaloPath d={d} width={LINE_PX} />
-      </Svg>
     </Presence>
   );
 }
 
 const STYLE = StyleSheet.create({
-  // The bar is as tall below its line as above it, so that the line lies at
-  // the strip's middle.
-  root: { alignItems: "center", paddingTop: TICK_PX },
-  above: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - HALO.width,
-    alignItems: "center",
-  },
+  root: { alignItems: "center" },
+  below: { marginTop: LABEL_GAP_PX },
 });
 
 const SCALE_LABEL = StyleSheet.create({
   label: {
     ...TEXT_STYLE.caption2,
-    fontWeight: WEIGHT.semibold,
-    letterSpacing: 0.8,
+    fontSize: LABEL_FONT_PX,
+    lineHeight: 13,
+    ...GAUGE_FACE,
+    letterSpacing: LABEL_FONT_PX * GAUGE_TRACKING_EM,
     fontVariant: ["tabular-nums"],
     color: COLOR.white,
   },

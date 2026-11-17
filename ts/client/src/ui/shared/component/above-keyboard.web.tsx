@@ -2,7 +2,7 @@
 
 import {
   type AboveKeyboardProps,
-  bottom_rest,
+  bottomRest,
 } from "@/ui/shared/component/bottom-rest.ts";
 import { LAYER } from "@/ui/shared/component/theme.ts";
 import { VISUAL_VIEWPORT_BOTTOM } from "@/service/platform/types.ts";
@@ -21,7 +21,7 @@ export function AboveKeyboard({
   lift = 0,
   children,
 }: AboveKeyboardProps) {
-  const rest = bottom_rest(useSafeArea(), inset);
+  const rest = bottomRest(useSafeArea(), inset);
   return (
     <div
       style={{

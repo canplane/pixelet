@@ -39,23 +39,23 @@ tasks.matching { it.name.startsWith("createBundle") }.configureEach {
 }
 `;
 
-const plugin: ConfigPlugin = (cfg) => {
-  cfg = withGradleProperties(cfg, (cfg) => {
-    const items = cfg.modResults.filter(
+const plugin: ConfigPlugin = (config) => {
+  config = withGradleProperties(config, (config) => {
+    const items = config.modResults.filter(
       (item) => !(item.type === "property" && item.key in PROPERTIES),
     );
     for (const [key, value] of Object.entries(PROPERTIES)) {
       items.push({ type: "property", key, value });
     }
-    cfg.modResults = items;
-    return cfg;
+    config.modResults = items;
+    return config;
   });
-  return withAppBuildGradle(cfg, (cfg) => {
-    const gradle = cfg.modResults.contents;
+  return withAppBuildGradle(config, (config) => {
+    const gradle = config.modResults.contents;
     if (!gradle.includes(BUNDLE_INPUT_MARK)) {
-      cfg.modResults.contents = gradle + BUNDLE_INPUT;
+      config.modResults.contents = gradle + BUNDLE_INPUT;
     }
-    return cfg;
+    return config;
   });
 };
 

@@ -12,18 +12,18 @@ export interface SearchResult extends Omit<SearchAnswer, "context"> {
   context: NamePart[];
 }
 
-export async function fetch_search(
+export async function fetchSearch(
   query: string,
   opts?: Parameters<typeof search>[1],
 ): Promise<SearchResult[]> {
   const results = await search(query, opts);
-  return results.map((r) => ({ ...r, context: r.context.flatMap(name_part) }));
+  return results.map((r) => ({ ...r, context: r.context.flatMap(namePart) }));
 }
 
 /** A part whose subtype is newer than this client is dropped. Subtypes are
  * only ever appended, so a newer one is any number past the last this client
  * knows. */
-function name_part({ subtype, approx, ...named }: SearchPart): NamePart[] {
+function namePart({ subtype, approx, ...named }: SearchPart): NamePart[] {
   return subtype > DIVISION_SUBTYPE.MICROHOOD
     ? []
     : [{ ...named, subtype, area: !approx }];

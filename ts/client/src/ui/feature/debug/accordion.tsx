@@ -47,10 +47,10 @@ export function Accordion({
         aria-expanded={open}
       >
         <View style={STYLE.title}>
-          <Text style={[GAUGE.text, STYLE.title_text]}>
+          <Text style={[GAUGE.text, STYLE.titleText]}>
             {title}
             {note !== undefined && (
-              <Text style={STYLE.note_text}>{` · ${note}`}</Text>
+              <Text style={STYLE.noteText}>{` · ${note}`}</Text>
             )}
           </Text>
           <View style={STYLE.end}>
@@ -80,13 +80,13 @@ const STYLE = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title_text: {
+  titleText: {
     fontSize: 11,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
     color: alpha(COLOR.white, 0.75),
   },
-  note_text: { fontWeight: "400" },
+  noteText: { fontWeight: "400" },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

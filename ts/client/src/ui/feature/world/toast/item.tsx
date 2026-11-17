@@ -1,13 +1,7 @@
 // @pxl/client/ui/feature/world/toast/item.tsx
 
 import { useEffect, useState } from "react";
-import {
-  type GestureResponderHandlers,
-  PixelRatio,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { PixelRatio, StyleSheet, Text, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/ui/shared/component/icon.tsx";
@@ -71,7 +65,7 @@ function ToneGlyph({ tone }: { tone: ToastTone }) {
 interface ToastProps extends ToastSpec {
   fade: f64;
   fadeTransition: Transition;
-  touch?: GestureResponderHandlers;
+  touch?: boolean;
   touchBelow?: f64;
 }
 
@@ -84,23 +78,23 @@ export function Toast({
   touchBelow,
 }: ToastProps) {
   const error = tone === ToastTone.ERROR;
-  const window_width = useWindowSize().width;
-  const [open, set_open] = useState(false);
-  const [content_width, set_content_width] = useState<f64>(TOAST_SIDE);
+  const windowWidth = useWindowSize().width;
+  const [open, setOpen] = useState(false);
+  const [contentWidth, setContentWidth] = useState<f64>(TOAST_SIDE);
 
   useEffect(() => {
-    const timer = setTimeout(() => set_open(true), OPEN_AFTER_MS);
+    const timer = setTimeout(() => setOpen(true), OPEN_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
 
-  const width = open ? Math.max(TOAST_SIDE, content_width) : TOAST_SIDE;
+  const width = open ? Math.max(TOAST_SIDE, contentWidth) : TOAST_SIDE;
 
   return (
     <Pill
       x={PixelRatio.roundToNearestPixel(-width / 2)}
       width={width}
       height={TOAST_SIDE}
-      spanPx={window_width}
+      spanPx={windowWidth}
       fill={error ? SURFACE.alarm.fill : COLOR.ground}
       tint={error ? SURFACE.alarm.glass : undefined}
       place={BackingPlace.OVER_MAP}
@@ -114,7 +108,7 @@ export function Toast({
       fadeTransition={fadeTransition}
       touch={touch}
       touchBelow={touchBelow}
-      onContentWidth={set_content_width}
+      onContentWidth={setContentWidth}
     >
       <View style={STYLE.slot}>
         <Swap
@@ -143,7 +137,7 @@ export function Toast({
             STYLE.message,
             {
               maxWidth:
-                window_width - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
+                windowWidth - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
             },
           ]}
         >

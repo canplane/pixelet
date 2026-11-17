@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
-import { message_key } from "@/ui/shared/locale/message-key.ts";
+import { messageKey } from "@/ui/shared/locale/message-key.ts";
 import {
   type Message,
   MESSAGE_WORLD_READ_FAILING,
@@ -13,9 +13,9 @@ import {
   SENSOR_STATUS_LOADING,
 } from "@/service/core/sensor/reading.ts";
 import { GPU_WAITING, type Gpu } from "@/service/sys/gpu.ts";
-import { boot_state, watch_boot, BOOT_STARTED } from "@/service/sys/boot.ts";
+import { bootState, watchBoot, BOOT_STARTED } from "@/service/sys/boot.ts";
 
-import { dismiss_toast, show_toast, ToastTone } from "./store.ts";
+import { dismissToast, showToast, ToastTone } from "./store.ts";
 import { useGpu, useCore, useOnline, useSensor } from "@/ui/shared/watch.ts";
 
 /** The reports that can each show a toast. Among toasts of one tone, a lower
@@ -54,27 +54,27 @@ interface Notice {
  * function would show every toast again. */
 function useWords(): (key: string) => string {
   const { t } = useTranslation();
-  const t_ref = useRef(t);
-  t_ref.current = t;
-  return useRef((key: string) => t_ref.current(key)).current;
+  const tRef = useRef(t);
+  tRef.current = t;
+  return useRef((key: string) => tRef.current(key)).current;
 }
 
-function useNotice(id: Report, notice: Notice | null, hold_ms = 0): void {
+function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
   const words = useWords();
   const key = notice?.key ?? null;
   const tone = notice?.tone ?? null;
   useEffect(() => {
     if (key !== null && tone !== null) {
-      show_toast(id, { message: words(key), tone });
+      showToast(id, { message: words(key), tone });
       return;
     }
-    if (hold_ms === 0) {
-      dismiss_toast(id);
+    if (holdMs === 0) {
+      dismissToast(id);
       return;
     }
-    const timer = setTimeout(() => dismiss_toast(id), hold_ms);
+    const timer = setTimeout(() => dismissToast(id), holdMs);
     return () => clearTimeout(timer);
-  }, [id, key, tone, words, hold_ms]);
+  }, [id, key, tone, words, holdMs]);
 }
 
 const error = (key: string): Notice => ({ key, tone: ToastTone.ERROR });
@@ -89,25 +89,23 @@ function location(status: SensorStatus, failure: string | null): Notice | null {
 
 /** The GPU's toast shows while the client asks again for a GPU, because none
  * answered or the one drawing was lost. */
-function gpu_error(gpu: Gpu): Notice | null {
+function gpuError(gpu: Gpu): Notice | null {
   return gpu === GPU_WAITING ? error("toast.gpu_unstable") : null;
 }
 
-function server_error(stall: Message | null): Notice | null {
-  return stall === MESSAGE_WORLD_READ_FAILING
-    ? error(message_key(stall))
-    : null;
+function serverError(stall: Message | null): Notice | null {
+  return stall === MESSAGE_WORLD_READ_FAILING ? error(messageKey(stall)) : null;
 }
 
 function world(
   outside: boolean,
   shown: boolean,
-  companion_loading: boolean,
+  companionLoading: boolean,
   greeting: Greeting,
 ): Notice | null {
   if (outside) return error("toast.outside");
   if (!shown) return loading("toast.world_loading");
-  if (companion_loading) return loading("toast.companion_loading");
+  if (companionLoading) return loading("toast.companion_loading");
   return greeting === SAYING
     ? { key: "toast.world_ready", tone: ToastTone.READY }
     : null;
@@ -116,34 +114,34 @@ function world(
 /** Every toast is derived from what the core and the client report now. Each
  * source of an error has one toast. */
 export function ToastController() {
-  const location_status = useSensor((l) => l.state.status);
-  const location_error = useSensor((l) => l.state.err);
-  useNotice(LOCATION, location(location_status, location_error));
+  const locationStatus = useSensor((l) => l.state.status);
+  const locationError = useSensor((l) => l.state.error);
+  useNotice(LOCATION, location(locationStatus, locationError));
 
   const gpu = useGpu();
   const stall = useCore((s) => s.stall);
-  useNotice(GPU, gpu_error(gpu));
+  useNotice(GPU, gpuError(gpu));
   useNotice(NETWORK, useOnline() ? null : error("toast.network_unstable"));
-  useNotice(SERVER, server_error(stall), SERVER_HOLD_MS);
+  useNotice(SERVER, serverError(stall), SERVER_HOLD_MS);
 
   const outside = useCore((s) => s.pivot.outside);
   const shown = useCore((s) => s.pivot.ground_shown);
-  const companion_loading = useCore((s) => !s.companion_ready);
-  const [greeting, set_greeting] = useState<Greeting>(UNSAID);
+  const companionLoading = useCore((s) => !s.companion_ready);
+  const [greeting, setGreeting] = useState<Greeting>(UNSAID);
   // The cover hides the toasts until the app shows.
-  const shows = useSyncExternalStore(watch_boot, boot_state) === BOOT_STARTED;
-  const ready = shows && !outside && shown && !companion_loading;
+  const shows = useSyncExternalStore(watchBoot, bootState) === BOOT_STARTED;
+  const ready = shows && !outside && shown && !companionLoading;
   useEffect(() => {
-    if (ready && greeting === UNSAID) set_greeting(SAYING);
+    if (ready && greeting === UNSAID) setGreeting(SAYING);
     // A ready word cut short is not shown again.
-    if (!ready && greeting === SAYING) set_greeting(SAID);
+    if (!ready && greeting === SAYING) setGreeting(SAID);
   }, [ready, greeting]);
   useEffect(() => {
     if (greeting !== SAYING) return;
-    const timer = setTimeout(() => set_greeting(SAID), READY_MS);
+    const timer = setTimeout(() => setGreeting(SAID), READY_MS);
     return () => clearTimeout(timer);
   }, [greeting]);
-  useNotice(WORLD, world(outside, shown, companion_loading, greeting));
+  useNotice(WORLD, world(outside, shown, companionLoading, greeting));
 
   return null;
 }

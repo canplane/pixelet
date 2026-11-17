@@ -17,24 +17,24 @@ export function entries(p: Pipeline): string {
   return p.compute ?? [p.vertex, p.fragment].filter(Boolean).join("+");
 }
 
-function target(ty: string): GPUColorTargetState {
-  const format = /\bu32\b|vec\du\b/.test(ty)
+function target(type: string): GPUColorTargetState {
+  const format = /\bu32\b|vec\du\b/.test(type)
     ? "r32uint"
-    : /\bi32\b|vec\di\b/.test(ty)
+    : /\bi32\b|vec\di\b/.test(type)
       ? "r32sint"
       : "rgba16float";
   return { format };
 }
 
-function targets(code: string, fs: string): GPUColorTargetState[] {
-  const ret = code.match(
-    new RegExp(`\\bfn\\s+${fs}\\s*\\([^]*?\\)\\s*->\\s*([^{]+)\\{`),
+function targets(code: string, fragment: string): GPUColorTargetState[] {
+  const returnType = code.match(
+    new RegExp(`\\bfn\\s+${fragment}\\s*\\([^]*?\\)\\s*->\\s*([^{]+)\\{`),
   )?.[1];
-  if (!ret) return [];
-  if (ret.includes("@location")) return [target(ret)];
-  if (ret.includes("@builtin")) return [];
+  if (!returnType) return [];
+  if (returnType.includes("@location")) return [target(returnType)];
+  if (returnType.includes("@builtin")) return [];
   const body = code.match(
-    new RegExp(`struct\\s+${ret.trim()}\\s*\\{([^}]*)\\}`),
+    new RegExp(`struct\\s+${returnType.trim()}\\s*\\{([^}]*)\\}`),
   )?.[1];
   return (body ?? "")
     .split(",")

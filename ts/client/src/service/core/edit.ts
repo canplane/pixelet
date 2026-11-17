@@ -12,15 +12,15 @@ import { ui } from "@/service/core/core.ts";
  * refused the tool with. */
 export async function tool(
   tool: Tool,
-  val: u32,
-  scale_step: i32,
+  value: u32,
+  scaleStep: i32,
 ): Promise<void> {
-  await edit.hold(ui, tool, val, scale_step);
+  await edit.hold(ui, tool, value, scaleStep);
 }
 
 /** Sets the draft's text; where it is too long, refused by the core or,
  * past a frame, by the link (EMSGSIZE), the draft keeps the text it had. */
-export function marker_text(text: string): void {
+export function markerText(text: string): void {
   void edit.marker_text(ui, text).catch((e: unknown) => {
     if (e instanceof ComponentError) return;
     if (e instanceof XputeError && e.errnum === ERRNO_EMSGSIZE) return;
@@ -28,10 +28,10 @@ export function marker_text(text: string): void {
   });
 }
 
-export function marker_commit(): void {
+export function markerCommit(): void {
   void edit.marker_commit(ui);
 }
 
-export function marker_cancel(): void {
+export function markerCancel(): void {
   void edit.marker_cancel(ui);
 }

@@ -23,7 +23,7 @@ import * as file from "@xpute/host/abi/fs/file.ts";
 import { ERROR_CODE_IO } from "@xpute/host/abi/fs/types.enum.ts";
 
 import { path } from "@/abi/file.spec.ts";
-import { binding, type Path } from "@/service/sys/fs/binding.ts";
+import { BINDING, type Path } from "@/service/sys/fs/binding.ts";
 
 /** What a backend's failure `e` answers: its own error-code, `io` where it
  * carries none, and a bug as itself. */
@@ -42,11 +42,10 @@ function aborted(signal: AbortSignal): Promise<never> {
   });
 }
 
-/** The file at `p`, over the core's memory `mem`, where it lends. */
-function open(mem: Memory, p: Path): file.HostFile {
-  const b = binding();
+/** The file at the path `at`, over the core's `memory`, where it lends. */
+function open(memory: Memory, at: Path): file.HostFile {
   const abort = new AbortController();
-  const opened = Promise.resolve().then(() => b.open(p, abort.signal));
+  const opened = Promise.resolve().then(() => BINDING.open(at, abort.signal));
   // What the read comes to is the first method's to answer.
   opened.catch(() => {});
   /** ECANCELED once the file is closed. */
@@ -71,16 +70,16 @@ function open(mem: Memory, p: Path): file.HostFile {
       // A read its caller cancels writes nothing into `buf`.
       const all = await Promise.race([bytes(), aborted(signal)]);
       const n = Math.min(buf.nbyte, all.length - read);
-      mem.bytes(buf.buf, n).set(all.subarray(read, read + n));
+      memory.bytes(buf.buf, n).set(all.subarray(read, read + n));
       read += n;
       return n;
     },
     async write(buf) {
-      written.push(mem.bytes(buf.buf, buf.nbyte).slice());
+      written.push(memory.bytes(buf.buf, buf.nbyte).slice());
     },
     async set_aside() {
       try {
-        await b.set_aside(p, Date.now());
+        await BINDING.setAside(at, Date.now());
       } catch (e) {
         throw failure(e);
       }
@@ -89,9 +88,9 @@ function open(mem: Memory, p: Path): file.HostFile {
       abort.abort();
       if (written.length === 0) return;
       const all = new Uint8Array(written.reduce((n, w) => n + w.length, 0));
-      written.reduce((at, w) => (all.set(w, at), at + w.length), 0);
+      written.reduce((offset, w) => (all.set(w, offset), offset + w.length), 0);
       try {
-        await b.commit(p, all);
+        await BINDING.commit(at, all);
       } catch (e) {
         throw failure(e);
       }
@@ -104,8 +103,8 @@ function open(mem: Memory, p: Path): file.HostFile {
 }
 
 /** Mounts an opener on `link` at each node atop file.json5's `path` tree,
- * over the core's memory `mem`. */
-export function mount_files(link: Callee, mem: Memory): void {
+ * over the core's `memory`. */
+export function mountFiles(link: Callee, memory: Memory): void {
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;
     if (id === undefined) continue;
@@ -113,7 +112,7 @@ export function mount_files(link: Callee, mem: Memory): void {
       file.file(
         link,
         open(
-          mem,
+          memory,
           uri.map((t) => t.val),
         ),
       ),

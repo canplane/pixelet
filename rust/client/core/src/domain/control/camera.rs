@@ -3,8 +3,7 @@
 //! The camera, which is an eye and a facing, and the controllers that move
 //! it. The folder is layered, and a part names only the parts below it
 //! (pxl-tool rule.rs `CAMERA_ORDER`). The camera itself, here, is at
-//! the bottom, beside a gesture's anchor (`gesture`). Above them is what the
-//! controls ask for (`state`). Above that are the orbit and the first-person
+//! the bottom. Above it is what the controls ask for (`state`). Above that are the orbit and the first-person
 //! camera, and each turns about its own pivot. At the top, `controller`
 //! decides which of the two moves the camera and where its pivot is. What
 //! asks the camera to move lives outside the folder (domain/control/input.rs,
@@ -12,7 +11,6 @@
 
 pub(crate) mod controller;
 pub(crate) mod first_person;
-pub(crate) mod gesture;
 pub(crate) mod orbit;
 pub(crate) mod state;
 

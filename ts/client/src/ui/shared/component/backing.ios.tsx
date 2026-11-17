@@ -35,7 +35,7 @@ const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
 
 type Effect = "none" | "clear" | "regular";
 
-function effect_at(level: f64, place: Place): Effect {
+function effectAt(level: f64, place: Place): Effect {
   if (level <= 0) return "none";
   if (level < 1 || place === BackingPlace.ON_SHEET) return "clear";
   return "regular";
@@ -56,21 +56,21 @@ export function Backing(props: BackingProps) {
   } = props;
   const dim = useDim(fade, transition, fadeFrom);
 
-  const target = effect_at(dim.level, place);
-  const [shown, set_shown] = useState<Effect>(
-    fadeFrom === undefined ? target : effect_at(fadeFrom, place),
+  const target = effectAt(dim.level, place);
+  const [shown, setShown] = useState<Effect>(
+    fadeFrom === undefined ? target : effectAt(fadeFrom, place),
   );
   // UIKit installs a glass style set before the first layout without
   // animating it, so a change of style waits for the first layout and for
   // the transition's delay.
-  const [laid_out, set_laid_out] = useState(false);
+  const [laidOut, setLaidOut] = useState(false);
   useEffect(() => {
-    if (!laid_out || shown === target) return;
-    const delay = dim.motion.transition.delay_ms ?? 0;
-    if (delay === 0) return set_shown(target);
-    const timer = setTimeout(() => set_shown(target), delay);
+    if (!laidOut || shown === target) return;
+    const delay = dim.motion.transition.delayMs ?? 0;
+    if (delay === 0) return setShown(target);
+    const timer = setTimeout(() => setShown(target), delay);
     return () => clearTimeout(timer);
-  }, [target, laid_out]);
+  }, [target, laidOut]);
 
   // A see-through backing, one with a material, is the system blur rather
   // than the glass, because the glass's rim draws a line across the sheet.
@@ -112,12 +112,12 @@ export function Backing(props: BackingProps) {
   } = StyleSheet.flatten(style) ?? {};
   return (
     <GlassView
-      onLayout={laid_out ? undefined : () => set_laid_out(true)}
+      onLayout={laidOut ? undefined : () => setLaidOut(true)}
       style={ground}
       glassEffectStyle={{
         style: shown,
         animate: true,
-        animationDuration: dim.motion.transition.duration_ms / 1000,
+        animationDuration: dim.motion.transition.durationMs / 1000,
       }}
       tintColor={tint}
       isInteractive={interactive}

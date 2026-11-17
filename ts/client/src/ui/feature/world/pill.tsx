@@ -16,7 +16,6 @@
 import type { ReactNode } from "react";
 import {
   type ColorValue,
-  type GestureResponderHandlers,
   StyleSheet,
   View,
   type ViewStyle,
@@ -30,7 +29,7 @@ import {
   type Transition,
 } from "@/ui/shared/component/motion/transition.ts";
 import { useDim } from "@/ui/shared/component/motion/dim.ts";
-import { touch_outset } from "@/ui/shared/component/touch.ts";
+import { touchOutset } from "@/ui/shared/component/touch.ts";
 import { PILL_STYLE } from "./pill-style.ts";
 
 export interface PillProps {
@@ -47,7 +46,9 @@ export interface PillProps {
   fade?: f64;
   fadeFrom?: f64;
   fadeTransition?: Transition;
-  touch?: GestureResponderHandlers;
+  /** Whether the pill takes the touches on it, so that none reaches what lies
+   * under it. */
+  touch?: boolean;
   /** How much further `touch`'s area reaches below the pill, over the cards of
    * a deck that peek out under it. */
   touchBelow?: f64;
@@ -81,13 +82,13 @@ export function Pill({
     borderRadius: r,
     ...(border && { borderWidth: border.width, borderColor: border.color }),
   };
-  const clip_left = {
+  const clipLeft = {
     left: -SHADOW_ROOM,
     top: -SHADOW_ROOM,
     width: SHADOW_ROOM + r,
     height: height + 2 * SHADOW_ROOM,
   };
-  const clip_right = {
+  const clipRight = {
     left: r,
     top: -SHADOW_ROOM,
     width: spanPx - r + SHADOW_ROOM,
@@ -100,7 +101,7 @@ export function Pill({
     width: spanPx,
     height,
   };
-  const outset = touch ? touch_outset(height) : 0;
+  const outset = touch ? touchOutset(height) : 0;
 
   return (
     <Motion to={{ translateX: x }} transition={transition} style={STYLE.at}>
@@ -122,7 +123,6 @@ export function Pill({
         <View collapsable={false} style={STYLE.corner}>
           <View
             collapsable={false}
-            {...touch}
             style={[
               touch ? PILL_STYLE.target : PILL_STYLE.box,
               {
@@ -142,7 +142,7 @@ export function Pill({
             >
               {shadow && (
                 <>
-                  <View style={[STYLE.clip, clip_left]}>
+                  <View style={[STYLE.clip, clipLeft]}>
                     <View
                       style={{
                         position: "absolute",
@@ -155,7 +155,7 @@ export function Pill({
                       }}
                     />
                   </View>
-                  <View style={[STYLE.clip, clip_right]}>
+                  <View style={[STYLE.clip, clipRight]}>
                     <Motion
                       to={{ translateX: slide }}
                       transition={transition}
@@ -186,7 +186,7 @@ export function Pill({
                   },
                 ]}
               />
-              <View style={[STYLE.clip, clip_right]}>
+              <View style={[STYLE.clip, clipRight]}>
                 <Motion
                   to={{ translateX: slide }}
                   transition={transition}

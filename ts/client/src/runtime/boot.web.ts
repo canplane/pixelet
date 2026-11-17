@@ -22,12 +22,12 @@ import {
 } from "@xpute/runtime-web";
 import { BUILD_ID } from "@/build.ts";
 import { stopped } from "@/service/sys/abort.ts";
-import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
-import { mirror_source } from "@/service/sys/fs/source.ts";
-import { is_storage_key } from "@/service/sys/fs/storage.ts";
+import { GPU_STATE, setGpu } from "@/service/sys/gpu.ts";
+import { mirrorSource } from "@/service/sys/fs/source.ts";
+import { isStorageKey } from "@/service/sys/fs/storage.ts";
 import * as storage from "@/service/platform/storage.ts";
-import { tell_drive } from "@/service/platform/drive.ts";
-import { mount_ui, start_client, trapped } from "@/runtime/ui.ts";
+import { tellDrive } from "@/service/platform/drive.ts";
+import { mountUi, startClient, trapped } from "@/runtime/ui.ts";
 import type { KeepReport, Kept, SourceReport } from "@/runtime/worker.ts";
 
 /** The module is served beside the page, from the app's public/, where
@@ -49,21 +49,23 @@ export function boot(): void {
   const ui = open_ui(require.unstable_resolveWorker("./worker.ts"));
   stopped_on(stopped);
   trap_on(trapped);
-  message_on<GpuReport>("gpu", (m) => set_gpu(GPU_STATE[m.state]));
-  message_on<SourceReport>("source", (m) => mirror_source(m.state, m.decl));
-  message_on<KeepReport>("keep", (m) => storage.set(m.key, m.val));
+  message_on<GpuReport>("gpu", (m) => setGpu(GPU_STATE[m.state]));
+  message_on<SourceReport>("source", (m) =>
+    mirrorSource(m.state, m.declaration),
+  );
+  message_on<KeepReport>("keep", (m) => storage.set(m.key, m.value));
   // The worker writes its runtime's records itself; a build made for
   // measuring keeps them for the tool that drives the page as well.
   if (__PERF_DRIVE__)
-    message_on<Log>("log", (m) => tell_drive(`[${m.context}] ${m.message}`));
-  mount_ui(ui);
+    message_on<Log>("log", (m) => tellDrive(`[${m.context}] ${m.message}`));
+  mountUi(ui);
   // A worker cannot read the page's kept entries, so they go with the core's
   // instantiation.
   const { module, init } = source();
   const entries = storage
     .keys()
-    .filter(is_storage_key)
+    .filter(isStorageKey)
     .map((key): [string, string] => [key, storage.get(key)!]);
   start(module.href, init, { entries } satisfies Kept);
-  start_client();
+  startClient();
 }

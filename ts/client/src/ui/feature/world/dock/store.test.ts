@@ -8,18 +8,18 @@ import {
   CHAT_TEXT_CHARS,
   MARKER_TEXT_CHARS,
 } from "@/ui/shared/asset/marker.spec.ts";
-import { text_fits, RECENT_PICKS, recent_pick, select_asset } from "./store.ts";
+import { textFits, RECENT_PICKS, recentPick, selectAsset } from "./store.ts";
 
 vi.mock("@/service/core/edit.ts", () => ({ tool: vi.fn(async () => {}) }));
 
 /** The hotbar, newest pick first. */
 function hotbar(): number[] {
-  return Array.from({ length: RECENT_PICKS }, (_, k) => recent_pick(k));
+  return Array.from({ length: RECENT_PICKS }, (_, k) => recentPick(k));
 }
 
 /** Picks `id`, and waits until the core has answered the tool. */
 async function pick(id: number): Promise<void> {
-  select_asset(id);
+  selectAsset(id);
   await new Promise((r) => setTimeout(r, 0));
 }
 
@@ -43,7 +43,7 @@ test("a pick goes first on the hotbar once the core holds it", async () => {
 // as it is sent, trimmed, and one past the cap does not fit.
 test("a text fits its cap in code points, trimmed", () => {
   for (const cap of [MARKER_TEXT_CHARS, CHAT_TEXT_CHARS]) {
-    expect(text_fits(` ${"😀".repeat(cap)} `, cap)).toBe(true);
-    expect(text_fits("😀".repeat(cap + 1), cap)).toBe(false);
+    expect(textFits(` ${"😀".repeat(cap)} `, cap)).toBe(true);
+    expect(textFits("😀".repeat(cap + 1), cap)).toBe(false);
   }
 });

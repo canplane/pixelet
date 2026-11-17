@@ -14,8 +14,13 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   are web and native, as `x.web.ts`, `runtime/native` and React Native's
   `Platform.OS` have them; a page is the HTML document and a device the hardware
   or the GPU's.
-- In a name of the mechanism, a word on this list is abbreviated, in every
-  casing (`asset_cnt`, `assetCnt`), and any other stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
+- In a snake_case or SCREAMING name of the mechanism, a word on this list is
+  abbreviated, standing alone too (`asset_cnt`, `ASSET_CNT`, `idx`), and any
+  other stays whole. pixelet's own TypeScript names its camelCase names and
+  its types by TypeScript's general convention, as Google's TypeScript style
+  guide writes it, and this list does not reach them (`assetCount`); an
+  acronym is a word there, as in Rust (`customerId`, never `customerID`). The
+  list: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
   offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
   direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance
   `dist`, address `addr`, capacity `cap`, dimension `dim`, memory `mem`,
@@ -50,21 +55,28 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `first_zoom`, a grid with a value a cell its `cells`.
 - Spelling is American (`color`, `behavior`, `center`). A word copied from
   outside keeps its own (OpenStreetMap's `community_centre`).
-- Casing, generated names too: functions, variables and fields in snake_case,
-  types in Pascal, constants in SCREAMING, in Rust, C++ and TypeScript alike, as
-  Svelte writes its own code; so a spec's name is one spelling in JSON, Rust and
-  TypeScript. Kotlin and Swift keep their own casing. The TypeScript kit's word
-  casts and bit helpers keep the capitals of a system's macros (`U32`, `BIT`,
-  `FIELD_GET64`), where Rust and C++ write theirs as functions in snake_case.
-  Only what React requires
-  takes React's form: a hook's `use` prefix, a component, a prop. A type spells
-  its words whole (`let cfg: Config`), and so does the name of a thing that is
-  there only for the UI to show or handle, wherever it is defined (a toast's
-  tone `ERROR`, a sensor's status `error`, `toast_count`); a name of
-  the mechanism keeps its form where the UI reads it (`ray_cnt`). A generated helper of a type is its verb, an
+- Casing: types in Pascal and constants in SCREAMING everywhere. Functions,
+  variables and fields are snake_case in Rust and C++, and in xpute's
+  TypeScript, as Svelte writes its own code: its kit, link, guest, host,
+  runtime and UI end, a plugin's own of them (`ts/gpu`), and what its
+  generators write (`abi/`), so a spec's name is one spelling in JSON, Rust and
+  TypeScript and keeps it wherever it is read. pixelet's own TypeScript, the
+  application over xpute, writes them in camelCase, as an application over
+  Svelte does, its words as the abbreviation rule says. Kotlin and Swift keep their own casing. The TypeScript kit's
+  word casts and bit helpers keep the capitals of a system's macros (`U32`,
+  `BIT`, `FIELD_GET64`), where Rust and C++ write theirs as functions in
+  snake_case. Only what React requires takes React's form: a hook's `use`
+  prefix, a component, a prop. A type spells its words whole, an acronym as
+  a word (`Config`, `AssetId`), and so does the name of a thing that is there
+  only for the UI to show or handle, wherever it is defined (a toast's tone `ERROR`, a
+  sensor's status `error`, `toastCount`); a name of the mechanism keeps its
+  form where the UI reads it (`ray_cnt`). A generated helper of a type is its verb, an
   underscore and the type's own spelling (`store_LonLat`, `of_Tool`), so the
   type's name finds it. A name copied from an outside API keeps that API's
-  (`with_capacity`, `memory_hints`, `devicePixelRatio`).
+  (`with_capacity`, `memory_hints`, `devicePixelRatio`), and so does a name
+  another side reads by its spelling: a key of a format kept or sent (a
+  server's JSON, a stored value, the perf trace), a method a native module
+  binds (`storage_get`).
 - A file or module is named for its layer: a system one takes its field's short
   word (`sys`, `io`, `mem`, `abi`), a domain one the whole word (`scene`,
   `query`, `count`), and this list alone renames neither.
@@ -135,7 +147,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   one range's first and last is a `range` or singular (`GROUND`).
 - A quantity is named by its form: a count ends in `_cnt` (`LAYER_CNT`), a cap
   in `_cap` (`CREDIT_CAP`), a size in bytes in `_sz` in both trees (`HDR_SZ`,
-  `PAGE_SZ`), and any other size or length in its unit (`HDR_WORDS`, `_ms`,
+  `PAGE_SZ`), in camelCase a count and a cap spelled whole and a size in bytes
+  by its unit (`frameCount`, `uploadBytes`), and any other size or length in
+  its unit (`HDR_WORDS`, `_ms`,
   `_px`; `_u` the world's units, `_merc` a meter on the
   EPSG:3857 plane, `_m` a meter on the ground), the unit shown where a person
   reads the value (`29.0 m`). A length takes its unit where it crosses into

@@ -18,10 +18,10 @@ const DEBUGGABLE = FLAVORS.flatMap((flavor) => [
 ]);
 const MARK = "// pxl: the flavors' debug builds (plugin/quest-build.ts)";
 
-const plugin: ConfigPlugin = (cfg) =>
-  withAppBuildGradle(cfg, (cfg) => {
-    const gradle = cfg.modResults.contents;
-    if (gradle.includes(MARK)) return cfg;
+const plugin: ConfigPlugin = (config) =>
+  withAppBuildGradle(config, (config) => {
+    const gradle = config.modResults.contents;
+    if (gradle.includes(MARK)) return config;
     const at = gradle.search(/^react \{\n/m);
     if (at < 0) {
       throw new Error("quest-build: the app's build.gradle has no react block");
@@ -30,8 +30,9 @@ const plugin: ConfigPlugin = (cfg) =>
     const line = `    ${MARK}\n    debuggableVariants = ${JSON.stringify(
       DEBUGGABLE,
     )}\n`;
-    cfg.modResults.contents = gradle.slice(0, end) + line + gradle.slice(end);
-    return cfg;
+    config.modResults.contents =
+      gradle.slice(0, end) + line + gradle.slice(end);
+    return config;
   });
 
 export default plugin;

@@ -9,16 +9,16 @@ import {
   DECOR_TRAIN,
   DECOR_TREE,
 } from "@/ui/shared/asset/decor.spec.ts";
-import { type Cube, cube_hex } from "@/ui/shared/asset/catalog.ts";
-import { shipped_top_texture_key } from "@/ui/shared/asset/texture.ts";
+import { type Cube, cubeHex } from "@/ui/shared/asset/catalog.ts";
+import { shippedTopTextureKey } from "@/ui/shared/asset/texture.ts";
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
-import { asset_url, href } from "@/service/origin/route.ts";
+import { assetUrl, href } from "@/service/origin/route.ts";
 import { SETTING } from "@/ui/shared/setting.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 
-function cube_texture_url(cube: Cube): string | null {
-  const key = shipped_top_texture_key(cube);
-  return key ? href(asset_url(key)) : null;
+function cubeTextureUrl(cube: Cube): string | null {
+  const key = shippedTopTextureKey(cube);
+  return key ? href(assetUrl(key)) : null;
 }
 
 interface CubeSwatchProps {
@@ -36,12 +36,12 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
     overflow: "hidden" as const,
   };
   const textured = useCore((s) => s.settings[SETTING.texture.key] === 1);
-  const texture_url = textured ? cube_texture_url(cube) : null;
-  if (texture_url) {
+  const textureUrl = textured ? cubeTextureUrl(cube) : null;
+  if (textureUrl) {
     return (
       <View style={[box, style]}>
         <Image
-          source={{ uri: texture_url }}
+          source={{ uri: textureUrl }}
           resizeMode="cover"
           style={{ width: size, height: size }}
         />
@@ -50,7 +50,7 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
   }
   return (
     <View
-      style={[box, { backgroundColor: cube_hex(cube) ?? undefined }, style]}
+      style={[box, { backgroundColor: cubeHex(cube) ?? undefined }, style]}
     />
   );
 }
@@ -62,11 +62,11 @@ const DECOR_GLYPH: Readonly<Record<number, GlyphName>> = {
   [DECOR_TRAIN]: "train.side.front.car",
 };
 
-export function decor_glyph(id: u16): GlyphName {
+export function decorGlyph(id: u16): GlyphName {
   return DECOR_GLYPH[id];
 }
 
-export function selection_ring(
+export function selectionRing(
   ground: string,
   ink: string,
   width: number,

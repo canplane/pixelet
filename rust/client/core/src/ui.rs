@@ -13,7 +13,6 @@ use crate::abi::overlay::{DivisionPart, LonLat, Message, PivotState, Snapshot};
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
 use crate::domain::control::edit::write;
-use crate::domain::control::input::{dragging, zooming};
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::layer::division::{each_division, naming};
@@ -75,8 +74,6 @@ pub(crate) struct SnapshotInput {
     companion_ready: bool,
     drafting: bool,
     is_follow_mode: bool,
-    camera_busy: bool,
-    zooming: bool,
     over_marker: bool,
     /// Each setting's value at its number, and 0 at a number no setting has.
     /// It is None until the settings are read, and the UI holds no settings
@@ -118,8 +115,6 @@ fn snapshot_input() -> SnapshotInput {
         companion_ready: companion_ready(),
         drafting: write::marker_draft().is_some(),
         is_follow_mode: following(),
-        camera_busy: dragging(),
-        zooming: zooming(),
         over_marker: pointer::over_marker(),
         settings: are_settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOT_CNT];
@@ -202,8 +197,6 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
         companion_ready: shown.companion_ready,
         drafting: shown.drafting,
         is_follow_mode: shown.is_follow_mode,
-        camera_busy: shown.camera_busy,
-        zooming: shown.zooming,
         over_marker: shown.over_marker,
         settings: shown.settings.map_or(Vec::new(), |s| s.to_vec()),
         division: division_parts(shown.division, shown.named_to),

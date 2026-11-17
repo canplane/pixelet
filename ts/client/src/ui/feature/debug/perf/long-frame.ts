@@ -6,7 +6,7 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { type LongFrame } from "@/service/platform/types.ts";
-import * as long_frame from "@/service/platform/long-frame.ts";
+import * as longFrame from "@/service/platform/long-frame.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
 
 const WINDOW_MS = LIMIT.WINDOW_MS;
@@ -25,18 +25,18 @@ function land(l: LongFrame): void {
 
 /** The table is filtered rather than searched, because its two sources feed
  * it out of time order. */
-export function long_frames_since(t: f64): LongFrame[] {
+export function longFramesSince(t: f64): LongFrame[] {
   return table.filter((l) => l.t >= t);
 }
 
-export function long_frames_clear(): void {
+export function longFramesClear(): void {
   table.length = 0;
 }
 
 let installed = false;
 
-export function install_long_frame_observers(): void {
+export function installLongFrameObservers(): void {
   if (installed) return;
   installed = true;
-  long_frame.watch(land);
+  longFrame.watch(land);
 }

@@ -49,7 +49,7 @@ export function useViewportTop(): number {
   return store((s) => s.top);
 }
 
-function set_top(top: number): void {
+function setTop(top: number): void {
   store.setState({ top });
 }
 
@@ -77,7 +77,7 @@ export function useVisualViewport(): void {
 
     const root = document.documentElement;
     let frame = 0;
-    let settle_timer: ReturnType<typeof setTimeout> | 0 = 0;
+    let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
 
     function apply() {
       frame = 0;
@@ -93,11 +93,11 @@ export function useVisualViewport(): void {
       // The top waits until the viewport settles. iOS overshoots while the
       // keyboard animates, and following it live would make the top overlays
       // bounce.
-      if (settle_timer !== 0) clearTimeout(settle_timer);
-      settle_timer = setTimeout(() => {
-        settle_timer = 0;
+      if (settleTimer !== 0) clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        settleTimer = 0;
         if (!vv) return;
-        set_top(vv.offsetTop);
+        setTop(vv.offsetTop);
       }, SETTLE_MS);
     }
 
@@ -106,7 +106,7 @@ export function useVisualViewport(): void {
       frame = requestAnimationFrame(apply);
     }
 
-    set_top(vv.offsetTop);
+    setTop(vv.offsetTop);
     apply();
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
@@ -114,13 +114,13 @@ export function useVisualViewport(): void {
 
     return () => {
       if (frame !== 0) cancelAnimationFrame(frame);
-      if (settle_timer !== 0) clearTimeout(settle_timer);
+      if (settleTimer !== 0) clearTimeout(settleTimer);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
       keyboard?.removeEventListener("geometrychange", schedule);
       if (keyboard) keyboard.overlaysContent = false;
       root.style.removeProperty(VISUAL_VIEWPORT_BOTTOM);
-      set_top(0);
+      setTop(0);
     };
   }, []);
 }

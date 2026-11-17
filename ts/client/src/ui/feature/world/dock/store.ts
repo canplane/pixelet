@@ -18,7 +18,7 @@ import {
   type AssetId,
   type Cube,
   CUBES,
-  kind_of,
+  kindOf,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
 import { type Tool, TOOL_ITEM, TOOL_POINTER } from "@/abi/edit.enum.ts";
@@ -34,19 +34,16 @@ interface ChatLine {
 }
 
 const MAX_CHAT_LINES = 10;
-let next_chat_line_id = 0;
+let nextChatLineId = 0;
 
 // A saved hotbar may come from another build, with ids this catalog lacks.
-function is_known_pick(id: AssetId): boolean {
+function isKnownPick(id: AssetId): boolean {
   return id === MARKER || DECORS.includes(id) || CUBES.includes(id);
 }
 
-function touch_recent(
-  recent_picks: readonly AssetId[],
-  id: AssetId,
-): AssetId[] {
-  if (recent_picks.includes(id)) return recent_picks as AssetId[];
-  return [id, ...recent_picks].slice(0, RECENT_PICKS);
+function touchRecent(recentPicks: readonly AssetId[], id: AssetId): AssetId[] {
+  if (recentPicks.includes(id)) return recentPicks as AssetId[];
+  return [id, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
 type DockMode = (typeof DockMode)[keyof typeof DockMode];
@@ -61,15 +58,15 @@ interface DockState {
    * The scale last chosen for a cube, kept while the tool changes. It counts
    * as a decor's `scale_step` does: 0 is a unit, and each step down halves it.
    */
-  scale_step: i32;
+  scaleStep: i32;
   // The hotbar, newest asset first; picking one already on it moves nothing.
-  // Only `select_asset` adds a pick, and only once the core holds it.
-  recent_picks: AssetId[];
-  chat_lines: ChatLine[];
-  dock_mode: DockMode;
+  // Only `selectAsset` adds a pick, and only once the core holds it.
+  recentPicks: AssetId[];
+  chatLines: ChatLine[];
+  dockMode: DockMode;
   /** A pick or a size step made with a key. The dock shows it over the cube's
    * swatch as a press would (popover.tsx). */
-  swatch_flash: SwatchFlash;
+  swatchFlash: SwatchFlash;
 }
 
 interface SwatchFlash {
@@ -113,7 +110,7 @@ function load(): Stored {
   }
   const picks = Array.isArray(stored?.hotbar)
     ? stored.hotbar
-        .filter((p) => typeof p === "number" && is_known_pick(p))
+        .filter((p) => typeof p === "number" && isKnownPick(p))
         .slice(0, RECENT_PICKS)
     : [];
   for (const seed of SEED) {
@@ -126,89 +123,85 @@ function load(): Stored {
 function save(s: DockState): void {
   storage.set(
     STORAGE_KEY,
-    JSON.stringify({ hotbar: s.recent_picks } satisfies Stored),
+    JSON.stringify({ hotbar: s.recentPicks } satisfies Stored),
   );
 }
 
 const store = create<DockState>()(() => ({
   tool: TOOL_POINTER,
   id: 0,
-  scale_step: 0,
-  recent_picks: load().hotbar,
-  chat_lines: [],
-  dock_mode: DockMode.PALETTE,
-  swatch_flash: { n: 0, cube: null, open: false },
+  scaleStep: 0,
+  recentPicks: load().hotbar,
+  chatLines: [],
+  dockMode: DockMode.PALETTE,
+  swatchFlash: { n: 0, cube: null, open: false },
 }));
 
 store.subscribe((s, previous) => {
-  if (s.recent_picks !== previous.recent_picks) save(s);
+  if (s.recentPicks !== previous.recentPicks) save(s);
 });
 
 export function useRecentPicks(): readonly AssetId[] {
-  return store((s) => s.recent_picks);
+  return store((s) => s.recentPicks);
 }
 
 export function useChatLines(): readonly ChatLine[] {
-  return store((s) => s.chat_lines);
+  return store((s) => s.chatLines);
 }
 
 export function useDockMode(): DockMode {
-  return store((s) => s.dock_mode);
+  return store((s) => s.dockMode);
 }
 
 export function useSwatchFlash(): SwatchFlash {
-  return store((s) => s.swatch_flash);
+  return store((s) => s.swatchFlash);
 }
 
-export function recent_pick(slot: number): AssetId {
-  return store.getState().recent_picks[slot];
+export function recentPick(slot: number): AssetId {
+  return store.getState().recentPicks[slot];
 }
 
-export function dock_mode(): DockMode {
-  return store.getState().dock_mode;
+export function dockMode(): DockMode {
+  return store.getState().dockMode;
 }
 
-export function watch_dock_mode(
+export function watchDockMode(
   listener: (mode: DockMode, before: DockMode) => void,
 ): () => void {
   return store.subscribe((s, previous) => {
-    if (s.dock_mode !== previous.dock_mode)
-      listener(s.dock_mode, previous.dock_mode);
+    if (s.dockMode !== previous.dockMode)
+      listener(s.dockMode, previous.dockMode);
   });
 }
 
 /** Tells the core what is held, and keeps it only if the core accepts it, so
  * that the dock never shows a tool the core refused. */
-async function hold(
-  tool: Tool,
-  id: AssetId,
-  scale_step: i32,
-): Promise<boolean> {
+async function hold(tool: Tool, id: AssetId, scaleStep: i32): Promise<boolean> {
   try {
-    await edit.tool(tool, id, scale_step);
+    await edit.tool(tool, id, scaleStep);
   } catch (err) {
     console.error(`[dock] the core refused the tool: ${String(err)}`);
     return false;
   }
-  store.setState({ tool, id, scale_step });
+  store.setState({ tool, id, scaleStep });
   return true;
 }
 
-export function select_tool(tool: Tool): void {
-  const { id, scale_step } = store.getState();
-  void hold(tool, id, scale_step);
+export function selectTool(tool: Tool): void {
+  const { id, scaleStep } = store.getState();
+  void hold(tool, id, scaleStep);
 }
 
-export function select_scale(scale_step: i32): void {
+export function selectScale(scaleStep: i32): void {
   const { tool, id } = store.getState();
-  void hold(tool, id, scale_step);
+  void hold(tool, id, scaleStep);
 }
 
-export function select_asset(id: AssetId): void {
-  void hold(TOOL_ITEM, id, store.getState().scale_step).then((ok) => {
+export function selectAsset(id: AssetId): void {
+  void hold(TOOL_ITEM, id, store.getState().scaleStep).then((ok) => {
     if (ok) {
       store.setState((s) => ({
-        recent_picks: touch_recent(s.recent_picks, id),
+        recentPicks: touchRecent(s.recentPicks, id),
       }));
     }
   });
@@ -219,50 +212,50 @@ export function useTool(): Tool {
 }
 
 export function useScale(): i32 {
-  return store((s) => s.scale_step);
+  return store((s) => s.scaleStep);
 }
 
-export function set_dock_mode(mode: DockMode): void {
-  store.setState({ dock_mode: mode });
+export function setDockMode(mode: DockMode): void {
+  store.setState({ dockMode: mode });
 }
 
-export function switch_dock_mode(): void {
-  set_dock_mode(
-    dock_mode() === DockMode.MESSAGE ? DockMode.PALETTE : DockMode.MESSAGE,
+export function switchDockMode(): void {
+  setDockMode(
+    dockMode() === DockMode.MESSAGE ? DockMode.PALETTE : DockMode.MESSAGE,
   );
 }
 
-export function flash_swatch(cube: Cube, open: boolean): void {
+export function flashSwatch(cube: Cube, open: boolean): void {
   store.setState((s) => ({
-    swatch_flash: { n: s.swatch_flash.n + 1, cube, open },
+    swatchFlash: { n: s.swatchFlash.n + 1, cube, open },
   }));
 }
 
 /** A `delta` of 1 is one step coarser, and -1 one step finer. */
-export function step_scale(delta: i32): void {
-  const { tool, id, scale_step } = store.getState();
-  if (tool !== TOOL_ITEM || kind_of(id) !== KIND_CUBE) return;
-  select_scale(Math.min(0, Math.max(1 - OBJECT_SCALE_CNT, scale_step + delta)));
-  flash_swatch(id, true);
+export function stepScale(delta: i32): void {
+  const { tool, id, scaleStep } = store.getState();
+  if (tool !== TOOL_ITEM || kindOf(id) !== KIND_CUBE) return;
+  selectScale(Math.min(0, Math.max(1 - OBJECT_SCALE_CNT, scaleStep + delta)));
+  flashSwatch(id, true);
 }
 
 /** Whether `text`, trimmed as it is sent, holds at most `cap` code points,
  * the core's cap of a pin's text or a chat line (`MARKER_TEXT_CHARS`,
  * `CHAT_TEXT_CHARS`): one past it is refused whole, never cut short. */
-export function text_fits(text: string, cap: number): boolean {
+export function textFits(text: string, cap: number): boolean {
   return [...text.trim()].length <= cap;
 }
 
 /** The line joins the chat once the core takes it, and a line it refuses
  * whole does not: it answers whether the core took it. */
-export async function append_chat_line(text: string): Promise<boolean> {
+export async function appendChatLine(text: string): Promise<boolean> {
   try {
     await scene.chat(text);
   } catch {
     return false;
   }
   store.setState((s) => ({
-    chat_lines: [...s.chat_lines, { id: next_chat_line_id++, text }].slice(
+    chatLines: [...s.chatLines, { id: nextChatLineId++, text }].slice(
       -MAX_CHAT_LINES,
     ),
   }));

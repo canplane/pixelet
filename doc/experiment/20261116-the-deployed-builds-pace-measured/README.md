@@ -511,6 +511,62 @@ each time, and read 45 to 48 °C after a run).
   p95 and its longest frame are the lower in every pair.
 - The location's zone is worked out on most frames of HEAD's every run and of two of
   #98's (its effect's p50 1.9 and 2.2 ms; 0.1 in the other two), where a zone at the
-  same cell was expected to ask nothing; what clears its memo through the drive (the
-  ground arriving under it, or the fix) was not read.
+  same cell was expected to ask nothing.
 
+### The location's zone, laid only while drawn
+
+Read in the code: the drive's fix stands at the camera's pivot, 755 units from the
+eye, where neither the zone nor the beacon is drawn; the ground's leaf is not held
+there, so the grounding's answers are coarser ones, and a memo of answers not exact is
+dropped by any ground node landing over its columns, about ten a second through the
+drive. Each drop grounded the whole zone again, tens of queries.
+
+`8cb606094e` grounds the center alone each step and lays the cells only in the frames
+that draw the zone. `03aee8151c` against it, a warm-up dropped, two rounds by turns,
+each run begun at 38.5 °C or less:
+
+| run | build | frames | GPU p50 / p95 | tick p50 / p95 | location, a run / most |
+| --- | --- | --- | --- | --- | --- |
+| 2 | before | 227 | 72.4 / 145.0 | 5.9 / 14.0 | 1.2 / 8.2 |
+| 3 | after | 198 | 84.9 / 161.3 | 4.8 / 10.7 | 0.0 / 1.6 |
+| 4 | after | 183 | 94.5 / 168.1 | 5.8 / 10.1 | 0.0 / 0.8 |
+| 5 | before | 188 | 90.4 / 179.2 | 6.2 / 13.1 | 0.9 / 7.2 |
+| 6 | before | 172 | 102.3 / 164.7 | 7.1 / 13.9 | 2.1 / 10.0 |
+| 7 | after | 197 | 83.6 / 172.4 | 5.0 / 11.4 | 0.1 / 0.8 |
+| 8 | after | 182 | 95.4 / 170.8 | 4.9 / 11.0 | 0.0 / 0.3 |
+| 9 | before | 177 | 97.2 / 168.6 | 6.2 / 14.1 | 1.2 / 8.8 |
+
+The location's step fell from about a millisecond a run to none, and the tick with it:
+its p50 from 5.9 to 7.1 down to 4.8 to 5.8, its p95 from 13.1 to 14.1 down to 10.1 to
+11.4, against #98's 9.1 to 9.8 with its effects of about 6 beside. The frames and the
+GPU moved with the phone, which slowed through the series as before; the measured
+build was the change before its review's last fixes, which touched a test and a
+comment.
+
+## Then: a pan past the service area
+
+The Mac's Chrome, a release web build without the drive, the app's own profiler; the
+view past the service area (the East Sea), at the orbit's largest distance.
+
+| | the companions' step, most | the input's step, most | tick p95 / most |
+| --- | --- | --- | --- |
+| HEAD before, one drag (43.9°N 145.2°E, 131072 u, polar 27°) | 217.5 | 98.8 | 99.3 / 217.8 |
+| HEAD before, one drag (37.4°N 133.2°E, about 106,000 u, polar 60°) | 14.5 | 68.1 | 9.9 / 68.6 |
+| the deployed build (`34cfa83`), the same place and drag | 13.9 | 96.6 | 13.4 / 97.3 |
+| `18598cc6e8`, three drags (37.4°N 134.5°E, the largest distance) | 0.2 | 0.1 | 0.6 / 0.8 |
+
+In ms. Before, the two steps had read 561 and 541 ms at most in the same session; a
+wheel's zoom there cost nothing. The GPU read 13 to 14 ms at p95 throughout.
+
+The cause, read and timed natively: `World::slide` walked one leaf cell a step, at
+about 5 µs a step (10,000 by 5,000 cells: 72.7 ms; 100,000 by 50,000: 773 ms), and past
+the area no leaf is lacking, so the walk ran its whole way; over served ground far
+out it ends at the first leaf not held. After `18598cc6e8` both walks take 0.07 ms.
+
+Met on the way and not acted on: over a void leaf tile inside the area a support query
+runs the ray to its cap of steps (about 0.77 ms a query); and a ray that ends at the
+cap is read as having met nothing, which a lift reads as filled to the world's top
+(`floor_under` from z = -2100 over flat ground at 5 answered 32768).
+
+With places on, the same build, a wheel out twenty steps and back sixteen: the scene's
+step 0.8 ms a run and 5.6 at most, the tick 1.4 / 2.6 and 6.4 at most, no long frame.
