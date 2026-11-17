@@ -21,7 +21,7 @@ pxl-engine.workspace = true
 pxl-content.workspace = true
 
 # WebGPU's calls written into a stream (gpu/api.rs): the GPU's encoder, which
-# the page's host and the device app's run alike.
+# the web host and the native app's run alike.
 pxl-gpu-guest.workspace = true
 # The stream's words, which the encoder writes and its hosts read.
 pxl-gpu-link.workspace = true

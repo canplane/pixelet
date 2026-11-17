@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
-# The guest, as the device's build reads it too (core-build.py): its cargo
+# The guest, as the native build reads it too (core-build.py): its cargo
 # workspace, its crate, and cargo's arguments for a debug and a release build.
 GUEST = json.loads((APP / "package.json").read_text()).get("xpute", {}).get("guest") or sys.exit(f"[wasm-build] {APP}/package.json names no xpute.guest")
 RUST = (APP / GUEST["workspace"]).resolve()
@@ -100,7 +100,7 @@ def finish(*args):
 
 
 def number_paths(module, table):
-    """The step that numbers a device core's paths the same way."""
+    """The step that numbers a native core's paths the same way."""
     proc = subprocess.run([sys.executable, str(NUMBER_PATHS), str(module), str(table), str(RUST)], stdout=subprocess.PIPE, text=True)
     if proc.returncode != 0:
         raise Failed(proc.returncode)

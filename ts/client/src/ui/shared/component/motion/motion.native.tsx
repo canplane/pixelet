@@ -1,7 +1,7 @@
 // @pxl/client/ui/shared/component/motion/motion.native.tsx
 
 /**
- * A view on a device, moved by React Native's native driver. One call hands
+ * A native view, moved by React Native's native driver. One call hands
  * the whole curve to the UI thread, because the core spends the JS thread's
  * frame time. A pose given while an animation runs starts from the value the
  * UI thread holds.

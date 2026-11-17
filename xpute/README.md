@@ -54,7 +54,7 @@ binding is written by hand for any one piece of work.
 
 The host gives the guest only its entries, the clocks, the stop and the log.
 The guest's memory is its own, and the guest decides everything else. Because
-that is all the host gives, the same guest runs unchanged in a page, on a
+that is all the host gives, the same guest runs unchanged on the web, on a
 phone and in a test.
 
 ## The guest, the host and the program
@@ -67,13 +67,13 @@ A program built on xpute has three parts.
 - The **host** implements the guest's clocks, stop and log, `@xpute/host` in
   TypeScript and `xpute-host` in Rust, and a plugin the program brings
   implements its own beside it. It runs in a runtime, the platform's environment
-  that runs the guest and enters it: `@xpute/runtime-web` in a page's worker,
-  and on a device `xpute-runtime-native`, on a thread of its own, which the Expo
-  module `@xpute/expo` starts.
+  that runs the guest and enters it: `@xpute/runtime-web` in the web worker,
+  and on iOS and Android `xpute-runtime-native`, on a thread of its own, which
+  the Expo module `@xpute/expo` starts.
 - The **program** is everything else the app decides: its interfaces and what
   their methods do, and its UI, which calls the guest and implements its imports
   by the same bindings from another thread, carried to the guest's end by the
-  runtime: over a page's MessagePort, and the native module on a device.
+  runtime: over the web's MessagePort, and the native module on iOS and Android.
 
 ```text
   ┌────────────────────────────────────────────────────────────────┐
@@ -113,13 +113,13 @@ says how.
 - **Its host**, as a list of mounts, each mounting implementations of some of
   the guest's imports, with `IMPORTS` and `CALLS`, from which the runtime starts
   the guest by the steps [ARCHITECTURE.md](./ARCHITECTURE.md) gives in "The
-  sides": a page's worker runs it on `@xpute/runtime-web`
-  ([runtime/web](./runtime/web/README.md)), and a device links it, with the
+  sides": the web worker runs it on `@xpute/runtime-web`
+  ([runtime/web](./runtime/web/README.md)), and a native app links it, with the
   guest, into one Rust crate over `xpute-runtime-native`
   ([runtime/native](./runtime/native/README.md)).
 - **Its UI**, which opens its end of the runtime, mounts on it what it
-  implements, starts the guest and then calls it by the same bindings: on a page
-  through `@xpute/runtime-web`, and on a device through `@xpute/expo`
+  implements, starts the guest and then calls it by the same bindings: on the
+  web through `@xpute/runtime-web`, and natively through `@xpute/expo`
   ([expo](./expo/README.md)).
 
 A plugin is a package of the program's own in WIT, whose bindings are written
@@ -134,7 +134,7 @@ In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/host`,
 Each carries what a registry asks. A program beside this tree lists the
 packages in its pnpm workspace and depends on them as `workspace:*`, and it
 names the crates by `path`. React Native and Expo are peers of the native
-module alone, so a program that runs only on a page installs neither. Each
+module alone, so a program that runs only on the web installs neither. Each
 TypeScript package is its own source: its `package.json` maps a path under the
 package's name to the file under `src/`, and the files use only syntax that
 strips to JavaScript, so a bundler or Node's type stripping takes them with no

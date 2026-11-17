@@ -84,7 +84,7 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
   const sheet = useRef<ViewInstance>(null);
   const [sheet_height, set_sheet_height] = useState(0);
   const [named, set_named] = useState<Named | null>(null);
-  // The sheet and the item are both measured in the window. On a device,
+  // The sheet and the item are both measured in the window. Natively,
   // measureLayout against the sheet leaves out how far the content scrolled.
   // Each press takes a new number, so a measurement that answers after its
   // press was released finds a newer number and shows nothing.

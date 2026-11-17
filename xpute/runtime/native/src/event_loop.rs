@@ -1,13 +1,13 @@
 // xpute-runtime-native/event_loop.rs
 
-//! The guest thread's one queue and its loop, a plain task queue as a page's
+//! The guest thread's one queue and its loop, a plain task queue as the web's
 //! event loop is, and its timers: the host's `post`, `after` and `clear`
 //! (xpute-host runtime.rs). Any thread pushes a task (`post_task`): the
 //! UI's methods (lib.rs `post`), the app's lifecycle, the answers of a
 //! plugin's threads. The loop waits until a task comes or its earliest timer
 //! is due and runs it on the guest's thread, entering the guest where it must
 //! (`turn`); the program runs the answers due and hands the UI its frames
-//! between turns (native.rs `run`), as a page's runs a task, its microtasks,
+//! between turns (native.rs `run`), as the web's runs a task, its microtasks,
 //! then posts.
 
 use std::cell::{Cell, RefCell};
@@ -47,14 +47,14 @@ pub(crate) fn post_task(task: Task) {
 
 /// Answers `task_return` once `d` has passed, on the guest's thread
 /// (xpute-host clock.rs `wait_for`), and returns the timer that will,
-/// as a page's `setTimeout` returns its id.
+/// as the web's `setTimeout` returns its id.
 pub(crate) fn after(d: Duration, task_return: Return<()>) -> Timer {
     let timer = (Instant::now() + d, NEXT.replace(NEXT.get() + 1));
     TIMERS.with_borrow_mut(|t| t.insert(timer, task_return));
     timer
 }
 
-/// Clears `timer` before it answers, as a page's `clearTimeout` does, and
+/// Clears `timer` before it answers, as the web's `clearTimeout` does, and
 /// hands back what it would have answered; none once it has answered.
 pub(crate) fn clear(timer: Timer) -> Option<Return<()>> {
     TIMERS.with_borrow_mut(|t| t.remove(&timer))

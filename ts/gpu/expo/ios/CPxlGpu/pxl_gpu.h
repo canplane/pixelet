@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 // Makes `state` be told what the host has of a GPU, by its name's UTF-8
-// bytes and their count, as `xpute_stopped_on`'s file is, and as a page's
+// bytes and their count, as `xpute_stopped_on`'s file is, and as the web
 // host reports it (@pxl/gpu/link `GpuState`): "present" once the guest's
 // ask finds a device open, "missing" once it finds none opens, and "waiting"
 // once a device is lost and the guest told, as it asks again. Null sets none.

@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/world_asked.wgsl
 
 // Asks the world's one query word for word, with the asks and what the query tells laid in
-// buffers of their own (tests/world.rs). No shader the page runs includes this part: build.rs
+// buffers of their own (tests/world.rs). No shader the app runs includes this part: build.rs
 // assembles it from part.rs `WORLD_ASKED` for that test and for Tint
 // (ts/tool/shader/shader.test.ts).
 

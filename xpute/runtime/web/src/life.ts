@@ -1,7 +1,7 @@
 // @xpute/runtime-web/life.ts
 
 /** The page's lifecycle, told to a guest that implements it
- * (wit/life/life.wit) from its start (page.ts `start`), as a device's module
+ * (wit/life/life.wit) from its start (page.ts `start`), as the native module
  * tells its runtime the app's: hidden on `visibilitychange` to hidden, the
  * Page Lifecycle's last sure event, and shown on visible. The worker tells it
  * the UI attached (`tell_attached`). The guest's answer is its own
@@ -12,8 +12,8 @@ import * as life from "@xpute/host/abi/life/life.ts";
 import { type Sender, type Side, sender } from "@xpute/link";
 
 /** Takes the guest's answer as its own, an error it answers too, ENOENT where
- * it implements none and EPIPE where it trapped, as a device's runtime takes it
- * (xpute-runtime-native life.rs). */
+ * it implements none and EPIPE where it trapped, as the native runtime takes
+ * it (xpute-runtime-native life.rs). */
 function take_answer(told: Promise<void>): void {
   told.catch((e: unknown) => {
     if (!(e instanceof XputeError)) throw e;
@@ -32,7 +32,7 @@ export function tell_life(link: Sender): void {
 }
 
 /** Tells the guest on `side` the UI attached, once the UI's port is attached
- * and the guest has booted, as a device's runtime tells it as each UI
+ * and the guest has booted, as the native runtime tells it as each UI
  * attaches (xpute-runtime-native remote.rs `accept`). */
 export function tell_attached(side: Side): void {
   take_answer(life.attached(sender(side)));

@@ -25,7 +25,7 @@ cd pixelet
 make install
 ```
 
-## Running the page
+## Running on the web
 
 The page can take its tiles from three places, named the way a bakery's bread
 is.
@@ -54,16 +54,16 @@ measure speed on.
 The make targets set everything a run needs. Point a run at another
 deployment or other ports only by the variables `ts/client/script/proxy.ts`
 reads, and run a server alone by its own target (`make serve-tile`). How the
-page and the device are built is in
+web and native builds are made is in
 [ts/client/README.md](./ts/client/README.md), "Builds".
 
 A page leaves a helper in the browser console. `pxl.perf` is the profiler:
 `report()` summarizes where the frames' time went and `trace()` saves a trace
 for ui.perfetto.dev.
 
-## Running on a device
+## Running natively
 
-The device app takes every route from the live site. Its native projects are
+The native app takes every route from the live site. Its native projects are
 generated, so a build starts from `expo prebuild`.
 
 On Android, with a JDK from 17 up and the NDK installed:

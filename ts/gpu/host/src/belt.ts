@@ -2,8 +2,8 @@
 
 /**
  * This is the staging belt that a guest's buffer and texture writes go
- * through on a page, as rust/gpu/host/src/belt.rs is a device's: a pool of
- * chunks mapped for writing, one more than the frame latency. The host
+ * through on the web, as rust/gpu/host/src/belt.rs is the native one: a
+ * pool of chunks mapped for writing, one more than the frame latency. The host
  * writes into a mapped chunk, and the uploads' encoder copies from it into
  * the target, submitted ahead of what follows. Once submitted, a chunk is
  * mapped again, and it is free when that mapping resolves, which the queue

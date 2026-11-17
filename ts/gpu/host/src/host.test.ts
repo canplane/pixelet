@@ -1,10 +1,10 @@
 // @pxl/gpu/host/src/host.test.ts
 
 /**
- * Holds the page's GPU host to spec/golden/gpu/program.tsv where it
+ * Holds the web GPU host to spec/golden/gpu/program.tsv where it
  * runs: in a browser, on its WebGPU. Each program's recorded turns, each the
- * records `gpu.run` is lent, run as the page's `gpu.run` runs them (web.ts),
- * must read back the bytes the record holds, as the device's host's do
+ * records `gpu.run` is lent, run as the web `gpu.run` runs them (web.ts),
+ * must read back the bytes the record holds, as the native host's do
  * (pxl-gpu-host lib.test.rs). Turn K's ticket is K + 1, and the next
  * turn waits until the host has stored it at the fence.
  *
@@ -69,9 +69,9 @@ async function replay(): Promise<void> {
       const recs = g.bytes(turn);
       bytes.set(recs, recs_at);
       const turn_words = new Uint32Array(mem, recs_at, recs.length / 4);
-      // An address is a native pointer on a device, and so differs every
+      // An address is a pointer natively, and so differs every
       // run: the record holds each relative to its block, and the addresses
-      // the stream spec's ops name move to this block, whose base on a page
+      // the stream spec's ops name move to this block, whose base on the web
       // is the memory's start.
       rebase(turn_words, 0n, 0n);
       host.run(turn_words);

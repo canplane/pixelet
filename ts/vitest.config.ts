@@ -1,8 +1,8 @@
 import { defineConfig } from "vitest/config";
 import { platform_file } from "./build/path.ts";
 
-// The tests run the page's files: x.web.ts where an import names x.ts, as
-// Metro takes them for the page (build/path.ts).
+// The tests run the web files: x.web.ts where an import names x.ts, as
+// Metro takes them for the web (build/path.ts).
 export default defineConfig({
   plugins: [
     {

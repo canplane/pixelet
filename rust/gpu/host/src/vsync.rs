@@ -1,7 +1,7 @@
 // pxl-gpu-host/vsync.rs
 
-//! The display's frames for a guest on a native device, as vsync.ts is a
-//! page's: `vsync.next` waits on the guest's thread until the platform's
+//! The display's frames for a native guest, as vsync.ts is the web's:
+//! `vsync.next` waits on the guest's thread until the platform's
 //! display link calls `vsync` with a frame that starts at its `after` or
 //! later, and answers that frame's start on the host's monotonic clock
 //! (xpute-host clock.rs `mark`) and its gap since the frame before. The

@@ -1,25 +1,25 @@
 # @xpute/expo
 
-@xpute/expo is the device's UI end: the Expo module through which a React
-Native UI reaches xpute's runtime on a device (`runtime/native/README.md`). It
-starts the runtime linked into the app on the guest's own thread, carries the
-UI's calls to it and back, and tells the runtime the app's lifecycle itself,
-from Swift and Kotlin, not through JavaScript. A page's UI end is
-@xpute/runtime-web's page half instead (`runtime/web/README.md`).
+@xpute/expo is the native UI end: the Expo module through which a React Native
+UI reaches xpute's native runtime (`runtime/native/README.md`). It starts the
+runtime linked into the app on the guest's own thread, carries the UI's calls to
+it and back, and tells the runtime the app's lifecycle itself, from Swift and
+Kotlin, not through JavaScript. The web UI end is @xpute/runtime-web's page half
+instead (`runtime/web/README.md`).
 
 ## The app's crate
 
 An app installs the module, which Expo autolinks, and names in its
-`package.json` under `xpute.guest.runtime` the Rust crate a device links: its
-guest, and the function that starts it, which the crate exports the runtime
-over (`native_abi!`). The app builds that crate for the device as it builds,
-and the module links it: a static library at
+`package.json` under `xpute.guest.runtime` the Rust crate a native build links:
+its guest, and the function that starts it, which the crate exports the runtime
+over (`native_abi!`). The app builds that crate for the device as it builds, and
+the module links it: a static library at
 `$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an iPhone
 (`ios/Xpute.podspec`), and a shared one among the app's `jniLibs` on Android,
 which the Kotlin class `xpute.Runtime` loads by the crate's name
 (`android/build.gradle`). Swift reaches the runtime through its C header
-(`ios/CXpute/xpute.h`). A plugin's UI end on a device is a module of its own
-beside this one, which links into the same crate.
+(`ios/CXpute/xpute.h`). A plugin's native UI end is a module of its own beside
+this one, which links into the same crate.
 
 ## The UI's end
 

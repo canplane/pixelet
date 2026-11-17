@@ -9,7 +9,7 @@ export function useWindowSize(): { width: f64; height: f64 } {
   return { width, height };
 }
 
-/** A device's window does not scroll under its keyboard. */
+/** A native window does not scroll under its keyboard. */
 export function useVisualViewport(): void {}
 
 export function useViewportTop(): number {

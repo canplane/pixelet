@@ -48,7 +48,8 @@ textarea,
   user-select: text;
 }
 
-/* No focus ring, as on a device. React Native's styles cannot express this. */
+/* No focus ring, as on iOS and Android. React Native's styles cannot express
+   this. */
 input:focus,
 textarea:focus {
   outline: none;

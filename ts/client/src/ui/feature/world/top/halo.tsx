@@ -23,7 +23,7 @@ import {
 
 /**
  * A dark halo made of black copies of `draw`, placed around circles of
- * growing radius. It cannot be a widened stroke, because a device's text and
+ * growing radius. It cannot be a widened stroke, because the native text and
  * an iPhone's symbol have no stroke to widen. Each ring fades as one layer,
  * so that copies that overlap are no darker. The box includes the rings,
  * because Android clips a layer at its view's bounds.

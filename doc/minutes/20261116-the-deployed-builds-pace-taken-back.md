@@ -44,7 +44,7 @@ a constant), `refresh` (64 rAF gaps at #98, 16 vsync answers at #102), and `turn
 
 - **A clock read became a crossing.** At #98 `now()` was one import, `env.now`. Since
   `a8e1547d6e` and `73e2174df5` it is `monotonic-clock.now` over the link, and on the
-  page each call made a DataView, a frame, a reply object and its closure, a Lower, a
+  web each call made a DataView, a frame, a reply object and its closure, a Lower, a
   BigInt and more. The core reads the clock once an item in every budgeted list and twice
   a timed step, so every step grew, and the span it timed grew with its own clock read
   and the collections those objects caused.
@@ -69,12 +69,12 @@ when a change is checked by building it alone.
 
 ## The Safari stop
 
-Apart from the figures, the page's core stopped at random on WebKit, at boot, with
+Apart from the figures, the web core stopped at random on WebKit, at boot, with
 `RangeError` in the upload belt's `set` (another session ran it: Mac Safari twice,
 the iPhone's Safari once, and once a device lost at 18 s that never came back; Chrome
 never). The belt came in for the stall of 2026-11-11
-([the Safari stall](../gpu/experiment/20261111-the-safari-stall/README.md)) on the page
-alone: the device's pool was fixed and waited, the page's grew without bound while the
+([the Safari stall](../gpu/experiment/20261111-the-safari-stall/README.md)) on the web
+alone: the native pool was fixed and waited, the web one grew without bound while the
 GPU lagged, since only a frame was admitted, and a host kept running records after the
 browser had taken the device's mappings away. A short mapped range is what `set`
 refuses.
@@ -120,12 +120,13 @@ down, so `sys` names nothing above it. The profiler's `budget` is the frame's de
 from its entry's start again.
 
 **The display.** The vsync answers its frame's start, a `mark` on the host's monotonic
-clock: the page's animation frame's timestamp, the device's display link's. The display's
-interval is the low quartile of the gaps between those starts, a gap across a frame being
-a whole number of intervals; before any is measured it is taken as one interval at 60 Hz,
-as #98's runtime took it. A refused frame waits for the next paced slot, as a skipped one
-does. The display's 16 gaps are kept, not #98's 64: they follow a change of refresh four
-times sooner, and timestamps leave little noise for more samples to smooth.
+clock: on the web the animation frame's timestamp, natively the display link's. The
+display's interval is the low quartile of the gaps between those starts, a gap across a
+frame being a whole number of intervals; before any is measured it is taken as one
+interval at 60 Hz, as #98's runtime took it. A refused frame waits for the next paced
+slot, as a skipped one does. The display's 16 gaps are kept, not #98's 64: they follow a
+change of refresh four times sooner, and timestamps leave little noise for more samples
+to smooth.
 
 **The GPU's belt (pxl-gpu link, guest and both hosts).**
 - A mapping gone or refused is a lost device on both hosts: no record runs after it, one
@@ -135,7 +136,7 @@ times sooner, and timestamps leave little noise for more samples to smooth.
   copy alike), and a host wakes the guest as chunks come back. Both pools hold the frame
   latency plus one chunk, made when the host is. A write that cannot wait is always
   recorded; a host with no chunk free makes one more for that run and destroys it when
-  it comes back. Neither host waits inside a record any more, the device included.
+  it comes back. Neither host waits inside a record any more, the native one included.
 - An upload larger than a chunk is split once, in the guest's encoder, into records a
   chunk each, and nothing reads the buffer until it is whole.
 - A frame is admitted while fewer frames than the latency are unfinished, as at #98;
@@ -149,9 +150,9 @@ times sooner, and timestamps leave little noise for more samples to smooth.
   drops the frame, was weighed and left: the right shape, but past a correction meant
   to reach #98.
 - Texture writes are staged through the belt on both hosts, as buffer writes are; the
-  page's synchronous `writeTexture` is gone.
+  web host's synchronous `writeTexture` is gone.
 - After a refused ask for a device, the core asks again with a delay doubling from 1 s to
-  30 s, and at once when shown again, one rule for the page and the device.
+  30 s, and at once when shown again, one rule for the web and native.
 
 ## Left open
 
@@ -171,10 +172,10 @@ times sooner, and timestamps leave little noise for more samples to smooth.
   > ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
 
   > Since 2026-11-16 (`3ac60df141`), on the user's word: the host tells the display's
-  > gaps, as it sees every frame (the device's display link, the page's animation frame
-  > loop), and answers the first vsync from when the core's frame is due; the core no
-  > longer reads the interval from the vsyncs it was answered, so a frame that outlasts
-  > one interval no longer moves it. Not measured.
+  > gaps, as it sees every frame (natively the display link, on the web the animation
+  > frame loop), and answers the first vsync from when the core's frame is due; the core
+  > no longer reads the interval from the vsyncs it was answered, so a frame that
+  > outlasts one interval no longer moves it. Not measured.
 - Effects run outside any budget, and `location_step` re-grounds its zone inside one.
 
   > Since 2026-11-16 (`deb1fbb08c`): settled before this minute.
@@ -189,6 +190,16 @@ times sooner, and timestamps leave little noise for more samples to smooth.
   > next. Moving the recompute under the budget was not weighed, and is open.
   > `place::show` re-asks a ray for each visible place when a place's detail zoom
   > changes, also outside the budget's pass.
+
+  > Since 2026-11-17 (`cfc72c4ac5`, `ff07ca506e`): on the user's word, both are asked
+  > under the budget (`sched::run`), and a pin crowd's stand with them. The zone is
+  > laid once every cell of a table of its cells' ground has been asked, the last laid
+  > shown till then; a place stands on its last surface until its own is asked.
+  > Not measured.
+
+  > Since 2026-11-17: taken back on the user's word, the location and the markers as at
+  > `bec3061dc4`
+  > ([the location zone, by the code's own axioms](./20261117-the-location-zone-by-the-codes-own-axioms.md)).
 - The C++ heap's branch for wasm without atomics has not been compiled.
 
   > Since 2026-11-16 (`deb1fbb08c`): it is the branch `make -C xpute/cpp wasm` compiles,

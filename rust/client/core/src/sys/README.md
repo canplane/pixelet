@@ -14,8 +14,8 @@ spends each entry's time in an order the rest of the core can rely on.
 
 The core's memory is the manifest's `mem.sz`, whole before its first entry and never
 grown, so a full heap stops the core. Its sections never move. The memory and its
-layout are the core's own (`heap.rs`): on a page the module's memory, which its
-link starts at that size and holds to it (the crate's `build.rs`), and on a device the
+layout are the core's own (`heap.rs`): on the web the module's memory, which its
+link starts at that size and holds to it (the crate's `build.rs`), and natively the
 block the core reserves of the process at that size, at its first
 allocation.
 
@@ -41,19 +41,19 @@ the manifest declares `.fixed`'s size and the heap the core counts on past it,
 and the compiler and the boot check that the memory holds both.
 
 The heap is the global allocator, xpute-kit's heap over the memory past
-`.fixed` (`heap.rs`), which the core's terminal crates declare (`lib.rs` on a
-page, pxl-runtime on a device): a slab of size classes over a buddy allocator
+`.fixed` (`heap.rs`), which the core's terminal crates declare (`lib.rs` on the
+web, pxl-runtime natively): a slab of size classes over a buddy allocator
 of pages, whose blocks are aligned to their own size, which bounds
 fragmentation. What is held only at times lives on it, the largest of it
 under caps that the build checks against the heap; `heap.rs` reads its
 counters.
 
-The heap is not the same on a page and a device. Stable Rust gives a binary
-one global allocator and no allocator per allocation, and a device's library
-holds the core with xpute's runtime and host and the GPU's host. So on a device
-the heap takes all of their allocations, where on a page it takes the core's
-alone, the page's runtime and host being the worker's JavaScript and its GPU
-the browser's. On a device their allocations come out of the core's budget and
+The heap is not the same on the web and natively. Stable Rust gives a binary
+one global allocator and no allocator per allocation, and the native library
+holds the core with xpute's runtime and host and the GPU's host. So natively
+the heap takes all of their allocations, where on the web it takes the core's
+alone, the web runtime and host being the worker's JavaScript and its GPU
+the browser's. Natively their allocations come out of the core's budget and
 can be what fills the heap, the runtime's, the GPU's and the core's threads
 take the heap's one lock, and the heap's counters count theirs too. `.fixed`
 is the same on both, since no allocator reaches it.

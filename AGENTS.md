@@ -54,7 +54,7 @@
   `service/` alone, and the core through `service/core/` alone; the types and
   constants generated into `abi/` it may read directly.
 - What differs by platform is a file pair in `service/platform/` (`<x>.web.ts`
-  the page's, `<x>.native.ts` the device's, an import naming `<x>.ts`) or, for
+  the web's, `<x>.native.ts` the native one, an import naming `<x>.ts`) or, for
   a piece of the UI, such a pair or a file and its override beside it
   (`ts/client/src/ui/shared/component/README.md`).
 

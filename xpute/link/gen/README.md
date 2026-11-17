@@ -51,11 +51,11 @@ xpute-link-gen guest wit --rs core/src/abi.rs
 # its amalgamation's one header, xpute.hpp.
 xpute-link-gen guest wit --cpp cpp/app/abi
 
-# A page's host: a module per interface, imports.ts and calls.ts.
+# The web host: a module per interface, imports.ts and calls.ts.
 xpute-link-gen host wit --ts ui/src/abi
 
-# A device's host: the Rust it mounts on the Side its runtime makes and
-# gives it. The UI on the device takes the page's TypeScript.
+# The native host: the Rust it mounts on the Side its runtime makes and
+# gives it. The native UI takes the web's TypeScript.
 xpute-link-gen host wit --rs host/src/abi.rs
 
 # A package over a plugin's: the plugin's WIT, and where its bindings of the

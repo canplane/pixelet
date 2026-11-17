@@ -10,7 +10,7 @@ lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-serve
 # What runs here alone: the tests' code, the bakes (the tile server's feature
 # with them, which only adds) and the tools.
 lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-gpu-link", "-p", "pxl-gpu-guest", "-p", "pxl-gpu-host", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-render", "-p", "pxl-core", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
-# The device's library, the core with its runtime and the GPU's host, for an
+# The native library, the core with its runtime and the GPU's host, for an
 # iPhone and an Android phone, as a release builds it.
 lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-gpu-host", "-p", "pxl-runtime", "--no-default-features", "--", "-D", "warnings"]
 # Clippy misreads std's Android thread-local expansion: os-based TLS drops the `const` block,

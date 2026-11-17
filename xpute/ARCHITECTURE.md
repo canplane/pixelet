@@ -71,7 +71,7 @@ implements it and injects it. The **host** is the guest's counterpart: the
 host's end of the link, the bindings mounted there, and xpute's own
 implementations, the clocks, the stop and the log. It varies by language, as the
 guest does, and names no runtime. The **runtime** is the platform's environment,
-a page's worker or a device's guest thread. It instantiates or links the guest,
+the web worker or the native guest thread. It instantiates or links the guest,
 makes the host's `Side`, injects into the host what the host needs of it (the
 way back to the guest's thread, where a report goes, the log) and runs the loop
 that enters the guest. Nothing names a runtime but its own UI end and the
@@ -82,7 +82,7 @@ among them, each a `Mount` that mounts the implementations of some of the
 guest's imports, in no order, since none depends on another, and its runtime
 runs the steps in their order, on both platforms alike: it runs each mount,
 stands in for the UI, enters the guest only once every interface the guest's
-world imports is mounted, and on a device runs the loop.
+world imports is mounted, and natively runs the loop.
 
 An end of the link is one machine whatever carries its frames, as a link
 layer knows its two ends and not the wire. What carries them is the
@@ -92,15 +92,15 @@ into it, in the guest's memory, which both ends share.
 The UI calls the guest's exports and implements some of its imports by the same
 WIT and the same generated bindings as any end, which call by a `Sender` and
 implement by a `Callee`, and never know which thread they run on. A UI on
-another thread than the guest's, a page's main thread to the guest's worker or a
-device's JavaScript thread to the guest's thread, is across a second boundary,
+another thread than the guest's, a page's main thread to the guest's worker or
+the native JavaScript thread to the guest's thread, is across a second boundary,
 copied, which the runtime alone carries, by its shell's convention: messages
-over a page's MessagePort, the module's functions and events over a device's C
+over the web's MessagePort, the module's functions and events over the native C
 ABI. The runtime holds both halves of that crossing. On the guest's thread it
 stands in for the UI on the guest's end: a stand-in under each named handle the
 UI implements and an opener at each prefix it implements, each method sent
 across and answered later by its tag. On the UI's thread, its UI end is an `End`
-over the runtime's own transport, a page's port or a device's module, so the
+over the runtime's own transport, the web's port or the native module, so the
 bindings call and implement there as on any end. One thread cannot wait on the
 other, so every method the UI implements is an `async func`, and the runtime
 refuses to start the guest where a function without `async` (the bindings'
@@ -110,17 +110,17 @@ once on the guest's end, pipelined, so that end issues its handle, and the
 runtime tells the UI end the handle and the prefix that matched, whose opener
 the UI end runs. The guest's cancel of a method and its drop of an object cross
 as the runtime's own messages. Handing an object beside a call, a canvas, is a
-property of a crossing that can move one, a page's port.
+property of a crossing that can move one, the web's port.
 
-The UI's connection is the runtime's, and an object like any other: a device's
+The UI's connection is the runtime's, and an object like any other: the native
 runtime attaches a UI under a handle of its own, everything the UI sends and
 takes names that handle, and the UI leaves when the handle is dropped, which
 drops on the guest's end what it opened and answers ECANCELED what it owed. The
 guest is told only that a UI attached (`xpute:life` `attached`); the WIT
-between it and the UI does not change. A device's runtime outlives its UI, so a
+between it and the UI does not change. The native runtime outlives its UI, so a
 reload opens a new handle on the same runtime and drops the old one, and the
 runtime keeps the guest's end, its last stop and its trap, which a new UI reads
-as it begins to hear them. A page's worker dies with its page, so a reloaded
+as it begins to hear them. The web worker dies with its page, so a reloaded
 page meets a new runtime.
 
 ## How a failure ends
@@ -139,10 +139,11 @@ telling and is neither as a log record, a level, a context and a message
 (`wit/log`, in `wasi:logging`'s shape). Each end has its `log`: the guest's
 calls the import, and the host implements it and hands the records, with its
 own, to the log its runtime injects. The runtime alone writes them to the
-platform's output, its error stream, Android's log or a page's console, and
-alone decides by level which it writes; no other part drops a record. A device's
-UI end hands it the UI's records to write the same way (`log`); a page's worker
-tells the page each record it writes, which the page does not write again.
+platform's output, its error stream, Android's log or the browser's console, and
+alone decides by level which it writes; no other part drops a record. The
+native UI end hands it the UI's records to write the same way (`log`); the web
+worker tells the page each record it writes, which the page does not write
+again.
 
 A guest's bug is reported through `stop`, and the guest traps. A host's own
 failure is a stop on both platforms too, reported the same way, and then the
@@ -163,15 +164,15 @@ and the seeded streams, the deque and the heap, the JSON texts a reader accepts
 layout; the link's `Side` is one machine in all three. The rest of the kit is
 each language's own: TypeScript has no allocator, and Rust no text encoding or
 hash codec. The guest exists in Rust and in C++ from the same WIT; the hosts are
-TypeScript's on a page and Rust's on a device. Where the C++ differs, the
+TypeScript's on the web and Rust's natively. Where the C++ differs, the
 language is the reason: RAII, templates and results, with no exceptions and no
 RTTI.
 
 A fact that crosses languages has one owner, a spec or WIT, and a generator
 writes it into every language that holds it: `xpute-gen` the data specs, and
 `xpute-link-gen` the link's bindings, each README saying how. XTP, the kit's
-tree packet, is the format of data a program stores and serves, and of a
-device's batches to its UI; the link's packets are the Canonical ABI's.
+tree packet, is the format of data a program stores and serves, and of the
+native runtime's batches to its UI; the link's packets are the Canonical ABI's.
 
 What holds the languages to each other is data. Under a part's
 `spec/golden/` are records each language reads bit for bit, so a difference
@@ -201,7 +202,7 @@ word; and a rule the GPU alone decides is one function every pass calls.
   nothing: a module's memory is its own, which it grows as its allocator asks,
   and a native guest's is its process's. A span the guest
   lends is read where it lies (`lent`, above), in place by a host in the same
-  process and by a device's UI through a buffer over that span alone. Whether
+  process and by the native UI through a buffer over that span alone. Whether
   the memory is fixed, what lies where in it and which allocator each
   allocation takes are the program's, in either language.
 - **The policy is the program's.** When the guest runs and how much I/O is out
@@ -240,10 +241,10 @@ word; and a rule the GPU alone decides is one function every pass calls.
   are the link; `guest/rust` (`xpute-guest`) and `cpp/xpute/guest` the
   guest's end.
 - `host/rust` (`xpute-host`) and `host/ts` (`@xpute/host`) are the host,
-  one in each language; `runtime/web` (`@xpute/runtime-web`) is a page's
-  runtime, its page half (`page.ts`) a page's UI end, and `runtime/native`
-  (`xpute-runtime-native`) a device's runtime; and `expo` (`@xpute/expo`) is
-  the device's UI end, the Expo module that reaches the native runtime, with
+  one in each language; `runtime/web` (`@xpute/runtime-web`) is the web
+  runtime, its page half (`page.ts`) the web UI end, and `runtime/native`
+  (`xpute-runtime-native`) the native runtime; and `expo` (`@xpute/expo`) is
+  the native UI end, the Expo module that reaches the native runtime, with
   the runtime's C header (`ios/CXpute/xpute.h`) and its JNI class
   (`android/.../xpute/Runtime.kt`). The guest in Rust and C++, both runtimes
   and `expo` each have a README beside them that says how a program takes

@@ -8,7 +8,7 @@
 //! the GPU's TypeScript folders, and across xpute's parts. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
 //! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
-//! a crate's module tree, that no device's host names its runtime's entries, and that the
+//! a crate's module tree, that no native host names its runtime's entries, and that the
 //! modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
 //! xpute/clippy.toml).
 //!
@@ -559,9 +559,9 @@ fn screen_reached(text: &str) -> Vec<usize> {
 const XPUTE: &str = "xpute/";
 const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
-/// The entries xpute's module on a device calls, the program's start among them, are the
+/// The entries xpute's native module calls, the program's start among them, are the
 /// runtime's: every function its C ABI declares (`RUNTIME_ABI`), and the Kotlin class
-/// `xpute.Runtime`'s JNI names (`RUNTIME_JNI`), is refused under a device's hosts, xpute's and
+/// `xpute.Runtime`'s JNI names (`RUNTIME_JNI`), is refused under the native hosts, xpute's and
 /// the GPU's (`HOSTS`).
 const HOSTS: [&str; 2] = ["xpute/host/rust/", "rust/gpu/host/"];
 const RUNTIME_ABI: &str = "xpute/expo/ios/CXpute/xpute.h";
@@ -622,7 +622,7 @@ const XPUTE_LAYERS: Order = Order {
 const PXL_GPU: [&str; 2] = ["rust/gpu/", "ts/gpu/"];
 
 /// The GPU's order, over its parts in both languages, as xpute's is over its own: its link at
-/// the bottom, and over it the guest's encoder, the host and a device's module (`expo`), heads
+/// the bottom, and over it the guest's encoder, the host and the native module (`expo`), heads
 /// none naming another. xpute's runtimes and their UI end stand at the GPU's layer, a head of
 /// their own, so no part of the GPU names them; the program's assembly hands the GPU's host what
 /// it takes of the runtime (`native_abi!`'s argument). A part is held by what it ships: a
@@ -1323,7 +1323,7 @@ fn strong_parts(
 }
 
 /// Each crate's module graph, by its `crate::`, `super::` and `self::` paths, and the
-/// TypeScript files' graph, by their imports, as a page resolves them (`.web` before the plain
+/// TypeScript files' graph, by their imports, as the web resolves them (`.web` before the plain
 /// file) and as iOS and Android do (`.ios` or `.android`, then `.native`). A test's file, a
 /// generated spec and the crate's root, which declares every module, are no node of it. Each
 /// cycle not in `CYCLES_KNOWN`.
@@ -1441,7 +1441,7 @@ fn cycles(
         })
         .collect();
     let have: BTreeSet<&str> = ts.iter().copied().collect();
-    // The page's own files, then each device's, its own files found first.
+    // The web's own files, then each native system's, its own files found first.
     let platforms: [(&[&str], &[&str]); 3] = [
         (&[".web"], &[".native.", ".ios.", ".android."]),
         (&[".ios", ".native"], &[".android.", ".web."]),
@@ -2016,7 +2016,7 @@ mod spec;"
         );
     }
 
-    /// The entries a device's host may not name are the functions its runtime's C header
+    /// The entries a native host may not name are the functions its runtime's C header
     /// declares, a declaration's first name whatever its lines, and no name a comment gives.
     #[test]
     fn runtime_entries_are_its_header_declarations() {

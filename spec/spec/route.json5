@@ -38,7 +38,7 @@
   origins: {
     SITE: {
       url: { $value: "https://plei.me" },
-      $description: "The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),\nthe app's page and every root, the bucket's served at the edge and the\nservers' relayed to the origin. A device's app, which has no origin of its\nown, reads from it, and so does a dev server's published deployment.",
+      $description: "The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),\nthe app's page and every root, the bucket's served at the edge and the\nservers' relayed to the origin. The native app, which has no origin of its\nown, reads from it, and so does a dev server's published deployment.",
     },
     ORIGIN: {
       url: { $value: "https://api.plei.me" },

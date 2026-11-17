@@ -1,15 +1,16 @@
 // @pxl/client/runtime/worker.ts
 
 /**
- * A page's core and the host's link to it run in a worker of their own, so
- * that the core holds up none of the UI's events. The page sends, in one
- * message, its kept entries, the core's module, the UI's port, and the named
- * handles and prefixes of what the UI implements; the worker instantiates the
- * module with a link laid over it (@xpute/runtime-web `instantiate`) and
- * runs the core on it from the mounts listed here (@xpute/runtime-web
- * `run`): what the host implements, the core's files and GPU among them, the
- * UI's stand-ins across the port, the canvases the UI gives going to the
- * GPU. The files are here, so the source is declared here too.
+ * On the web the core and the host's link to it run in a worker of their
+ * own, so that the core holds up none of the UI's events. The page sends, in
+ * one message, its kept entries, the core's module, the UI's port, and the
+ * named handles and prefixes of what the UI implements; the worker
+ * instantiates the module with a link laid over it (@xpute/runtime-web
+ * `instantiate`) and runs the core on it from the mounts listed here
+ * (@xpute/runtime-web `run`): what the host implements, the core's files and
+ * GPU among them, the UI's stand-ins across the port, the canvases the UI
+ * gives going to the GPU. The files are here, so the source is declared here
+ * too.
  */
 
 import { type Side, sender } from "@xpute/link";
@@ -79,7 +80,7 @@ async function boot(m: Instantiate): Promise<void> {
   const instance = await instantiate(m.module, m.init);
   if (instance === null) return;
   const { side } = instance;
-  // The page's host runs by the config a device's does
+  // The web host runs by the config the native one does
   // (spec/client/render/api.json5 `device`).
   const gpu = new WebGpu(
     side,

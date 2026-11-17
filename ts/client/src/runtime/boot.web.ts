@@ -1,14 +1,14 @@
 // @pxl/client/runtime/boot.web.ts
 
 /**
- * A page runs the core in a worker of its own (worker.ts), and reaches it
+ * On the web the core runs in a worker of its own (worker.ts), reached
  * across a message port. The UI opens its end of the worker, hears
  * the core's stop, its trap and the GPU's state, mounts what it implements
- * and starts the core here (@xpute/runtime-web `open_ui`, `start`), as a
- * device's UI does its runtime's (boot.native.ts). The worker holds the
+ * and starts the core here (@xpute/runtime-web `open_ui`, `start`), as the
+ * native UI does its runtime's (boot.native.ts). The worker holds the
  * files, keeps a copy of the page's storage that it writes back here, and
- * tells the page the source's state. Where the boot stands is moved as on a
- * device (ui.ts).
+ * tells the page the source's state. Where the boot stands is moved as
+ * natively (ui.ts).
  */
 
 import type { GpuReport } from "@pxl/gpu/host";

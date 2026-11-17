@@ -1,7 +1,7 @@
 // @pxl/client/service/sys/gpu.ts
 
-/** This state is kept for the UI to show, as the GPU's host reports it: a
- * page's worker (runtime/worker.ts) or a device's module (boot.native.ts).
+/** This state is kept for the UI to show, as the GPU's host reports it: the
+ * web worker (runtime/worker.ts) or the native module (boot.native.ts).
  * The core hears of the device itself on the link (@pxl/gpu/host
  * web.ts, pxl-gpu-host native.rs). */
 

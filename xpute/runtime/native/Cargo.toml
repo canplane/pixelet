@@ -1,6 +1,6 @@
 [package]
 name = "xpute-runtime-native"
-description = "xpute's runtime on a native device: the guest's thread and its loop, its link to the guest, and the UI's channel to it"
+description = "xpute's native runtime: the guest's thread and its loop, its link to the guest, and the UI's channel to it"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

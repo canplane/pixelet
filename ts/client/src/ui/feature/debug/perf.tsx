@@ -73,7 +73,7 @@ const TINT: Record<Tint, TintLook> = {
 };
 
 /** A button whose hint shows under the buttons while it is hovered or held.
- * A device has no tooltip, so the hint stands in for one. */
+ * A native app has no tooltip, so the hint stands in for one. */
 function PanelButton({
   label,
   hint,

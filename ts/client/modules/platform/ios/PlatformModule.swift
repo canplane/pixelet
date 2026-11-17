@@ -6,7 +6,7 @@ import ExpoUI
 import PxlNative
 import UIKit
 
-/// The device's half of the client's services on iOS (the .native files in
+/// The native half of the client's services on iOS (the .native files in
 /// ts/client/src/service/platform/), as one module that answers what the UI
 /// asks of the system. The core is in xpute's own module
 /// (@xpute/expo), and the view it draws into in
@@ -74,7 +74,7 @@ public class PlatformModule: Module {
 
     // ---- the clipboard (service/platform/share.native.ts) ----
     //
-    // The general pasteboard serves as navigator.clipboard does on a page.
+    // The general pasteboard serves as navigator.clipboard does on the web.
     // React Native's JavaScript has no clipboard of its own.
 
     Function("clipboard_set") { (text: String) in

@@ -2,9 +2,9 @@
 
 /**
  * The shapes the platform's services share. Each service is a pair of files,
- * x.ts for the page and x.native.ts for a device, and what both give and take
- * is named here. A place, in these names, is where the client runs: the page
- * or a device.
+ * x.ts for the web and x.native.ts for native, and what both give and take is
+ * named here. A place, in these names, is where the client runs: the web or a
+ * native app.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -31,7 +31,7 @@ export interface Viewport {
   dpr: f64;
 }
 
-/** A position as the page's API and a device's both give it. */
+/** A position as the web API and the native one both give it. */
 export interface Coords {
   longitude: f64;
   latitude: f64;
@@ -66,13 +66,13 @@ export interface SensorListener {
     course: f64 | null,
   ): void;
   /** `watching` says whether the watch runs on past the failure, which only
-   * the platform knows: a page's watch rides out all but a refusal, and a
-   * device's ends on any. */
+   * the platform knows: a web watch rides out all but a refusal, and a
+   * native one ends on any. */
   pos_err(err: GeolocationError, watching: boolean): void;
   /** A heading, in degrees clockwise from north, or null for a reading with
    * no heading. */
   orient(heading: f64 | null): void;
-  /** The place has no compass: a page's event with every field null. */
+  /** The place has no compass: a web event with every field null. */
   orient_unavailable(): void;
   orient_err(): void;
   permission(sensor: "geolocation" | "orient", answer: PermissionAnswer): void;
@@ -91,7 +91,7 @@ export interface GeolocationSensor {
 export interface OrientationSensor {
   has: boolean;
   /** Whether its loss shows only as silence. A browser's compass says nothing
-   * when it stops hearing, while a device's reports its failure. */
+   * when it stops hearing, while a native one reports its failure. */
   silence: boolean;
   /** Resolves whether it is granted, from the decision the place holds. Where
    * none is held, a prompt is raised only inside a press, as iOS Safari's must
@@ -108,7 +108,7 @@ export interface SurfaceDriver {
    * none left. */
   open(): Promise<u32>;
   size(handle: u32, width: u32, height: u32, dpr: f64): void;
-  /** Closes the surface, which takes back a page's canvas lent under it. */
+  /** Closes the surface, which takes back a web canvas lent under it. */
   close(handle: u32): void;
 }
 
@@ -168,9 +168,9 @@ export interface LongFrame {
   render_ms: f64;
 }
 
-/** The CSS variable that a page's `useVisualViewport` keeps on its root on
+/** The CSS variable that the web `useVisualViewport` keeps on its root on
  * every frame. It holds how far the visual viewport's bottom stands above the
- * layout viewport's, which is the keyboard's height, in px. The page sets it
- * (service/platform/viewport.web.ts) and the UI's CSS reads it
- * (ui/shared/component/above-keyboard.web.tsx). A device never sets it. */
+ * layout viewport's, which is the keyboard's height, in px. The web file sets
+ * it (service/platform/viewport.web.ts) and the UI's CSS reads it
+ * (ui/shared/component/above-keyboard.web.tsx). Natively nothing sets it. */
 export const VISUAL_VIEWPORT_BOTTOM = "--vv-bottom";

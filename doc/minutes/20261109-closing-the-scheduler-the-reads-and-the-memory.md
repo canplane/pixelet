@@ -25,6 +25,10 @@ without a bound is the objects.
   the objects' apply, the last alone growing with a shard. A CPU ray ends at
   `STEPS_CAP`, 4096 steps. The render passes loop over fixed counts or the turn's
   draw lists, and a frame that no longer fits the GPU's stream is dropped.
+
+  > Since 2026-11-17 (`cfc72c4ac5`): the location indicator asks the ground under the
+  > budget, a cell at a time, from a table of its cells' ground that a change thins
+  > and a move shifts; the effects hold to a query or two of the world.
 - The ways, read after their move to the heap landed in `70e08a0262`: a brick's fill
   goes by parts (columns, a row of spans, mips, laying the run), each a fixed count
   of columns, checked against the turn's share between parts, with at least one

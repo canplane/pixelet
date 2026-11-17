@@ -1,17 +1,17 @@
 // @xpute/runtime-web/remote.ts
 
 /** The worker's half of the UI's crossing, as xpute-runtime-native remote.rs
- * is a device's: the runtime stands in for the UI on the guest's link, what
- * the UI implements mounted on the guest's end as stand-ins that post each
- * method to the UI across its port, each answered later by its tag, and what
- * the UI calls put on the guest's end and answered back (message.ts). The
- * guest's end issues the handle of an object the UI implements as the guest
- * opens it, and the UI holds it under that handle (page.ts). The UI
- * attaches as its port does, and its port is its connection for the
- * worker's life: a page's worker dies with the page, so a reloaded page
- * meets a new worker and link over a new port, and no UI is dropped here,
- * where a device's runtime outlives its UI and drops one as a new one
- * attaches (xpute-runtime-native remote.rs `accept`). */
+ * is the native runtime's: the runtime stands in for the UI on the guest's
+ * link, what the UI implements mounted on the guest's end as stand-ins that
+ * post each method to the UI across its port, each answered later by its tag,
+ * and what the UI calls put on the guest's end and answered back (message.ts).
+ * The guest's end issues the handle of an object the UI implements as the guest
+ * opens it, and the UI holds it under that handle (page.ts). The UI attaches as
+ * its port does, and its port is its connection for the worker's life: the web
+ * worker dies with the page, so a reloaded page meets a new worker and link
+ * over a new port, and no UI is dropped here, where the native runtime outlives
+ * its UI and drops one as a new one attaches (xpute-runtime-native remote.rs
+ * `accept`). */
 
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
 import {
@@ -38,7 +38,7 @@ interface Hear {
 }
 
 /** What takes the things the UI gives beside its calls, by the handle it
- * gives each under, and hears the handle dropped: a page's port moves
+ * gives each under, and hears the handle dropped: the web's port moves
  * objects. */
 export interface Taker {
   give(h: Handle, thing: unknown): void;

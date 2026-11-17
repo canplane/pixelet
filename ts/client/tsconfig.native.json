@@ -1,9 +1,9 @@
-// The client as a device's bundler reads it, from its entry (index.ts) and
+// The client as the native bundler reads it, from its entry (index.ts) and
 // its build's configuration: x.native.ts where an import names x.ts, and the
-// page's own files, which no device reaches, left out. It also reads
+// web's own files, which no native build reaches, left out. It also reads
 // src/conform.ts, which imports both halves of each pair and which only this
-// view resolves as each half's own platform does; the page's view leaves it
-// out, so this view's `exclude` is its own. The page's is ../tsconfig.json.
+// view resolves as each half's own platform does; the web view leaves it
+// out, so this view's `exclude` is its own. The web's is ../tsconfig.json.
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {

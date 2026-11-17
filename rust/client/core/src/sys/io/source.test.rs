@@ -48,7 +48,7 @@ fn unfollowable_decl_refused() {
     assert!(parse(16, &f, []).is_none(), "a zoom below the leaves");
 }
 
-/// Each UI declares the source at its boot, a device's reloaded UI on a
+/// Each UI declares the source at its boot, a reloaded native UI on a
 /// running core too: a declaration that parses to the one held is taken and
 /// changes nothing, and any other is refused.
 #[test]

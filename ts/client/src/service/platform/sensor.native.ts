@@ -2,7 +2,7 @@
 
 /**
  * Position and heading through expo-location, each reaching the listener as
- * the page's does.
+ * the web's does.
  */
 
 import { AppState, Linking } from "react-native";
@@ -124,7 +124,7 @@ function watch_keep(
 
 let geolocation: Watch | null = null;
 
-/** A device's watch ends on any failure. */
+/** A native watch ends on any failure. */
 function geolocation_fail(
   watch: Watch,
   err: "denied" | "unavailable" | "other",

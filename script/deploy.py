@@ -4,7 +4,7 @@
 # ts/build/stamp.ts `stamp`).
 #
 # The deployment runs across the trees, so it is the repository's: the
-# page's bundle, built by the app (its `build:web` task, Expo's export) and copied beside the
+# web bundle, built by the app (its `build:web` task, Expo's export) and copied beside the
 # Worker, where wrangler.jsonc `assets` serves it; the panics' path table,
 # kept in the bucket (r2.py); the Worker, published by wrangler; and the site
 # read back. Everything that can fail before the Worker goes out runs before
@@ -33,7 +33,7 @@ REPO = Path(__file__).resolve().parent.parent
 EDGE = REPO / "ts/server/edge"
 APP = REPO / "ts/client"
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
-# The panics' `#n` → path table the page's build wrote beside its core.
+# The panics' `#n` → path table the web build wrote beside its core.
 PATHS = APP / "core.paths.json"
 BUILT = EDGE / "dist/index.html"
 # The custom domain the Worker answers on (spec/spec/route.json5 `origins`).

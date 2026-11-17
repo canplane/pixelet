@@ -1,6 +1,6 @@
 // pxl-gpu-host/lib.rs
 
-//! This is the host's end of a guest's GPU calls on a native device, as
+//! This is the host's end of a guest's GPU calls natively, as
 //! ts/gpu/host/src/host.ts is on the web. It runs a stream's records
 //! (spec/gpu/api.json5) on a wgpu device, and keeps each object the guest
 //! made at its handle's slot. It knows nothing of what the guest draws.
@@ -141,7 +141,7 @@ impl GpuHost {
     /// `wake` asks for a `poll` and may be called from any thread; beside a
     /// native guest it is native.rs's `wake`. Whatever learns of a completion
     /// calls it, so that the next `poll` writes the answer. A device the
-    /// system loses (`Unknown`) is logged, as a page's host logs it, and told
+    /// system loses (`Unknown`) is logged, as the web host logs it, and told
     /// the guest at the next `poll`, and the host's owner lets the host go
     /// (`lost`). A device lost as `Destroyed` was its
     /// owner's doing, and is none of these.
@@ -166,7 +166,7 @@ impl GpuHost {
                 wake();
             }
         });
-        // An error no scope caught is logged and counted, as a page's host
+        // An error no scope caught is logged and counted, as the web host
         // does, in place of wgpu's default, which panics.
         let error_cnt = Arc::new(AtomicU32::new(0));
         let errors = error_cnt.clone();
@@ -214,7 +214,7 @@ impl GpuHost {
     /// This says whether the system lost the device, or a chunk of the belt
     /// had its mapping refused, which is a lost device too. The host is then
     /// spent: once a `poll` has told the guest, its owner lets it go and opens
-    /// a device anew, as a page asks for a new device.
+    /// a device anew, as the web asks for a new device.
     pub fn lost(&self) -> bool {
         self.device_lost.load(Ordering::Acquire) || self.belt.is_gone()
     }
@@ -268,13 +268,13 @@ impl GpuHost {
 }
 
 /// What a host says where its belt has no chunk for a write, a mapping gone
-/// or refused or a chunk not made, as a page's host says it (@pxl/gpu/host
+/// or refused or a chunk not made, as the web host says it (@pxl/gpu/host
 /// host.ts `CHUNK_GONE`).
 const CHUNK_GONE: &str = "device lost: an upload chunk is gone or cannot be made";
 
 /// Holds the device as lost on `device_lost`, and says `why` the first time:
 /// the one place a loss is said, the system's (`GpuHost::new`) and the belt's
-/// (`GpuHost::lose`) alike, as a page's host says it (@pxl/gpu/host host.ts
+/// (`GpuHost::lose`) alike, as the web host says it (@pxl/gpu/host host.ts
 /// `_lose`).
 fn lose_device(device_lost: &AtomicBool, why: &str) {
     if !device_lost.swap(true, Ordering::AcqRel) {

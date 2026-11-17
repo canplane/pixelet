@@ -135,7 +135,7 @@ export const watch_source = listeners.watch;
 
 /** Resolves with the declaration once the core takes it, and rejects once
  * the source is refused or `signal` aborts: a file opened under it waits for
- * it (binding.ts), as a device's reloaded UI opens the tiles a running core
+ * it (binding.ts), as a reloaded native UI opens the tiles a running core
  * asks for again before it has declared the source. What it watches goes
  * when it settles. */
 export function when_source_declared(
@@ -161,7 +161,7 @@ export function when_source_declared(
   });
 }
 
-/** On a page, the core and the asking for the declaration run in a worker.
+/** On the web, the core and the asking for the declaration run in a worker.
  * The page's thread holds no files, so the UI learns the source's state and
  * declaration through this (runtime/worker.ts). */
 export function mirror_source(next: Source, decl: Declaration | null): void {

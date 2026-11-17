@@ -196,7 +196,7 @@ const STYLE = StyleSheet.create({
   strip: { flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: halo_gap(8) },
-  // The row is bounded, because a page lays out a row that does not wrap at
+  // The row is bounded, because the web lays out a row that does not wrap at
   // its content's width, and a long address would run over the buttons.
   search: {
     flexDirection: "row",

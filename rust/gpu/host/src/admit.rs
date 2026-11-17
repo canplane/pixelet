@@ -40,7 +40,7 @@ impl GpuHost {
     }
 
     /// Writes the uncaptured errors, the unfinished frames and the belt's
-    /// free chunks into the device's block (spec `DEVICE`), as a page's host
+    /// free chunks into the device's block (spec `DEVICE`), as the web host
     /// does. It runs after each run and at each `poll`, after the queue's
     /// callbacks that end frames and give chunks back have run. It says
     /// whether more chunks are free than the block last said, which wakes a

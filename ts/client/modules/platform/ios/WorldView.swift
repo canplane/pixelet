@@ -5,7 +5,7 @@ import UIKit
 import PxlGpu
 
 /// The world's surface, which hands its touches to the UI as pointer events
-/// (`onPointer`), as a page's canvas gives its pointer events.
+/// (`onPointer`), as the web canvas gives its pointer events.
 final class WorldView: SurfaceView {
   let attachEvent = EventDispatcher("onAttach")
   let detachEvent = EventDispatcher("onDetach")
@@ -58,7 +58,7 @@ final class WorldView: SurfaceView {
     tell(touches, "move")
   }
 
-  // A lifted finger also leaves the surface, as a page's pointerleave follows
+  // A lifted finger also leaves the surface, as the web's pointerleave follows
   // its pointerup, so that nothing stays hovered under it.
   override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
     super.touchesEnded(touches, with: event)

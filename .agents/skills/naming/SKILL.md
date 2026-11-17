@@ -9,7 +9,11 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - The system (xpute, the commands' modules, what the guest asks of its host)
   takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application takes its field's word (graphics, cartography,
-  games). A metaphor no field uses is no name.
+  games). A metaphor no field uses is no name. A word in prose, a comment's or a
+  document's, follows the same rule and says what the code names: the platforms
+  are web and native, as `x.web.ts`, `runtime/native` and React Native's
+  `Platform.OS` have them; a page is the HTML document and a device the hardware
+  or the GPU's.
 - In a name of the mechanism, a word on this list is abbreviated, in every
   casing (`asset_cnt`, `assetCnt`), and any other stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
   offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
@@ -65,7 +69,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   word (`sys`, `io`, `mem`, `abi`), a domain one the whole word (`scene`,
   `query`, `count`), and this list alone renames neither.
 - A symmetric pair's part is the base, a dot and its side, on both halves
-  (`x.web.ts` the page's beside `x.native.ts` a device's,
+  (`x.web.ts` beside `x.native.ts`,
   `location.uniform.wgsl` beside `location.slot.wgsl`); a body both sides
   take is the plain base (`sample.wgsl` under `sample.eye.wgsl` and
   `sample.light.wgsl`); a stand-in replacing a part at assembly is the part, a

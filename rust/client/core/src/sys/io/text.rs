@@ -107,7 +107,7 @@ pub(crate) fn text_lines(
     )
 }
 
-/// A space, as a page's `\s` and `trim` read it.
+/// A space, as JavaScript's `\s` and `trim` read it.
 fn is_space(c: char) -> bool {
     matches!(
         c,

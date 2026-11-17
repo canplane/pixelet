@@ -70,7 +70,7 @@ class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context,
     // A LinearLayout clips its children to its bounds, and this view is only
     // as tall as what stands on it. A shadow drawn past a pill's body, such as
     // a toast's or the dock's, would be cut at this view's edge. Neither the
-    // page nor the iPhone's view clips there.
+    // web's view nor the iPhone's clips there.
     clipChildren = false
     clipToPadding = false
     ViewCompat.setWindowInsetsAnimationCallback(

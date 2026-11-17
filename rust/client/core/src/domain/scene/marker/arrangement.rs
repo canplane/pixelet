@@ -70,9 +70,10 @@ struct Arrangement {
     places: Vec<place::Place>,
     /// What the sources show this run.
     shown: Vec<Instance>,
-    /// The drawn bricks `pins` and `places` were read from. A brick still
-    /// drawn keeps what was read from it, so an eye that moves casts rays
-    /// only in the bricks it enters.
+    /// The drawn bricks read since a change last touched them, which need no
+    /// read, so an eye that moves casts rays only in the bricks it enters.
+    /// `pins` and `places` also hold what a touched brick last read, until it
+    /// is read again.
     found_for: Option<Read>,
     /// The same, for the bricks read this frame.
     now: Read,
@@ -94,8 +95,9 @@ struct Arrangement {
     /// keep. Both are rebuilt each run.
     last_design: FnvHashMap<Key, Design>,
     keep: FnvHashSet<Design>,
-    /// What the marker set holds, and the buffer the next run lays out
-    /// into. They are swapped as `sized` and `spare` are.
+    /// What the marker set is to hold, which it holds unless the heap refused
+    /// it, and the buffer the next run lays out into. They are swapped as
+    /// `sized` and `spare` are.
     instances: Vec<u32>,
     spare_instances: Vec<u32>,
     /// What the last run read, compared by value. While it is equal, nothing
@@ -122,10 +124,10 @@ struct Input {
 
 static ARRANGEMENT: Global<Arrangement> = Global::new();
 
-/// What `pins` and `places` were read from: the drawn bricks, and whether
-/// places were on. A brick is read over its whole columns, so what was read
-/// stays valid while no change touches those columns, whatever heights the
-/// world spans in them.
+/// The drawn bricks read since a change last touched them, and whether
+/// places were on (`found_for`). A brick is read over its whole columns, so
+/// what was read stays valid while no change touches those columns, whatever
+/// heights the world spans in them.
 #[derive(Default, PartialEq)]
 struct Read {
     bricks: Vec<Brick>,
@@ -154,7 +156,8 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         if p.set.free(model::draw_list()) {
             sched::invalidate();
         }
-        // Nothing is drawn now, so what comes back is laid out afresh.
+        // Nothing is drawn now, so every brick is read again once it comes
+        // back, its markers shown as last read until then.
         (p.last, p.waiting, p.found_for) = (None, false, None);
         p.changed_places.clear();
         p.instances.clear();
@@ -162,9 +165,15 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         design::retain(&FnvHashSet::default());
         return;
     }
-    // With no observation yet, the source's reach is not declared. The
-    // markers are laid out afresh once there is one, so the tiles that
-    // changed meanwhile are not kept.
+    // A write the heap refused is tried again from the instances held, and
+    // asks a frame until it is taken, as the location's zone does.
+    if !p.instances.is_empty() && !p.set.has_block() {
+        p.set.write(model::draw_list(), &p.instances);
+        sched::invalidate();
+    }
+    // With no observation yet, the source's reach is not declared. Every
+    // brick is read again once there is one, so the tiles that changed
+    // meanwhile are read, the markers shown as last read until then.
     let Some(o) = observation::observation() else {
         (p.last, p.found_for) = (None, None);
         p.changed_places.clear();
@@ -206,12 +215,13 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // Places are a setting, while what someone placed always shows.
     now.place = settings().place;
     let place_on = now.place;
-    // What was read stays for a brick that is still drawn and whose columns
-    // no change touches (domain/query/change.rs), as long as the places
-    // setting did not turn. A brick left or touched drops what was read from
-    // it. Only bricks entered or touched are read, nearest the eye first, as
-    // many a frame as one pass of the tick's budget reads and at least one.
-    // The rest are not read yet, so a later frame reads them.
+    // A brick still drawn whose columns no change touches
+    // (domain/query/change.rs), as long as the places setting did not turn,
+    // needs no read. Only bricks entered or touched are read, nearest the eye
+    // first, as many a frame as one pass of the tick's budget reads and at
+    // least one; the rest are read by a later frame. What was read from a
+    // brick stays while the brick is drawn, until it is read again; a brick
+    // left drops it, and places go when the setting is off.
     p.changed = false;
     let last_bricks = match &p.found_for {
         Some(f) if f.place == place_on => f.bricks.as_slice(),
@@ -219,9 +229,9 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     };
     let changed_places = &p.changed_places;
     let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
-    // Whether each drawn brick keeps what was read from it, asked once for
+    // Whether each drawn brick's read is current, so it needs none, asked once for
     // each brick however many pins and places it holds.
-    let kept_bricks: Vec<bool> = now
+    let fresh: Vec<bool> = now
         .bricks
         .iter()
         .map(|&s| {
@@ -230,18 +240,18 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
                 && !change::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
-    let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| kept_bricks[k]);
+    let drawn = |s: &Brick| now.bricks.binary_search(s).is_ok();
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
-    pins.retain(|s| stands(&s.brick));
-    read_places.retain(|s| stands(&s.brick));
+    pins.retain(|s| drawn(&s.brick));
+    read_places.retain(|s| place_on && drawn(&s.brick));
     let entering = &mut p.entering;
     entering.clear();
     entering.extend(
         now.bricks
             .iter()
-            .zip(&kept_bricks)
-            .filter(|&(_, &st)| !st)
+            .zip(&fresh)
+            .filter(|&(_, &f)| !f)
             .map(|(&s, _)| {
                 let r = columns(s);
                 let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
@@ -253,6 +263,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
             }),
     );
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+    let held = (pins.len(), read_places.len());
     let read = sched::run(entering.iter(), |&(_, brick, columns)| {
         pin::read(brick, &columns, &mut pins);
         if place_on {
@@ -261,6 +272,21 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         true
     })
     .step_cnt as usize;
+    // A brick read again replaces what it read before: of what was held
+    // before the reads, the first `held` entries, those of a brick read now go.
+    let done = &mut entering[..read];
+    done.sort_unstable_by_key(|e| e.1);
+    let read_now = |b: &Brick| done.binary_search_by_key(b, |e| e.1).is_ok();
+    let mut k = 0;
+    pins.retain(|s| {
+        k += 1;
+        k > held.0 || !read_now(&s.brick)
+    });
+    let mut k = 0;
+    read_places.retain(|s| {
+        k += 1;
+        k > held.1 || !read_now(&s.brick)
+    });
     let unread = entering.len() - read;
     // The bricks not read yet are not among those the markers were read
     // from.

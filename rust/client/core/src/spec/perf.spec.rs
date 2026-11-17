@@ -78,43 +78,43 @@ pub mod frame {
     pub const STAGE_MS: usize = 10;
     pub const PERF_MS: usize = 11;
     pub const EFFECTS: usize = 12;
-    pub const KIND_NAME: usize = 20;
-    pub const GPU_TIMED: usize = 21;
-    pub const GPU_SPANS: usize = 22;
-    pub const GPU_BUSY_MS: usize = 60;
-    pub const GPU_PX: usize = 61;
-    pub const SCALE: usize = 62;
-    pub const DRAW_CNT: usize = 63;
-    pub const TRIANGLE_CNT: usize = 64;
-    pub const GPU_FRAME: usize = 65;
-    pub const LIGHT_CHANGED: usize = 66;
-    pub const DECOR_RECT_CNT: usize = 67;
-    pub const EYE_CAST: usize = 68;
-    pub const EYE_RAY_CNT: usize = 69;
-    pub const EYE_BEAM: usize = 70;
-    pub const EYE_SAMPLE: usize = 71;
-    pub const EYE_HOLE_WALK: usize = 72;
-    pub const EYE_ASK_CNT: usize = 73;
-    pub const EYE_VOXEL: usize = 74;
-    pub const EYE_HOLE: usize = 75;
-    pub const EYE_SKY: usize = 76;
-    pub const EYE_BOX_CNT: usize = 77;
-    pub const LIGHT_CAST: usize = 78;
-    pub const LIGHT_RAY_CNT: usize = 79;
-    pub const LIGHT_BEAM: usize = 80;
-    pub const LIGHT_SAMPLE: usize = 81;
-    pub const LIGHT_HOLE_WALK: usize = 82;
-    pub const LIGHT_ASK_CNT: usize = 83;
-    pub const LIGHT_VOXEL: usize = 84;
-    pub const LIGHT_HOLE: usize = 85;
-    pub const LIGHT_SKY: usize = 86;
-    pub const LIGHT_BOX_CNT: usize = 87;
-    pub const TERRAIN_LOAD_CNT: usize = 88;
-    pub const UPLOAD_CNT: usize = 89;
-    pub const UPLOAD_BYTES: usize = 90;
-    pub const PACK_BYTES: usize = 91;
-    pub const HEAP_USED_BYTES: usize = 92;
-    pub const WORDS: usize = 93;
+    pub const KIND_NAME: usize = 19;
+    pub const GPU_TIMED: usize = 20;
+    pub const GPU_SPANS: usize = 21;
+    pub const GPU_BUSY_MS: usize = 59;
+    pub const GPU_PX: usize = 60;
+    pub const SCALE: usize = 61;
+    pub const DRAW_CNT: usize = 62;
+    pub const TRIANGLE_CNT: usize = 63;
+    pub const GPU_FRAME: usize = 64;
+    pub const LIGHT_CHANGED: usize = 65;
+    pub const DECOR_RECT_CNT: usize = 66;
+    pub const EYE_CAST: usize = 67;
+    pub const EYE_RAY_CNT: usize = 68;
+    pub const EYE_BEAM: usize = 69;
+    pub const EYE_SAMPLE: usize = 70;
+    pub const EYE_HOLE_WALK: usize = 71;
+    pub const EYE_ASK_CNT: usize = 72;
+    pub const EYE_VOXEL: usize = 73;
+    pub const EYE_HOLE: usize = 74;
+    pub const EYE_SKY: usize = 75;
+    pub const EYE_BOX_CNT: usize = 76;
+    pub const LIGHT_CAST: usize = 77;
+    pub const LIGHT_RAY_CNT: usize = 78;
+    pub const LIGHT_BEAM: usize = 79;
+    pub const LIGHT_SAMPLE: usize = 80;
+    pub const LIGHT_HOLE_WALK: usize = 81;
+    pub const LIGHT_ASK_CNT: usize = 82;
+    pub const LIGHT_VOXEL: usize = 83;
+    pub const LIGHT_HOLE: usize = 84;
+    pub const LIGHT_SKY: usize = 85;
+    pub const LIGHT_BOX_CNT: usize = 86;
+    pub const TERRAIN_LOAD_CNT: usize = 87;
+    pub const UPLOAD_CNT: usize = 88;
+    pub const UPLOAD_BYTES: usize = 89;
+    pub const PACK_BYTES: usize = 90;
+    pub const HEAP_USED_BYTES: usize = 91;
+    pub const WORDS: usize = 92;
 }
 
 /// FRAME's columns in groups, every column in one (column.test.ts), in the order a reader asks in turn — where the time went, what was drawn and cast, what landed, and what it holds. The trace prints every column by its group's order, so a column the core adds is printed without a word written for it; the panel shows some groups, a few rows each, and the report its own lines. The `rays` group's columns lie in FRAME in its order, which the window's sums of them (STAT.frames.rays) keep.
@@ -198,11 +198,11 @@ pub mod task {
 /// One of the worst moving frames since the recording started, by its interval, and what changed from the frame before it: its uploads, their bytes and the heap's high-water mark, each this frame's less that one's, all 0 where `has_prev` is 0. A still interval is long on purpose and is never among them.
 pub mod worst {
     pub const SAMPLE: usize = 0;
-    pub const HAS_PREV: usize = 93;
-    pub const UPLOAD_CNT_DELTA: usize = 94;
-    pub const UPLOAD_DELTA_BYTES: usize = 95;
-    pub const HEAP_USED_DELTA_BYTES: usize = 96;
-    pub const WORDS: usize = 97;
+    pub const HAS_PREV: usize = 92;
+    pub const UPLOAD_CNT_DELTA: usize = 93;
+    pub const UPLOAD_DELTA_BYTES: usize = 94;
+    pub const HEAP_USED_DELTA_BYTES: usize = 95;
+    pub const WORDS: usize = 96;
 }
 
 /// A value's percentiles over n values: p50 and p95 each the nearest rank, the least value at or above which lie no more than that share of the n (sorted, the value at ceil(q × n) − 1), and the most.
@@ -255,32 +255,32 @@ pub mod stat {
         pub const STAGE: usize = 16;
         pub const PERF: usize = 19;
         pub const EFFECTS_P95: usize = 22;
-        pub const GPU_BUSY: usize = 30;
-        pub const GPU_BUSY_KINDS: usize = 33;
-        pub const PHASES_P95: usize = 60;
-        pub const GPU_SPANS_P95: usize = 62;
-        pub const GPU_SPANS_CNT: usize = 100;
-        pub const KINDS: usize = 138;
-        pub const GPU_PX: usize = 147;
-        pub const RAYS: usize = 148;
-        pub const FIRST: usize = 168;
-        pub const LAST: usize = 261;
-        pub const WORDS: usize = 354;
+        pub const GPU_BUSY: usize = 29;
+        pub const GPU_BUSY_KINDS: usize = 32;
+        pub const PHASES_P95: usize = 59;
+        pub const GPU_SPANS_P95: usize = 61;
+        pub const GPU_SPANS_CNT: usize = 99;
+        pub const KINDS: usize = 137;
+        pub const GPU_PX: usize = 146;
+        pub const RAYS: usize = 147;
+        pub const FIRST: usize = 167;
+        pub const LAST: usize = 259;
+        pub const WORDS: usize = 351;
     }
     pub mod tasks {
-        pub const AT: usize = 354;
+        pub const AT: usize = 351;
         pub const SLOTS: usize = 0;
         pub const WORDS: usize = 138;
     }
     pub mod steps {
-        pub const AT: usize = 492;
+        pub const AT: usize = 489;
         pub const CNT: usize = 0;
         pub const SLOTS: usize = 1;
         pub const WORDS: usize = 161;
     }
     /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame's record is taken (perf/record.rs `perf_fold_recording`): `frame_cnt` the frames folded; the heap's figures by their allocator's names (pxl-core sys/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the body slots' peak (sys/io/body.rs `take_peak`); and `terrain_refusal_cnt` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusal_cnt`). Every word 0 before a frame is folded.
     pub mod recording {
-        pub const AT: usize = 653;
+        pub const AT: usize = 650;
         pub const FRAME_CNT: usize = 0;
         pub const HEAP_LIVE_MAX_BYTES: usize = 1;
         pub const HEAP_RUN_MAX_BYTES: usize = 2;
@@ -292,7 +292,7 @@ pub mod stat {
         pub const TERRAIN_REFUSAL_CNT: usize = 8;
         pub const WORDS: usize = 9;
     }
-    pub const WORDS: usize = 662;
+    pub const WORDS: usize = 659;
 }
 
 /// What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.
@@ -308,7 +308,7 @@ pub mod now {
         pub const WORDS: usize = 5;
     }
     /// Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frame_cnt` the frames the renderer encoded (pxl-render renderer.rs `drawn_frame_cnt`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (pxl-gpu-guest `admit::frame`) or the host still held the stream (pxl-gpu-guest stream.rs) (frame.rs `frame_task`).
-    /// Then the device, as the host wrote its block (spec/gpu/api.json5 DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `err_cnt` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.
+    /// Then the device, as the host wrote its block (spec/gpu/api.json5 DEVICE), the same on the web and natively: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `err_cnt` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.
     pub mod draw {
         pub const AT: usize = 5;
         pub const FRAME_CNT: usize = 0;

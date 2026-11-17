@@ -210,7 +210,7 @@ export function refusal_of(e: unknown): i32 {
 }
 
 /** What reads the guest's memory in place, where what the guest lends lies:
- * the host's end (`Side`), or a device's UI end, in the guest's process. */
+ * the host's end (`Side`), or the native UI end, in the guest's process. */
 export interface Memory {
   /** The `len` bytes the guest lent at `at`, its address
    * (link/wit/types.wit `lent`). */

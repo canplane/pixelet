@@ -2,8 +2,8 @@
 
 //! How a host's staging belt packs a run's writes into its chunks, one rule
 //! that the guest reads to know how many chunks its open stream needs
-//! (pxl-gpu-guest stream.rs `stage`) and the device's host reads to place
-//! them (pxl-gpu-host belt.rs), and that a page's host holds alike
+//! (pxl-gpu-guest stream.rs `stage`) and the native host reads to place
+//! them (pxl-gpu-host belt.rs), and that the web host holds alike
 //! (@pxl/gpu/host belt.ts). The writes staged since the host last submitted
 //! begin at a fresh chunk. A buffer's bytes go as far as the chunk has room
 //! and go on in the next, and a texture's rows, each padded to the copy's

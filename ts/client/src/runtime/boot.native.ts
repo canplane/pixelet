@@ -1,17 +1,17 @@
 // @pxl/client/runtime/boot.native.ts
 
 /**
- * A device's core and xpute's runtime are linked into the app, and the
+ * Natively, the core and xpute's runtime are linked into the app, and the
  * runtime runs the core on a thread of its own, implementing its stop, its
  * clocks, its text and its GPU; the app's lifecycle reaches it natively. The
  * UI opens its end of the runtime and starts the runtime here (@xpute/expo
- * `open_ui`, `start`), and implements for the core, on its own thread, what a
- * page's worker implements (worker.ts): the files, the settings among them in
+ * `open_ui`, `start`), and implements for the core, on its own thread, what the
+ * web worker implements (worker.ts): the files, the settings among them in
  * the platform's storage (storage.native.ts), and the objects, over the
  * core's memory, where the guest lends their buffers, and the source's
  * declaration, whose state is the UI's here. The GPU's host tells the UI what
- * it has of a GPU through its own module, as a page's worker does. Where the
- * boot stands is moved as on a page (ui.ts).
+ * it has of a GPU through its own module, as the web worker does. Where the
+ * boot stands is moved as on the web (ui.ts).
  */
 
 import { state_on } from "@pxl/gpu/expo";

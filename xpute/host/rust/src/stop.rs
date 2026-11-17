@@ -4,7 +4,7 @@
 //! report of a broken invariant, handed to the host's runtime (runtime.rs
 //! `stopped`), which reports it, before the guest stops (stop.ts). The host's
 //! own failures are its runtime's to tell, as a stop and a trap, and so is a
-//! guest's trap, as a page's stop and trap are two messages.
+//! guest's trap, as the web's stop and trap are two messages.
 
 use std::rc::Rc;
 

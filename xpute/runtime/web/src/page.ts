@@ -1,7 +1,7 @@
 // @xpute/runtime-web/page.ts
 
 /**
- * The UI's end of the guest's worker, as @xpute/expo is a device's of its
+ * The UI's end of the guest's worker, as @xpute/expo is the native one of its
  * runtime: the link's end (@xpute/link `End`) over the page's half of the
  * UI's crossing, a port to the worker (`open_ui`), on which the UI calls the
  * guest and implements its imports by the generated bindings as any end does;
@@ -16,7 +16,7 @@
  * answer to a call of the UI's. What the worker posts besides is a message by
  * its kind, the runtime's own and a host's or the program's alike
  * (`message_on`), heard as it comes. Nothing is kept for a late hearer: the
- * worker dies with its page, so no UI comes late to it, where a device's
+ * worker dies with its page, so no UI comes late to it, where the native
  * runtime outlives its UI and keeps the guest's stop and its trap.
  */
 
@@ -179,11 +179,11 @@ export function trap_on(hear: (err: string) => void): { remove(): void } {
 }
 
 /** Starts the guest with what the UI implements, once it is mounted on the
- * UI's end, as @xpute/expo `start` does on a device: the worker is sent the
+ * UI's end, as @xpute/expo `start` does natively: the worker is sent the
  * guest's `module`, fetched with `init`, the UI's port, the named handles and
  * prefixes of what the UI implements, and `more`, the program's own fields,
  * which its worker reads with them (`Instantiate`). The guest is told the
- * page's lifecycle from here on (`tell_life`), as a device's module tells its
+ * page's lifecycle from here on (`tell_life`), as the native module tells its
  * runtime the app's. */
 export function start(
   module: string,

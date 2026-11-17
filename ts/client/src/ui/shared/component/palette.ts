@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/component/palette.ts
 
-/** iOS's label and status colors as they are in light mode, so that a page
+/** iOS's label and status colors as they are in light mode, so that the web
  * and Android draw as an iPhone does. */
 
 import {

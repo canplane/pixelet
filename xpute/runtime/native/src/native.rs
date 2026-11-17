@@ -1,7 +1,7 @@
 // xpute-runtime-native/native.rs
 
-//! The runtime as a native device's app reaches it, as @xpute/runtime-web is
-//! a page's: xpute's module starts the guest and calls the runtime's entries
+//! The runtime as a native app reaches it, as @xpute/runtime-web is the
+//! web's: xpute's module starts the guest and calls the runtime's entries
 //! through the C ABI (xpute.h), which the program exports by `native_abi!`
 //! with what it starts its guest with (`Boot`), and on Android the same calls
 //! under JNI's names (jni.rs). What the app hears, a batch waiting, a stop
@@ -80,7 +80,7 @@ fn on_guest_thread() -> bool {
 }
 
 /// Starts the guest on a thread of its own, as @xpute/runtime-web worker.ts
-/// `run` does on a page: names the thread the guest's, gives the host what it
+/// `run` does on the web: names the thread the guest's, gives the host what it
 /// needs of the runtime (xpute-host runtime.rs `Runtime`), and once a failure
 /// of the host's is a trap (`hook`), runs each mount on the host's side it
 /// makes (`link::side`), then mounts what the UI implements
@@ -169,7 +169,7 @@ fn caught(f: impl FnOnce()) {
 /// then the link is
 /// trapped, so that no answer the dead thread owed leaves the guest waiting,
 /// and the app hears the trap after the stop, its cause what the panic gives,
-/// its message and place, as a page's trap carries the throw's, or a bug's
+/// its message and place, as the web's trap carries the throw's, or a bug's
 /// place. A panic after the guest trapped
 /// is no failure of the host's. The link's state
 /// is the guest thread's: a panic there is told at once, before it unwinds,

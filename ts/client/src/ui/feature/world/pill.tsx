@@ -1,7 +1,7 @@
 // @pxl/client/ui/feature/world/pill.tsx
 
 /**
- * A pill whose place and width can move. On a page and on Android it moves by
+ * A pill whose place and width can move. On the web and on Android it moves by
  * transforms alone. It does not scale, because scaling squashes its round
  * ends, and it does not animate its width, because that leaves ghosts over
  * the canvas in iOS WebKit. So it is drawn as a fixed circle at its left end

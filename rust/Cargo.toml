@@ -10,12 +10,12 @@
 # and over them two crates, pxl-render and pxl-core, and
 # pxl-core is its artifact: one `xpute_guest::link!` makes it the WebAssembly module the
 # main thread and each worker instantiate for themselves, and the guest
-# linked into a device's app. pxl-runtime is that app's library: the core
+# linked into the native app. pxl-runtime is that app's library: the core
 # with the runtime it composes on the core's thread (xpute-runtime-native and
 # xpute-host) and the GPU's host beside it (pxl-gpu-host), which draws
-# with wgpu where the page's host draws with the browser's WebGPU. The GPU is
+# with wgpu where the web host draws with the browser's WebGPU. The GPU is
 # pixelet's plugin of xpute: its link (pxl-gpu-link), the guest's encoder
-# (pxl-gpu-guest) and the device's host (pxl-gpu-host). The server end
+# (pxl-gpu-guest) and the native host (pxl-gpu-host). The server end
 # is native: pxl-geo and pxl-api over
 # pxl-server, pxl-geo-bake beside them for what is baked rather than answered,
 # and pxl-geo-spec where the two geo halves read the same tables.
@@ -84,7 +84,7 @@ pxl-geo-spec = { path = "server/geo-spec" }
 
 # The client's crates name the core's memory by offsets from one base
 # (xpute-link mem.rs), and an offset cast straight to a pointer
-# reads the wrong memory wherever the base is not 0 — on a device, where the
+# reads the wrong memory wherever the base is not 0 — natively, where the
 # core faulted reading a terrain page from address 92 MB. `as` spells that
 # cast and every harmless one alike, so the harmless ones are made to say
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
@@ -188,7 +188,7 @@ inherits = "release"
 opt-level = 3
 panic = "unwind"
 
-# What the device app links (pxl-runtime, the core with its runtime, as
+# What the native app links (pxl-runtime, the core with its runtime, as
 # ts/client/package.json `xpute.guest.runtime` names it). The release profile's `z` is for a download, and an app is installed
 # once and then runs every frame on a phone's battery, so it takes the faster
 # code. It unwinds: the core's exports catch its panic as a trap, which ends
@@ -210,7 +210,7 @@ lto = false
 codegen-units = 256
 incremental = true
 
-# The device's library as a dev build of the app rebuilds it
+# The native library as a dev build of the app rebuilds it
 # (ts/client/script/core-build.py), as `watch` is the module's: the
 # native profile's code, without the one codegen unit and the whole-graph
 # LTO that make every build of it start over, so a change recompiles the

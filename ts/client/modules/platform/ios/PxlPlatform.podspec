@@ -1,6 +1,6 @@
 # @pxl/client/modules/platform/ios/PxlPlatform.podspec
 #
-# The device's half of the client's services on iOS (the .native files in
+# The native half of the client's services on iOS (the .native files in
 # ts/client/src/service/platform/). It answers what the UI asks of the system,
 # such as storage, the clipboard, text and the compass, and makes the native
 # library's own calls besides xpute's (`import PxlNative`, the transport's
@@ -13,7 +13,7 @@ require 'json'
 Pod::Spec.new do |s|
   s.name = 'PxlPlatform'
   s.version = '0.0.0'
-  s.summary = 'The platform the pixelet UI asks of on a device.'
+  s.summary = 'The platform the pixelet UI asks of on iOS.'
   # The site's URL (spec/spec/route.json5 `origins`), as the client's route.spec.ts writes it.
   s.homepage = File.read(File.join(__dir__, '../../../src/service/origin/route.spec.ts'))[/SITE_URL = "([^"]+)"/, 1]
   s.license = { type: 'UNLICENSED' }

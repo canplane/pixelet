@@ -357,10 +357,10 @@ by the platform, so each platform shapes its own scripts and emoji.
 The world lives in one Rust **core**, `pxl-core`, which draws through
 `pxl-render`. It is a pure guest of xpute: linked with `xpute-guest` into one
 image, it owns no device and names no host, and what the app composes around it
-gives it a GPU, its files and its time, and nothing else reaches in. On a page
-the image is a WebAssembly module and its runtime the page's worker; on a device
-it is linked into the app with `pxl-runtime`, the device's counterpart of that
-worker, and xpute's native runtime runs it on a thread of its own. The world
+gives it a GPU, its files and its time, and nothing else reaches in. On the web
+the image is a WebAssembly module and its runtime a worker; natively it is
+linked into the app with `pxl-runtime`, the native counterpart of that worker,
+and xpute's native runtime runs it on a thread of its own. The world
 cannot tell which, and does not need to, so the same world runs everywhere.
 Every interface between the core and what implements its imports is declared in
 WIT, pixelet's own under `spec/client/core/wit/`; xpute's own documents describe
@@ -491,13 +491,13 @@ thing runs:
   rust/client/content/  pxl-content, the content: decor, caves, clouds
   rust/client/global/   pxl-global, the global the core's state lives in
   rust/client/core/     pxl-core, the core
-  rust/client/runtime/  pxl-runtime, the core as xpute's runtime starts it on
-                        a device
+  rust/client/runtime/  pxl-runtime, the core as xpute's runtime starts it
+                        natively
   rust/client/render/   pxl-render, the renderer and its WGSL
   rust/server/          the servers and the bakes, one crate a folder
   rust/tool/            pxl-tool, the generator and the checks
   ts/client/            the app: the UI, its services and its runtime
-  ts/gpu/               @pxl/gpu, the GPU's link, page host and device module
+  ts/gpu/               @pxl/gpu, the GPU's link, web host and native module
   ts/server/edge/       the Cloudflare Worker in front of everything
   spec/                 the specs and WIT both languages' code is
                         generated from

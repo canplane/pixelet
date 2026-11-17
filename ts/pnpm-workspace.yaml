@@ -1,5 +1,5 @@
 # pixelet's TypeScript workspace. It holds the client, which is one Expo app
-# for the page and the device; the build scripts its bundler reads the client
+# for the web and native; the build scripts its bundler reads the client
 # through; the XR app (xr); the shader tools; the GPU, pixelet's plugin of
 # xpute (gpu/); and xpute's packages, as xpute's own workspace lists them.
 packages:

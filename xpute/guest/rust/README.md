@@ -2,8 +2,8 @@
 
 xpute-guest is the guest's end of xpute in Rust: its end of the link to its
 host, the clocks it reads, its log records and the report of its failures. A
-program links it into its guest, which it builds as a WebAssembly module for a
-page (`wasm32-unknown-unknown`) and as a library of a device's crate.
+program links it into its guest, which it builds as a WebAssembly module for
+the web (`wasm32-unknown-unknown`) and as a library of a native crate.
 
 The guest's three exports are defined by one macro, `link!`, given four things.
 The first is a frame's cap in bytes, a multiple of 8 that holds a frame's words
@@ -16,7 +16,7 @@ symbols, which catch the guest's panic and answer a trap.
 
 From the first export on, the guest's own bug or panic is its stop, told to the
 host before it stops (`stop::hook`); one in `link_init` itself, before the link
-is laid, is told by the trap alone. On a device the hook is the process's, so a
+is laid, is told by the trap alone. Natively the hook is the process's, so a
 panic that is not the guest's own, another thread's or the host's while the
 guest is out on `link_out`, goes on to the runtime's hook.
 

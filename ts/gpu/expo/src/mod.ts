@@ -4,10 +4,10 @@
  * This is the GPU's module, which an Expo app autolinks (ios/, android/)
  * beside xpute's (@xpute/expo). The GPU's host runs in the app's
  * own process (pxl-gpu-host) and opens its device when the guest
- * asks for one, as a page's GPU host does (web.ts `WebGpu`). The module
+ * asks for one, as the web GPU host does (web.ts `WebGpu`). The module
  * tells the host of each display frame from the platform's display link
  * itself (Swift, Kotlin), tells what the host has of a GPU as it changes
- * (`state_on`), as a page's host reports it, and gives the view a guest's
+ * (`state_on`), as the web host reports it, and gives the view a guest's
  * surface draws into (`SurfaceView`).
  */
 

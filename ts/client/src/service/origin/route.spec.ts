@@ -71,7 +71,7 @@ export const WORKER_FIRST = [
 
 /** The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),
  * the app's page and every root, the bucket's served at the edge and the
- * servers' relayed to the origin. A device's app, which has no origin of its
+ * servers' relayed to the origin. The native app, which has no origin of its
  * own, reads from it, and so does a dev server's published deployment. */
 export const SITE_URL = "https://plei.me";
 

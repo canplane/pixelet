@@ -36,7 +36,7 @@ extern "C" fn link_out(at: u64) -> i32 {
 }
 
 /// The core's heap, the tests' process's global allocator, as pxl-runtime
-/// declares it a device's.
+/// declares it natively.
 #[global_allocator]
 static HEAP: Heap = Heap;
 

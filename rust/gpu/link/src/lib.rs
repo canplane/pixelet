@@ -30,7 +30,7 @@ pub struct GpuAsk {
 }
 
 /// These are the settings of the GPU's host that the program chooses, the
-/// same on a page and a device; a device's host chooses the rest of its
+/// same on the web and natively; the native host chooses the rest of its
 /// config (pxl-gpu-host `Config`, `native::config`). It crosses no link, so
 /// no spec owns it: it is defined in Rust and TypeScript alike, the same
 /// fields and types (@pxl/gpu `GpuConfig`).

@@ -14,20 +14,22 @@ pub enum StepName {
     Camera = 2,
     Edit = 3,
     Ghost = 4,
-    Environment = 5,
-    Companion = 6,
-    Demand = 7,
-    Scene = 8,
+    Location = 5,
+    Environment = 6,
+    Companion = 7,
+    Demand = 8,
+    Scene = 9,
 }
 
 impl StepName {
     /// Every member, in its source's own order.
-    pub const ALL: [StepName; 9] = [
+    pub const ALL: [StepName; 10] = [
         StepName::Controller,
         StepName::Input,
         StepName::Camera,
         StepName::Edit,
         StepName::Ghost,
+        StepName::Location,
         StepName::Environment,
         StepName::Companion,
         StepName::Demand,
@@ -42,10 +44,11 @@ impl StepName {
             2 => Some(StepName::Camera),
             3 => Some(StepName::Edit),
             4 => Some(StepName::Ghost),
-            5 => Some(StepName::Environment),
-            6 => Some(StepName::Companion),
-            7 => Some(StepName::Demand),
-            8 => Some(StepName::Scene),
+            5 => Some(StepName::Location),
+            6 => Some(StepName::Environment),
+            7 => Some(StepName::Companion),
+            8 => Some(StepName::Demand),
+            9 => Some(StepName::Scene),
             _ => None,
         }
     }
@@ -58,6 +61,7 @@ impl StepName {
             StepName::Camera => "camera",
             StepName::Edit => "edit",
             StepName::Ghost => "ghost",
+            StepName::Location => "location",
             StepName::Environment => "environment",
             StepName::Companion => "companion",
             StepName::Demand => "demand",
@@ -75,20 +79,18 @@ pub enum EffectName {
     Dst = 3,
     Decor = 4,
     Object = 5,
-    Location = 6,
-    Setting = 7,
+    Setting = 6,
 }
 
 impl EffectName {
     /// Every member, in its source's own order.
-    pub const ALL: [EffectName; 8] = [
+    pub const ALL: [EffectName; 7] = [
         EffectName::Navigation,
         EffectName::Bootstrap,
         EffectName::Follow,
         EffectName::Dst,
         EffectName::Decor,
         EffectName::Object,
-        EffectName::Location,
         EffectName::Setting,
     ];
 
@@ -101,8 +103,7 @@ impl EffectName {
             3 => Some(EffectName::Dst),
             4 => Some(EffectName::Decor),
             5 => Some(EffectName::Object),
-            6 => Some(EffectName::Location),
-            7 => Some(EffectName::Setting),
+            6 => Some(EffectName::Setting),
             _ => None,
         }
     }
@@ -116,7 +117,6 @@ impl EffectName {
             EffectName::Dst => "dst",
             EffectName::Decor => "decor",
             EffectName::Object => "object",
-            EffectName::Location => "location",
             EffectName::Setting => "setting",
         }
     }

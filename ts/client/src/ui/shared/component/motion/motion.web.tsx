@@ -1,7 +1,7 @@
 // @pxl/client/ui/shared/component/motion/motion.web.tsx
 
 /**
- * A view on a page, moved by the Web Animations API, which runs on the
+ * A view on the web, moved by the Web Animations API, which runs on the
  * compositor. The view's style is always the pose it was given last, so a
  * canceled animation leaves the view where it was told to be. A pose given
  * while an animation runs starts from the view's computed style.

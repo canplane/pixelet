@@ -2,9 +2,10 @@
 
 /**
  * Text measured and drawn on the browser's canvas, which falls back through
- * every script and draws color emoji as the page does. It has no twin here: a
- * device's text is the platform module's (Text.swift, Text.kt), which
- * pxl-runtime's text.rs implements, so service/core/text.ts imports it by name.
+ * every script and draws color emoji as the page does. It has no twin here: the
+ * native text is the platform module's (Text.swift, Text.kt), which
+ * pxl-runtime's text.rs implements, so service/core/text.ts imports it by
+ * name.
  */
 
 import type { f32, u32 } from "@xpute/kit/abi/word.ts";
@@ -17,9 +18,9 @@ function face(weight: u32, px: f32): string {
 
 let canvas: OffscreenCanvasRenderingContext2D | null | undefined;
 
-/** The canvas text is set on. A place with none answers ENOSYS, as a device
- * whose system text is not yet given does (pxl-runtime text.rs), and nothing
- * is made up in its place. */
+/** The canvas text is set on. A place with none answers ENOSYS, as a native
+ * runtime whose system text is not yet given does (pxl-runtime text.rs), and
+ * nothing is made up in its place. */
 function context(): OffscreenCanvasRenderingContext2D {
   if (canvas === undefined) {
     canvas =

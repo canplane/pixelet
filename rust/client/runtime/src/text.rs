@@ -1,9 +1,9 @@
 // pxl-runtime/text.rs
 
-//! A device's `text` (spec/client/core/wit/text.wit), implemented on the
+//! The native `text` (spec/client/core/wit/text.wit), implemented on the
 //! host's side of the link and answered by the system's font engine
 //! (Text.swift, Text.kt) on the core's own thread before the call returns, so
-//! an entry that needs a text waits for no other thread. On a page the
+//! an entry that needs a text waits for no other thread. On the web the
 //! runtime answers the same calls (ts/client/src/service/core/text.ts); the
 //! core breaks the lines itself (pxl-core sys/io/text.rs).
 

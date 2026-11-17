@@ -4,7 +4,7 @@
 //! lends the device's block to `device.lost`, asks the device ready, and once
 //! the device is lost asks again. A device refused is asked again after a
 //! wait that doubles with each refusal in a row (link/param.rs), or at once
-//! when the app is shown again, the same on a page and on a device. Another
+//! when the app is shown again, the same on the web and natively. Another
 //! task hears each wake of the device (`settle`).
 
 use core::future::poll_fn;

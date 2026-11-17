@@ -5,7 +5,7 @@
 //! shown come through the queue, and a UI attached at each start (remote.rs
 //! `accept`). The guest's answer is its own: no error it answers raises
 //! anything, ENOENT where it implements none and EPIPE where it trapped among
-//! them, as on a page (life.ts `take_answer`).
+//! them, as on the web (life.ts `take_answer`).
 
 use xpute_host::abi;
 
@@ -13,7 +13,7 @@ use crate::link::side;
 
 /// Tells the guest `hidden` or `shown`.
 pub(crate) fn tell(shown: bool) {
-    // The guest's answer is its own, as a page's is (life.ts).
+    // The guest's answer is its own, as the web's is (life.ts).
     let _ = if shown {
         abi::life::shown(side())
     } else {

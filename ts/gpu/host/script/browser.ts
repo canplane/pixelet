@@ -1,4 +1,4 @@
-// Runs src/host.test.ts where the page's GPU host runs: in
+// Runs src/host.test.ts where the web GPU host runs: in
 // Chrome, on its WebGPU. The test is bundled for the browser and served beside
 // the tree's golden records, whose root the bundle's golden reader is handed.
 // Chrome is started headless on the page, and the page posts its outcome back.

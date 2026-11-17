@@ -75,7 +75,7 @@ export function Toaster() {
   const swipe = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!swipe.current) {
     swipe.current = PanResponder.create({
-      // The stack claims a touch as it starts. A mouse drag on a page reports
+      // The stack claims a touch as it starts. A mouse drag on the web reports
       // each move to whatever lies under the cursor, so a swipe down that
       // reached the dock before the stack claimed it would turn the dock.
       onStartShouldSetPanResponder: () => toast_count() > 1,
@@ -112,7 +112,7 @@ export function Toaster() {
               : arrived > 0
                 ? MAKE_ROOM
                 : SETTLE;
-          // This view takes no opacity, because an opacity over a device's
+          // This view takes no opacity, because an opacity over the native
           // glass draws the glass wrongly. The card fades through `fade`.
           return (
             <Motion

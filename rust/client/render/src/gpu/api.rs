@@ -2,8 +2,8 @@
 
 //! The WebGPU calls the renderer makes. They are written through the GPU's encoder (pxl-gpu-guest
 //! `encode`) into one stream in the core's memory, and the GPU's host runs the records the core
-//! lends it each frame (pxl-gpu-guest `stream`). The page's host runs them on WebGPU
-//! (@pxl/gpu/host) and the device app's on wgpu (pxl-gpu-host), from the same
+//! lends it each frame (pxl-gpu-guest `stream`). The web host runs them on WebGPU
+//! (@pxl/gpu/host) and the native app's on wgpu (pxl-gpu-host), from the same
 //! records. What is pixelet's own stays here: the pipeline records expanded into descriptors, the
 //! shape of a pass, and the timing of the GPU spans a frame is timed in (spec/span.spec.rs).
 //!

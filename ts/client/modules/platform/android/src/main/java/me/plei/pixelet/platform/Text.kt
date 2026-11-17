@@ -29,7 +29,7 @@ fun textRaster(text: String, weight: Double, px: Double, rgba: Long, x: Double, 
   // Android counts down from the top row, and its ascent is negative.
   Canvas(bitmap).drawText(text, x.toFloat(), height / 2f - (metrics.ascent + metrics.descent) / 2f, paint)
   // A bitmap's pixels copy out as premultiplied RGBA bytes. The core reads
-  // straight alpha, which is what a page's canvas always hands back, so the
+  // straight alpha, which is what the web canvas always hands back, so the
   // colors are divided by alpha here and both platforms give the same.
   val bytes = ByteArray(width * height * 4)
   bitmap.copyPixelsToBuffer(java.nio.ByteBuffer.wrap(bytes))

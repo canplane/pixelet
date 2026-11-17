@@ -7,7 +7,7 @@
 //! names nothing else of the runtime: the runtime's link tells it a trap
 //! (link.rs `trap`), the host hands the runtime the guest's stop (native.rs
 //! `stopped`), and the runtime's hook a failure of the host's (native.rs
-//! `hook`), each written and told here, as a page's runtime posts its own (@xpute/runtime-web
+//! `hook`), each written and told here, as the web runtime posts its own (@xpute/runtime-web
 //! worker.ts `tell`).
 
 use std::sync::{Mutex, MutexGuard};
@@ -22,7 +22,7 @@ pub type Tell = extern "C" fn();
 pub type Stopped = extern "C" fn(i32, *const u8, usize, u32, u64, u64);
 
 /// What tells the app the guest trapped: what stopped it, its UTF-8 and
-/// length, as a page's trap carries its error (@xpute/runtime-web `Trap`).
+/// length, as the web's trap carries its error (@xpute/runtime-web `Trap`).
 pub type Trapped = extern "C" fn(*const u8, usize);
 
 static NOTIFY: Mutex<Option<Tell>> = Mutex::new(None);

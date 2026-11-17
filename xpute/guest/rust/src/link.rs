@@ -143,7 +143,7 @@ pub fn task_return(t: Tag, result: i32, data: Args) {
 
 /// Whether control is in the guest's own code on this thread: inside an
 /// entry, and not out on the host through `link_out`. A program's report
-/// of its failures takes only these, as hooks are the process's on a device.
+/// of its failures takes only these, as hooks are the process's natively.
 pub fn in_guest() -> bool {
     ENTERED.get() && !SIDE.with(Side::crossing)
 }

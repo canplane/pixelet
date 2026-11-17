@@ -9,7 +9,7 @@
 //! is a frame's. The writes are packed as pxl-gpu-link `Pack` says.
 //!
 //! The pool holds one chunk more than the frame latency
-//! (`Config::frame_latency`), as a page's does. The device's block tells the
+//! (`Config::frame_latency`), as the web's does. The device's block tells the
 //! guest how many of them are free, and the guest admits the writes that may
 //! wait only as far as they hold (pxl-gpu-guest stream.rs `stage`). A write
 //! that cannot wait is recorded however few are free, and where a run finds

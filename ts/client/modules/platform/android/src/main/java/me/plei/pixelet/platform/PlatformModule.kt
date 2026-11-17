@@ -15,7 +15,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
- * The device's half of the client's services on Android (the .native files in
+ * The native half of the client's services on Android (the .native files in
  * ts/client/src/service/platform/). It answers what the UI asks of the system,
  * under the same names as the iPhone's PlatformModule.swift. The core is in
  * xpute's own module (@xpute/expo), and the view it draws into in @pxl/gpu/expo's.

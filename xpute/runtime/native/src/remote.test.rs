@@ -1,7 +1,6 @@
 // xpute-runtime-native/remote.test.rs
 
-//! A reload on a device attaches a new UI to the same runtime (remote.rs
-//! `accept`).
+//! A native reload attaches a new UI to the same runtime (remote.rs `accept`).
 
 use std::rc::Rc;
 use std::sync::Mutex;

@@ -68,7 +68,7 @@ impl GpuHost {
             self.scratch = scratch;
             k += 2 + n;
         }
-        // The run's staged writes reach the queue with the run, as a page's
+        // The run's staged writes reach the queue with the run, as the web
         // host submits its own.
         if self.uploads.is_some() && !self.lost() {
             self.submit(core::iter::empty());
@@ -146,7 +146,7 @@ impl GpuHost {
     /// `size` texels at `place`, read from `bytes` as `layout` says (its bytes
     /// per row and rows per image, a row being a row of texel blocks). Each
     /// image goes a band of whole rows at a time, each row padded to the
-    /// copy's row alignment (spec `ROW_ALIGNMENT`), as a page's
+    /// copy's row alignment (spec `ROW_ALIGNMENT`), as the web
     /// host stages it (@pxl/gpu/host host.ts `_write_texture`). An empty
     /// `size` writes nothing, as in WebGPU, and any other has bytes per row
     /// (pxl-gpu-guest `call::write_texture`).
@@ -225,7 +225,7 @@ impl GpuHost {
     }
 
     /// Lets the object at `id` go. The writes staged so far reach the queue
-    /// first, as a page's host submits its own, since a submit refuses a
+    /// first, as the web host submits its own, since a submit refuses a
     /// copy into what has been destroyed.
     pub(super) fn destroy(&mut self, id: u32) {
         self.making.remove(&handle_slot(id));
