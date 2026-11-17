@@ -23,7 +23,7 @@ use pxl_spec::value;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::scatter::{Candidate, brick_cap, draw_variant, stands_at};
+use crate::scatter::{Candidate, brick_cap, draw_variant, shows_at};
 use pxl_spec::asset::decor::{Decor, Orientation, ROWS, Row};
 
 /// The lanes of a decor pass's workgroup.
@@ -255,7 +255,7 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 
 /// A record's first word: its decor and variant, a byte each, its turn in quarters, and the
 /// clip level zoom it was generated at, or for placed decor the coarsest it stands at
-/// (`scatter::coarsest_stand`); above them, once sized, its region (`drawing::REGION_SHIFT`).
+/// (`scatter::coarsest_shown`); above them, once sized, its region (`drawing::REGION_SHIFT`).
 pub const fn rec_word(decor: u32, variant: u32, turn: u32, cell_zoom: Zoom) -> u32 {
     decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell_zoom << CELL_ZOOM_SHIFT
 }
@@ -406,7 +406,7 @@ pub struct Prop {
 /// finest zoom at which the world holds its leaf column (`DecorQuery::finest`), around that
 /// zoom's column surface, so a candidate faces and generates alike at every clip level it is
 /// generated at. Its pose stands as itself only at a clip level its size stands at
-/// (`stands_at`). It returns where it stands and whether it generates there, which where not
+/// (`shows_at`). It returns where it stands and whether it generates there, which where not
 /// `boxed` is that it stands and no read of its vote lacks; none where its column surface is
 /// not found.
 pub fn placement(
@@ -443,7 +443,7 @@ pub fn placement(
             at,
             sink,
         },
-        found && generates && stands_at(decor, variant, cell_zoom),
+        found && generates && shows_at(decor, variant, cell_zoom),
     ))
 }
 
@@ -538,7 +538,7 @@ pub fn dist2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// it stands where one of its size that the ground generates would. A generated one is asked
 /// at the zoom held where it stands (`ray_zoom`), as a ray there draws. Each clip level
 /// generates what stands as itself at it (pxl-core domain/view/lens.rs `decor_zooms`,
-/// `stands_at`).
+/// `shows_at`).
 pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
     if placed {
         at >= cell_zoom

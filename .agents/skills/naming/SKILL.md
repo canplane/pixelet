@@ -92,7 +92,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | thing | name | not |
   | --- | --- | --- |
   | where the camera looks from | `eye` | camera position |
-  | the point the camera turns about (the eye itself in first person) | `pivot` | focus, center, target |
+  | the point the camera turns about (under the eye in first person) | `pivot` | focus, center, target |
   | where the pivot is going | its `to` (`pivot_to`, `put_pivot`, `resolve_to`) | target |
   | the direction the camera faces | `facing` | look |
   | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |

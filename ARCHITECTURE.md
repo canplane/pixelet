@@ -18,7 +18,7 @@ pixelet takes that literally. The eye sets the detail: every place is looked at
 in cubes just large enough to fill one cell of the screen, so what a frame costs
 is bound to the screen and not to the size of the world. Whatever looks asks the
 same question, what fills this cube of space at this size, and one function
-answers it, for the pixel's ray, the walker's feet, the pointer and the hand
+answers it, for the pixel's ray, the body's feet, the pointer and the hand
 that builds alike. What that function can compute is never stored: the ground is
 baked small, trees and caves grow from a seed wherever they are asked about, and
 only what people build is kept. What it does not know yet it never makes up; a
@@ -230,16 +230,17 @@ a cell at the zoom its distance asks for
 
 Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`).
 So there is no collision mesh beside a drawing mesh to drift apart: what you
-see is what you stand on and what you click. What a body stands
-on and what an edit takes are the world's at its finest held zoom, not the
-eye's: the walker stands on the first cell that fills under it, the orbit camera
-keeps clear of what is there, and the pointer asks at the finest zoom and
-judges what it struck by the zoom the eye's rays draw there
-(`domain/control/edit/pick.rs`). Whether a walker is there at all is the
+see is what you stand on and what you click. Control's rays read the world as
+an eye's do, by their distance from where they start, the same in every
+direction, and what one meets far off it reads again from near
+(`domain/query/ray.rs` `World::near`): a body stands on what is met at its
+own cell's zoom, the orbit camera keeps clear of what its way meets, and the
+pointer strikes what is held, judging it by the zoom the eye's rays draw there
+(`domain/control/edit/pick.rs`). Whether a body is there at all is the
 eye's: it fills a leaf cell, and it stands, its character drawn and its walk
 walked, at the zooms at which a cube of that cell is drawn, as a decor of
 that box is; past them it goes where it is sent (`domain/query/support.rs`
-`walker_stands`).
+`body_shown`).
 
 Decor is part of that answer on the CPU alone, since the GPU draws it as models
 and its rays never ask for it: a leaf cell the layers leave void is the decor
@@ -471,7 +472,7 @@ every observer. The machinery under it is earlier work:
 | Earth Engine's `MODE` pyramiding | The ground's fold: a parent's asset id is the majority of the four under it |
 | Cesium 3D Tiles' `preloadAncestors` | Demand: the tiles on the line over a missing one are asked for, so a coarser answer is held wherever the view looks |
 | Web Mercator (EPSG:3857), WGS 84 | The plane a position follows, one lap of X its whole width, and the Earth's radius |
-| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | The walker: blocked, it steps up and slides along the wall as `PM_ClipVelocity` clips the velocity, with no step height but the ceiling's, and settles on the floor |
+| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | The body: blocked, it steps up and slides along the wall as `PM_ClipVelocity` clips the velocity, with no step height but the ceiling's, and settles on the floor |
 | Amanatides and Woo's voxel traversal | The ray's walk: the next cell along a ray, by the share of the way to each axis's edge |
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010) | The ray's descent: push, advance and pop down the octree, and a split passed whole where the ray misses its contour, here a box |
 | Laine and Karras's beams; Reshetov et al. | The beam rays: rays at a cell's corners walk the descent its pixels share, and the samples walk on from where the nearest stopped |

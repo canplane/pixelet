@@ -51,18 +51,6 @@ pub(crate) fn at_zoom(tile: Zoom) -> Detail {
     }
 }
 
-/// The level of detail that reads what is held as finely as it is held: the
-/// ground at its cells, which answer the same when asked finer, and what is
-/// placed at its own zoom. Where the eye draws something coarser, the asker
-/// judges that by `by_dist` (domain/control/edit/pick.rs `Pick`).
-pub(crate) fn finest() -> Detail {
-    let [_, finest] = zoom_range();
-    Detail {
-        range: [finest, finest],
-        spacing: Spacing::NONE,
-    }
-}
-
 /// The camera grid's level of detail: at each distance from the ray's
 /// origin, the cell zoom whose cell, drawn whole, spans at least one grid
 /// cell from any direction (pxl-spec space/camera/grid.rs `cell_zoom_at`).
@@ -218,6 +206,18 @@ impl CastWorld<'_> {
     }
 }
 
+impl CastWorld<'_> {
+    /// `answer` of a walk that ended as `end`: one that ended at what no
+    /// node answers is a lack, whatever answered before it, since it did not
+    /// go its reach.
+    fn ended<T>(&self, v: Option<T>, end: End) -> Answer<Option<T>> {
+        match (end, self.lack) {
+            (End::Lack, Some(l)) => Answer::Lack(l),
+            _ => self.answer(v),
+        }
+    }
+}
+
 impl Query for CastWorld<'_> {
     type At = At;
 
@@ -279,24 +279,131 @@ impl World {
         self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
     }
 
-    /// The first thing a viewer sees along `ray`, the same walk stopping at a
-    /// decor as the frame draws it: everything placed and, of what the ground
-    /// generates at the leaves, `decors` (`lens::leaf_decors`).
-    pub(crate) fn first_visible(
-        &self,
-        ray: &Ray,
-        detail: Detail,
-        decors: u32,
-    ) -> Answer<Option<Hit>> {
-        let mut path = Path::default();
-        self.along(
+    /// The first cell that stops a body along `ray`, read as an eye at its
+    /// origin reads the world and met at the finest zoom held (`near`).
+    pub(crate) fn first_met(&self, ray: &Ray) -> Answer<Option<Hit>> {
+        let [_, own] = zoom_range();
+        self.near(
             ray,
-            detail,
+            own,
             Until::Opaque,
-            Some(decors),
-            &mut path,
+            None,
+            &mut Path::default(),
             &mut None,
         )
+    }
+
+    /// The first thing a viewer sees along `ray`, read as `first_met` reads:
+    /// everything placed and, of what the ground generates at the leaves,
+    /// `decors` (`lens::leaf_decors`).
+    pub(crate) fn first_seen(&self, ray: &Ray, decors: u32) -> Answer<Option<Hit>> {
+        let [_, own] = zoom_range();
+        self.near(
+            ray,
+            own,
+            Until::Opaque,
+            Some(decors),
+            &mut Path::default(),
+            &mut None,
+        )
+    }
+
+    /// What `ray` first meets that `until` stops at, read by its distance
+    /// from where the ray starts, as an eye's ray reads: the camera grid's
+    /// zoom there, no finer than `own` and no coarser than the ray's reach
+    /// asks. What it meets past where `own` is read is a coarser cell, which
+    /// may hold what the ray looks for anywhere from the cell before it on,
+    /// so the ray starts again a cell of that zoom short of it. Where the
+    /// cell it would start in, read at `own`, is already what it looks for,
+    /// that began behind it, under what a coarser cell said: the ray back
+    /// from there, looking for the other, finds where, or nothing, when it
+    /// is that cell itself; and what lies two cells on from a cell short of
+    /// there is read at `own`. Either way what is answered is met at `own`, and
+    /// what a coarser cell folds away on the way is passed, as an eye passes
+    /// it. `path` and `descent` are `along`'s.
+    pub(super) fn near(
+        &self,
+        ray: &Ray,
+        own: Zoom,
+        until: Until,
+        decors: Option<u32>,
+        path: &mut Path,
+        descent: &mut Option<Descent>,
+    ) -> Answer<Option<Hit>> {
+        let side = units(own);
+        let (mut from, mut lack) = (0.0, None);
+        // After a look back: the cell the ray would have started in, while
+        // the pass that reads where the thing began at `own` is cast.
+        let mut found: Option<f64> = None;
+        loop {
+            let reach = match found {
+                Some(_) => (2.0 * side).min(ray.t_max - from),
+                None => ray.t_max - from,
+            };
+            let part = Ray {
+                origin: ray.at(from),
+                dir: ray.dir,
+                t_max: reach,
+            };
+            let far = by_dist().at((reach * reach) as f32).min(own);
+            let detail = Detail {
+                range: [far, own],
+                ..by_dist()
+            };
+            let answer = self.along(&part, detail, until, decors, path, descent);
+            lack = lack.or(answer.lack());
+            // The two cells held nothing: on by distance from a cell short of
+            // the one the ray would have started in, which is then met.
+            if let (Some(next), Answer::Exact(None) | Answer::Coarser(None, _)) = (found, &answer) {
+                (from, found) = (q3::to_real(q3::from_real(next - side)), None);
+                continue;
+            }
+            let met = |h: &Hit| detail.at((h.t * h.t) as f32);
+            let next = match answer {
+                // On a position's steps, so a ray along an axis from a
+                // position starts again at one.
+                Answer::Exact(Some(h)) | Answer::Coarser(Some(h), _) if met(&h) < own => {
+                    q3::to_real(q3::from_real(from + h.t - units(met(&h))))
+                }
+                _ => {
+                    let answer = answer.map(|hit| hit.map(|h| Hit { t: h.t + from, ..h }));
+                    return match (answer, lack) {
+                        (Answer::Exact(v), Some(l)) => Answer::Coarser(v, l),
+                        (answer, _) => answer,
+                    };
+                }
+            };
+            // The cell the ray would start again in, a body's as the layers
+            // hold it at `own`; one not held fills nothing.
+            let start = ray
+                .at(next + side / 2.0)
+                .map(|v| libm::floor(v / side) as i32);
+            let held = self.asset_at((own, start), |at, zooms, path| {
+                self.layer_node(at, zooms, path)
+            });
+            lack = lack.or(held.lack());
+            let fills = held.val().is_some_and(answer::fills);
+            if matches!(until, Until::Transparent) == fills {
+                from = next;
+                continue;
+            }
+            // Already what the ray looks for: where that began lies back
+            // toward `from`, where the ray back from here meets the other.
+            let other = match until {
+                Until::Transparent => Until::Opaque,
+                _ => Until::Transparent,
+            };
+            let back = Ray {
+                origin: ray.at(next),
+                dir: ray.dir.map(|v| -v),
+                t_max: next - from,
+            };
+            let behind = self.near(&back, own, other, None, &mut Path::default(), &mut None);
+            lack = lack.or(behind.lack());
+            let began = behind.val().flatten().map_or(next, |h| next - h.t);
+            found = Some(next);
+            from = q3::to_real(q3::from_real(began - side)).max(from);
+        }
     }
 
     /// The first cell along `ray` that `until` stops at, at the zoom `detail`
@@ -327,8 +434,6 @@ impl World {
             ..self.cast_world()
         };
         let o = ray.origin;
-        let end = ray.at(ray.t_max);
-        change::report_read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let on = descent
@@ -342,13 +447,19 @@ impl World {
             None => cast::walk_from_root(&mut query, q, &from, detail, until, &mut keep),
         };
         *path = query.path;
+        // What the walk read: the cells on its way as far as it went and the
+        // one it ended in, the coarsest of them the one its detail asks there.
+        let went = f64::from(trace.hit.t).clamp(0.0, ray.t_max);
+        let coarsest = detail.at((went * went) as f32);
+        let end = ray.at(went + units(coarsest) / 2.0);
+        change::report_read([o[0], o[1]], [end[0], end[1]], coarsest);
         let met = query.viewer.as_ref().and_then(|v| v.met);
         let is_decor = kind_of(answer::val(trace.hit.asset[0])) == Some(id::Kind::Decor);
         let hit = (trace.end == End::Hit).then(|| {
             met.filter(|_| is_decor)
                 .unwrap_or_else(|| self.hit(ray, q, trace.hit))
         });
-        query.answer(hit)
+        query.ended(hit, trace.end)
     }
 
     /// The column surface down column `g` at `cell_zoom` (pxl-engine
@@ -367,7 +478,7 @@ impl World {
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, cell_zoom);
         let f = support::column_surface(&mut query, cell_zoom, g);
-        (query.answer((f.end == End::Hit).then_some(f.top)), f)
+        (query.ended((f.end == End::Hit).then_some(f.top), f.end), f)
     }
 
     /// What is in the cell `c` at `zoom`, asked off the line `l`

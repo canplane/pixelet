@@ -7,7 +7,7 @@
 //! asked for, and the order a tile is read in.
 
 use crate::sys::io::demand::Order;
-use pxl_content::scatter::COARSEST_STAND;
+use pxl_content::scatter::COARSEST_SHOWN;
 use pxl_global::Global;
 use pxl_spec::space::layer::lattice::{GROUND, Lattice, demand_dist, draw_dist};
 
@@ -161,7 +161,7 @@ pub(crate) fn demand_radius(
     if zoom == top {
         return floor::ring(o);
     }
-    let under_decor = lattice == GROUND && GROUND.grid_zoom(zoom) > COARSEST_STAND;
+    let under_decor = lattice == GROUND && GROUND.grid_zoom(zoom) > COARSEST_SHOWN;
     band(o, lattice, top, zoom).map(|(_, to)| {
         if under_decor {
             demand_dist(lattice, zoom)

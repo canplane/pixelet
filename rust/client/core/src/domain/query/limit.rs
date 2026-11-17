@@ -1,12 +1,12 @@
 // pxl-core/domain/query/limit.rs
 
-//! Where the world ends for what moves in it. A walker does not leave the
+//! Where the world ends for what moves in it. A body does not leave the
 //! service area, the shards the source serves (sys/io/source.rs). An asset
 //! may be placed or taken out only over ground the world knows, between its
-//! bedrock and its ceiling, in shards whose objects are read. Every walker's
+//! bedrock and its ceiling, in shards whose objects are read. Every body's
 //! walk, of its cells or of its two ends where it does not stand, and every
 //! edit asks these limits, and nothing else decides them. The
-//! camera is not a walker and asks none of them (query/support.rs
+//! camera is not a body and asks none of them (query/support.rs
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 
 use crate::domain::layer::Base as _;
@@ -30,7 +30,7 @@ impl World {
     /// not the wall at its edge (pxl-spec `area::is_wall`). The answer is
     /// known before any of the column's ground arrives: it comes from the
     /// nine shards around the column's own, with the area's index asked once
-    /// (`Shard::at`). A walker comes up to the wall's face and never stands
+    /// (`Shard::at`). A body comes up to the wall's face and never stands
     /// on the wall.
     pub(crate) fn within(&self, at: &Q3) -> bool {
         within_in(&source::ServiceArea, at)
@@ -51,7 +51,7 @@ impl World {
     /// - every shard under it is read, so a write stands over what its file
     ///   held (domain/layer/object/repository.rs `holds`);
     /// - none of its leaf columns is the wall (pxl-spec `area::walls_in`),
-    ///   as `within` requires of a walker;
+    ///   as `within` requires of a body;
     /// - `space` lies over the bedrock and under the ceiling of ground the
     ///   world knows exactly, with no tile still missing (pxl-content strata.rs).
     ///

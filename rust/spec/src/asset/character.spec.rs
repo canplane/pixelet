@@ -102,6 +102,14 @@ pub mod group {
     }
 }
 
+/// The box a body claims, in leaf cells, as a decor's `size` is: the person,
+/// the pet that keeps beside it, and the camera's pivot, which walks as they do.
+/// It is a cell higher than the person stands (`group.person.size`), on purpose:
+/// a passage lower than the box stops a body, so it never fits itself into one
+/// as high as itself, and the first-person eye, half a cell under the box's top,
+/// sees over what stands a cell high.
+pub const BODY_BOX: [u32; 3] = [1, 1, 2];
+
 /// The clip a character stands in, "idle", by its index in both packs' animations.
 pub const IDLE_CLIP: u32 = 1;
 

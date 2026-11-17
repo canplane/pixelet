@@ -1,10 +1,11 @@
 // pxl-core/domain/control/edit/pick.rs
 
 //! The pointer's pick (`Pick`), and what it struck means for a placement or
-//! an erase. The pick asks the world at terrain's finest zoom, the leaves',
-//! because the leaves are what the screen shows around the eye. It then
-//! judges what it struck by the zoom the eye's rays draw there, since an edit
-//! takes only whole cells and a folded cell is a summary.
+//! an erase. The pick's ray reads the world as an eye's does, by its
+//! distance, and what it meets it reads again from near, so what it struck is
+//! met as finely as it is held (`World::first_seen`). It then judges what it
+//! struck by the zoom the eye's rays draw there, since an edit takes only
+//! whole cells and a folded cell is a summary.
 
 use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -16,7 +17,7 @@ use crate::domain::control::edit::collision::object_aabb;
 use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query;
-use crate::domain::query::{Hit, HitKind, Ray, World, finest};
+use crate::domain::query::{Hit, HitKind, Ray, World};
 use crate::domain::setting::settings;
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::{eye, ray_of};
@@ -176,7 +177,7 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
 
 /// The first thing the ray from the eye at `origin` along `dir` strikes
 /// within `PICK_DIST_U`, in the root frame. Decor is struck as the frame
-/// draws it (`World::first_visible`). The world asked is the stored one
+/// draws it (`World::first_seen`). The world asked is the stored one
 /// (`World::now`), not the one the eraser's preview draws, because what is
 /// erased is what is stored.
 pub(crate) fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
@@ -188,7 +189,7 @@ pub(crate) fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     // Only an exact answer counts. A coarser tile's answer is a summary, not
     // what is held.
     World::now()
-        .first_visible(&ray, finest(), leaf_decors(&decor_zooms(settings().decor)))
+        .first_seen(&ray, leaf_decors(&decor_zooms(settings().decor)))
         .exact()
         .flatten()
 }

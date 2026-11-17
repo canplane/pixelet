@@ -12,7 +12,7 @@
 //! (`spec/spec/asset/cube.json5` `unknown`), and the service area is walled with it from
 //! inside: a leaf column with ground beside one past the area is bedrock up to its own face, a
 //! cell of the leaves like any other, so the wall's outer face stands on the area's edge at
-//! every zoom (pxl-spec area.rs `is_wall`). A walker and an edit keep off the wall's columns
+//! every zoom (pxl-spec area.rs `is_wall`). A body and an edit keep off the wall's columns
 //! by the rule the wall is laid by (pxl-core domain/query/limit.rs `within`, `editable`).
 
 use pxl_engine::ground::rock;

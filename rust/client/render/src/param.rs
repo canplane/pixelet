@@ -249,7 +249,7 @@ pub mod location {
     pub mod zone {
         params! {
             FILL_OPACITY: f32 = 0.4;
-            BORDER_WIDTH: f32 = 0.04;
+            LINE_WIDTH: f32 = 0.04;
         }
     }
 

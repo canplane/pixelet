@@ -2,6 +2,21 @@
 
 ## Hold firmly
 
+- The mechanics is the easy one, as a physics has it, with no ad hoc term: one
+  rule, isotropic and symmetric, that holds for every case alike. A form tuned
+  to one case (faster near, a zoom, a length or a constant of its own, a second
+  path beside the first) is overfitting and is not kept, whatever it saves
+  there: what the one rule costs in its place is no regression. A fault is
+  closed by the rule the rest already follows, never by a piece laid beside it.
+- Everything that reads the world reads it by perspective, the same in every
+  direction: the farther from where a ray starts, the coarser its cells, for
+  the camera, the light, the shadows and what collides alike; what a ray does
+  not find within its cap of steps is not there.
+- The project is a study, not a product and not a team's: the clean form is
+  chosen over the expedient one, whatever it takes to rewrite. The code that
+  is there is read as an adversary's: where it departs from the rule it is
+  rewritten, and no residue of what it replaced is left, a constant, a branch,
+  a second form or a sentence that still says it.
 - Symmetry usually wins: of role and contract, not of form. Parts whose roles
   differ are not forced alike. A fix goes where the fact is owned and holds on
   every platform alike; a platform differs only in how it is reached. No patch is

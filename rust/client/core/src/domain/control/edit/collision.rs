@@ -8,10 +8,11 @@ use pxl_spec::space::coord::world::{cube, idx_of};
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::domain::control::camera::controller;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::World;
+use crate::domain::query::{World, body_room};
 use crate::domain::view::frame::coord;
 
 impl Asset {
@@ -40,14 +41,17 @@ fn stands_on(kind: Kind, under: Kind) -> bool {
 
 /// Whether placing `asset` at `corner` is refused. The placement and its
 /// hover preview share this check. A placement is allowed only where the
-/// world takes an edit (`World::editable`), where nothing placed shares the
-/// room the asset's kind occupies (`World::placed_occupying`), and where
+/// world takes an edit (`World::editable`), where nothing shares the room the
+/// asset's kind occupies, neither what is placed (`World::placed_occupying`)
+/// nor the body standing where the pivot goes (`body_room`), and where
 /// nothing in the cell under it is something it may not stand on
 /// (`stands_on`). Only a placed marker can refuse it that way, since the
 /// ground generates no markers.
 pub(crate) fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
     let (world, room) = (World::now(), asset.room(zoom, corner));
-    let blocked = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
+    let taken = world.placed_occupying(&room, |_| true).is_some()
+        || controller::pivot_to().is_some_and(|at| body_room(&at).shares(room));
+    let blocked = !world.editable(&room) || taken;
     let under = Aabb {
         min: [
             room.min[0],

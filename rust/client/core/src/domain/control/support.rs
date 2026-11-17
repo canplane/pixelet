@@ -18,13 +18,12 @@ use crate::domain::layer::Answer;
 use crate::domain::query::World;
 use crate::domain::setting::settings;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// Where the pivot stands for the cell center `at`, such as the center of
 /// the cell across the face a tap struck. It stands on the floor under that
 /// cell. Its Z is unknown until a leaf gives that floor.
 pub(crate) fn stand(at: &Q3) -> Q3 {
-    match World::now().floor_under(at, LEAF_ZOOM) {
+    match World::now().floor_under(at) {
         Answer::Exact(Some(top)) => on_floor(at, top),
         // Nothing stands under the point, so it keeps its height.
         Answer::Exact(None) => *at,
@@ -63,7 +62,7 @@ fn standing(world: World, at: &Q3) -> Answer<Option<Q3>> {
     }
     let floor = stand_memo().of(*at, || {
         world
-            .floor_under(at, LEAF_ZOOM)
+            .floor_under(at)
             .map(|top| top.map(|top| on_floor(at, top)))
     });
     Answer::Exact(Some(floor.exact().flatten().unwrap_or(*at)))
@@ -118,8 +117,8 @@ pub(crate) fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
 }
 
 /// Where a pan moves the pivot from `from`, by `lx` units across the screen
-/// and `ly` units up it. The pivot slides over the world as a walker steps
-/// (`World::step_slide`) where a walker stands for `eye`, the drawn camera's,
+/// and `ly` units up it. The pivot slides over the world as a body steps
+/// (`World::step_slide`) where a body stands for `eye`, the drawn camera's,
 /// and elsewhere goes where it is moved. There, and where a leaf on the way
 /// is not held, the pivot goes on with its Z unknown until a leaf gives it.
 pub(crate) fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {

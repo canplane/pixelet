@@ -557,8 +557,7 @@ const SKINNED_BUFS: [VertexBufferLayout; 5] = [
     vertex(16, &[[3, 0, U32X4]]),
     vertex(16, &[[4, 0, F32X4]]),
 ];
-const LOCATION_ZONE_BUFS: [VertexBufferLayout; 2] =
-    [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
+const LOCATION_ZONE_BUFS: [VertexBufferLayout; 1] = [vertex(12, &[[0, 0, F32X3]])];
 const LOCATION_BEACON_BUFS: [VertexBufferLayout; 2] =
     [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
 /// The bytes of a debug line's vertex, which holds its place and its color, and of a debug

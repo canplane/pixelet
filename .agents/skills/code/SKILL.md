@@ -8,6 +8,12 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - Reduce first. A concept that is another in disguise (a reply is a frame, an
   abort is an import) is that other. Code is short because its concepts are few.
 - Orthogonal. A concept says one thing; changing it reinterprets no other.
+- One rule, isotropic and symmetric (AGENTS.md). Before a fix, find the rule
+  the rest of the system follows there and make the part follow it; a form
+  that is faster in one case than the general rule is overfitting, and what
+  the general rule costs there is its price, not a regression. A reader of
+  the world takes its detail from its distance alone (`query::by_dist`), and
+  what it meets far off it reads again from near.
 - One owner. A fact has one definition; every other form derives from it. A
   fact held in several places is reviewed, and stays apart only where the CPU
   and the GPU each hold it or joining it would add branches. Where they each

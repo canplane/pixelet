@@ -73,7 +73,7 @@ use crate::spec::phase::Phase;
 use crate::sys::sched::param::MAX_STEP_S;
 
 /// The camera as the companion's walk reads it. It is None in first person,
-/// where the eye stands at the pivot and the person is the one looking.
+/// where the eye stands over the pivot and the person is the one looking.
 fn companion_camera() -> Option<Camera> {
     if controller::active() != Active::Orbit {
         return None;
@@ -275,7 +275,7 @@ pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
     effect!(times, Bootstrap, map_bootstrap_step());
     effect!(times, Follow, follow_mode_step());
     effect!(times, Dst, {
-        // The floors the walker found under a position of unknown height
+        // The floors the body found under a position of unknown height
         // are dropped where the ground changed under them.
         support::support_step();
         destination::dst_step();

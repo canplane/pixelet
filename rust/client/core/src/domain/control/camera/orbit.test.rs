@@ -1,8 +1,8 @@
 // pxl-core/domain/control/camera/orbit.test.rs
 //
-// Tests of the dive under a roof, the zoom out held under it, and the climb.
-// The ground is flat at height five. A cube over it makes a roof, and a slab
-// of cubes makes a tunnel's roof.
+// Tests of the pull forward under a ceiling, the zoom out held under it, and the climb.
+// The ground is flat at height five. A cube over it makes a ceiling, and a slab
+// of cubes makes a tunnel's ceiling.
 
 use super::*;
 use crate::domain::layer::object::store::Store;
@@ -39,72 +39,72 @@ fn cube_at(store: &mut Store, at: V3) {
     write(store, at, OBJECT_COARSEST, cube::Object::Red as AssetId);
 }
 
-/// The ground at five, a roof whose underside is `roof` above the ground
-/// when `roof` is given, and the pivot standing on the ground under it.
-fn roofed(roof: Option<f64>) -> (Store, V3) {
+/// The ground at five, a ceiling whose underside is `ceiling` above the ground
+/// when `ceiling` is given, and the pivot standing on the ground under it.
+fn under_ceiling(ceiling: Option<f64>) -> (Store, V3) {
     let [x, y] = flat_at_five();
     let mut store = Store::default();
-    if let Some(roof) = roof {
-        cube_at(&mut store, [x, y, 5.0 + roof]);
+    if let Some(ceiling) = ceiling {
+        cube_at(&mut store, [x, y, 5.0 + ceiling]);
     }
     (store, [x + 0.5, y + 0.5, over(5.0)])
 }
 
 /// Zooms from 16 to `to` at the pitch `polar` and returns the distance the
-/// eye dives to, if it dives.
-fn dive_to(roof: Option<f64>, to: f64, polar: f64) -> Option<f64> {
-    let (store, pivot) = roofed(roof);
+/// eye pulls forward to, if it pulls forward.
+fn pull_forward_to(ceiling: Option<f64>, to: f64, polar: f64) -> Option<f64> {
+    let (store, pivot) = under_ceiling(ceiling);
     let world = placed(store);
     let access = Ground::of(&world);
     let to = pose(pivot, to, polar);
-    dive(&to, &pose(pivot, 16.0, polar), &access).map(|p| p.dist)
+    pull_forward(&to, &pose(pivot, 16.0, polar), &access).map(|p| p.dist)
 }
 
 /// Zooms straight down from `from` to `to` under `climb` and returns the
 /// distance it reaches.
-fn climbed_to(roof: Option<f64>, from: f64, to: f64) -> f64 {
-    let (store, pivot) = roofed(roof);
+fn climbed_to(ceiling: Option<f64>, from: f64, to: f64) -> f64 {
+    let (store, pivot) = under_ceiling(ceiling);
     let world = placed(store);
     let access = Ground::of(&world);
     climb_step(&pose(pivot, to, 0.0), &pose(pivot, from, 0.0), &access).dist
 }
 
 #[test]
-fn dives_under_roof() {
+fn pulls_forward_under_ceiling() {
     let under = 8.0 - over(5.0) - NEAR;
-    assert_eq!(dive_to(Some(3.0), 10.0, 0.0), Some(under));
-    // A zoom asked nearer than the roof stands where it was asked.
-    assert_eq!(dive_to(Some(3.0), 2.2, 0.0), Some(2.2));
+    assert_eq!(pull_forward_to(Some(3.0), 10.0, 0.0), Some(under));
+    // A zoom asked nearer than the ceiling stands where it was asked.
+    assert_eq!(pull_forward_to(Some(3.0), 2.2, 0.0), Some(2.2));
 }
 
 /// A zoom short of straight down, at whatever pitch the climb stopped,
-/// dives as well, along its own line.
+/// pulls forward as well, along its own line.
 #[test]
-fn dives_slanted() {
+fn pulls_forward_slanted() {
     let polar: f64 = 0.1;
     let under = (8.0 - over(5.0)) / libm::cos(polar) - NEAR;
-    let dist = dive_to(Some(3.0), 10.0, polar).unwrap();
+    let dist = pull_forward_to(Some(3.0), 10.0, polar).unwrap();
     assert!((dist - under).abs() < 1e-6);
 }
 
 #[test]
-fn dive_held_back() {
-    // The line passes beside the roof.
-    assert_eq!(dive_to(Some(3.0), 10.0, 0.3), None);
-    assert_eq!(dive_to(None, 10.0, 0.0), None);
+fn pull_forward_held_back() {
+    // The line passes beside the ceiling.
+    assert_eq!(pull_forward_to(Some(3.0), 10.0, 0.3), None);
+    assert_eq!(pull_forward_to(None, 10.0, 0.0), None);
 }
 
-/// Under a roof nearer the pivot than the orbit can come, the zoom goes to
+/// Under a ceiling nearer the pivot than the orbit can come, the zoom goes to
 /// the orbit's nearest distance.
 #[test]
-fn dives_into_low_roof() {
-    assert_eq!(dive_to(Some(2.0), 10.0, 0.0), Some(MIN_DIST));
-    assert_eq!(dive_to(Some(1.0), 10.0, 0.0), Some(MIN_DIST));
+fn pulls_forward_into_low_ceiling() {
+    assert_eq!(pull_forward_to(Some(2.0), 10.0, 0.0), Some(MIN_DIST));
+    assert_eq!(pull_forward_to(Some(1.0), 10.0, 0.0), Some(MIN_DIST));
 }
 
-/// A zoom out goes as far as it can. Under a roof it goes up to the roof,
-/// and at the nearest in the roof's lowest cell it does not go out at all.
-/// From over the roof, or with nothing over the pivot, it goes where it is
+/// A zoom out goes as far as it can. Under a ceiling it goes up to the ceiling,
+/// and at the nearest in the ceiling's lowest cell it does not go out at all.
+/// From over the ceiling, or with nothing over the pivot, it goes where it is
 /// asked. A zoom in whose way hit a slab goes under it, whether it starts
 /// over the slab or in it. A zoom out that starts in the slab stops.
 #[test]
@@ -120,7 +120,7 @@ fn zoom_out_does_not_go_through() {
     let to = climb_step(&pose(pivot, 3.8, 0.0), &pose(pivot, 16.0, 0.0), &access);
     assert_eq!(to.dist, 8.0 - over(5.0) - NEAR);
     // From inside the slab, a zoom out stops where it stands and a zoom in
-    // dives.
+    // pulls forward.
     let out = climb_step(&pose(pivot, 4.2, 0.0), &pose(pivot, 3.8, 0.0), &access);
     assert_eq!(out.dist, 3.8);
     let down = climb_step(&pose(pivot, 3.4, 0.0), &pose(pivot, 3.8, 0.0), &access);
@@ -130,9 +130,9 @@ fn zoom_out_does_not_go_through() {
 /// The eye climbs over a low wall on its way, for a zoom in and a zoom out
 /// alike, and gets the distance asked, whether it starts level or above.
 /// Under a slab that meets the wall, the climb hits the slab on its way up.
-/// Then a zoom out stops short, and a zoom in dives through the wall.
+/// Then a zoom out stops short, and a zoom in pulls forward through the wall.
 #[test]
-fn climb_or_dive_or_stop() {
+fn climb_or_pull_forward_or_stop() {
     let wall = |store: &mut Store, pivot: V3, top: f64| {
         for dy in -3..=3 {
             for z in [5.0, 6.0].into_iter().filter(|&z| z < top) {
@@ -141,7 +141,7 @@ fn climb_or_dive_or_stop() {
         }
     };
 
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     wall(&mut store, pivot, 6.0);
     let world = placed(store);
     let access = Ground::of(&world);
@@ -163,7 +163,7 @@ fn climb_or_dive_or_stop() {
     let stopped = climb_step(&to, &east(pivot, 2.4), &access).dist;
     assert!((2.4..3.2).contains(&stopped), "{stopped}");
     // Where the climb clears the slab's corner, it climbs. Where the slab is
-    // too thick, a zoom in dives through the wall.
+    // too thick, a zoom in pulls forward through the wall.
     assert_eq!(climb_step(&to, &east(pivot, 4.2), &access), to);
     let (mut store, pivot) = tunnel(2.0, 2);
     wall(&mut store, pivot, 7.0);
@@ -178,7 +178,7 @@ fn climb_or_dive_or_stop() {
 /// floor. At the nearest it stands as asked.
 #[test]
 fn open_ground_keeps_a_cell() {
-    let (store, pivot) = roofed(None);
+    let (store, pivot) = under_ceiling(None);
     let world = placed(store);
     let access = Ground::of(&world);
     let level = core::f64::consts::FRAC_PI_2;
@@ -220,7 +220,7 @@ fn open_ground_keeps_a_cell() {
 /// as it does anywhere.
 #[test]
 fn nearest_turns_through() {
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     for dx in [-2.5, -1.5, 1.5, 2.5] {
         for dy in [-2.5, -1.5, -0.5, 0.5, 1.5] {
             for z in [5.0, 6.0, 7.0] {
@@ -273,7 +273,7 @@ fn nearest_turns_through() {
 /// out. Only going deeper is refused.
 #[test]
 fn the_nearest_under_the_level_is_no_trap() {
-    let (store, pivot) = roofed(None);
+    let (store, pivot) = under_ceiling(None);
     let world = placed(store);
     let access = Ground::of(&world);
     let at = ViewPose {
@@ -301,7 +301,7 @@ fn the_nearest_under_the_level_is_no_trap() {
 /// either side, for a zoom in and a zoom out alike.
 #[test]
 fn stop_goes_straight() {
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     for dy in -3..=3 {
         cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + f64::from(dy), 5.0]);
     }
@@ -316,10 +316,10 @@ fn stop_goes_straight() {
     assert_eq!(dist_at(2.3, 2.45), None);
 }
 
-/// The ground at five and a tunnel's roof over the pivot. The roof is a slab
-/// seven cells across and `thick` cells thick, with its underside `roof`
+/// The ground at five and a tunnel's ceiling over the pivot. The ceiling is a slab
+/// seven cells across and `thick` cells thick, with its underside `ceiling`
 /// above the ground.
-fn tunnel(roof: f64, thick: u32) -> (Store, V3) {
+fn tunnel(ceiling: f64, thick: u32) -> (Store, V3) {
     let [x, y] = flat_at_five();
     let mut store = Store::default();
     for dz in 0..thick {
@@ -328,7 +328,7 @@ fn tunnel(roof: f64, thick: u32) -> (Store, V3) {
                 let at = [
                     x + f64::from(dx),
                     y + f64::from(dy),
-                    5.0 + roof + f64::from(dz),
+                    5.0 + ceiling + f64::from(dz),
                 ];
                 cube_at(&mut store, at);
             }
@@ -337,7 +337,7 @@ fn tunnel(roof: f64, thick: u32) -> (Store, V3) {
     (store, [x + 0.5, y + 0.5, over(5.0)])
 }
 
-/// In the roof's lowest cell, where the eye may stand, the climb asks for no
+/// In the ceiling's lowest cell, where the eye may stand, the climb asks for no
 /// rise. A tilt there is drawn as asked and is not held straight down.
 #[test]
 fn climb_stands_in_roof_cell() {
@@ -348,10 +348,10 @@ fn climb_stands_in_roof_cell() {
     assert_eq!(climbed.polar, 0.3);
 }
 
-/// In a roof thicker than its lowest cell, even straight down does not
+/// In a ceiling thicker than its lowest cell, even straight down does not
 /// clear it, so the climb keeps the asked pitch, on the way in and at rest.
 #[test]
-fn climb_fails_under_roof() {
+fn climb_fails_under_ceiling() {
     let (store, pivot) = tunnel(3.0, 2);
     let world = placed(store);
     let access = Ground::of(&world);
@@ -365,7 +365,7 @@ fn climb_fails_under_roof() {
 /// block's top.
 #[test]
 fn climb_clears_block() {
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     // The block surrounds the cell where the eye stands, level with the pivot
     // and 3 east of it.
     for dx in [1.5, 2.5, 3.5] {
@@ -388,7 +388,7 @@ fn climb_clears_block() {
 /// over the wall instead of into it.
 #[test]
 fn climbs_out_of_wall_with_room() {
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     for dy in [-1.5, -0.5, 0.5, 1.5] {
         cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + dy, 5.0]);
     }
@@ -419,14 +419,14 @@ fn climb_rises_under_eye() {
     assert!(rise > 0.0, "{rise}");
 }
 
-/// Ground that two passes do not climb out of is not a roof, so the climbed
+/// Ground that two passes do not climb out of is not a ceiling, so the climbed
 /// pitch is kept, not the asked one. The eye is level with the pivot, 40
 /// out, in ground that rises a cell for each cell toward the pivot. Each
 /// pass steepens the pitch and draws the eye in over higher ground, so two
 /// passes do not clear it, yet straight down does.
 #[test]
 fn slope_keeps_pitch_climbed() {
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     // From 20 to 40 cells east, each column is 60 cells high less its
     // distance.
     for dx in 20..=40 {
@@ -443,13 +443,13 @@ fn slope_keeps_pitch_climbed() {
     assert!(climbed.polar < at.polar, "{climbed:?}");
 }
 
-/// The pivot stands on a tower ten cells high, under a roof. The eye is
+/// The pivot stands on a tower ten cells high, under a ceiling. The eye is
 /// tilted below the level and out to where it lies under the ground, inside
-/// one of the seed's caves. With the pivot roofed, a cave's air does not
+/// one of the seed's caves. With the pivot under_ceiling, a cave's air does not
 /// count as ground, so the climb does not lift the eye.
 #[test]
 fn a_cave_is_not_climbed_out_of() {
-    let (mut store, ground) = roofed(None);
+    let (mut store, ground) = under_ceiling(None);
     for z in (0..10).chain([12]) {
         cube_at(&mut store, [ground[0], ground[1], 5.0 + f64::from(z)]);
     }
@@ -480,7 +480,7 @@ fn a_cave_is_not_climbed_out_of() {
 /// in it as asked.
 #[test]
 fn a_hollow_in_a_hill() {
-    let (mut store, pivot) = roofed(None);
+    let (mut store, pivot) = under_ceiling(None);
     for dx in 8..=40 {
         for dy in -6..=6 {
             for z in (0..12).filter(|z| !((18..=30).contains(&dx) && (3..=7).contains(z))) {
@@ -530,7 +530,7 @@ fn a_hollow_in_a_hill() {
 /// onto that floor and keeps it below the level.
 #[test]
 fn climbs_past_level() {
-    let (mut store, ground) = roofed(None);
+    let (mut store, ground) = under_ceiling(None);
     for z in 0..10 {
         cube_at(&mut store, [ground[0], ground[1], 5.0 + f64::from(z)]);
     }

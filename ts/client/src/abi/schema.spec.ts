@@ -28,9 +28,10 @@
  *
  *   orbit        — third person: the camera turns about the pivot, its
  *                  radius ahead of the eye, and a drag moves the pivot.
- *   first_person — the eye is the pivot and turns in place; a drag
- *                  walks it as the orbit's pivot walks, the eye at its
- *                  height over where the walk stands. */
+ *   first_person — the eye stands over the pivot and turns in place;
+ *                  a drag walks the pivot as the orbit's pivot walks,
+ *                  the eye half a cell under the top of the box a
+ *                  body claims. */
 export type CameraMode =
   typeof CAMERA_MODE_ORBIT | typeof CAMERA_MODE_FIRST_PERSON;
 export const CAMERA_MODE_ORBIT = 0;
@@ -288,7 +289,7 @@ export const SETTING_KEY_TILT_LOCK = 4;
 export const SETTING_KEY_CAMERA_MODE = 5;
 /** The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck. */
 export const SETTING_KEY_SURFACE_FOLLOW = 6;
-/** Only `climb` goes into a tunnel (camera/orbit.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+/** Only `climb` goes into a tunnel (camera/orbit.rs `pull_forward`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
 export const SETTING_KEY_ORBIT_OBSTACLE = 7;
 /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
  * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -483,7 +484,7 @@ export const SETTING = {
     section: "camera",
     dev: true,
   },
-  /** Only `climb` goes into a tunnel (camera/orbit.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+  /** Only `climb` goes into a tunnel (camera/orbit.rs `pull_forward`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",

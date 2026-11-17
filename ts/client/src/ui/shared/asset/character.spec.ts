@@ -142,6 +142,14 @@ export function name_Group(val: Group): string {
   }
 }
 
+/** The box a body claims, in leaf cells, as a decor's `size` is: the person,
+ * the pet that keeps beside it, and the camera's pivot, which walks as they do.
+ * It is a cell higher than the person stands (`group.person.size`), on purpose:
+ * a passage lower than the box stops a body, so it never fits itself into one
+ * as high as itself, and the first-person eye, half a cell under the box's top,
+ * sees over what stands a cell high. */
+export const BODY_BOX = [1 as number, 1 as number, 2 as number] as const;
+
 /** The clip a character stands in, "idle", by its index in both packs' animations. */
 export const IDLE_CLIP = 1 as number;
 

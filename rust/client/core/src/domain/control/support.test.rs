@@ -49,3 +49,18 @@ fn the_pivot_follows_its_floor() {
     );
     assert_eq!(height(&on(built)), over(6.0));
 }
+
+/// A pan walks the pivot only where a body shows for the eye it is handed:
+/// seen from near it ends on the floor, seen from far it goes where it is
+/// moved with its height not known.
+#[test]
+fn a_pan_walks_only_where_a_body_shows() {
+    let [x, y] = flat_at_five();
+    placed(Store::default());
+    let from = world::point(x + 0.5, y + 0.5, over(5.0));
+    let near = world::point(x + 0.5, y - 3.0, 8.0);
+    let far = world::point(x + 0.5, y + 0.5, over(5.0) + 500.0);
+    let walked = pan_to(&from, 2.0, 0.0, 0.0, &near);
+    assert_eq!(height(&walked), over(5.0));
+    assert!(is_unknown(&pan_to(&from, 2.0, 0.0, 0.0, &far)));
+}

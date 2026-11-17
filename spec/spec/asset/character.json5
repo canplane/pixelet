@@ -120,6 +120,11 @@
       },
     },
   },
+  BODY_BOX: {
+    $value: [1, 1, 2],
+    $type: "u32",
+    $description: "The box a body claims, in leaf cells, as a decor's `size` is: the person,\nthe pet that keeps beside it, and the camera's pivot, which walks as they do.\nIt is a cell higher than the person stands (`group.person.size`), on purpose:\na passage lower than the box stops a body, so it never fits itself into one\nas high as itself, and the first-person eye, half a cell under the box's top,\nsees over what stands a cell high.",
+  },
   IDLE_CLIP: {
     $value: 1,
     $type: "u32",

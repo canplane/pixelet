@@ -576,5 +576,23 @@ and reads the surface once where the pivot's height is not known. The same nativ
 walk of 27 leaf cells took 302 µs before and 279 after the floor's fix beside it
 (`c02a80d07b`). Not measured in the app.
 
+The ray that ended at the cap and was read as filled to the world's top is closed
+by the rule every other ray reads by: the climb's rays read by their distance. Native,
+`floor_under` over flat ground:
+
+| inside solid by | fixed at the finest, before | by distance |
+| --- | --- | --- |
+| 100 cells | 0.13 ms | 0.14 |
+| 2,000 | 0.84 | 0.18 |
+| 5,000 | 32768 answered | 0.26 |
+| 30,000 | 32768 answered | 0.35 |
+| 2,000, something placed at the finest zoom in the cell | 56.6 | 10.8 |
+
+The near walk of 27 leaf cells takes 333 to 345 µs where it took 302 before the day
+and 279 with the fixed detail: a ray by distance asks a node over it for the bound of
+every zoom asked within it (`ground::node`, `Resident::relief`), where a ray at one
+zoom asks one. That is the one rule's price where the fixed zoom was fitted to the
+near case, and it bought the far one's wrong answers.
+
 With places on, the same build, a wheel out twenty steps and back sixteen: the scene's
 step 0.8 ms a run and 5.6 at most, the tick 1.4 / 2.6 and 6.4 at most, no long frame.

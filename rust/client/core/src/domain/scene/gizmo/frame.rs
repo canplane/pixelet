@@ -9,7 +9,7 @@
 use crate::spec::step::InvalidationReason;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};
+use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::World;
@@ -86,7 +86,7 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     let at = to_world(pivot);
     s.about = at;
     s.lines.clear();
-    let ground = World::now().floor_under(pivot, LEAF_ZOOM).val().flatten();
+    let ground = World::now().floor_under(pivot).val().flatten();
     let cell = v3::floor(
         &[at[0], at[1], ground.unwrap_or(0.0)],
         units(GROUND.leaf_cell_zoom()),

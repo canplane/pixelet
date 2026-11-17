@@ -1,7 +1,7 @@
 // pxl-engine/support.rs
 
 //! wgsl-port: where something stands, asked of the world's one query (pxl-core
-//! domain/query/support.rs, a walker's support). A column's surface is the first cell that a
+//! domain/query/support.rs, a body's support). A column's surface is the first cell that a
 //! ray down the column from the world's top cannot see through at a given cell zoom, with its
 //! top as drawn (`column_surface`). The module also holds the query's cursor
 //! (ARCHITECTURE.md, "The query, the only seam"): a descent's line (`Line`), either a column
