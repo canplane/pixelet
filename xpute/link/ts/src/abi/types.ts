@@ -36,21 +36,21 @@ export function load_Token(r: Lift, at: number): Token {
 }
 
 export interface Lent {
-  at: u64;
-  len: number;
+  buf: u64;
+  nbyte: number;
 }
 
 export const LENT_SZ = 16;
 export const LENT_ALIGN = 8;
 
 export function store_Lent(w: Lower, at: number, v: Lent): void {
-  w.u64(at, v.at);
-  w.u32(at + 8, v.len);
+  w.u64(at, v.buf);
+  w.u32(at + 8, v.nbyte);
 }
 
 export function load_Lent(r: Lift, at: number): Lent {
   return {
-    at: r.u64(at),
-    len: r.u32(at + 8),
+    buf: r.u64(at),
+    nbyte: r.u32(at + 8),
   };
 }

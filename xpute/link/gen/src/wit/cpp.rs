@@ -87,7 +87,7 @@ const GIVEN: [&str; 7] = [
     "L",
 ];
 
-/// Whether the C++ bindings give `n`: one of `GIVEN`, a lent span's template
+/// Whether the C++ bindings give `n`: one of `GIVEN`, a lent buffer's template
 /// parameter (`T0`, …), or a resource's side class's form.
 fn given(n: &str) -> bool {
     GIVEN.contains(&n)
@@ -887,10 +887,10 @@ impl Header<'_> {
                 String::new()
             } else {
                 let ty = self.rt_use(LINK, "Lent");
-                let span = self.rt_use(LINK, "span");
+                let lent = self.rt_use(LINK, "lent");
                 lents
                     .iter()
-                    .map(|l| format!("    {ty} {l}_lent_ = {span}({l});\n"))
+                    .map(|l| format!("    {ty} {l}_lent_ = {lent}({l});\n"))
                     .collect()
             };
             let h = if o.resource {

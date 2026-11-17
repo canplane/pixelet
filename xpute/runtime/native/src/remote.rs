@@ -16,19 +16,17 @@
 //! implements as the guest opens it, by the opener of the prefix that
 //! matched, and the UI holds it under that handle.
 //!
-//! A batch is messages, each an XTP packet laid after its length (a u32,
-//! then four bytes so the packet starts on a word), its first field its
-//! kind:
+//! A batch is frames, each the link's own (link/spec/frame.json5): its four
+//! words, then its packet, padded so the next starts on a word of eight
+//! bytes:
 //!
-//! - 0 `(tag, result, data)`: the answer to the UI's request `tag`;
-//! - 2 `(h, m, tag, pkt)`: a method of an object the UI implements, which the
-//!   UI answers by `tag`;
-//! - 3 `(h, k, uri)`: open the object at `uri`, a lowered `list<token>`,
-//!   under `h`, by the UI's opener of its `k`th prefix;
-//! - 4 `(tag)`: the guest canceled the request `tag`;
-//! - 5 `(h)`: the object `h` the UI opened is dropped,
-//!
-//! where data, pkt and uri are a packet's bytes or nil.
+//! - a method of an object the UI implements, which the UI answers by its
+//!   tag;
+//! - the answer to the UI's request, marked `RES`, with its tag;
+//! - the root's `OPEN_AT`: open the object at a URI under the handle the
+//!   guest's end issued, by the UI's opener of its `k`th prefix;
+//! - the root's `CANCEL`: the guest canceled the request of that tag;
+//! - a handle's `DROP`: the object the UI opened is dropped.
 //!
 //! The UI's connection is a handle: each start attaches a new UI on the same
 //! runtime, as a reload's (`accept`), which implements what the first did,
@@ -51,11 +49,12 @@ use std::sync::{Mutex, MutexGuard};
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::wire::xtp::{MAX_PKT_SZ, PacketWriter};
 use xpute_link::abi::types::Token;
-use xpute_link::frame::HDR_SZ;
+use xpute_link::frame::{Frame, HDR_SZ};
 use xpute_link::resource::Table;
-use xpute_link::{DROP, Handle, Lift, Lower, Method, OPEN, Object, Packet, ROOT, Tag, store_uri};
+use xpute_link::{
+    CANCEL, DROP, Handle, Lift, Lower, Method, OPEN, OPEN_AT, Object, Packet, ROOT, Tag, store_uri,
+};
 
 use crate::event_loop::post_task;
 use crate::life;
@@ -150,29 +149,34 @@ pub fn accept() -> Handle {
     h
 }
 
-/// Appends to the batch one message of `cnt` fields that `write` writes,
-/// where the UI of the handle `ui` is attached.
-fn tell(ui: Handle, cnt: u32, write: impl Fn(&mut PacketWriter)) {
-    let mut cap = 1 << 10;
-    let pkt = loop {
-        let mut buf = vec![0u8; cap];
-        let mut w = PacketWriter::new(&mut buf, cnt);
-        write(&mut w);
-        if let Some(len) = w.fit_len() {
-            buf.truncate(len as usize);
-            break buf;
-        }
-        xpute_kit::ensure!(cap < MAX_PKT_SZ as usize, EOVERFLOW);
-        cap = (cap * 2).min(MAX_PKT_SZ as usize);
+/// The frame of the request `tag` for the method `m` of `h`.
+fn request(tag: Tag, h: Handle, m: Method) -> Frame {
+    Frame {
+        tag,
+        res: false,
+        handle: h,
+        method: m,
+        result: 0,
+        pkt_len: 0,
+    }
+}
+
+/// Appends to the batch the frame `f` with its packet `pkt`, where the UI of
+/// the handle `ui` is attached.
+fn tell(ui: Handle, f: Frame, pkt: Option<&[u8]>) {
+    let pkt = pkt.unwrap_or_default();
+    let f = Frame {
+        pkt_len: pkt.len() as u32,
+        ..f
     };
     let mut out = out();
     if out.ui != ui {
         return;
     }
-    out.batch
-        .extend_from_slice(&(pkt.len() as u32).to_le_bytes());
-    out.batch.extend_from_slice(&[0; 4]);
-    out.batch.extend_from_slice(&pkt);
+    for w in f.words() {
+        out.batch.extend_from_slice(&w.to_le_bytes());
+    }
+    out.batch.extend_from_slice(pkt);
     let end = out.batch.len().next_multiple_of(8);
     out.batch.resize(end, 0);
 }
@@ -181,20 +185,12 @@ fn tell(ui: Handle, cnt: u32, write: impl Fn(&mut PacketWriter)) {
 /// `tag`, and tells it the guest's cancel of it.
 fn forward(ui: &Ui, h: Handle, m: Method, tag: Tag, args: Lift) -> i32 {
     let u = ui.h;
-    tell(u, 5, |w| {
-        w.u32(Some(2))
-            .u32(Some(h))
-            .u32(Some(m))
-            .u32(Some(tag))
-            .array::<u8>(args.pkt());
-    });
+    tell(u, request(tag, h, m), args.pkt());
     ui.pending.borrow_mut().insert(tag);
     side().on_cancel(
         tag,
         Box::new(move || {
-            tell(u, 2, |w| {
-                w.u32(Some(4)).u32(Some(tag));
-            });
+            tell(u, request(0, ROOT, CANCEL), Some(&tag.to_le_bytes()));
         }),
     );
     Errno::EINPROGRESS as i32
@@ -235,18 +231,19 @@ impl Drop for Opened {
     fn drop(&mut self) {
         let h = self.h;
         if let Some(ui) = self.ui.upgrade() {
-            tell(ui.h, 2, |w| {
-                w.u32(Some(5)).u32(Some(h));
-            });
+            tell(ui.h, request(0, h, DROP), None);
         }
     }
 }
 
-/// `uri` as a lowered `list<token>`, as ROOT OPEN's args are.
-fn lowered(uri: &[Token]) -> Vec<u8> {
+/// The root's `OPEN_AT`'s args, lowered: the handle `h`, the opener's place
+/// `k` and `uri`, a `list<token>`.
+fn lowered(h: Handle, k: u32, uri: &[Token]) -> Vec<u8> {
     let mut buf = vec![0; (side().layout().cap - HDR_SZ) as usize];
-    let mut w = Lower::new(&mut buf, 8);
-    store_uri(&mut w, 0, uri);
+    let mut w = Lower::new(&mut buf, 16);
+    w.u32(0, h);
+    w.u32(4, k);
+    store_uri(&mut w, 8, uri);
     let len = w.finish().ok().or_bug(Errno::EMSGSIZE);
     buf.truncate(len);
     buf
@@ -264,13 +261,7 @@ pub(crate) fn mount(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>) {
     for (k, (i, p)) in (0..).zip(prefixes) {
         side().mount(i, p, move |uri, h| {
             let ui = ui().or_bug(Errno::ENOTCONN);
-            let uri = lowered(uri);
-            tell(ui.h, 4, |w| {
-                w.u32(Some(3))
-                    .u32(Some(h))
-                    .u32(Some(k))
-                    .array::<u8>(Some(&uri));
-            });
+            tell(ui.h, request(0, ROOT, OPEN_AT), Some(&lowered(h, k, uri)));
             Ok(Rc::new(Opened {
                 h,
                 ui: Rc::downgrade(&ui),
@@ -305,12 +296,15 @@ pub(crate) fn recv(u: Handle, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
                 None => side().drop(o),
             }
         }
-        tell(u, 4, |w| {
-            w.u32(Some(0))
-                .u32(Some(tag))
-                .i32(Some(result))
-                .array::<u8>(data.as_deref());
-        });
+        let answered = Frame {
+            tag,
+            res: true,
+            handle: ROOT,
+            method: 0,
+            result,
+            pkt_len: 0,
+        };
+        tell(u, answered, data.as_deref());
     };
     let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
     side().send(h, m, pkt, Some(Box::new(answer)));

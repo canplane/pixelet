@@ -50,9 +50,9 @@ fn system() -> Result<&'static SystemText, Errno> {
 }
 
 /// The text a call lends, which the core holds until the call returns.
-fn text_of(span: &Lent) -> Result<&'static str, Errno> {
+fn text_of(lent: &Lent) -> Result<&'static str, Errno> {
     // SAFETY: the text the core lent for the call, until it returns.
-    core::str::from_utf8(unsafe { mem::read(span.at, span.len) }).map_err(|_| Errno::EBADMSG)
+    core::str::from_utf8(unsafe { mem::read(lent.buf, lent.nbyte) }).map_err(|_| Errno::EBADMSG)
 }
 
 /// The system's text, as the core's `text` asks it.
@@ -83,11 +83,11 @@ impl text::Host for Device {
         let len = width
             .checked_mul(height)
             .and_then(|n| n.checked_mul(4))
-            .filter(|&n| n <= image.len)
+            .filter(|&n| n <= image.nbyte)
             .ok_or(Errno::EINVAL)?;
         // SAFETY: the pixels the core lent for this call, which nothing else
         // touches until it returns.
-        let out = unsafe { mem::bytes(image.at, len) };
+        let out = unsafe { mem::bytes(image.buf, len) };
         // SAFETY: the text's bytes and `out`, both held for the call.
         unsafe {
             (system.raster)(

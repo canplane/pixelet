@@ -24,6 +24,7 @@ use pxl_spec::space::coord::world::between;
 use xpute_kit::abi::word::split64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 /// An upload record's words: handle, address (two words, pxl-gpu-link `addr`), byte length,
@@ -918,7 +919,10 @@ impl MirroredBlock {
             return false;
         };
         bytes[..data.len()].copy_from_slice(data);
-        let (at, room) = mem::span(&self.block.0);
+        let Lent {
+            buf: at,
+            nbyte: room,
+        } = mem::lent(&self.block.0);
         if self.handle == 0 {
             self.handle = draw.upload(at, room, 0, 0);
         } else {

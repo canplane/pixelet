@@ -110,8 +110,8 @@ struct Arrangement {
     /// step does nothing.
     last: Option<Input>,
     /// Whether the last run left a design not laid out or not painted, which
-    /// a later frame brings, or a brick not read yet. If so, the next frame
-    /// runs again.
+    /// a later frame brings, or a brick not read or a place's surface not
+    /// asked yet. If so, the next frame runs again.
     waiting: bool,
 }
 
@@ -287,6 +287,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     })
     .step_cnt as usize;
     incomplete.retain(|b| place_on && now.bricks.binary_search(b).is_ok());
+    place::hand_held(&mut read_places, held.1);
     let unread_cnt = entering.len() - read;
     let (read_bricks, unread_bricks) = entering.split_at_mut(read);
     read_bricks.sort_unstable_by_key(|e| e.1);
@@ -340,7 +341,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
     pin::show(&mut pins, o.eye, draft, &mut shown);
-    place::show(&mut read_places, o.eye, &mut shown);
+    let places_stopped = place::show(&mut read_places, o.eye, &mut shown);
     shown.extend(seen.bubble.instance());
     let spacing = SPACING_PX;
     // What was drawn last, by its holder's key. When what a holder shows
@@ -413,7 +414,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // (`design::coming`), when a freed slot may make room for a design that
     // had none, or when a hold given up frees the old slot.
     let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
-    p.waiting = pending || refused || unlaid || unread_cnt > 0;
+    p.waiting = pending || refused || unlaid || unread_cnt > 0 || places_stopped;
     if p.waiting {
         sched::invalidate(InvalidationReason::Pending);
     }

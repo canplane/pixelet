@@ -40,8 +40,8 @@ trap_on((err) => { /* show it */ });
 start();
 ```
 
-What the runtime sends the UI comes in a batch on one notify, each message an
-XTP packet by its kind, and a buffer the guest lends is read and written
-through a buffer the module makes over its span alone. Why the runtime outlives
+What the runtime sends the UI comes in a batch on one notify, each message a
+frame of the link's, and a buffer the guest lends is read and written through
+a buffer the module makes over its span alone. Why the runtime outlives
 its UI and keeps the guest's stop and trap is in
 [ARCHITECTURE.md](../ARCHITECTURE.md), "The sides".

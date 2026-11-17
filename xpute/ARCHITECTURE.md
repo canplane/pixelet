@@ -46,7 +46,9 @@ packet, which is the one copy. A buffer the caller lends, WIT's `lent`
 answer; its address is a u64 on every platform, an offset into a module's
 memory or a pointer natively, so a packet has one layout everywhere. A packet
 that does not hold what its type says is refused, EBADMSG,
-where the ABI traps. And RESULT is status alone, the value in the packet.
+where the ABI traps. And RESULT is status alone, the value in the packet. What
+of WIT the link takes, and what it reads its own way, is the generator's to
+list ([link/gen](./link/gen/README.md)).
 
 A `func` answers at once, and is called. An `async func` answers later, and is
 sent: the crossing answers EINPROGRESS, and the callee answers later by a
@@ -170,9 +172,9 @@ RTTI.
 
 A fact that crosses languages has one owner, a spec or WIT, and a generator
 writes it into every language that holds it: `xpute-gen` the data specs, and
-`xpute-link-gen` the link's bindings, each README saying how. XTP, the kit's
-tree packet, is the format of data a program stores and serves, and of the
-native runtime's batches to its UI; the link's packets are the Canonical ABI's.
+`xpute-link-gen` the link's bindings, each README saying how. What crosses
+between two languages is a frame, its packet the Canonical ABI's; XTP, the kit's
+tree packet, is the format of data a program stores and serves.
 
 What holds the languages to each other is data. Under a part's
 `spec/golden/` are records each language reads bit for bit, so a difference

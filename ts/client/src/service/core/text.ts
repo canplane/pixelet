@@ -24,8 +24,8 @@ import * as platform from "@/service/platform/text.web.ts";
 export function mount_text(link: Callee, mem: Memory): void {
   /** The text a call lends, which the core holds only until the call
    * returns. */
-  const text_of = (span: Lent): string =>
-    td.decode(mem.bytes(span.at, span.len));
+  const text_of = (lent: Lent): string =>
+    td.decode(mem.bytes(lent.buf, lent.nbyte));
 
   text.mount(link, {
     width(weight, px, text) {
@@ -33,7 +33,7 @@ export function mount_text(link: Callee, mem: Memory): void {
     },
     raster(weight, px, color, image, width, height, x, text) {
       const len = width * height * 4;
-      if (len > image.len) throw new XputeError(ERRNO_EINVAL);
+      if (len > image.nbyte) throw new XputeError(ERRNO_EINVAL);
       platform.raster(
         weight,
         px,
@@ -42,7 +42,7 @@ export function mount_text(link: Callee, mem: Memory): void {
         x,
         width,
         height,
-        mem.bytes(image.at, len),
+        mem.bytes(image.buf, len),
       );
     },
   });

@@ -12,16 +12,12 @@ pub fn apply<L: _rt::Lend>(
     batch: L,
 ) -> impl Future<Output = (L, Result<Result<(), _rt::ErrorCode>, _rt::Errno>)> + use<L> {
     let mut batch = batch;
-    let (batch_at_, batch_len_) = _rt::Lend::span(&mut batch);
+    let batch_lent_ = _rt::Lend::lent(&mut batch);
     let sent = _rt::wait::wait(
         HANDLE,
         APPLY,
         Some((16, &|w_: &mut _rt::Lower| {
-            _rt::Lent {
-                at: batch_at_,
-                len: batch_len_,
-            }
-            .store(w_, 0);
+            batch_lent_.store(w_, 0);
         })),
         batch,
     );
@@ -49,6 +45,5 @@ mod _rt {
     pub(super) use xpute_guest::abi::fs::types::ErrorCode;
     pub(super) use xpute_guest::wait;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::abi::types::Lent;
     pub(super) use xpute_link::{Handle, Lend, Lift, Lower, Method, answer};
 }

@@ -15,7 +15,7 @@ use xpute_golden::Golden;
 const GOLDEN: &str = include_str!("../../spec/golden/cabi.tsv");
 
 /// The record's packet: one of each number, a string, a list of numbers, a
-/// URI and a lent span, as the Canonical ABI lays a tuple of them.
+/// URI and a lent buffer, as the Canonical ABI lays a tuple of them.
 const FIXED_SZ: usize = 88;
 
 /// Packets that do not hold a URI, each refused as one: a list whose
@@ -50,7 +50,11 @@ fn lower(buf: &mut [u8]) -> Result<usize, Errno> {
     w.str(48, "€€");
     w.arr::<u16>(56, &[1, 2, 65535]);
     store_uri(&mut w, 64, &uri());
-    Lent { at: 4096, len: 64 }.store(&mut w, 72);
+    Lent {
+        buf: 4096,
+        nbyte: 64,
+    }
+    .store(&mut w, 72);
     w.finish()
 }
 
@@ -88,7 +92,13 @@ fn lift_matches_record() {
     assert_eq!(r.str(48), Ok("€€"));
     assert_eq!(r.arr::<u16>(56), Ok(vec![1, 2, 65535]));
     assert_eq!(load_uri(r, 64), Ok(uri()));
-    assert_eq!(Lent::load(r, 72), Ok(Lent { at: 4096, len: 64 }));
+    assert_eq!(
+        Lent::load(r, 72),
+        Ok(Lent {
+            buf: 4096,
+            nbyte: 64
+        })
+    );
 }
 
 /// Each recorded packet that does not hold a URI is refused as one, EBADMSG.

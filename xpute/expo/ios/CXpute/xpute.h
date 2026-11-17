@@ -87,9 +87,9 @@ void xpute_answer(uint32_t ui, uint32_t tag, int32_t result, const uint8_t *data
                   size_t len);
 
 // Hands over the batch the UI of the handle `ui` has not taken, none where it
-// is not the UI attached, and writes its length through `len`: each message an XTP
-// packet laid after its length (a u32, then four zero bytes, so the packet
-// starts on a word), padded to 8 bytes. The bytes are the caller's until
+// is not the UI attached, and writes its length through `len`: each message a
+// frame of the link's (link/spec/frame.json5), its four words and then its
+// packet, padded to 8 bytes. The bytes are the caller's until
 // `xpute_taken_free(at, len)`.
 uint8_t *xpute_take(uint32_t ui, size_t *len);
 void xpute_taken_free(uint8_t *at, size_t len);

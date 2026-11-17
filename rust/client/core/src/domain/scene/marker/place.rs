@@ -7,6 +7,7 @@
 //! center of its ground leaf cell, on the first surface a ray down meets at
 //! the detail drawn there, and a tap on it goes there.
 
+use fnv::FnvHashMap;
 use pxl_spec::space::layer::lattice::{Cell, GROUND};
 use pxl_spec::space::layer::quadrant::{Quadrant, quad_rows};
 use std::rc::Rc;
@@ -15,6 +16,7 @@ use super::{Brick, Instance, Key, MarkerHit, cell_zoom, surface};
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::{World, cell_zoom_at};
 use crate::domain::scene::marker::design::Design;
+use crate::sys::sched;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{PLACE_FIRST, PLACE_LATTICE, stands, symbol_of};
 use pxl_spec::space::coord::q3;
@@ -25,8 +27,14 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
 /// cell it stands in, and the finest camera grid cell its brick draws, which
-/// its tile was read at (`finest`). `top` keeps the surface it stood on when
-/// last asked, with the detail it was asked at.
+/// its tile was read at (`finest`). The ground under it is asked two things.
+/// `ele` is where it is: the finest ground there, asked once when it is
+/// read, from which the camera grid's cell it is in is told. `top` is what it
+/// stands on: the surface at the detail `asked`, the one drawn in that cell,
+/// None where nothing was found. The one decides the other and is not decided
+/// by it. While `asked` is None both are still to ask, and they are those of
+/// the same place as it stood before (`hand_held`), for it to show by
+/// meanwhile.
 pub(super) struct Place {
     pub(super) brick: Brick,
     kind: u16,
@@ -34,7 +42,9 @@ pub(super) struct Place {
     name: Option<Rc<str>>,
     ground: Cell,
     finest: Zoom,
-    top: Option<(Zoom, Option<f64>)>,
+    ele: Option<f64>,
+    top: Option<f64>,
+    asked: Option<Zoom>,
 }
 
 impl Place {
@@ -91,7 +101,9 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
             name: (!h.name.is_empty()).then(|| h.name.into()),
             ground,
             finest,
+            ele: None,
             top: None,
+            asked: None,
         });
     });
     if !whole {
@@ -100,25 +112,72 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
     whole
 }
 
+/// Hands each place read now, those past the first `held`, where the same
+/// place was and what it stood on, so it shows as it did until its own are
+/// asked.
+pub(super) fn hand_held(read: &mut [Place], held: usize) {
+    let (before, now) = read.split_at_mut(held);
+    if before.is_empty() || now.is_empty() {
+        return;
+    }
+    let was: FnvHashMap<Cell, (Option<f64>, f64)> = before
+        .iter()
+        .filter_map(|p| Some((p.ground, (p.ele, p.top?))))
+        .collect();
+    for p in now {
+        if let Some(&(ele, top)) = was.get(&p.ground) {
+            (p.ele, p.top) = (ele, Some(top));
+        }
+    }
+}
+
+/// The zoom of the camera grid's cell `p` is in, no finer than its tile was
+/// read at.
+fn cell_zoom_of(p: &Place, eye: V3) -> Zoom {
+    let [x, y, _] = q3::unpack(&p.ground.mid());
+    cell_zoom_at(eye, [x, y, p.ele.unwrap_or(0.0)]).min(p.finest)
+}
+
+/// Asks the surface under `p` at `detail`.
+fn ask(p: &mut Place, detail: Zoom) {
+    let top = surface(&p.ground.mid(), (BOUNDS.max[2], BOUNDS.min[2]), detail);
+    (p.top, p.asked) = (top, Some(detail));
+}
+
+/// Asks the ground under `p`: where it is, for a place just read, at its
+/// brick's finest detail; then, where Carto shows it and the detail of the
+/// cell it is in is not the one last asked, what it stands on. Returns
+/// whether it asked.
+fn settle(p: &mut Place, eye: V3) -> bool {
+    let mut asked = false;
+    if p.asked.is_none() {
+        ask(p, GROUND.read_zoom(p.finest));
+        p.ele = p.top;
+        asked = true;
+    }
+    let zoom = cell_zoom_of(p, eye);
+    let detail = GROUND.read_zoom(zoom);
+    if p.asked != Some(detail) && point_of(p.kind, p.first_zoom, None, carto_zoom(zoom)).is_some() {
+        ask(p, detail);
+        asked = true;
+    }
+    asked
+}
+
 /// Writes into `out` the places `read` read, seen from `eye`. Each shows as
-/// Carto shows it at the zoom of the camera grid's cell where it stands, no
-/// finer than its tile was read at, and it stands on what is drawn there.
-pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
+/// Carto shows it at the zoom of the camera grid's cell it is in, no finer
+/// than its tile was read at, and it stands on what is drawn there: a
+/// marker is tested against the world's depth at its anchor (pxl-render
+/// pass/marker.rs), so one standing on a finer ground than is drawn would be
+/// hidden wherever the drawn ground is higher. The surfaces are asked under the entry's budget (sys/sched.rs `run`), a place
+/// showing by what it holds until its own are asked. Returns whether
+/// the budget stopped the asks before the list's end.
+pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) -> bool {
+    let run = sched::run(read.iter_mut(), |p| settle(p, eye));
     for p in read {
-        // Its cell is the grid's cell at what it stands on. That surface is
-        // the one last asked, or, on the first ask, the one at its brick's
-        // finest detail.
-        let first = match p.top {
-            Some((_, top)) => top,
-            None => top_at(p, GROUND.read_zoom(p.finest)),
-        };
-        let [x, y, _] = q3::unpack(&p.ground.mid());
-        let cell_zoom = cell_zoom_at(eye, [x, y, first.unwrap_or(0.0)]).min(p.finest);
-        let Some(design) = point_of(p.kind, p.first_zoom, p.name.as_ref(), carto_zoom(cell_zoom))
-        else {
-            continue;
-        };
-        let Some(top) = top_at(p, GROUND.read_zoom(cell_zoom)) else {
+        let Some(top) = p.top else { continue };
+        let carto = carto_zoom(cell_zoom_of(p, eye));
+        let Some(design) = point_of(p.kind, p.first_zoom, p.name.as_ref(), carto) else {
             continue;
         };
         let pos = p.ground.center(top);
@@ -129,20 +188,7 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
             tap: Some(MarkerHit::To(pos)),
         });
     }
-}
-
-/// The height at which a ray down over `p`'s cell first meets what is drawn
-/// at `detail`, or None where nothing there is known. The answer is kept with
-/// the detail it was asked at.
-fn top_at(p: &mut Place, detail: Zoom) -> Option<f64> {
-    match p.top {
-        Some((at, top)) if at == detail => top,
-        _ => {
-            let top = surface(&p.ground.mid(), (BOUNDS.max[2], BOUNDS.min[2]), detail);
-            p.top = Some((detail, top));
-            top
-        }
-    }
+    run.stopped_early
 }
 
 /// A place of `kind`, shown from zoom `first_zoom` on, as Carto shows it at

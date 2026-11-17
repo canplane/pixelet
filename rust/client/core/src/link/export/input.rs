@@ -3,7 +3,7 @@
 //! The input interface's methods: the pointer, the wheel, a trackpad's pinch,
 //! the held movement keys and a tracker's pose.
 
-use super::{applied, refuse_unless};
+use super::refuse_unless;
 use crate::abi::input::{Drag, PointerPhase};
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
@@ -44,24 +44,23 @@ pub(super) fn pointer(
     if pinching() {
         clear_hover_coord();
     }
-    // A pointer moves the view or what it hovers, which a frame shows.
-    applied()
+    Ok(())
 }
 
 pub(super) fn wheel(delta_y: f64) -> Result<(), Errno> {
     camera_wheel(delta_y);
-    applied()
+    Ok(())
 }
 
 pub(super) fn pinch(scale: f64) -> Result<(), Errno> {
     refuse_unless(scale > 0.0, Errno::EINVAL)?;
     camera_pinch(scale);
-    applied()
+    Ok(())
 }
 
 pub(super) fn r#move(x: i32, y: i32) -> Result<(), Errno> {
     camera_keys(x, y);
-    applied()
+    Ok(())
 }
 
 pub(super) fn xr_pose(

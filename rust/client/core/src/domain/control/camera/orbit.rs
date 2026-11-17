@@ -48,10 +48,12 @@ use crate::domain::control::camera::gesture::{Anchor, spread};
 use crate::domain::control::camera::state::{
     Intent, IntentPatch, camera_state, camera_state_mut, ease_pivot, resolved_to,
 };
-use crate::domain::control::camera::{camera, ease_facing, facing_dir, set_eye_world};
+use crate::domain::control::camera::{
+    camera, ease_facing, eases_toward, facing_dir, facing_domain, set_eye_world,
+};
 use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
-use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP, EASE_EPS_U};
+use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP};
 use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
@@ -108,8 +110,10 @@ pub(crate) fn ask(partial: IntentPatch) -> Intent {
     c.intent
 }
 
+/// Whether the distance is still to reach the intent's, which it takes
+/// whole when the ease ends (`step`).
 pub(crate) fn zoom_settling() -> bool {
-    (camera_state().intent.dist - orbit().dist).abs() > EASE_EPS_U
+    camera_state().intent.dist != orbit().dist
 }
 
 /// A wheel turn of `delta_y` CSS pixels.
@@ -161,13 +165,7 @@ pub(crate) fn step(delta: f64) -> bool {
     let (o, cam) = (orbit(), camera());
     let was = (drawn_pivot, o.dist, cam.polar, cam.azimuth);
 
-    let (at, mut moving) = ease_pivot(drawn_pivot, delta);
-
-    // The distance eases between two that the intent holds to the camera's
-    // range (state.rs `with_patch`), so it stays within it.
-    let ([dist], m) = smooth_vec([o.dist], [vs.dist], CAM_DAMP, delta, EASE_EPS_U);
-    o.dist = dist;
-    moving |= m;
+    let to = resolved_to(drawn_pivot);
 
     // Under `climb`, the ground pitches the facing toward straight down
     // instead of shortening the distance. The pitch rises fast and relaxes
@@ -181,7 +179,19 @@ pub(crate) fn step(delta: f64) -> bool {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    moving |= ease_facing(cam, polar, rate, vs.azimuth, delta);
+    let (polar, azimuth) = facing_domain(polar, vs.azimuth);
+    let eye_to = v3::add(&to, &orbit_eye_off(vs.dist, polar, azimuth));
+    let moving = eases_toward(cam, eye_to, polar, azimuth);
+    let at = if moving {
+        // The distance eases between two that the intent holds to the
+        // camera's range (state.rs `with_patch`), so it stays within it.
+        [o.dist] = smooth_vec([o.dist], [vs.dist], CAM_DAMP, delta);
+        ease_facing(cam, polar, rate, azimuth, delta);
+        ease_pivot(drawn_pivot, to, delta)
+    } else {
+        (o.dist, cam.polar, cam.azimuth) = (vs.dist, polar, azimuth);
+        to
+    };
 
     // The eye is written only when something moved, so a camera at rest is
     // never rewritten.

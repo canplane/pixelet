@@ -453,11 +453,11 @@ pub unsafe fn take(e: *mut JNIEnv, ui: u32) -> jbyteArray {
 /// `ByteBuffer` over them, with no copy, the UI's until the lend's answer.
 ///
 /// # Safety
-/// `e` is what JNI called with, and the span is lent to the UI.
+/// `e` is what JNI called with, and the bytes are lent to the UI.
 pub unsafe fn buf(e: *mut JNIEnv, at: jlong, len: jint) -> jobject {
     // SAFETY: the caller's.
     let b = unsafe { mem::bytes(at as u64, len as u32) };
-    // SAFETY: JNI's own call over the span.
+    // SAFETY: JNI's own call over those bytes.
     unsafe {
         env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(e, b.as_mut_ptr().cast(), i64::from(len))
     }
@@ -558,7 +558,7 @@ macro_rules! jni_abi {
             at: $crate::jni::sys::jlong,
             len: $crate::jni::sys::jint,
         ) -> $crate::jni::sys::jobject {
-            // SAFETY: the environment JNI called with, over a span the guest
+            // SAFETY: the environment JNI called with, over a buffer the guest
             // lent the UI.
             unsafe { $crate::jni::buf(env, at, len) }
         }

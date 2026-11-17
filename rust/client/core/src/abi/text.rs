@@ -15,18 +15,14 @@ pub fn width<T0: Copy + Unpin + 'static>(
     px: f64,
     text: &mut [T0],
 ) -> Result<f64, _rt::Errno> {
-    let (text_at_, text_len_) = _rt::mem::span(&text[..]);
+    let text_lent_ = _rt::mem::lent(&text[..]);
     let (r, data) = _rt::link::call(
         HANDLE,
         WIDTH,
         Some((32, &|w_: &mut _rt::Lower| {
             w_.u32(0, weight);
             w_.f64(8, px);
-            _rt::Lent {
-                at: text_at_,
-                len: text_len_,
-            }
-            .store(w_, 16);
+            text_lent_.store(w_, 16);
         })),
     );
     _rt::answer(r).and_then(|_| {
@@ -49,8 +45,8 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     x: f64,
     text: &mut [T1],
 ) -> Result<(), _rt::Errno> {
-    let (image_at_, image_len_) = _rt::mem::span(&image[..]);
-    let (text_at_, text_len_) = _rt::mem::span(&text[..]);
+    let image_lent_ = _rt::mem::lent(&image[..]);
+    let text_lent_ = _rt::mem::lent(&text[..]);
     let (r, _) = _rt::link::call(
         HANDLE,
         RASTER,
@@ -58,19 +54,11 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
             w_.u32(0, weight);
             w_.f64(8, px);
             w_.u32(16, color);
-            _rt::Lent {
-                at: image_at_,
-                len: image_len_,
-            }
-            .store(w_, 24);
+            image_lent_.store(w_, 24);
             w_.u32(40, width);
             w_.u32(44, height);
             w_.f64(48, x);
-            _rt::Lent {
-                at: text_at_,
-                len: text_len_,
-            }
-            .store(w_, 56);
+            text_lent_.store(w_, 56);
         })),
     );
     _rt::answer(r)
@@ -79,6 +67,5 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
 mod _rt {
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::abi::types::Lent;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer, mem};
 }

@@ -54,39 +54,90 @@ Its two conditions carry every item of the meeting.
 
 ## The code
 
-Kept by the law: the level of detail; the location's zone (`600037b61c`,
-`aff9dfde09`); a block the heap refused, written again from what is held, and a
-brick's markers standing until the brick is read again (`63f0ec4499`, `64e4fae492`).
+Kept by the law before the meeting: the level of detail, and a coarser answer of the
+ground standing in for a finer one not held, which the query gives (`Answer::Coarser`).
 
 Brought under it at the meeting:
-- **A brick that splits or merges** (`948b7b3889`): a marker stands until the drawn
-  brick over it is read, and a brick's places are read whole or not at all, what
-  stood staying while a tile of theirs is still to come.
-- **The camera** (`93a64f5181`): the view takes a turn only once it moves the screen
-  by half a CSS pixel, and the pick is cast from the view. The eye's place was
-  already taken by the lattice the rays start from.
+- **The location's zone** (`600037b61c`, `aff9dfde09`): keyed by the fix's cell, run as
+  the ghost runs.
+- **What stands while it is read again** (`63f0ec4499`, `64e4fae492`, `948b7b3889`,
+  `bbd6b5e5af`, `8b39a6b078`): a block the heap refused is written again from what is
+  held, the zone's, the marker set's and the debug meshes' as the ghost's; a marker
+  stands until the drawn brick over it is read, across a split or a merge, a brick's
+  places read whole or not at all; a place is named by the ground cell it stands in,
+  so its drawing is held whatever tile it is read from.
+- **The camera** (`93a64f5181`, `8b39a6b078`, `9fd850c654`, `d753e720dc`): the view
+  takes a turn only once it moves the screen by half a CSS pixel; the pick, the world
+  gizmo's heading and the UI's compass read the view; the camera's ease ends where its
+  pose and the one it eases toward are not distinct in the view, by the one test the
+  view takes its pose by, and the two ends chosen by eye are gone.
+- **The places' asks of the ground** (`e77e5f8a03`) run under the entry's budget, the
+  decision of 2026-10-28: the loop's body for one place handed to the pass every other
+  budgeted work uses, a place read again standing meanwhile on the surface the same
+  place stood on.
 - **What moves on its own** (`59f9975f42`): the characters, the beacon and the clouds
   read their clocks in one place, which wakes the frame at the next step and records
   it.
-- **One fact, one name**: a decor opens into its model where the ground's cell opens
-  into its finer ones, so the decor's own constant went for the grid's.
+- **The triggers** (`6102908d4e`, `8e8f7f5f8c`): an ask for a frame says its reason
+  (`InvalidationReason`: a method applied, the view, the scene, a completion, pending
+  work, an animation), counted by the scheduler and read by the profiler. Who asks
+  follows where the trigger comes from. A method from outside asks as a method, in
+  the one place the interfaces are implemented (`link/export.rs` `with_frame`): every
+  method that changes what the core holds, none that only reads, and the device's
+  heading alone by a condition, only while the camera follows, since the device tells
+  it far more often than a frame is worth. What changes inside the core asks where it
+  changes. A rule tried in between (`b8c835dcc8`), that an event asks once, so a
+  method whose state asks adds none, was taken back: it made who asks depend on
+  whether a state happened to ask, and an ask is a flag, so two draw one frame.
+- **One fact, one name** (`c95305007c`): a decor opens into its model at the grid's
+  `SPANS`, as the ground's cell opens into its finer ones.
 
-The Mac's Chrome, by turns with the tree before the camera and the markers changed,
-read the same: tick p50 1.8 ms, GPU p50 20.6 to 21.0 ms, 839 to 850 frames. The
-phones were not measured.
+State the meeting added: the bricks whose place tile is still to come, the scheduler's
+counts by reason, a view's pose that may differ from the camera's by less than can be
+told apart, a place showing by what it was handed, and a place's two heights where
+it had one. State it removed: the
+ease's two ends, the smoothing's `eps` and its flag, the location's two-fold key, the effect that did real
+work, the memo cleared on a refused block, the pick's own pose, a decor's constant, a
+place's tile and index, and the asks for a frame written in each method's body.
 
-Where the code still departs from the law: the camera's controllers ask a frame every
-frame they ease, where an asset wakes at its next step; the eye's place and the turn
-are taken by two quanta, the lattice's and the eye's; the steps and the ease's ends
-chosen by eye (`VISIBLE_STEP_CELLS`, `EASE_EPS_RAD`, `EASE_EPS_U`,
-`DECOR_IMPOSTOR_CELLS`) are not yet the rule's values; the asks for a frame do not
-name their kind; a place's surface and a pin crowd's stand are asked outside the
-budget; and the debug gizmo and the compass read the camera, not the view.
+Measured: the Mac's Chrome, by turns with the tree before, five times over the day,
+read the same (tick p50 1.8 ms; the GPU within the runs' own spread; the runs late in a
+series slower on both builds). The phones were not measured.
+
+What stands as it is, and why:
+- **A place stands on the ground as drawn**, asked again when the detail drawn where
+  it is changes. Cesium's clamped label reads the finest ground loaded, once, and is
+  drawn over the ground whatever its depth; a marker here is tested against the
+  world's depth at its anchor (pxl-render `pass/marker.rs`), so the premise differs.
+  The loop this made, a height telling the cell that asked for the height, is cut
+  (`685dbeff31`): where a place is and what it stands on are two facts, the first
+  deciding the second.
+- **A pins' count is asked where it stands at once, outside the budget**, where a
+  place's surface is asked under it: the same contract, that nothing shown goes while
+  it is asked, kept by two forms. A place is named by its cell and stands meanwhile on
+  what it held; a count is named by the pins' cell, which changes with the zoom, so
+  nothing shown before can stand for it, and its ray ends within that cell. Putting it
+  under the budget was tried twice, the night's and at the meeting, and taken back:
+  the count went and came back.
+- **A motion's step is its own quantum** (`VISIBLE_STEP_CELLS`, a twelfth of a cell),
+  not the view's turn. The clouds drift in the sky's own frame and the beacon bobs in
+  the world's, and what steps them is time, the third sampler; the view's turn step is
+  the picture's. Putting the one in the other's place was tried and taken back as
+  forcing unlike roles alike: it changed no frame of a moving camera and would step a
+  still screen 1.8 to 2.5 times as often.
+- **`DECOR_IMPOSTOR_CELLS`** stays a quarter of a cell, chosen by eye, where the
+  grid's quantum is half. Seen side by side on the Mac's Chrome at three zooms over
+  the ground, a quarter and a half drew the same picture: a decor leaves by its clip
+  level's zooms before this angle is reached. The value also sets how far the clouds
+  are drawn, whether a character is seen, and the size of the fixed ranges
+  (`manifest.json5` `fixed_sz`), so changing it moves those for no gain shown.
+- The effects were read and do no real work (0.1 ms at p95).
 
 ## The way of working
 
 The user's: what simplifies the structure, keeps a symmetry or clears the state space
 is done, and never at the cost of a regression in pace. A task is divided, one problem
 finished before the next. An agent's verdict is judged by the law and refused where it
-departs. A minute holds conclusions, written whole. These are carried into `AGENTS.md`,
-the code skill and `doc/README.md`.
+departs. A fault met is first asked whether an ad hoc piece made it, and the piece
+goes rather than the fault being patched. A minute holds conclusions, written whole.
+These are carried into `AGENTS.md`, the code skill and `doc/README.md`.

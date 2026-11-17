@@ -21,6 +21,42 @@ and `Host` on any other side, a resource's `GuestDevice` or `HostDevice`, and
 the internal `_Object`. A WIT name that meets one of them, or a name the
 bindings import, takes `_`, as wit-bindgen's `Guest_` does.
 
+## What of WIT it takes
+
+The link is declared in WIT and is not the component model: the generator takes
+a part of WIT, refuses the rest by name, and reads some of it its own way.
+
+| WIT | Here |
+| --- | --- |
+| `bool`, `u8` to `u64`, `s8` to `s64`, `f32`, `f64`, `string` | taken |
+| `record`, `variant`, `enum`, a type alias | taken |
+| `list<T>` | taken; a list of numbers crosses as its bytes, a typed array in TypeScript |
+| `option<T>` | taken, but no option of an option: TypeScript's none is one null |
+| `result<T, E>` | taken, either side empty; any failure outside its error case is the frame's status, an errno |
+| `char`, `tuple`, `flags`, `future`, `stream`, `error-context` | refused |
+| `func`, and a resource's method | a method answered inside the crossing |
+| `async func` | a method answered later, by a frame of its own that carries the request's tag; the component model's async ABI is not used |
+| a resource's constructor, static function, getter or setter | refused |
+| `resource` | an object under a handle the implementing side issues: opened by a URI through the root's `open`, or returned by a function, and let go by the drop every handle has |
+| `own<T>`, `borrow<T>` | one handle, a `u32`; the link tells them apart nowhere |
+| an interface with functions | one object under a named handle, the hash of its package and name, called with no open |
+| `world` | says which side implements what, and nothing else: one a package, its name unread, and the link's own crossings in none |
+| `xpute:link/types` `lent` | a record to WIT; to the bindings a buffer of the caller's memory lent in place until the answer, one an async call |
+
+An object holds at most 255 methods, the drop taking the last number. A
+packet's layout is the Canonical ABI's but for the four departures
+[ARCHITECTURE.md](../../ARCHITECTURE.md) gives in "The link".
+
+xpute's own packages borrow WASI's shapes and implement none of WASI: a guest
+imports nothing of it.
+
+| Package | Against WASI |
+| --- | --- |
+| `xpute:clocks` | `wasi:clocks@0.3`'s monotonic and system clocks, cut to `now` and `wait-for` |
+| `xpute:log` | `wasi:logging`'s shape: a level, a context and a message |
+| `xpute:fs` | its own: a `file` opened by URI that reads and writes a lent buffer, with no descriptors, directories or streams; only its `error-code` names its cases as `wasi:filesystem`'s does |
+| `xpute:stop`, `xpute:life`, `xpute:link` | xpute's own |
+
 ## A program's bindings
 
 A program declares one package, its world being its guest's, and asks for its

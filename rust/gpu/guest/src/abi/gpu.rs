@@ -45,16 +45,12 @@ impl ErrorCode {
 
 pub fn run<L: _rt::Lend>(recs: L) -> impl Future<Output = (L, Result<(), _rt::Errno>)> + use<L> {
     let mut recs = recs;
-    let (recs_at_, recs_len_) = _rt::Lend::span(&mut recs);
+    let recs_lent_ = _rt::Lend::lent(&mut recs);
     let sent = _rt::wait::wait(
         HANDLE,
         RUN,
         Some((16, &|w_: &mut _rt::Lower| {
-            _rt::Lent {
-                at: recs_at_,
-                len: recs_len_,
-            }
-            .store(w_, 0);
+            recs_lent_.store(w_, 0);
         })),
         recs,
     );
@@ -77,16 +73,12 @@ pub fn device_lost<L: _rt::Lend>(
     block: L,
 ) -> impl Future<Output = (L, Result<(), _rt::Errno>)> + use<L> {
     let mut block = block;
-    let (block_at_, block_len_) = _rt::Lend::span(&mut block);
+    let block_lent_ = _rt::Lend::lent(&mut block);
     let sent = _rt::wait::wait(
         device_,
         DEVICE_LOST,
         Some((16, &|w_: &mut _rt::Lower| {
-            _rt::Lent {
-                at: block_at_,
-                len: block_len_,
-            }
-            .store(w_, 0);
+            block_lent_.store(w_, 0);
         })),
         block,
     );
@@ -130,6 +122,5 @@ pub fn device_settled(
 mod _rt {
     pub(super) use xpute_guest::{link, wait};
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::abi::types::Lent;
     pub(super) use xpute_link::{Handle, Lend, Lift, Lower, Method, answer};
 }

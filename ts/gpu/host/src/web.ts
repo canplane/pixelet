@@ -59,15 +59,15 @@ export class WebGpu {
     gpu.mount(this.side, {
       run: async (recs) => {
         this.host?.run(
-          new Uint32Array(this.side.mem, Number(recs.at), recs.len / 4),
+          new Uint32Array(this.side.mem, Number(recs.buf), recs.nbyte / 4),
         );
       },
       get_device: () =>
         this.side.add(
           gpu.device(this.side, {
             lost: (block, signal) => {
-              this.block = block.at;
-              this.host?.attach(block.at);
+              this.block = block.buf;
+              this.host?.attach(block.buf);
               // A loss its caller cancels hands the block back, and the host
               // writes it no more.
               signal.addEventListener("abort", () => {

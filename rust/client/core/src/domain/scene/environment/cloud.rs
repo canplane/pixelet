@@ -25,6 +25,7 @@ use pxl_spec::asset::catalog::{Slot, model_extent};
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
+use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 use crate::domain::scene::column::{self, GroupRange};
@@ -494,7 +495,10 @@ fn build(
         out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
         first += GroupRange::word_cnt(l.len());
     }
-    let (at, bytes) = mem::span(&out[..]);
+    let Lent {
+        buf: at,
+        nbyte: bytes,
+    } = mem::lent(&out[..]);
     let handle = draw.upload(at, bytes, 0, 0);
     Some(Patch {
         words: out,

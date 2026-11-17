@@ -34,31 +34,43 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// The frame its words `w` hold.
+    pub fn of(w: [u32; WORDS as usize]) -> Frame {
+        let cmd = w[CMD as usize];
+        Frame {
+            tag: w[TAG as usize],
+            res: cmd & RES != 0,
+            handle: (cmd & !RES) >> METHOD_BITS,
+            method: cmd & ((1 << METHOD_BITS) - 1),
+            result: w[RESULT as usize] as i32,
+            pkt_len: w[PKT as usize],
+        }
+    }
+
+    /// The frame's words.
+    pub fn words(&self) -> [u32; WORDS as usize] {
+        let res = if self.res { RES } else { 0 };
+        let mut w = [0; WORDS as usize];
+        w[TAG as usize] = self.tag;
+        w[CMD as usize] = res | self.handle << METHOD_BITS | self.method;
+        w[RESULT as usize] = self.result as u32;
+        w[PKT as usize] = self.pkt_len;
+        w
+    }
+
     /// The frame laid at `at`.
     pub fn at(at: u64) -> Frame {
         // SAFETY: a frame's words in a link's box, which only the side that
         // holds the box touches (link.rs).
-        let w = |k: u32| unsafe { word(at + 4 * u64::from(k)) };
-        let cmd = w(CMD);
-        Frame {
-            tag: w(TAG),
-            res: cmd & RES != 0,
-            handle: (cmd & !RES) >> METHOD_BITS,
-            method: cmd & ((1 << METHOD_BITS) - 1),
-            result: w(RESULT) as i32,
-            pkt_len: w(PKT),
-        }
+        Frame::of(core::array::from_fn(|k| unsafe { word(at + 4 * k as u64) }))
     }
 
     /// Lays the frame's words at `at`.
     pub fn lay(&self, at: u64) {
-        // SAFETY: as in `at`.
-        let set = |k: u32, v: u32| unsafe { set_word(at + 4 * u64::from(k), v) };
-        let res = if self.res { RES } else { 0 };
-        set(TAG, self.tag);
-        set(CMD, res | self.handle << METHOD_BITS | self.method);
-        set(RESULT, self.result as u32);
-        set(PKT, self.pkt_len);
+        for (k, w) in self.words().into_iter().enumerate() {
+            // SAFETY: as in `at`.
+            unsafe { set_word(at + 4 * k as u64, w) };
+        }
     }
 
     /// The packet of the frame of `cap` bytes laid at `at`; a packet past

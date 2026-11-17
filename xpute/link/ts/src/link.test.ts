@@ -8,8 +8,17 @@ import {
   ERRNO_EMSGSIZE,
 } from "@xpute/kit/status/errno.spec.ts";
 import { type Frame, frame, HDR_SZ, lay, read } from "./frame.ts";
-import { LAYOUT } from "./frame.spec.ts";
-import { CANCEL, NAMED, ROOT, Side, type Tag } from "./link.ts";
+import { LAYOUT, OPEN_AT } from "./frame.spec.ts";
+import {
+  CANCEL,
+  NAMED,
+  pkt_of,
+  ROOT,
+  Side,
+  store_uri,
+  type Tag,
+  uri,
+} from "./link.ts";
 import { Table } from "./resource.ts";
 
 const INBOX = 4 * LAYOUT.WORDS;
@@ -130,6 +139,40 @@ test("a cancel runs the stop its request put once, and none once the request has
   side.task_return(later(), 0);
   send(9, ROOT, CANCEL, 8);
   assert.equal(stops, 1);
+});
+
+test("the root's OPEN_AT opens an object under the handle the sender issued, by the opener at its place", () => {
+  const { side, view } = link();
+  const opened: [string, number][] = [];
+  side.mount(INTERFACE, uri("none"), () => ({ call: () => -1, drop() {} }));
+  side.mount(INTERFACE, uri("obj"), (u, h) => {
+    opened.push([u.map((t) => t.val).join("/"), h]);
+    return { call: (m) => m + 40, drop() {} };
+  });
+  const h = 9;
+  const pkt = pkt_of([
+    16,
+    (w) => {
+      w.u32(0, h);
+      w.u32(4, 1);
+      store_uri(w, 8, uri("obj", "a"));
+    },
+  ])!;
+  new Uint8Array(view.buffer).set(pkt, OUTBOX + HDR_SZ);
+  const send = (handle: number, method: number, pkt_len: number) => {
+    lay(view, OUTBOX, {
+      tag: 0,
+      res: false,
+      handle,
+      method,
+      result: 0,
+      pkt_len,
+    });
+    return side.recv(BigInt(OUTBOX));
+  };
+  assert.equal(send(ROOT, OPEN_AT, pkt.length), 0);
+  assert.deepEqual(opened, [["obj/a", h]]);
+  assert.equal(send(h, 2, 0), 42);
 });
 
 test("a table holds an object under a handle the other end issued, as under its own, and its slot follows that end's next generation", () => {

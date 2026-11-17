@@ -8,7 +8,7 @@
 // the callee issued above METHOD_BITS, and the method's place among its object's below
 // them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,
 // lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT
-// is the handle every side implements, OPEN and CANCEL its methods, DROP the method
+// is the handle every side implements, OPEN, CANCEL and OPEN_AT its methods, DROP the method
 // every handle has, NAMED marks an interface's handle, SLOT_BITS splits an issued handle
 // into its slot and its generation, and TRAP and TRAP_AT are a native guest's stop.
 
@@ -50,6 +50,13 @@ inline constexpr std::uint32_t OPEN = 0u;
 // arg. A call the callee can stop it stops, and answers ECANCELED; any other runs on. Either
 // way it settles by its own answer, and what it lent stays lent until then.
 inline constexpr std::uint32_t CANCEL = 1u;
+
+// The root's method that opens an object under a handle the sender has issued for it:
+// the handle, which of the receiver's mounted openers opens it, by its place among them, and
+// the URI. A runtime that stands in for a UI on another thread answers the guest's open at
+// once, issuing the handle, and carries the open to the UI's end as this. It takes no
+// answer.
+inline constexpr std::uint32_t OPEN_AT = 2u;
 
 // The method every handle has, which lets it go.
 inline constexpr std::uint32_t DROP = 255u;

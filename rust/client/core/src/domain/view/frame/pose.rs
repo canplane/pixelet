@@ -167,17 +167,16 @@ pub(crate) fn view_resize(width: f64, height: f64) {
 /// (pxl-spec `world::origin`). The world the rays draw and what is
 /// rasterized on its faces (the location indicator's zone, the ghosts, the
 /// markers' anchors) are then seen from the same eye. The view moves when
-/// the snapped eye does, or when the camera has turned from the view's pose
-/// by more than `turn_step`; a smaller turn is not taken, so it adds up against
-/// the pose the view keeps until it passes.
+/// the camera's pose, its eye snapped, can be told apart from the view's
+/// (`distinct`); a smaller turn is not taken, so it adds up against the
+/// pose the view keeps until it passes.
 pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
     let pose = pose.map(|p| ObserverPose {
         eye: p.eye.map(|v| to_real(from_real(v))),
         ..p
     });
-    let v = view();
-    let moved = match (v.pose, pose) {
-        (Some(cur), Some(p)) => cur.eye != p.eye || turn(&cur.rot, &p.rot) > turn_step(v),
+    let moved = match (view().pose, pose) {
+        (Some(cur), Some(p)) => distinct(&cur, &p),
         (cur, p) => cur.is_some() != p.is_some(),
     };
     if moved {
@@ -185,6 +184,14 @@ pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
         compose();
     }
     moved
+}
+
+/// Whether two poses can be told apart in the view: their eyes are a step
+/// of the lattice or more apart along an axis, or one is turned from the
+/// other by more than `turn_step`.
+pub(crate) fn distinct(a: &ObserverPose, b: &ObserverPose) -> bool {
+    let step = to_real(1);
+    (0..3).any(|k| (a.eye[k] - b.eye[k]).abs() >= step) || turn(&a.rot, &b.rot) > turn_step(view())
 }
 
 /// The angle between two rotations, as 2(1 − cos) of it, which for a small

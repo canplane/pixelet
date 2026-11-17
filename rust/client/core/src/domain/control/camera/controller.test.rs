@@ -136,3 +136,29 @@ fn person_change_keeps_pivot() {
     );
     third_person();
 }
+
+/// The ease ends where what it has left cannot be told apart in the view:
+/// the camera then stands on its intent whole. It ends whichever side the
+/// pivot comes from, at an azimuth where the eye's target lies on the
+/// lattice itself.
+#[test]
+fn the_ease_ends_where_what_is_left_cannot_be_told() {
+    use crate::domain::control::camera::fixture::place;
+    use crate::domain::control::camera::orbit::{self, orbit};
+    use crate::domain::control::camera::state::{IntentPatch, camera_state_mut};
+    use crate::domain::view::frame::coord::world_to_canonical;
+    use crate::domain::view::frame::pose::view_resize;
+    view_resize(1280.0, 720.0);
+    for (to, azimuth) in [([8.0, 3.0, 10.0], 0.0), ([-8.0, -3.0, 10.0], 0.5)] {
+        place([0.0, 0.0, 10.0], 400.0, 1.0, 0.0);
+        camera_state_mut().to = Some(world_to_canonical(&to));
+        orbit::ask(IntentPatch {
+            azimuth: Some(azimuth),
+            dist: Some(300.0),
+            ..Default::default()
+        });
+        let rested = (0..10_000).find(|_| !orbit::step(1.0 / 60.0));
+        assert!(rested.is_some(), "the ease toward {to:?} ends");
+        assert_eq!((camera().azimuth, orbit().dist), (azimuth, 300.0));
+    }
+}

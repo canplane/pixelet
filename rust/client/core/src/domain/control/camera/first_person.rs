@@ -6,7 +6,9 @@
 //! step up or down eases like every other move.
 
 use crate::domain::control::camera::state::{camera_state, ease_pivot, resolved_to};
-use crate::domain::control::camera::{camera, ease_facing, eye_world, set_eye_world};
+use crate::domain::control::camera::{
+    camera, ease_facing, eases_toward, eye_world, facing_domain, set_eye_world,
+};
 use crate::domain::control::param::CAM_DAMP;
 
 /// Puts the eye at the pivot's `to` at once.
@@ -17,14 +19,23 @@ pub(crate) fn snap() {
 /// Eases the drawn eye and facing over `delta` seconds and returns whether
 /// they are still moving.
 pub(crate) fn step(delta: f64) -> bool {
-    let mut moving = false;
-    if let Some(eye) = eye_world() {
-        let (next, m) = ease_pivot(eye, delta);
-        if next != eye {
-            set_eye_world(&next);
-        }
-        moving |= m;
-    }
+    let Some(eye) = eye_world() else {
+        return false;
+    };
     let vs = camera_state().intent;
-    moving | ease_facing(camera(), vs.polar, CAM_DAMP, vs.azimuth, delta)
+    let cam = camera();
+    let to = resolved_to(eye);
+    let (polar, azimuth) = facing_domain(vs.polar, vs.azimuth);
+    let moving = eases_toward(cam, to, polar, azimuth);
+    let next = if moving {
+        ease_facing(cam, polar, CAM_DAMP, azimuth, delta);
+        ease_pivot(eye, to, delta)
+    } else {
+        (cam.polar, cam.azimuth) = (polar, azimuth);
+        to
+    };
+    if next != eye {
+        set_eye_world(&next);
+    }
+    moving
 }

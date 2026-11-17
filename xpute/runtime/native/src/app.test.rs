@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use xpute_kit::wire::xtp::cursor::TreeReader;
 use xpute_link::abi::types::Token;
+use xpute_link::frame::{Frame, HDR_SZ};
 use xpute_link::{Handle, Lower, store_uri};
 use xpute_runtime_native::listener;
 use xpute_runtime_native::native::{self, Start};
@@ -69,39 +69,24 @@ pub fn until(what: &str, mut cond: impl FnMut() -> bool) {
     }
 }
 
-/// A message the runtime sent a UI, its leading numbers: its kind, then what
-/// that kind carries (remote.rs).
-pub type Message = Vec<i64>;
-
-/// The messages of the batch the UI of the handle `ui` takes now.
-pub fn take(ui: u32) -> Vec<Message> {
+/// The frames of the batch the UI of the handle `ui` takes now, each without
+/// its packet (remote.rs).
+pub fn take(ui: u32) -> Vec<Frame> {
     let batch = native::take(ui);
-    // The batch is read from a copy laid on words, as XTP reads a packet
-    // where it starts on a word.
-    let mut words = vec![0u64; batch.1.div_ceil(8)];
-    // SAFETY: what `take` handed over, freed once, copied into `words`, which
-    // holds as many bytes and more.
-    unsafe {
-        core::ptr::copy_nonoverlapping(batch.0, words.as_mut_ptr().cast::<u8>(), batch.1);
-        native::taken_free(batch.0, batch.1);
-    }
-    // SAFETY: `words`' bytes, every one set.
-    let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), batch.1) };
+    // SAFETY: what `take` handed over, read whole and then freed once.
+    let bytes = unsafe { core::slice::from_raw_parts(batch.0, batch.1) }.to_vec();
+    // SAFETY: as above.
+    unsafe { native::taken_free(batch.0, batch.1) };
     let mut out = Vec::new();
     let mut at = 0;
     while at < bytes.len() {
-        let len = u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
-        let f = TreeReader::new(&bytes[at + 8..at + 8 + len])
-            .unwrap()
-            .read_branch()
-            .unwrap();
-        out.push(
-            (0..)
-                .map_while(|k| f.at(k).ok()?.get_number().ok())
-                .map(|n| n as i64)
-                .collect(),
-        );
-        at += (8 + len).next_multiple_of(8);
+        let word = |k: usize| {
+            let w = at + 4 * k;
+            u32::from_le_bytes(bytes[w..w + 4].try_into().unwrap())
+        };
+        let f = Frame::of(core::array::from_fn(word));
+        at += (HDR_SZ + f.pkt_len).next_multiple_of(8) as usize;
+        out.push(f);
     }
     out
 }
@@ -123,16 +108,16 @@ pub fn lowered(uri: &[Token]) -> Vec<u8> {
 }
 
 /// Waits until the UI of the handle `ui` hears an answer to its request `tag`,
-/// gathering every message into `messages`, and answers its result.
-pub fn answer_to(ui: u32, tag: u32, messages: &mut Vec<Message>) -> i64 {
+/// gathering every frame into `frames`, and answers its result.
+pub fn answer_to(ui: u32, tag: u32, frames: &mut Vec<Frame>) -> i64 {
     let mut result = None;
     until(&format!("the answer to {tag}"), || {
         let more = take(ui);
-        messages.extend(more);
-        result = messages
+        frames.extend(more);
+        result = frames
             .iter()
-            .find(|m| m[0] == 0 && m[1] == i64::from(tag))
-            .map(|m| m[2]);
+            .find(|m| m.res && m.tag == tag)
+            .map(|m| i64::from(m.result));
         result.is_some()
     });
     result.unwrap()

@@ -12,6 +12,7 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
+use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 use crate::handle::Table;
@@ -1030,7 +1031,10 @@ pub mod call {
     }
 
     fn buffer_write_at(s: &mut dyn Sink, buffer: Id, offset: u32, bytes: &[u8]) {
-        let (at, len) = mem::span(bytes);
+        let Lent {
+            buf: at,
+            nbyte: len,
+        } = mem::lent(bytes);
         let [lo, hi] = split64(at);
         [buffer, offset, lo, hi, len]
             .into_iter()
@@ -1098,7 +1102,10 @@ pub mod call {
         size: [u32; 3],
         bytes: &[u8],
     ) -> bool {
-        let (at, len) = mem::span(bytes);
+        let Lent {
+            buf: at,
+            nbyte: len,
+        } = mem::lent(bytes);
         let [lo, hi] = split64(at);
         stream.stage(|p| write_texture_pack(p, layout, size))
             && emit(stream, op::WRITE_TEXTURE_AT, &|s| {
@@ -1121,7 +1128,10 @@ pub mod call {
         fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
-        let (image_at, image_len) = mem::span(image);
+        let Lent {
+            buf: image_at,
+            nbyte: image_len,
+        } = mem::lent(image);
         let ([image_lo, image_hi], [word_lo, word_hi]) =
             (split64(image_at), split64(mem::addr(fence)));
         emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
@@ -1405,7 +1415,10 @@ pub mod call {
         fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
-        let (at, len) = mem::span(into);
+        let Lent {
+            buf: at,
+            nbyte: len,
+        } = mem::lent(into);
         let ([lo, hi], [word_lo, word_hi]) = (split64(at), split64(mem::addr(fence)));
         words(
             stream,

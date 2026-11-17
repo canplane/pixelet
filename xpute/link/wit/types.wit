@@ -15,11 +15,15 @@
 // number is its place in its interface, in declaration order: a singleton
 // interface's functions, or one resource's methods.
 //
-// The root, handle 0, has two methods. `open(uri) -> handle`, number 0, the
+// The root, handle 0, has three methods. `open(uri) -> handle`, number 0, the
 // implementing side answers at once from the opener mounted at the URI's
 // longest matching leading tokens. An open is pipelined, so a missing file
 // opens, and its first method with a result answers `no-entry`. `cancel(tag)`,
 // number 1, cancels a call the sender has pending (`frame.json5` `CANCEL`).
+// `open-at(handle, k, uri)`, number 2, opens an object under a handle the
+// sender issued, by the receiver's `k`th opener: what a runtime that stands in
+// for a UI on another thread sends that UI's end once it has answered the
+// guest's open (`frame.json5` `OPEN_AT`).
 // Every handle has a drop, method 0xFF, as the component model's resource
 // drop, which takes no result and lets the object go; a resource whose end
 // must report a result keeps its own method for it, as a file's `close`.
@@ -41,8 +45,8 @@
 // armed, such as `monotonic-clock.wait-for`.
 //
 // Raw memory enters WIT in one place, `xpute:link/types.lent`: a borrow, in the
-// component model's sense, of a span of the caller's memory, (at, len), valid
-// until the answer; an empty span has no address, and is (0, 0). Its address
+// component model's sense, of a buffer in the caller's memory, (buf, nbyte), valid
+// until the answer; an empty buffer has no address, and is (0, 0). Its address
 // is a u64 on every platform, one layout everywhere: a module's offset into
 // its own memory, a native guest's pointer. The data stays
 // where it is and only its place crosses; the callee reads or writes it there.
@@ -77,9 +81,9 @@ interface types {
     str(string),
   }
 
-  // A borrow of a span of the caller's memory, valid until the answer.
+  // A borrow of a buffer in the caller's memory, valid until the answer.
   record lent {
-    at: u64,
-    len: u32,
+    buf: u64,
+    nbyte: u32,
   }
 }

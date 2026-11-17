@@ -9,6 +9,8 @@
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::abi::types::Lent;
+
 /// The byte at `at`, as a pointer.
 pub(crate) fn ptr(at: u64) -> *mut u8 {
     core::ptr::with_exposed_provenance_mut(usize::try_from(at).ok().or_bug(Errno::EFAULT))
@@ -30,15 +32,18 @@ pub fn addr<T>(v: &T) -> u64 {
     core::ptr::from_ref(v).expose_provenance() as u64
 }
 
-/// Where the range `s` lies and how many bytes it takes, as a lent span
+/// The range `s` as a lent buffer, where it lies and how many bytes it takes
 /// (link/wit/types.wit `lent`). An empty range has no address, and lends
 /// (0, 0), on the web and natively alike.
-pub fn span<T>(s: &[T]) -> (u64, u32) {
+pub fn lent<T>(s: &[T]) -> Lent {
     let Some(first) = s.first() else {
-        return (0, 0);
+        return Lent { buf: 0, nbyte: 0 };
     };
-    let len = u32::try_from(size_of_val(s)).ok().or_bug(Errno::EFAULT);
-    (addr(first), len)
+    let nbyte = u32::try_from(size_of_val(s)).ok().or_bug(Errno::EFAULT);
+    Lent {
+        buf: addr(first),
+        nbyte,
+    }
 }
 
 /// The `len` bytes at `at`.
@@ -54,7 +59,7 @@ pub unsafe fn read(at: u64, len: u32) -> &'static [u8] {
 /// Writes `from` at `at`; `from` may lie in the memory.
 ///
 /// # Safety
-/// As `bytes`, and nothing else reads or writes the span meanwhile: an answer
+/// As `bytes`, and nothing else reads or writes them meanwhile: an answer
 /// the host gives into what the guest lent, or words the caller alone writes.
 pub unsafe fn write(at: u64, from: &[u8]) {
     // SAFETY: the caller's; the copy may overlap.

@@ -20,6 +20,7 @@ use std::rc::Rc;
 
 use crate::abi;
 use crate::domain::control::input::forget;
+use crate::domain::control::navigation::follow_mode::following;
 use crate::sys::sched::invalidate;
 use xpute_guest::abi::life;
 use xpute_kit::status::errno::Errno;
@@ -45,12 +46,43 @@ fn bearing(deg: Option<f64>) -> bool {
     deg.is_none_or(|d| (0.0..=360.0).contains(&d))
 }
 
-/// Answers a method applied, for one whose state asks for no frame of its
-/// own: the next frame shows it, and the entry's end posts to the UI (link.rs
-/// `end`). A method whose state asks when it changes answers without it.
-fn applied() -> Result<(), Errno> {
+/// A method's answer, which says whether the core took what the method
+/// asked. A refusal says it did not.
+trait Answer {
+    fn accepts(&self) -> bool;
+}
+
+impl Answer for () {
+    fn accepts(&self) -> bool {
+        true
+    }
+}
+
+impl<T: Answer, E> Answer for Result<T, E> {
+    fn accepts(&self) -> bool {
+        self.as_ref().is_ok_and(Answer::accepts)
+    }
+}
+
+/// Asks for the frame that shows what a method from outside changed. What
+/// comes from outside asks here, where the method is answered, as a method
+/// (`InvalidationReason::Method`); what changes inside the core asks where it
+/// changes, by its own reason (sys/sched.rs `invalidate`). Where a method's
+/// state asks as well, both are asks for the one frame.
+fn ask() {
     invalidate(InvalidationReason::Method);
-    Ok(())
+}
+
+/// Hands on a method's answer, asking for its frame where the answer accepts
+/// the method. Which methods ask is written where the interfaces are
+/// implemented, below and for a surface in surface.rs: every method of the
+/// UI's that changes what the core holds, and none that only reads. The
+/// methods' bodies, each in its interface's module, ask for nothing.
+fn with_frame<A: Answer>(answer: A) -> A {
+    if answer.accepts() {
+        ask();
+    }
+    answer
 }
 
 /// What implements the core's interfaces.
@@ -72,13 +104,13 @@ pub(super) fn mount() {
 
 impl abi::camera::Guest for Core {
     fn track(&self, tracking: abi::camera::Tracking) -> Result<(), Errno> {
-        camera::track(tracking)
+        with_frame(camera::track(tracking))
     }
     fn north_up(&self) -> Result<(), Errno> {
-        camera::north_up()
+        with_frame(camera::north_up())
     }
     fn goto(&self, lon: f64, lat: f64) -> Result<(), Errno> {
-        camera::goto(lon, lat)
+        with_frame(camera::goto(lon, lat))
     }
 }
 
@@ -92,16 +124,16 @@ impl abi::input::Guest for Core {
         x: f64,
         y: f64,
     ) -> Result<(), Errno> {
-        input::pointer(phase, touch, id, drag, x, y)
+        with_frame(input::pointer(phase, touch, id, drag, x, y))
     }
     fn wheel(&self, delta_y: f64) -> Result<(), Errno> {
-        input::wheel(delta_y)
+        with_frame(input::wheel(delta_y))
     }
     fn pinch(&self, scale: f64) -> Result<(), Errno> {
-        input::pinch(scale)
+        with_frame(input::pinch(scale))
     }
     fn r#move(&self, x: i32, y: i32) -> Result<(), Errno> {
-        input::r#move(x, y)
+        with_frame(input::r#move(x, y))
     }
     fn xr_pose(
         &self,
@@ -113,10 +145,10 @@ impl abi::input::Guest for Core {
         qz: f64,
         qw: f64,
     ) -> Result<(), Errno> {
-        input::xr_pose(x, y, z, qx, qy, qz, qw)
+        with_frame(input::xr_pose(x, y, z, qx, qy, qz, qw))
     }
     fn xr_pose_end(&self) -> Result<(), Errno> {
-        input::xr_pose_end()
+        with_frame(input::xr_pose_end())
     }
 }
 
@@ -128,59 +160,68 @@ impl abi::scene::Guest for Core {
         group: Option<u8>,
         bg: Option<u32>,
     ) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
-        scene::draw(surface, content, group, bg)
+        with_frame(scene::draw(surface, content, group, bg))
     }
     fn chat(&self, text: String) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
-        scene::chat(text)
+        with_frame(scene::chat(text))
     }
 }
 
 impl abi::sensor::Guest for Core {
     fn pos(&self, at: Option<abi::sensor::Position>) -> Result<(), Errno> {
-        sensor::pos(at)
+        with_frame(sensor::pos(at))
     }
+    /// The one method that asks by a condition: the device tells its heading
+    /// far more often than a frame is worth, and the heading turns the camera
+    /// only while it follows the device, so it asks only then.
     fn heading(&self, deg: Option<f64>) -> Result<(), Errno> {
-        sensor::heading(deg)
+        let answer = sensor::heading(deg);
+        if following() {
+            return with_frame(answer);
+        }
+        answer
     }
     fn location(&self, status: abi::sensor::LocationStatus) -> Result<(), Errno> {
-        sensor::location(status)
+        with_frame(sensor::location(status))
     }
 }
 
 impl abi::setting::Guest for Core {
     fn set(&self, key: u32, val: u32) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
-        setting::set(key, val)
+        with_frame(setting::set(key, val))
     }
 }
 
 impl abi::edit::Guest for Core {
     fn hold(&self, tool: abi::edit::Tool, val: u32, scale_step: i32) -> Result<(), Errno> {
-        edit::hold(tool, val, scale_step)
+        with_frame(edit::hold(tool, val, scale_step))
     }
     fn marker_text(&self, text: String) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
-        edit::marker_text(text)
+        with_frame(edit::marker_text(text))
     }
     fn marker_cancel(&self) -> Result<(), Errno> {
-        edit::marker_cancel()
+        with_frame(edit::marker_cancel())
     }
     fn marker_commit(&self) -> Result<(), Errno> {
-        edit::marker_commit()
+        with_frame(edit::marker_commit())
     }
 }
 
 impl abi::source::Guest for Core {
     fn declare(&self, min_zoom: u32, formats: Vec<u32>, shards: Vec<String>) -> Result<(), Errno> {
-        source::declare(min_zoom, formats, shards)
+        with_frame(source::declare(min_zoom, formats, shards))
     }
 }
 
 impl abi::perf::Guest for Core {
     fn start(&self) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
-        perf::start()
+        with_frame(perf::start())
     }
     fn stop(&self) -> Result<(), Errno> {
-        perf::stop()
+        with_frame(perf::stop())
     }
+    // The three below only read, and a read asks for no frame: it would
+    // draw into what the profiler measures.
     fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
         perf::stats(window_ms)
     }
@@ -192,6 +233,11 @@ impl abi::perf::Guest for Core {
     }
 }
 
+// The runtime's notices of the app's life are not the UI's methods and ask
+// for no frame here: a save's completion asks after `hidden`, `shown` wakes
+// the wait for the GPU's device, whose answer asks (link/gpu.rs), and
+// `attached` is answered by the entry's post to the UI, the surface it then
+// opens asking for its own.
 impl life::Guest for Core {
     fn hidden(&self) -> Result<(), Errno> {
         super::life::on_hidden();

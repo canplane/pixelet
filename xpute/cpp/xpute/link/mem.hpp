@@ -15,8 +15,11 @@
 #include <utility>
 
 #include "xpute/kit/status/bug.hpp"
+#include "xpute/link/abi/types.hpp"
 
 namespace xpute::link::mem {
+
+using Lent = ::xpute::abi::link::types::Lent;
 
 // The `len` bytes at `at`.
 std::span<std::uint8_t> bytes(std::uint64_t at, std::uint32_t len) noexcept;
@@ -32,13 +35,13 @@ template <class T> std::uint64_t addr(const T &v) noexcept {
     return detail::addr(&v);
 }
 
-// Where the range `s` lies and how many bytes it takes, as a lent span
+// The range `s` as a lent buffer, where it lies and how many bytes it takes
 // (link/wit/types.wit `lent`). An empty range has no address, and lends
 // (0, 0), in a module and natively alike; one past 4 GiB is a bug.
-template <class T> std::pair<std::uint64_t, std::uint32_t> span(std::span<const T> s) noexcept {
-    if (s.empty()) return {0, 0};
+template <class T> Lent lent(std::span<const T> s) noexcept {
+    if (s.empty()) return Lent{.buf = 0, .nbyte = 0};
     ensure(s.size_bytes() <= UINT32_MAX, Errno::efault);
-    return {addr(s.front()), static_cast<std::uint32_t>(s.size_bytes())};
+    return Lent{.buf = addr(s.front()), .nbyte = static_cast<std::uint32_t>(s.size_bytes())};
 }
 
 // The little-endian word at `at`, aligned or not.
