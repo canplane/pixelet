@@ -42,16 +42,12 @@ pub fn file_read<L: _rt::Lend>(
     buf: L,
 ) -> impl Future<Output = (L, Result<Result<u32, super::types::ErrorCode>, _rt::Errno>)> + use<L> {
     let mut buf = buf;
-    let (buf_at_, buf_len_) = _rt::Lend::span(&mut buf);
+    let buf_lent_ = _rt::Lend::lent(&mut buf);
     let sent = _rt::wait::wait(
         file_,
         FILE_READ,
         Some((16, &|w_: &mut _rt::Lower| {
-            _rt::Lent {
-                at: buf_at_,
-                len: buf_len_,
-            }
-            .store(w_, 0);
+            buf_lent_.store(w_, 0);
         })),
         buf,
     );
@@ -80,16 +76,12 @@ pub fn file_write<L: _rt::Lend>(
     buf: L,
 ) -> impl Future<Output = (L, Result<(), _rt::Errno>)> + use<L> {
     let mut buf = buf;
-    let (buf_at_, buf_len_) = _rt::Lend::span(&mut buf);
+    let buf_lent_ = _rt::Lend::lent(&mut buf);
     let sent = _rt::wait::wait(
         file_,
         FILE_WRITE,
         Some((16, &|w_: &mut _rt::Lower| {
-            _rt::Lent {
-                at: buf_at_,
-                len: buf_len_,
-            }
-            .store(w_, 0);
+            buf_lent_.store(w_, 0);
         })),
         buf,
     );
@@ -144,6 +136,5 @@ pub fn file_close(
 mod _rt {
     pub(super) use crate::wait;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::abi::types::Lent;
     pub(super) use xpute_link::{Handle, Lend, Lift, Lower, Method, answer};
 }

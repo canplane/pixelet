@@ -142,7 +142,10 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
             continue;
         }
         // Where the count stands is asked once for each cell it stands for,
-        // and kept with the cell's pins.
+        // and kept with the cell's pins. It is asked here and not under the
+        // entry's budget, as a place's surface is: a count is named by its
+        // cell, so nothing shown before could stand for it meanwhile, and
+        // the ray ends within the cell.
         let at = match run.iter().find_map(|p| p.crowd.filter(|c| c.0 == cell)) {
             Some((_, at)) => at,
             None => crowd_at(cell, run[0].at.zoom(), GROUND.read_zoom(run[0].grid)),

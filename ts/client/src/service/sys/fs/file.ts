@@ -70,13 +70,13 @@ function open(mem: Memory, p: Path): file.HostFile {
     async read(buf, signal) {
       // A read its caller cancels writes nothing into `buf`.
       const all = await Promise.race([bytes(), aborted(signal)]);
-      const n = Math.min(buf.len, all.length - read);
-      mem.bytes(buf.at, n).set(all.subarray(read, read + n));
+      const n = Math.min(buf.nbyte, all.length - read);
+      mem.bytes(buf.buf, n).set(all.subarray(read, read + n));
       read += n;
       return n;
     },
     async write(buf) {
-      written.push(mem.bytes(buf.at, buf.len).slice());
+      written.push(mem.bytes(buf.buf, buf.nbyte).slice());
     },
     async set_aside() {
       try {

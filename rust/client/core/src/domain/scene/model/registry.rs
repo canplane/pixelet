@@ -11,6 +11,7 @@ use core::ops::Range;
 
 use pxl_render::asset::{SCENE_IDXS_CAP, SCENE_VERTICES_CAP};
 use pxl_render::gpu::draw::{DrawList, MODEL_VERTEX_WORDS};
+use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 use crate::sys::heap;
@@ -230,7 +231,10 @@ impl ModelTable {
     /// Uploads `model` through `draw`, keeps it for good, and returns its
     /// number, which names it from then on.
     pub(crate) fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
-        let (at, bytes) = mem::span(&model.words[..]);
+        let Lent {
+            buf: at,
+            nbyte: bytes,
+        } = mem::lent(&model.words[..]);
         model.handle = draw.upload(at, bytes, model.vertex_cnt, model.idx_cnt);
         self.models.push(model);
         (self.models.len() - 1) as u32

@@ -453,3 +453,64 @@ runs each by turns (before, after, after, before, before, after).
 No difference past the runs' own spread. The drive moves the camera throughout, so
 what the turn's threshold saves at rest is not in these figures; what they show is
 that nothing got slower. The phones were not measured.
+
+A second comparison the same day, `64e4fae492` against `9fd850c654` with the places'
+asks under the budget laid on it (a form since taken back), three runs each by turns:
+
+| build | frames | GPU p50 | tick p50 / p95 | scene p50 |
+| --- | --- | --- | --- | --- |
+| before | 855, 686, 741 | 21.0, 26.4, 24.2 | 1.8 / 2.7–2.8 | 1.3 |
+| after | 858, 728, 800 | 20.6, 24.8, 22.0 | 1.8 / 2.7–2.8 | 1.3 |
+
+The core's figures are the same. The GPU's rose on both builds from the third run on,
+the Mac's own state; within each pair by turns the later build is no slower. The
+report's new line of asks by reason read, over a run: method about 2500, view 2100 to
+2400, completion 3000 to 3300, pending 1600, animation 1000 to 1100, scene 0.
+
+Three more the same day, each `64e4fae492` against the tree named, by turns:
+
+| against | before: tick p50 / p95, GPU p50 | after: tick p50 / p95, GPU p50 |
+| --- | --- | --- |
+| the places under the budget (`e77e5f8a03`, before its review's fix) | 1.8 / 2.8, 20.6; 2.0 / 3.8, 29.0; 1.8 / 2.8, 25.6 | 1.8 / 2.8, 20.4; 1.8 / 2.7, 20.6; 1.8 / 2.9, 23.1 |
+| the ease ended by the view, its first forms | 1.8 / 2.8, 20.6; 2.4 / 4.8, 31.7; 1.9 / 2.9, 22.7; 1.9 / 3.1, 21.9 | 1.8 / 2.7, 20.6; 1.8 / 2.8, 20.7; 1.9 / 2.9, 24.1; 2.7 / 4.6, 24.3 |
+| `d753e720dc` | 1.8 / 2.8, 20.4; 1.8 / 2.8, 20.8; 1.9 / 4.5, 21.2 | 1.8 / 2.8, 21.0; 1.8 / 2.7, 20.6; 2.7 / 4.3, 23.1 |
+
+The first four runs of a series read the same on both builds. A run late in a series
+is slower on whichever build it falls to, the tick with the GPU; the scenario does not
+turn places on, so the places' asks were not exercised.
+
+## Then: the S23's Chrome on the code of 2026-11-17
+
+#98 (`ac321a51af`) against `03aee8151c`, the day's last, each a release web build with
+the drive and run by its own day's scripts; a warm-up of #98 dropped, then two rounds
+by turns, each run begun once the AP read 38.5 °C or less (it waited 30 to 151 s, longer
+each time, and read 45 to 48 °C after a run).
+
+| run | build | frames | GPU p50 / p95 | tick p50 / p95 | effects p50 / p95 | longest |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | #98 | 288 | 52.2 / 161.3 | 4.1 / 9.1 | 0.1 / 5.7 | 441 |
+| 3 | HEAD | 247 | 58.3 / 133.9 | 5.9 / 13.0 | 0.1 / 0.2 | 168 |
+| 4 | HEAD | 220 | 76.8 / 147.2 | 6.1 / 13.2 | 0.1 / 0.2 | 178 |
+| 5 | #98 | 212 | 77.6 / 208.3 | 4.8 / 9.2 | 1.9 / 5.9 | 448 |
+| 6 | #98 | 207 | 77.8 / 207.4 | 5.2 / 9.8 | 2.2 / 6.1 | 434 |
+| 7 | HEAD | 174 | 96.3 / 178.5 | 7.0 / 14.1 | 0.1 / 0.2 | 320 |
+| 8 | HEAD | 174 | 98.3 / 180.6 | 6.8 / 14.0 | 0.1 / 0.2 | 246 |
+| 9 | #98 | 198 | 81.9 / 216.0 | 5.5 / 9.3 | 0.1 / 6.1 | 439 |
+
+- **The tick is not the same sum on the two builds.** #98 runs the location indicator
+  as an effect, outside the tick; HEAD runs it as a tick (`interaction/location`, 0.9 to
+  1.7 ms a run, 9 to 10 at most). The effects' p50 and the tick's, added, read 4.2,
+  6.7, 7.4 and 5.6 ms on #98's runs and 6.0, 6.2, 7.1 and 6.9 on HEAD's: higher on
+  HEAD in two of the four pairs and lower in two. At p95 the tick alone reads 9.1 to 9.8
+  on #98, beside effects of about 6, and 13.0 to 14.1 on HEAD with the location in it.
+- **Frames:** #98's four mean 226, HEAD's 204, a tenth fewer, as on 2026-11-16 (263
+  against 236). The phone slowed through the series on both builds: #98 from 288 frames
+  to 198.
+- **The GPU:** its p50 follows the phone's clock, which HEAD's runs read between 348
+  and 719 MHz in the window, lower in the later runs; #98's scripts read none. HEAD's
+  p95 and its longest frame are the lower in every pair.
+- The location's zone is worked out on most frames of HEAD's every run and of two of
+  #98's (its effect's p50 1.9 and 2.2 ms; 0.1 in the other two), where a zone at the
+  same cell was expected to ask nothing; what clears its memo through the drive (the
+  ground arriving under it, or the fix) was not read.
+

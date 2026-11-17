@@ -193,8 +193,8 @@ impl Gen<'_> {
     }
 
     /// The Rust of the args `ps`: none, or their tuple's size and what writes
-    /// it, each of `lents` lending memory, written as the lent record of its
-    /// span (`{lent}_at_`, `{lent}_len_`), names no WIT name escapes to.
+    /// it, each of `lents` lending memory, written as its lent record
+    /// (`{lent}_lent_`), a name no WIT name escapes to.
     fn rs_args(&self, ps: &[(String, Kind)], lents: &[String]) -> Result<String, String> {
         if ps.is_empty() {
             return Ok("None".into());
@@ -203,10 +203,7 @@ impl Gen<'_> {
         let mut writes = Vec::new();
         for ((n, k), at) in ps.iter().zip(&offs) {
             writes.push(if lents.contains(n) {
-                format!(
-                    "{} {{ at: {n}_at_, len: {n}_len_ }}.store(w_, {at});",
-                    self.rs_ty(k, true)
-                )
+                format!("{n}_lent_.store(w_, {at});")
             } else {
                 // A string's, a list's, a record's or a variant's param is
                 // a borrow already.
@@ -475,7 +472,7 @@ impl Gen<'_> {
                 None
             };
             // A sync call lends slices of any plain elements, each its own; an
-            // async call lends any buffer that says its span (link `Lend`).
+            // async call lends any buffer that says where it lies (link `Lend`).
             let lent_ty = |k: usize| {
                 if is_async(f) {
                     "L".to_string()
@@ -531,12 +528,12 @@ impl Gen<'_> {
                 .map(|l| {
                     if is_async(f) {
                         format!(
-                            "let mut {l} = {l}; let ({l}_at_, {l}_len_) = {}::span(&mut {l}); ",
+                            "let mut {l} = {l}; let {l}_lent_ = {}::lent(&mut {l}); ",
                             self.rs_use(self.link_rs, "Lend")
                         )
                     } else {
                         format!(
-                            "let ({l}_at_, {l}_len_) = {}::span(&{l}[..]); ",
+                            "let {l}_lent_ = {}::lent(&{l}[..]); ",
                             self.rs_use(self.link_rs, "mem")
                         )
                     }

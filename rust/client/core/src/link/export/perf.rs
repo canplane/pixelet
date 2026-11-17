@@ -4,7 +4,6 @@
 //! the words it hands over as its return data, so the client never reads the
 //! core's memory.
 
-use super::applied;
 use crate::abi::types::ErrorCode;
 use crate::domain::setting::settings;
 use crate::perf::frame::{FrameSample, WorstFrame};
@@ -28,12 +27,12 @@ pub(super) fn start() -> Result<Result<(), ErrorCode>, Errno> {
     if !perf_window_start() {
         return Ok(Err(ErrorCode::InsufficientMemory));
     }
-    applied().map(Ok)
+    Ok(Ok(()))
 }
 
 pub(super) fn stop() -> Result<(), Errno> {
     perf_window_stop();
-    applied()
+    Ok(())
 }
 
 /// Answers STAT's words over `window_ms` and NOW's (perf.json5).

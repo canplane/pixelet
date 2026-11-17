@@ -16,7 +16,7 @@ using link::Token;
 namespace {
 
 // The record's packet: one of each number, a string, a list of numbers, a URI
-// and a lent span, as the Canonical ABI lays a tuple of them.
+// and a lent buffer, as the Canonical ABI lays a tuple of them.
 constexpr std::size_t FIXED_SZ = 88;
 
 const std::vector<Token> URI{Token{Token::Int{5}}, Token{Token::Str{"f"}}};
@@ -38,7 +38,7 @@ Result<std::size_t> lower(std::span<std::uint8_t> buf) {
     const std::uint16_t list[] = {1, 2, 65535};
     w.arr<std::uint16_t>(56, list);
     link::store_uri(w, 64, URI);
-    Lent{.at = 4096, .len = 64}.store(w, 72);
+    Lent{.buf = 4096, .nbyte = 64}.store(w, 72);
     return w.finish();
 }
 
@@ -79,7 +79,7 @@ XPUTE_TEST(cabi_lift_matches_record) {
     auto *s = uri.size() == 2 ? std::get_if<Token::Str>(&uri[1].variant) : nullptr;
     XPUTE_CHECK(n && n->val == 5 && s && s->val == "f");
     Lent lent = Lent::load(r, 72);
-    XPUTE_CHECK(lent.at == 4096 && lent.len == 64);
+    XPUTE_CHECK(lent.buf == 4096 && lent.nbyte == 64);
     XPUTE_CHECK(r.finish().ok());
 }
 

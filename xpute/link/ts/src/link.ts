@@ -63,7 +63,15 @@ import {
   TOKEN_SZ,
 } from "./abi/types.ts";
 import { type Frame, frame, lay, read, HDR_SZ } from "./frame.ts";
-import { CANCEL, DROP, LAYOUT, NAMED, OPEN, ROOT } from "./frame.spec.ts";
+import {
+  CANCEL,
+  DROP,
+  LAYOUT,
+  NAMED,
+  OPEN,
+  OPEN_AT,
+  ROOT,
+} from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
 
 export type Tag = u32;
@@ -336,7 +344,8 @@ export abstract class End implements Callee {
   /** Opens the object at `uri` under `h`, a handle the other end issued, by
    * the opener of this end's `k`th mount (`prefixes`): the other end
    * answered its open at once and issued `h`, and this end opens the object
-   * later, as a runtime carries the open to a UI on another thread. An
+   * later, as a runtime carries the open to a UI on another thread
+   * (`frame.json5` `OPEN_AT`, its args the handle, `k` and the URI). An
    * opener that refuses answers each method of what it would have opened
    * with the refusal. */
   open_at(k: number, h: Handle, uri: readonly Token[]): void {
@@ -445,6 +454,14 @@ export abstract class End implements Callee {
         const stop = this._cancels.get(t);
         this._cancels.delete(t);
         stop?.();
+        return 0;
+      } catch (e) {
+        return refusal_of(e);
+      }
+    }
+    if (h === ROOT && m === OPEN_AT) {
+      try {
+        this.open_at(args.u32(4), args.u32(0), load_uri(args, 8));
         return 0;
       } catch (e) {
         return refusal_of(e);

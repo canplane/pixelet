@@ -7,7 +7,7 @@ use xpute_kit::math::scalar::clamp;
 
 use crate::domain::control::camera::facing_domain;
 use crate::domain::control::param::{
-    DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, EASE_EPS_U, MAX_DIST, MIN_DIST,
+    DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST,
 };
 use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
@@ -98,8 +98,8 @@ pub(crate) fn resolved_to(cur: V3) -> V3 {
     resolve_to(&mut camera_state_mut().to, cur)
 }
 
-/// Eases the pivot drawn at `cur` toward its `to` over `delta` seconds, and
-/// returns where it is drawn now and whether it is still moving.
-pub(crate) fn ease_pivot(cur: V3, delta: f64) -> (V3, bool) {
-    smooth_vec(cur, resolved_to(cur), POS_DAMP, delta, EASE_EPS_U)
+/// Eases the pivot drawn at `cur` toward `to` over `delta` seconds, and
+/// returns where it is drawn now.
+pub(crate) fn ease_pivot(cur: V3, to: V3, delta: f64) -> V3 {
+    smooth_vec(cur, to, POS_DAMP, delta)
 }

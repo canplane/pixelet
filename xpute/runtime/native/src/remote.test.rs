@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use xpute_guest::abi::life;
 use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
+use xpute_link::frame::Frame;
 use xpute_link::{Handle, Lift, Lower, Method, NAMED, OPEN, Object, ROOT, Tag, uri};
 use xpute_runtime_native::listener;
 use xpute_runtime_native::native::Boot;
@@ -95,14 +96,14 @@ extern "C" fn notified() {
 
 /// The tag of the request the guest sent the UI of the handle `ui` to answer
 /// later, among what that UI heard.
-fn request(ui: u32, messages: &mut Vec<app::Message>) -> i64 {
+fn request(ui: u32, frames: &mut Vec<Frame>) -> i64 {
     let mut tag = None;
     app::until("the guest's request", || {
-        messages.extend(app::take(ui));
-        tag = messages
+        frames.extend(app::take(ui));
+        tag = frames
             .iter()
-            .find(|m| m[..3] == [2, i64::from(UI), 0])
-            .map(|m| m[3]);
+            .find(|m| !m.res && m.handle == UI && m.method == 0)
+            .map(|m| i64::from(m.tag));
         tag.is_some()
     });
     tag.unwrap()
@@ -115,10 +116,10 @@ fn request(ui: u32, messages: &mut Vec<app::Message>) -> i64 {
 fn reload() {
     listener::notify_on(Some(notified));
     let old = app::start(boot, &[UI]);
-    let mut messages = Vec::new();
-    let pending = request(old, &mut messages) as Tag;
+    let mut frames = Vec::new();
+    let pending = request(old, &mut frames) as Tag;
     app::post(old, 1, ROOT, OPEN, Some(app::lowered(&uri(&["obj"]))));
-    assert_eq!(app::answer_to(old, 1, &mut messages), 0);
+    assert_eq!(app::answer_to(old, 1, &mut frames), 0);
 
     let notify_cnt = NOTIFY_CNT.load(Ordering::Relaxed);
     let new = app::start(boot, &[UI]);
@@ -136,14 +137,14 @@ fn reload() {
     });
     assert!(app::take(old).is_empty(), "the old UI takes nothing of it");
 
-    let mut messages = Vec::new();
-    let again = request(new, &mut messages) as Tag;
+    let mut frames = Vec::new();
+    let again = request(new, &mut frames) as Tag;
     xpute_runtime_native::answer(old, pending, 0, None);
     xpute_runtime_native::answer(new, pending, 0, None);
     xpute_runtime_native::answer(old, again, 0, None);
     // A round trip after them, which the guest's thread runs in turn.
     app::post(new, 2, ROOT, OPEN, Some(app::lowered(&uri(&["none"]))));
-    assert_eq!(app::answer_to(new, 2, &mut messages), Errno::ENOENT as i64);
+    assert_eq!(app::answer_to(new, 2, &mut frames), Errno::ENOENT as i64);
     assert_eq!(*ANSWERS.lock().unwrap(), [Errno::ECANCELED as i32]);
 
     xpute_runtime_native::answer(new, again, 0, None);

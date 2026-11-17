@@ -99,10 +99,10 @@ concept Lend = requires(L &l) {
     std::data(l);
 };
 
-// Where `l` lies in the guest's memory, and how long it is.
-template <class L> Lent span(L &l) noexcept {
-    auto [at, len] = mem::span(std::span<const std::remove_reference_t<decltype(*std::data(l))>>(std::data(l), std::size(l)));
-    return Lent{.at = at, .len = len};
+// `l` as a lent buffer: where it lies in the guest's memory, and how many
+// bytes it takes.
+template <class L> Lent lent(L &l) noexcept {
+    return mem::lent(std::span<const std::remove_reference_t<decltype(*std::data(l))>>(std::data(l), std::size(l)));
 }
 
 // A packet a side writes: its fixed part's size, and what writes it

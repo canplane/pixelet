@@ -271,7 +271,7 @@ impl Object for Source {
         assert_eq!(m, object::APPLY);
         let lent = Lent::load(args, 0).unwrap();
         // SAFETY: the batch the guest lent until the answer.
-        let batch = unsafe { mem::read(lent.at, lent.len) };
+        let batch = unsafe { mem::read(lent.buf, lent.nbyte) };
         let writes = decode_writes(format::OBJECT_EDIT, batch).unwrap();
         SENT.set(Some((t, writes.len())));
         Errno::EINPROGRESS as i32

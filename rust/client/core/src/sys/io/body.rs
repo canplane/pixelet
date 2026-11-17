@@ -19,6 +19,7 @@ use crate::spec::step::InvalidationReason;
 use core::ops::{Deref, DerefMut};
 
 use pxl_global::Global;
+use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 use crate::sys::heap::PAGE_SZ;
@@ -118,8 +119,8 @@ impl DerefMut for Slot {
 }
 
 impl xpute_link::Lend for Slot {
-    fn span(&mut self) -> (u64, u32) {
-        mem::span(self.bytes())
+    fn lent(&mut self) -> Lent {
+        mem::lent(self.bytes())
     }
 }
 

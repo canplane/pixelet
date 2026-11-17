@@ -1,7 +1,7 @@
 // pxl-core/domain/scene/marker/place.test.rs
 
 use super::*;
-use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM};
 
 /// A place read from the brick it stands in, on the lap of X `lap` rounds
 /// from the world's own.
@@ -15,9 +15,124 @@ fn place_in(brick_zoom: Zoom, lap: i32) -> Place {
         first_zoom: 0,
         name: None,
         ground,
-        finest: 0,
+        finest: LEAF_CELL_ZOOM,
+        ele: None,
         top: None,
+        asked: None,
     }
+}
+
+/// A kind Carto shows at the finest zoom.
+fn shown_kind() -> u16 {
+    let zoom = carto_zoom(LEAF_CELL_ZOOM);
+    (1..=ICON_ZOOM.len() as u16)
+        .find(|&k| point_of(k, 0, None, zoom).is_some())
+        .unwrap()
+}
+
+/// The entry's budget, spent so that a pass asks one item, or ample.
+fn budget(spent: bool) {
+    use crate::sys::host::set_clock;
+    set_clock(0.0);
+    sched::begin(1000.0);
+    if spent {
+        set_clock(1e6);
+    }
+}
+
+/// Three places Carto shows, each standing on a surface it holds, its own
+/// still to ask.
+fn standing() -> Vec<Place> {
+    let src = Quadrant::new(LEAF_ZOOM, [3, 5]);
+    (0..3)
+        .map(|k| Place {
+            ground: stands(src, [7 + 40 * k, 9]),
+            kind: shown_kind(),
+            top: Some(3.0),
+            ..place_in(12, 0)
+        })
+        .collect()
+}
+
+/// A place read again is where the same place was and stands on what it
+/// stood on until its own are asked.
+#[test]
+fn a_place_read_again_keeps_its_stand() {
+    let held = Place {
+        ele: Some(2.0),
+        top: Some(3.0),
+        asked: Some(7),
+        ..place_in(12, 0)
+    };
+    let mut read = vec![held, place_in(12, 0)];
+    hand_held(&mut read, 1);
+    assert_eq!(
+        (read[1].ele, read[1].top, read[1].asked),
+        (Some(2.0), Some(3.0), None)
+    );
+    // Its own ask takes the place of what it was handed: nothing is known
+    // under it here.
+    assert!(settle(&mut read[1], [0.0, 0.0, 10.0]));
+    assert_eq!((read[1].ele, read[1].asked.is_some()), (None, true));
+}
+
+/// With the budget spent, a run asks one place's surface and the others
+/// stand on the surface they were handed; later runs ask the rest, and then
+/// none. Nothing is known under them here, so a place asked stands no more.
+#[test]
+fn surfaces_are_asked_under_the_budget() {
+    let mut read = standing();
+    let [x, y, _] = q3::unpack(&read[0].ground.mid());
+    let eye = [x, y, 10.0];
+    let asked = |read: &[Place]| read.iter().filter(|p| p.asked.is_some()).count();
+    let mut out = Vec::new();
+    budget(true);
+    assert!(show(&mut read, eye, &mut out), "some are left");
+    assert_eq!(asked(&read), 1);
+    assert_eq!(out.len(), 2, "those still to ask stand on what they hold");
+    assert!(show(&mut read, eye, &mut out));
+    assert!(!show(&mut read, eye, &mut out), "the last is asked");
+    assert_eq!(asked(&read), 3);
+    assert!(!show(&mut read, eye, &mut out), "none is left to ask");
+}
+
+/// The asks of a place with nothing known under it end, the eye standing
+/// still, however short the budget, and it stands on nothing.
+#[test]
+fn the_asks_of_a_place_over_nothing_known_end() {
+    let mut read: Vec<Place> = standing()
+        .into_iter()
+        .map(|p| Place { top: None, ..p })
+        .collect();
+    let [x, y, _] = q3::unpack(&read[0].ground.mid());
+    let eye = [x, y, 500.0];
+    let mut out = Vec::new();
+    budget(true);
+    let runs = (0..8)
+        .take_while(|_| show(&mut read, eye, &mut out))
+        .count();
+    assert!(runs < 3, "the asks end: {runs} runs left some");
+    assert!(read.iter().all(|p| p.asked.is_some()));
+    assert!(out.is_empty(), "nothing stands on nothing known");
+}
+
+/// What a place stands on does not move where it is: the cell it is in is
+/// told from the finest ground under it, so another surface under it, as a
+/// coarser detail gives, changes neither the cell nor what is asked.
+#[test]
+fn a_surface_does_not_decide_the_cell() {
+    let mut p = Place {
+        ele: Some(3.0),
+        ..standing().remove(0)
+    };
+    let [x, y, _] = q3::unpack(&p.ground.mid());
+    let eye = [x, y, 5000.0];
+    let cell_zoom = cell_zoom_of(&p, eye);
+    (p.top, p.asked) = (Some(4900.0), Some(GROUND.read_zoom(cell_zoom)));
+    assert_eq!(cell_zoom_of(&p, eye), cell_zoom);
+    assert!(!settle(&mut p, eye), "nothing is asked again");
+    p.ele = Some(4900.0);
+    assert_ne!(cell_zoom_of(&p, eye), cell_zoom, "where it is does");
 }
 
 /// A place's brick at any zoom lies over or under its own brick, on its

@@ -52,7 +52,7 @@ use xpute_kit::abi::word::{join64, split64};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::abi::types::Token;
+use crate::abi::types::{Lent, Token};
 
 use crate::frame::{Frame, HDR_SZ};
 use crate::mem;
@@ -64,19 +64,19 @@ pub use crate::resource::Handle;
 /// memory and how long (link/wit/types.wit `lent`), and stays put while the
 /// answer owns it.
 pub trait Lend: Unpin + 'static {
-    fn span(&mut self) -> (u64, u32);
+    fn lent(&mut self) -> Lent;
 }
 
 impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
-    fn span(&mut self) -> (u64, u32) {
-        mem::span(self)
+    fn lent(&mut self) -> Lent {
+        mem::lent(self)
     }
 }
 
 pub type Tag = u32;
 pub type Method = u32;
 
-pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT, layout};
+pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, OPEN_AT, ROOT, TRAP, TRAP_AT, layout};
 
 /// An object a side implements: given a method, the request's tag, for a
 /// later answer (`task_return`), its args (`args`, empty for none) and the

@@ -294,7 +294,7 @@ impl abi::gpu::Host for Gpu {
             let Some(r) = d.host.as_mut() else {
                 return complete(id, ());
             };
-            r.run(recs.at, recs.len);
+            r.run(recs.buf, recs.nbyte);
             complete(id, ());
             r.present();
             if let Some(p) = &d.poller {
@@ -330,9 +330,9 @@ impl abi::gpu::HostDevice for GuestDevice {
         on_gpu(Box::new(move || {
             let mut guard = device();
             let d = guard.get_or_insert_with(|| new_device(&args.ask));
-            d.block = Some(block.at);
+            d.block = Some(block.buf);
             if let Some(r) = d.host.as_mut() {
-                r.attach(block.at);
+                r.attach(block.buf);
             }
             d.lost.push(id);
         }));

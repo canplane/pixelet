@@ -8,13 +8,13 @@
  * does. The runtime stands in for the UI on the guest's link
  * (xpute-runtime-native remote.rs). What the UI calls goes to the module's
  * `post`, and what it answers to its `answer`; what the runtime sends comes
- * in a batch on one notify (`take`), each message an XTP packet by its kind
- * (`HEAR`): a method of an object the UI implements, answered back by its
+ * in a batch on one notify (`take`), each message a frame of the link's
+ * (`read`): a method of an object the UI implements, answered back by its
  * tag, at once or later; an open of one under the handle the guest's end
  * issued, by the opener of the prefix that matched; the guest's cancel of a
  * method and its drop of an object; and the answer to a call of the UI's. A
  * buffer the guest lends is read and written through a buffer the module
- * makes over its span (`bytes`). The module names the UI's handle on the
+ * makes over it (`bytes`). The module names the UI's handle on the
  * runtime in each of these (xpute.h `xpute_start`). The native module moves
  * no object beside the calls: the GPU's module binds a surface to its view
  * itself.
@@ -22,21 +22,16 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { split64, type i32, type u32, type u64 } from "@xpute/kit/abi/word.ts";
-import { bug } from "@xpute/kit/status/bug.ts";
 import {
-  ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
   ERRNO_EMSGSIZE,
 } from "@xpute/kit/status/errno.spec.ts";
-import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   type Answered,
-  CANCEL,
   DROP,
   End,
   type Handle,
   Lift,
-  load_uri,
   Lower,
   type Memory,
   type Method,
@@ -46,6 +41,7 @@ import {
   store_uri,
   type Tag,
 } from "@xpute/link";
+import { frame, HDR_SZ, read as read_frame } from "@xpute/link/frame.ts";
 import { XPUTE } from "./xpute.ts";
 
 /** The UI's end, over the module: a request posted, answered later in a
@@ -70,8 +66,8 @@ const ui = new (class extends End implements Memory {
   }
 
   /** The `len` bytes the guest lent at `at`, its address, as `Side.bytes`
-   * gives them: a buffer the module makes over that span alone. An empty
-   * span has no address (link/wit/types.wit `lent`). */
+   * gives them: a buffer the module makes over those bytes alone. An empty
+   * buffer has no address (link/wit/types.wit `lent`). */
   bytes(at: u64, len: u32): U8Array {
     if (len === 0) return new Uint8Array(0);
     const [lo, hi] = split64(at);
@@ -105,60 +101,26 @@ function input(
   return ui.input(tag, h, m, res, result, args, ret);
 }
 
-/** Each message of a batch by its kind, its first field
- * (xpute-runtime-native remote.rs), handed to the UI's end: a method's
- * result at once goes back as a later answer, and the guest's cancel and
- * drop are the link's own. */
-const HEAR: Readonly<Record<u32, (f: BranchCursor) => void>> = {
-  0: (f) =>
-    void input(
-      f.get<u32>(1),
-      ROOT,
-      0,
-      true,
-      f.get<i32>(2),
-      f.get<U8Array | null>(3),
-    ),
-  2: (f) => {
-    const tag = f.get<u32>(3);
-    const result = input(
-      tag,
-      f.get<u32>(1),
-      f.get<u32>(2),
-      false,
-      0,
-      f.get<U8Array | null>(4),
-    );
-    if (result === ERRNO_EINPROGRESS) return;
-    ui.task_return(tag, ret.finish() < 0 ? ERRNO_EMSGSIZE : result);
-  },
-  3: (f) =>
-    ui.open_at(
-      f.get<u32>(2),
-      f.get<u32>(1),
-      load_uri(new Lift(f.get<U8Array>(3)), 0),
-    ),
-  4: (f) => {
-    const tag = f.get<u32>(1);
-    input(0, ROOT, CANCEL, false, 0, pkt_of([4, (w) => w.u32(0, tag)]));
-  },
-  5: (f) => void input(0, f.get<u32>(1), DROP, false, 0, null),
-};
+/** The frame `read` reads each of a batch into. */
+const f = frame();
 
-/** A message's header: its packet's length, a u32, and four bytes more, so
- * that the packet starts on a word. Each message is padded to 8 bytes. */
-const HDR_SZ = 8;
-
-/** Hears each message of `batch`. */
+/** Hears each frame of `batch` (xpute-runtime-native remote.rs), handed to
+ * the UI's end: its words, then its packet, padded to 8 bytes. A method of
+ * an object's is owed an answer by its tag, so its result at once goes back
+ * as a later answer; the root's methods and a drop are the link's own and
+ * owed none. */
 function read(batch: ArrayBuffer): void {
   const view = new DataView(batch);
   for (let at = 0; at < batch.byteLength;) {
-    const len = view.getUint32(at, true);
-    const f = new TreeReader(
-      new Uint8Array(batch, at + HDR_SZ, len),
-    ).read_branch();
-    (HEAR[f.get<u32>(0)] ?? bug(ERRNO_EBADMSG))(f);
-    at += (HDR_SZ + len + 7) & ~7;
+    read_frame(view, at, f);
+    const pkt =
+      f.pkt_len === 0 ? null : new Uint8Array(batch, at + HDR_SZ, f.pkt_len);
+    at += (HDR_SZ + f.pkt_len + 7) & ~7;
+    const { tag, handle: h, method: m, res } = f;
+    const result = input(tag, h, m, res, f.result, pkt);
+    if (res || h === ROOT || m === DROP || result === ERRNO_EINPROGRESS)
+      continue;
+    ui.task_return(tag, ret.finish() < 0 ? ERRNO_EMSGSIZE : result);
   }
 }
 

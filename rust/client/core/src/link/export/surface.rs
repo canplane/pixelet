@@ -4,13 +4,11 @@
 //! object the core implements under the handle the link issued it: opened by
 //! the UI, resized by it, and closed as the UI drops it.
 
-use crate::spec::step::InvalidationReason;
 use std::rc::Rc;
 
-use super::refuse_unless;
+use super::{ask, refuse_unless, with_frame};
 use crate::domain::scene::resolution;
 use crate::domain::view::frame::pose::view_resize;
-use crate::sys::sched::invalidate;
 use pxl_gpu_guest::abi::surface as wit;
 use pxl_gpu_link::spec::SURFACE_URI;
 use pxl_render::gpu::surface;
@@ -28,14 +26,14 @@ struct Surface(Handle);
 pub(super) fn mount() {
     link::mount(wit::HANDLE, xpute_link::uri(SURFACE_URI), |_, h| {
         refuse_unless(surface::surface_open(h), Errno::ENFILE)?;
-        invalidate(InvalidationReason::View);
+        ask();
         Ok(wit::surface(Rc::new(Surface(h))))
     });
 }
 
 impl wit::GuestSurface for Surface {
     fn resize(&self, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
-        resize(self.0, width, height, dpr)
+        with_frame(resize(self.0, width, height, dpr))
     }
 }
 
@@ -57,7 +55,6 @@ pub(super) fn draw_world(handle: u32) -> bool {
         s.ratio = resolution::surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
         view_resize(f64::from(s.px_w) / s.dpr, f64::from(s.px_h) / s.dpr);
     }
-    invalidate(InvalidationReason::View);
     true
 }
 
@@ -73,6 +70,5 @@ fn resize(h: Handle, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
     if role == surface_role::WORLD {
         view_resize(f64::from(width) / dpr, f64::from(height) / dpr);
     }
-    invalidate(InvalidationReason::View);
     Ok(())
 }

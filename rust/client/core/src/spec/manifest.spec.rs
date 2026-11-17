@@ -11,8 +11,8 @@
 /// grows it, so a full heap stops the core: the stack, the module's data, the fixed ranges, then the
 /// heap (sys/heap.rs).
 ///
-/// `fixed_sz`: the fixed ranges, `.fixed` (link/layout.rs), 147.71 MiB, which the compiler holds
-/// the ranges' sum under. In a module it begins on the page past the module's data, and
+/// `fixed_sz`: the fixed ranges, `.fixed` (link/layout.rs), 147.71 MiB: the compiler checks
+/// that the ranges' sum, on a page, is this, no more and no less. In a module it begins on the page past the module's data, and
 /// natively at the block's base; the heap begins on the page past it (sys/heap.rs).
 ///
 /// `min_heap_sz`: the heap the core counts on past the fixed ranges, 256 MiB, which the

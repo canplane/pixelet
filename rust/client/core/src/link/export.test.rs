@@ -79,57 +79,98 @@ fn take_invalid() -> bool {
 /// An input the UI sends, called as the link calls it.
 type Input<'a> = &'a dyn Fn() -> Result<(), Errno>;
 
-/// An input that moves the view, what the pointer hovers or the tool asks for
-/// its frame, as the core's other methods do, so a still world shows it at
-/// once.
+/// How many times a frame was asked for as a method, which this takes.
+fn take_method_asks() -> u32 {
+    use crate::spec::step::InvalidationReason;
+    use crate::sys::sched::take_invalidations;
+    take_invalidations()[InvalidationReason::Method as usize]
+}
+
+/// A method of the UI's that changes what the core holds asks for its frame
+/// as a method, once, whatever its state asks besides, so a still world shows
+/// it at once.
 #[test]
-fn an_input_asks_for_its_frame() {
+fn a_method_applied_asks_for_its_frame() {
+    use crate::abi::camera::Tracking;
     use crate::abi::input::{Drag, PointerPhase};
+    use crate::abi::{camera as cam, edit as ed, input as inp, sensor as sen};
     use crate::domain::control::camera::fixture::place;
     place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
-    let pointer = |phase| input::pointer(phase, false, 1, Drag::Pan, 10.0, 10.0);
-    let inputs: [(&str, Input); 7] = [
+    let pointer = |phase| inp::Guest::pointer(&Core, phase, false, 1, Drag::Pan, 10.0, 10.0);
+    let methods: [(&str, Input); 12] = [
         ("hover", &|| pointer(PointerPhase::Move)),
         ("pointer down", &|| pointer(PointerPhase::Down)),
         ("pressed move", &|| pointer(PointerPhase::Move)),
         ("pointer up", &|| pointer(PointerPhase::Up)),
-        ("wheel", &|| input::wheel(1.0)),
-        ("pinch", &|| input::pinch(1.1)),
-        ("tool", &|| edit::hold(Tool::Pointer, 0, 0)),
-    ];
-    for (name, input) in inputs {
-        take_invalid();
-        assert_eq!(input(), Ok(()), "{name}");
-        assert!(take_invalid(), "{name} asks for no frame");
-    }
-}
-
-/// A method whose state asks for its own frame gets it from that state
-/// alone: the link adds no ask of its own to a destination's, a tracked
-/// pose's or the follow mode's.
-#[test]
-fn a_method_whose_state_asks_adds_no_ask() {
-    use crate::domain::control::camera::fixture::place;
-    use crate::spec::step::InvalidationReason;
-    use crate::sys::sched::take_invalidations;
-    place([0.0, 0.0, 0.0], 10.0, 1.0, 0.5);
-    use crate::abi::camera::Tracking;
-    let methods: [(&str, Input); 4] = [
-        ("follow", &|| camera::track(Tracking::Follow)),
-        ("goto", &|| camera::goto(127.0, 37.5)),
+        ("wheel", &|| inp::Guest::wheel(&Core, 1.0)),
+        ("pinch", &|| inp::Guest::pinch(&Core, 1.1)),
         ("xr pose", &|| {
-            input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+            inp::Guest::xr_pose(&Core, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
         }),
-        ("xr pose end", &|| input::xr_pose_end()),
+        ("xr pose end", &|| inp::Guest::xr_pose_end(&Core)),
+        ("tool", &|| ed::Guest::hold(&Core, Tool::Pointer, 0, 0)),
+        ("follow", &|| cam::Guest::track(&Core, Tracking::Follow)),
+        ("goto", &|| cam::Guest::goto(&Core, 127.0, 37.5)),
+        ("pos", &|| sen::Guest::pos(&Core, None)),
     ];
     for (name, method) in methods {
-        take_invalidations();
+        take_invalid();
+        take_method_asks();
         assert_eq!(method(), Ok(()), "{name}");
-        let asks = take_invalidations();
-        assert!(asks[InvalidationReason::View as usize] > 0, "{name}");
-        assert_eq!(asks[InvalidationReason::Method as usize], 0, "{name}");
+        assert!(take_invalid(), "{name} asks for no frame");
+        assert_eq!(take_method_asks(), 1, "{name}");
     }
+    cam::Guest::track(&Core, Tracking::Unfollow).unwrap();
     destination::cancel();
+    // The methods of the other answers and of the other interfaces.
+    use crate::abi::sensor::LocationStatus;
+    use crate::abi::{scene as sc, setting as st};
+    assert!(surface_open(2));
+    take_method_asks();
+    assert_eq!(sen::Guest::location(&Core, LocationStatus::Ready), Ok(()));
+    assert_eq!(take_method_asks(), 1, "location");
+    let drawn = sc::Guest::draw(&Core, 2, SceneContent::World, None, None);
+    assert_eq!(drawn, Ok(Ok(())));
+    assert_eq!(take_method_asks(), 1, "draw");
+    assert_eq!(ed::Guest::marker_text(&Core, String::new()), Ok(Ok(())));
+    assert_eq!(take_method_asks(), 1, "marker text");
+    assert_eq!(ed::Guest::marker_commit(&Core), Ok(()));
+    assert_eq!(take_method_asks(), 1, "marker commit");
+    assert_eq!(ed::Guest::marker_cancel(&Core), Ok(()));
+    assert_eq!(take_method_asks(), 1, "marker cancel");
+    // The settings are not read yet, so a set is refused in its answer.
+    assert_eq!(st::Guest::set(&Core, 0, 0), Ok(Err(ErrorCode::WouldBlock)));
+    assert_eq!(take_method_asks(), 0, "a set refused");
+}
+
+/// A method refused changes nothing and asks for no frame, whether its
+/// argument is refused or its answer says so.
+#[test]
+fn a_method_refused_asks_for_no_frame() {
+    use crate::abi::{camera as cam, input as inp, scene as sc};
+    take_method_asks();
+    assert_eq!(cam::Guest::goto(&Core, 181.0, 0.0), Err(Errno::EINVAL));
+    assert_eq!(inp::Guest::pinch(&Core, 0.0), Err(Errno::EINVAL));
+    let long = "a".repeat(CHAT_TEXT_CHARS as usize + 1);
+    assert_eq!(sc::Guest::chat(&Core, long), Ok(Err(ErrorCode::TooLong)));
+    assert_eq!(take_method_asks(), 0);
+}
+
+/// The device's heading asks for a frame only while the camera follows the
+/// device, which is when it turns the camera.
+#[test]
+fn a_heading_asks_only_while_following() {
+    use crate::abi::camera::Tracking;
+    use crate::abi::{camera as cam, sensor as sen};
+    cam::Guest::track(&Core, Tracking::Unfollow).unwrap();
+    take_method_asks();
+    assert_eq!(sen::Guest::heading(&Core, Some(10.0)), Ok(()));
+    assert_eq!(take_method_asks(), 0, "free");
+    cam::Guest::track(&Core, Tracking::Follow).unwrap();
+    take_method_asks();
+    assert_eq!(sen::Guest::heading(&Core, Some(20.0)), Ok(()));
+    assert_eq!(take_method_asks(), 1, "following");
+    cam::Guest::track(&Core, Tracking::Unfollow).unwrap();
 }
 
 /// A text is held to its kind's cap and refused whole one past it,
@@ -139,24 +180,26 @@ fn a_method_whose_state_asks_adds_no_ask() {
 /// typed, none at first, and keeps the text it had where it is refused.
 #[test]
 fn a_text_is_held_to_its_kind_cap() {
+    use crate::abi::{edit as ed, scene as sc};
     let text = |cnt: u32| "😀".repeat(cnt as usize);
-    take_invalid();
+    take_method_asks();
     assert_eq!(
-        scene::chat(text(CHAT_TEXT_CHARS + 1)),
+        sc::Guest::chat(&Core, text(CHAT_TEXT_CHARS + 1)),
         Ok(Err(ErrorCode::TooLong))
     );
-    assert!(!take_invalid(), "a refused line asks for a frame");
+    assert_eq!(take_method_asks(), 0, "a refused line asks for a frame");
 
     let [x, y] = flat_at_five();
     write::draft_at(Octant::holding(UNIT_ZOOM, &world::point(x, y, 5.0)));
-    assert_eq!(edit::marker_text(String::new()), Ok(Ok(())));
-    assert_eq!(edit::marker_text(text(MARKER_TEXT_CHARS)), Ok(Ok(())));
-    take_invalid();
+    assert_eq!(ed::Guest::marker_text(&Core, String::new()), Ok(Ok(())));
+    let held = ed::Guest::marker_text(&Core, text(MARKER_TEXT_CHARS));
+    assert_eq!(held, Ok(Ok(())));
+    take_method_asks();
     assert_eq!(
-        edit::marker_text(text(MARKER_TEXT_CHARS + 1)),
+        ed::Guest::marker_text(&Core, text(MARKER_TEXT_CHARS + 1)),
         Ok(Err(ErrorCode::TooLong))
     );
-    assert!(!take_invalid(), "a refused draft asks for a frame");
+    assert_eq!(take_method_asks(), 0, "a refused draft asks for a frame");
     assert_eq!(
         write::marker_draft(),
         Some(text(MARKER_TEXT_CHARS).as_str())

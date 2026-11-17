@@ -31,6 +31,7 @@ use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 use crate::domain::scene::animation;
@@ -143,7 +144,10 @@ impl Character {
                 palette[j * 16 + d * 5] = 1.0;
             }
         }
-        let (palette_at, palette_sz) = mem::span(&palette[..]);
+        let Lent {
+            buf: palette_at,
+            nbyte: palette_sz,
+        } = mem::lent(&palette[..]);
         let palette_handle = draw.upload(palette_at, palette_sz, 0, 0);
         Some(Character {
             group,
@@ -345,7 +349,10 @@ impl Character {
             &mut self.global,
             &mut self.palette[..joint_cnt * 16],
         );
-        let (palette_at, palette_sz) = mem::span(&self.palette[..]);
+        let Lent {
+            buf: palette_at,
+            nbyte: palette_sz,
+        } = mem::lent(&self.palette[..]);
         draw.rewrite(self.palette_handle, palette_at, palette_sz);
         asks
     }

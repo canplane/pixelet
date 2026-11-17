@@ -42,12 +42,6 @@ pub(crate) const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(MIN_ZO
 
 // ---- how the camera settles and keeps out of the ground ----
 
-/// How close the drawn camera comes to what it eases toward before it stops
-/// easing: an eye, a pivot or a distance within `EASE_EPS_U`, a polar angle or
-/// an azimuth within `EASE_EPS_RAD`. Each gap is smaller than a pixel at any
-/// distance the view is seen across.
-pub(crate) const EASE_EPS_U: f64 = 0.001;
-pub(crate) const EASE_EPS_RAD: f64 = 0.0001;
 /// The most samples a collision test takes along one step of the orbit
 /// (camera/orbit.rs `way_hit`). Testing only where a step lands would let
 /// the camera tunnel, because the easing carries it through everything in

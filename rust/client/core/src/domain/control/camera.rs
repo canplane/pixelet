@@ -21,8 +21,9 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use xpute_kit::math::scalar::wrap;
 
-use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR, EASE_EPS_RAD, ROT_DAMP};
+use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR, ROT_DAMP};
 use crate::domain::smooth::{smooth_angle, smooth_vec};
+use crate::domain::view::frame::pose::{self, ObserverPose};
 
 // A facing is a direction in spherical coordinates about the world's Z
 // axis. The polar angle θ is measured from straight down and is clamped to
@@ -98,20 +99,30 @@ pub(crate) fn polar() -> f64 {
 
 /// Eases the facing of `cam` over `delta` seconds, its polar angle toward
 /// `polar` at `polar_rate` and its azimuth toward `azimuth` the short way
-/// round, and returns whether it is still moving.
-pub(crate) fn ease_facing(
-    cam: &mut Camera,
-    polar: f64,
-    polar_rate: f64,
-    azimuth: f64,
-    delta: f64,
-) -> bool {
-    let ([eased_polar], polar_moving) =
-        smooth_vec([cam.polar], [polar], polar_rate, delta, EASE_EPS_RAD);
-    let (eased_azimuth, azimuth_moving) =
-        smooth_angle(cam.azimuth, azimuth, ROT_DAMP, delta, EASE_EPS_RAD);
+/// round.
+pub(crate) fn ease_facing(cam: &mut Camera, polar: f64, polar_rate: f64, azimuth: f64, delta: f64) {
+    let [eased_polar] = smooth_vec([cam.polar], [polar], polar_rate, delta);
+    let eased_azimuth = smooth_angle(cam.azimuth, azimuth, ROT_DAMP, delta);
     (cam.polar, cam.azimuth) = facing_domain(eased_polar, eased_azimuth);
-    polar_moving || azimuth_moving
+}
+
+/// Whether `cam` is still to ease toward the eye `eye_to` facing `polar`
+/// and `azimuth`: whether its pose and that one are distinct in the view.
+/// Where they are not, what the ease has left is under what is seen, and the
+/// camera takes the pose whole. A camera with no eye has nothing to ease.
+pub(crate) fn eases_toward(cam: &Camera, eye_to: V3, polar: f64, azimuth: f64) -> bool {
+    cam.eye.is_some_and(|eye| {
+        pose::distinct(
+            &ObserverPose {
+                eye,
+                rot: facing_rot(cam.polar, cam.azimuth),
+            },
+            &ObserverPose {
+                eye: eye_to,
+                rot: facing_rot(polar, azimuth),
+            },
+        )
+    })
 }
 
 #[cfg(test)]

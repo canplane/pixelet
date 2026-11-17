@@ -244,7 +244,7 @@ export function mount_objects(link: Callee, mem: Memory): void {
   object.mount(link, {
     async apply(batch) {
       try {
-        await OBJECTS.commit(mem.bytes(batch.at, batch.len).slice());
+        await OBJECTS.commit(mem.bytes(batch.buf, batch.nbyte).slice());
       } catch (e) {
         if (e instanceof XputeBug) throw e;
         // Only the decode throws an XputeError; the database throws its own.

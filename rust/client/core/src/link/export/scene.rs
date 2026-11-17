@@ -2,7 +2,7 @@
 
 //! The scene interface's methods: what a surface draws, and a chat line said.
 
-use super::{applied, or_refuse, refuse_unless};
+use super::{or_refuse, refuse_unless};
 use crate::abi::scene::SceneContent;
 use crate::abi::types::ErrorCode;
 use crate::domain::scene::character::surface::character_surface_open;
@@ -18,7 +18,7 @@ pub(super) fn chat(text: String) -> Result<Result<(), ErrorCode>, Errno> {
     if marker::append_chat_line(&text).is_err() {
         return Ok(Err(ErrorCode::TooLong));
     }
-    applied().map(Ok)
+    Ok(Ok(()))
 }
 
 /// Sets what a surface draws until it closes: the world, or one group's

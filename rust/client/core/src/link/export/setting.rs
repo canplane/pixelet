@@ -2,7 +2,7 @@
 
 //! The setting interface's methods.
 
-use super::{applied, or_refuse, refuse_unless};
+use super::{or_refuse, refuse_unless};
 use crate::abi::types::ErrorCode;
 use crate::domain::setting::SettingKey;
 use crate::domain::setting::are_settings_loaded;
@@ -22,5 +22,5 @@ pub(super) fn set(key: u32, val: u32) -> Result<Result<(), ErrorCode>, Errno> {
     if changed == Some(true) && key == SettingKey::Perf {
         perf_follow(val == 1);
     }
-    applied().map(Ok)
+    Ok(Ok(()))
 }

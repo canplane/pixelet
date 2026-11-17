@@ -57,6 +57,31 @@ The guest's memory is its own, and the guest decides everything else. Because
 that is all the host gives, the same guest runs unchanged on the web, on a
 phone and in a test.
 
+## Beside WASI and the component model
+
+xpute takes its words and its layouts from WIT and the component model: the
+guest and its host, a world's imports and exports, interfaces declared in WIT
+with both ends' bindings generated, an object called under a handle, and a
+packet's values in the Canonical ABI's layout. It is not WASI, and a guest is
+not a component. WASI answers how a program runs on any host that keeps a
+standard; xpute answers how one program's compiled part runs unchanged in a
+browser and inside a phone's app. Between the guest and its host they part in
+five places.
+
+| | WASI and the component model | xpute |
+| --- | --- | --- |
+| The guest | a component, which a browser does not run: a tool transpiles it into JavaScript glue over core modules | a core module as a browser loads it, or a native library linked into the app |
+| The boundary | an import or an export for each function | one function out and three exports, and frames between them, so a native app's C ABI carries the same boundary |
+| A value | copied into the other side's memory at each call | laid once in the frame's packet, and a buffer lent where it lies |
+| What the host gives | a standard set of interfaces, files, sockets and HTTP among them, which a browser has to imitate | its entries, the clocks, the stop and the log; the rest is the program's own WIT |
+| Isolation | components share no memory | the host reads the guest's memory, and nothing is isolated: both are one program's |
+
+What that costs is what the standard gives. A guest written for xpute runs on
+no WASI host and composes with no component, and what a host must keep for it
+is the program's own to declare. What of WIT the link takes and what it reads
+its own way, and how xpute's packages stand to WASI's, is in
+[link/gen](./link/gen/README.md).
+
 ## The guest, the host and the program
 
 A program built on xpute has three parts.
