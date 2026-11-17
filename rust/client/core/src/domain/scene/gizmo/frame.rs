@@ -6,6 +6,7 @@
 //! ring through north. The view's forward, its up and north are told apart by
 //! the spec's colors (`spec::gizmo::frame`), which the UI's legend reads too.
 
+use crate::spec::step::InvalidationReason;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};
@@ -108,7 +109,8 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
 }
 
 struct Gizmo {
-    /// The sketch now drawn, and whether the gizmo is shown at all.
+    /// The sketch last set, and whether it is shown: false while the gizmo is
+    /// hidden and where the heap refused it.
     drawn: Sketch,
     shown: bool,
     /// The next sketch. It is kept between steps so a step allocates nothing.
@@ -135,7 +137,7 @@ pub(crate) fn frame_gizmo_draw(draw: &mut DrawList) {
     gizmo().mesh.draw(draw);
 }
 
-/// `heading` is the camera's azimuth in third person, and None in first
+/// `heading` is the view's azimuth in third person, and None in first
 /// person. The gizmo is sketched every step but handed to the renderer only
 /// when the sketch changed, so the floor under the pivot is drawn in its
 /// place as soon as it is known. It must run before the frame's list begins
@@ -146,6 +148,7 @@ pub(crate) fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f6
     let Some(at) = pivot.filter(|_| show) else {
         if core::mem::take(&mut g.shown) {
             g.mesh.set(draw_list(), [0.0; 3], &[], 0);
+            invalidate(InvalidationReason::Scene);
         }
         return;
     };
@@ -153,9 +156,11 @@ pub(crate) fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f6
     if g.shown && g.drawn == g.next {
         return;
     }
-    g.mesh
+    // Where the heap refused the sketch nothing is shown, so the next step
+    // sets it again, as the ghost does.
+    g.shown = g
+        .mesh
         .set(draw_list(), g.next.about, &g.next.lines, g.next.lines.len());
     core::mem::swap(&mut g.drawn, &mut g.next);
-    g.shown = true;
-    invalidate();
+    invalidate(InvalidationReason::Scene);
 }

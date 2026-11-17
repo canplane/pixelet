@@ -20,7 +20,10 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   so and when, and what the user decided there. State which of its values are
   independent and which derive or repeat. The change follows from who owns the
   fact, as the design and those decisions place it; its size follows from
-  that.
+  that. Where the design leaves the shape open, take the convention of those
+  who solved the same problem, naming it, and first set its premises beside
+  this system's: a convention holds only as far as the premises it rests on do
+  (a rasterizer's rule is not a ray caster's).
 - Layers, as a system is built. A part depends only on what is below it: the
   part below gives the mechanism and declares the interface it needs; the part
   above implements it, sets the policy and injects it; the program's assembly,

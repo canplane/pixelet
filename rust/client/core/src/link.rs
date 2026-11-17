@@ -23,6 +23,7 @@ use crate::domain::view::demand;
 use crate::frame;
 use crate::perf::record::perf_record;
 use crate::perf::task::TaskRecord;
+use crate::spec::step::InvalidationReason;
 use crate::sys::io::dispatch;
 use crate::sys::io::file;
 use crate::sys::io::loader;
@@ -88,7 +89,7 @@ pub fn boot() {
     // view asks for them (domain/layer/object/repository.rs).
     settings_open();
     // The UI must hold the core's state from its first render on.
-    invalidate();
+    invalidate(InvalidationReason::Pending);
     frame::boot();
 }
 
@@ -119,8 +120,11 @@ pub fn end() -> bool {
     // here, and asks for no frame.
     let complete = renderer::complete();
     let retry = api::take_retry();
-    if complete || retry {
-        invalidate();
+    if complete {
+        invalidate(InvalidationReason::Completion);
+    }
+    if retry {
+        invalidate(InvalidationReason::Pending);
     }
     renderer::take_reads();
     executor::poll();
@@ -147,7 +151,7 @@ pub fn end() -> bool {
         }
     }
     if let Some(at) = request::next_pump_at(now()) {
-        invalidate_at(at);
+        invalidate_at(at, InvalidationReason::Pending);
     }
     api::gpu_flush();
     post_ui(state());

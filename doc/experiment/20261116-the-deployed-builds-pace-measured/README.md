@@ -437,3 +437,19 @@ the scheduler ends its attempt as it stops it, and the late answer finds none
 to the deployment through Node (`script/proxy.ts` `forward`) and answers 502, unlogged,
 when that leg fails; the run reads none of the page's console. A failed leg is the likely
 cause; not shown.
+
+## Then: the view's turn and the markers' stand (2026-11-17)
+
+`64e4fae492` against the tree with the markers standing across a brick's split or
+merge and the view taking a turn only past half a CSS pixel (`948b7b3889`,
+`93a64f5181`). Release web builds with `PXL_PERF_DRIVE=1`, the Mac's Chrome, three
+runs each by turns (before, after, after, before, before, after).
+
+| build | frames | GPU p50 / p95 | tick p50 / p95 | scene p50 / p95 |
+| --- | --- | --- | --- | --- |
+| before | 839–845 | 20.8–21.0 / 29.6–29.8 | 1.8 / 2.6–2.7 | 1.2–1.3 / 1.7–2.2 |
+| after | 844–850 | 20.6–21.0 / 29.4–30.0 | 1.8 / 2.6–2.7 | 1.2 / 1.8–2.2 |
+
+No difference past the runs' own spread. The drive moves the camera throughout, so
+what the turn's threshold saves at rest is not in these figures; what they show is
+that nothing got slower. The phones were not measured.

@@ -5,7 +5,9 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::perf::frame::{EFFECT_CNT, FrameSample, GPU_SPAN_CNT, RaySample};
+use crate::perf::frame::{
+    EFFECT_CNT, FrameSample, GPU_SPAN_CNT, INVALIDATION_REASON_CNT, RaySample,
+};
 use crate::perf::word::{AsWords, words, zeroed};
 use crate::spec::demand::{StreamName, TaskPhaseName};
 use crate::spec::perf::{frame, limit, now, percentile, stat, step_stat, stream_stat};
@@ -84,6 +86,8 @@ pub(crate) struct FrameSection {
     pub perf: Percentile,
     /// Each effect's p95, indexed by `EffectName`.
     pub effects_p95: [f64; EFFECT_CNT],
+    /// The invalidations for a frame over the window, indexed by `InvalidationReason`.
+    pub invalidations: [f64; INVALIDATION_REASON_CNT],
     /// The GPU's time, with overlapping spans counted once.
     pub gpu_busy: Percentile,
     /// Three words for each of the renderer's `FrameKind`s: the p50 and p95 of
@@ -126,7 +130,7 @@ words!(FrameSection, stat::frames::WORDS,
     tick => stat::frames::TICK, effect => stat::frames::EFFECT,
     stage => stat::frames::STAGE,
     perf => stat::frames::PERF,
-    effects_p95 => stat::frames::EFFECTS_P95, gpu_busy => stat::frames::GPU_BUSY,
+    effects_p95 => stat::frames::EFFECTS_P95, invalidations => stat::frames::INVALIDATIONS, gpu_busy => stat::frames::GPU_BUSY,
     gpu_busy_kinds => stat::frames::GPU_BUSY_KINDS,
     phases_p95 => stat::frames::PHASES_P95, gpu_spans_p95 => stat::frames::GPU_SPANS_P95,
     gpu_spans_cnt => stat::frames::GPU_SPANS_CNT,

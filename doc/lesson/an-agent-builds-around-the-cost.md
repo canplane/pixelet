@@ -4,7 +4,7 @@
 the work. It covers why the agent behaved as it did over one night, what in this
 project makes that worse, why most who build by agent neither meet it nor raise it,
 and why the user sees it otherwise. The case is recorded in
-[the location zone, by the code's own axioms](../minutes/20261117-the-location-zone-by-the-codes-own-axioms.md)
+[the location zone, and the observation quantized](../minutes/20261117-the-location-zone-by-the-codes-own-axioms.md)
 and measured in
 [the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)
 ("Then: the night's quick comparison").

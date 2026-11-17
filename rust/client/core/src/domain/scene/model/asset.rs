@@ -19,6 +19,7 @@
 //! (registry.rs `Model::seal`). The model joins the registry, and the table
 //! here, only once it is whole.
 
+use crate::spec::step::InvalidationReason;
 use core::ops::Range;
 use std::rc::Rc;
 
@@ -137,7 +138,7 @@ async fn parse(file: u32, bytes: Box<[u8]>) {
     if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
         *entry = Some(parsed.map(Rc::new));
     }
-    invalidate();
+    invalidate(InvalidationReason::Completion);
 }
 
 /// `slot`'s model as `model_of` registered it at `height_u`, without asking
@@ -169,7 +170,7 @@ async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     {
         *at = Some(entry);
     }
-    invalidate();
+    invalidate(InvalidationReason::Completion);
 }
 
 /// A primitive as its model lays it out. Its vertices start at `first`. In a

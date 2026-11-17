@@ -29,9 +29,9 @@ use crate::pass::model::{
 };
 
 /// The side of an atlas layer, in texels. An impostor is drawn only smaller
-/// than decor drawn as a model, two camera grid cells (pxl-core
-/// `DECOR_MODEL_CELLS`). A cell is 45 drawn pixels at the middle of a view
-/// 2160 CSS pixels high at a pixel ratio of 2.
+/// than decor drawn as a model, pxl-spec `grid::SPANS` camera grid cells
+/// (pxl-core `lens::decor_model_angle`). A cell is 45 drawn pixels at the
+/// middle of a view 2160 CSS pixels high at a pixel ratio of 2.
 const IMPOSTOR_SIZE: u32 = 128;
 const FIT_SZ: u32 = 16;
 

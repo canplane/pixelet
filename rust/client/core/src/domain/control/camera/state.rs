@@ -1,5 +1,6 @@
 // pxl-core/domain/control/camera/state.rs
 
+use crate::spec::step::InvalidationReason;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use xpute_kit::math::scalar::clamp;
@@ -77,7 +78,7 @@ impl CameraState {
             return;
         }
         self.intent = next;
-        invalidate();
+        invalidate(InvalidationReason::View);
     }
 }
 

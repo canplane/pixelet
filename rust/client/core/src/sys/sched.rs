@@ -35,15 +35,20 @@ use xpute_guest::clock::{duration, now};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::spec::step::InvalidationReason;
 use crate::sys::sched::param::{CONTENT_SHARE, MARGIN_SHARE};
 
 struct Sched {
     /// Whether a frame is asked for, and the frame task's waker.
     invalid: bool,
     frame_waker: Option<Waker>,
-    /// The earliest time a frame is armed for, or infinity, and the timer
-    /// task's waker.
+    /// How many times a frame was asked for since the count was last taken,
+    /// by its reason. The profiler alone reads it.
+    invalidations: [u32; InvalidationReason::ALL.len()],
+    /// The earliest time a frame is armed for, or infinity, why it is, and
+    /// the timer task's waker.
     earliest: f64,
+    earliest_reason: InvalidationReason,
     timer_waker: Option<Waker>,
     budget: Budget,
 }
@@ -54,16 +59,19 @@ fn sched() -> &'static mut Sched {
     SCHED.get(|| Sched {
         invalid: false,
         frame_waker: None,
+        invalidations: [0; InvalidationReason::ALL.len()],
         earliest: f64::INFINITY,
+        earliest_reason: InvalidationReason::Pending,
         timer_waker: None,
         budget: Budget::NONE,
     })
 }
 
-/// Asks for a frame.
-pub(crate) fn invalidate() {
+/// Asks for a frame, saying why.
+pub(crate) fn invalidate(reason: InvalidationReason) {
     let s = sched();
     s.invalid = true;
+    s.invalidations[reason as usize] += 1;
     if let Some(w) = s.frame_waker.take() {
         w.wake();
     }
@@ -87,13 +95,18 @@ pub(crate) async fn invalidated() {
     .await;
 }
 
-/// Asks for a frame at `at`, on the clock.
-pub(crate) fn invalidate_at(at: f64) {
+/// How many times a frame was asked for since this was last called, by why.
+pub(crate) fn take_invalidations() -> [u32; InvalidationReason::ALL.len()] {
+    core::mem::take(&mut sched().invalidations)
+}
+
+/// Asks for a frame at `at`, on the clock, saying why.
+pub(crate) fn invalidate_at(at: f64, reason: InvalidationReason) {
     let s = sched();
     if at >= s.earliest {
         return;
     }
-    s.earliest = at;
+    (s.earliest, s.earliest_reason) = (at, reason);
     if let Some(w) = s.timer_waker.take() {
         w.wake();
     }
@@ -130,7 +143,7 @@ async fn timer() {
         let s = sched();
         if s.earliest == at {
             s.earliest = f64::INFINITY;
-            invalidate();
+            invalidate(s.earliest_reason);
         }
     }
 }

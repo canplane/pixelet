@@ -31,7 +31,11 @@ import {
   TASK,
   WORST,
 } from "@/abi/perf.spec.ts";
-import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
+import {
+  INVALIDATION_REASONS,
+  EFFECT_NAMES,
+  STEP_NAMES,
+} from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import * as perf from "@/abi/perf.ts";
 import { ui } from "@/service/core/core.ts";
@@ -64,7 +68,12 @@ const site = (strtab: U8Array, file: u32, bytes: u32, line: u32) =>
     : `${file === 0 ? "?" : td.decode(strtab.subarray(file, file + bytes))}:${line}`;
 
 /** The `FRAME` columns that are lists, one word for each name in the list. */
-const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
+const LIST_COLUMNS = [
+  "phases",
+  "effects",
+  "invalidations",
+  "gpu_spans",
+] as const;
 export type ListColumn = (typeof LIST_COLUMNS)[number];
 export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarColumn = Exclude<FrameColumn, ListColumn>;
@@ -72,6 +81,7 @@ type ScalarColumn = Exclude<FrameColumn, ListColumn>;
 export type Frame = { [K in ScalarColumn]: f64 } & {
   phases: f64[];
   effects: f64[];
+  invalidations: f64[];
   gpu_spans: f64[];
 };
 
@@ -136,6 +146,8 @@ export interface FrameSummary {
    * and that ran the span. */
   phases: { name: string; p95: f64 }[];
   effects_p95: { name: string; p95: f64 }[];
+  /** How many times a frame was asked for over the window, by reason. */
+  invalidations: { name: string; n: f64 }[];
   gpu_spans: { name: string; p95: f64; n: f64 }[];
   /** How many frames were of each kind the renderer draws. */
   kinds: { name: string; n: f64 }[];
@@ -257,6 +269,10 @@ function frame_summary(s: F64Array): FrameSummary | null {
     effects_p95: EFFECT_NAMES.map((name, k) => ({
       name,
       p95: s[a + F.effects_p95 + k],
+    })),
+    invalidations: INVALIDATION_REASONS.map((name, k) => ({
+      name,
+      n: s[a + F.invalidations + k],
     })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
       name,

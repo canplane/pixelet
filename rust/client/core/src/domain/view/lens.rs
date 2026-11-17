@@ -13,7 +13,9 @@ use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_engine::{beam, eye};
 use pxl_spec::asset::decor::{DECORS, Decor};
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{CELLS_A_RAD, CLIP_CELLS_A_RAD, CLIP_MARGIN, split_dist};
+use pxl_spec::space::camera::grid::{
+    CELLS_A_RAD, CLIP_CELLS_A_RAD, CLIP_MARGIN, SPANS, split_dist,
+};
 use pxl_spec::space::coord::world::origin;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 
@@ -73,11 +75,12 @@ impl StepClock {
 }
 
 /// The angle about the eye, in radians, below which a decor is drawn as an
-/// impostor instead of a model: `DECOR_MODEL_CELLS` camera grid cells
-/// (`CELL`). Being an angle, it does not change
-/// with the screen's size or aspect ratio.
+/// impostor instead of a model: the camera grid cells past which the ground's
+/// cell is drawn as its finer ones (`SPANS`), so a decor and a cell of the
+/// ground open into their parts at one span of the view's cells. Being an
+/// angle, it does not change with the screen's size or aspect ratio.
 pub(crate) fn decor_model_angle() -> f64 {
-    param::DECOR_MODEL_CELLS * CELL
+    f64::from(SPANS) * CELL
 }
 
 /// The angle about the eye, in radians, below which a decor's impostor is

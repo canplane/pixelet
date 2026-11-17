@@ -24,6 +24,7 @@
 use crate::domain::scene::param;
 use crate::domain::scene::rate::{self, Motion, Pace};
 use crate::domain::setting::{ResMode, settings};
+use crate::spec::step::InvalidationReason;
 use crate::sys::sched;
 use pxl_global::Global;
 use pxl_render::gpu::api;
@@ -331,7 +332,7 @@ pub(crate) fn load(pace: Pace, gpu: Option<GpuRead>) {
     let ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
     if s.ratio != ratio {
         s.ratio = ratio;
-        sched::invalidate();
+        sched::invalidate(InvalidationReason::View);
     }
 }
 

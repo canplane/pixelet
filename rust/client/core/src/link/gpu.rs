@@ -7,6 +7,7 @@
 //! when the app is shown again, the same on the web and natively. Another
 //! task hears each wake of the device (`settle`).
 
+use crate::spec::step::InvalidationReason;
 use core::future::poll_fn;
 use core::pin::pin;
 use core::task::Poll;
@@ -54,10 +55,10 @@ async fn hold(device: Handle) {
             wait_ms = (wait_ms * 2.0).min(DEVICE_RETRY_CAP_MS);
         }
         api::on_device_ready();
-        invalidate();
+        invalidate(InvalidationReason::Completion);
         let (back, _) = lost.await;
         block = Some(back);
-        invalidate();
+        invalidate(InvalidationReason::Completion);
     }
 }
 

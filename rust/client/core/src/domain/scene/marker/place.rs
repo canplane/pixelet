@@ -20,7 +20,7 @@ use pxl_spec::bake::tile::place::{PLACE_FIRST, PLACE_LATTICE, stands, symbol_of}
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{BOUNDS, idx_of, wrap_idx};
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, idx_at};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
@@ -29,7 +29,6 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 /// last asked, with the detail it was asked at.
 pub(super) struct Place {
     pub(super) brick: Brick,
-    key: Key,
     kind: u16,
     first_zoom: Zoom,
     name: Option<Rc<str>>,
@@ -38,16 +37,29 @@ pub(super) struct Place {
     top: Option<(Zoom, Option<f64>)>,
 }
 
+impl Place {
+    /// The brick of `zoom` it stands in, on its own brick's lap of X.
+    pub(super) fn brick_at(&self, zoom: Zoom) -> Brick {
+        let (z, column) = self.brick;
+        let lap = column[0] - wrap_idx(z, column[0]);
+        let [x, y, _] = idx_of(zoom, &self.ground.mid());
+        (zoom, [x + idx_at(z, lap, zoom), y])
+    }
+}
+
 /// Reads the places standing in `brick`, from the tiles whose cells are its
 /// cells at its finest zoom, each from the tile that places it exactly. Only
 /// the places Carto shows at the zoom those cells are drawn at are read
 /// (`point_of`). A place not shown there is shown at no coarser zoom either.
-pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
+/// The brick is read whole or not at all: where one of its tiles is still to
+/// come, nothing is found and false is returned.
+pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
     let finest = cell_zoom(brick);
     let zoom = carto_zoom(finest);
     if zoom < PLACE_FIRST as i32 {
-        return;
+        return true;
     }
+    let found_cnt = found.len();
     let t = PLACE_LATTICE.read_zoom(finest);
     let (z, column) = brick;
     // The tile over the column, or the tiles under it: `n` of them along each
@@ -63,7 +75,7 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
     // The brick's column as the world names it, wrapped once round the
     // world.
     let named = [wrap_idx(z, column[0]), column[1]];
-    World::now().places_in(tiles, &mut |src, place, h| {
+    let whole = World::now().places_in(tiles, &mut |src, h| {
         if point_of(h.kind, h.first_zoom, None, zoom).is_none() {
             return;
         }
@@ -74,7 +86,6 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
         }
         found.push(Place {
             brick,
-            key: Key::Place(src, place),
             kind: h.kind,
             first_zoom: h.first_zoom,
             name: (!h.name.is_empty()).then(|| h.name.into()),
@@ -83,6 +94,10 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
             top: None,
         });
     });
+    if !whole {
+        found.truncate(found_cnt);
+    }
+    whole
 }
 
 /// Writes into `out` the places `read` read, seen from `eye`. Each shows as
@@ -108,7 +123,7 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
         };
         let pos = p.ground.center(top);
         out.push(Instance {
-            key: p.key,
+            key: Key::Place(p.ground),
             design,
             pos,
             tap: Some(MarkerHit::To(pos)),
@@ -151,3 +166,7 @@ fn point_of(kind: u16, first_zoom: Zoom, name: Option<&Rc<str>>, zoom: i32) -> O
         ink: INK[k],
     })
 }
+
+#[cfg(test)]
+#[path = "place.test.rs"]
+mod test;

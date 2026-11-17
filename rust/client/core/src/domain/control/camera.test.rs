@@ -60,3 +60,24 @@ fn pole_headings_agree() {
         }
     }
 }
+
+/// The view's heading is the camera's azimuth once the view has taken its
+/// pose, at any pitch, straight down included.
+#[test]
+fn the_view_s_heading_is_the_camera_s_azimuth() {
+    use crate::domain::control::camera::controller;
+    use crate::domain::control::camera::fixture::place;
+    use crate::domain::view::frame::pose;
+    for polar in [0.0, 0.4, 1.2] {
+        for azimuth in [0.0, 1.1, -2.7] {
+            pose::view_compose(None);
+            place([0.0, 0.0, 0.0], 30.0, polar, azimuth);
+            pose::view_compose(controller::pose());
+            let heading = pose::azimuth().unwrap();
+            assert!(
+                (heading - azimuth).abs() < 1e-9,
+                "{polar}, {azimuth}: {heading}"
+            );
+        }
+    }
+}

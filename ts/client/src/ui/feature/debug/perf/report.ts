@@ -212,6 +212,7 @@ function window_section(r: PerfReport): string[] {
         .map((e) => `${e.name} ${n1(e.p95)}`)
         .join("  ") || "-"
     }`,
+    `  invalidations ${f.invalidations.map((a) => `${a.name} ${a.n}`).join("  ")}`,
     `  stage   ${percentile(f.stage)} ms   (the pump and the render)`,
     `  perf ${percentile(f.perf)} ms   (its own record and the UI's reads)`,
     f.gpu_timed > 0

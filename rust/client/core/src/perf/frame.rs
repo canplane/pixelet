@@ -10,7 +10,7 @@ use pxl_engine::count;
 
 use crate::perf::word::{AsWords, as_words, as_words_mut, words, zeroed};
 use crate::spec::perf::{frame, frame_group, worst};
-use crate::spec::step::EffectName;
+use crate::spec::step::{EffectName, InvalidationReason};
 use pxl_render::ray;
 use pxl_render::spec::span::GpuSpanName;
 
@@ -93,6 +93,9 @@ pub(crate) struct FrameSample {
     pub perf_ms: f64,
     /// The time of each effect in the frame, indexed by `EffectName`.
     pub effects: [f64; EFFECT_CNT],
+    /// How many times a frame was asked for since the frame before was
+    /// recorded, indexed by `InvalidationReason`.
+    pub invalidations: [f64; INVALIDATION_REASON_CNT],
     /// The frame's kind, its renderer's `FrameKind`'s number.
     pub kind: f64,
     pub gpu: GpuSample,
@@ -212,7 +215,7 @@ words!(FrameSample, frame::WORDS,
     t => frame::T, interval_ms => frame::INTERVAL_MS, refresh_ms => frame::REFRESH_MS, paced_ms => frame::PACED_MS, settled => frame::SETTLED,
     budget_ms => frame::BUDGET_MS, effects_ms => frame::EFFECTS_MS, tick_ms => frame::TICK_MS,
     phases => frame::PHASES, stage_ms => frame::STAGE_MS,
-    perf_ms => frame::PERF_MS, effects => frame::EFFECTS,
+    perf_ms => frame::PERF_MS, effects => frame::EFFECTS, invalidations => frame::INVALIDATIONS,
     kind => frame::KIND_NAME,
     gpu.timed => frame::GPU_TIMED, gpu.spans => frame::GPU_SPANS, gpu.busy_ms => frame::GPU_BUSY_MS, gpu.px => frame::GPU_PX, gpu.scale => frame::SCALE,
     gpu.draw_cnt => frame::DRAW_CNT, gpu.triangle_cnt => frame::TRIANGLE_CNT, gpu.frame => frame::GPU_FRAME,
@@ -245,6 +248,7 @@ words!(WorstFrame, worst::WORDS,
 
 pub(crate) const GPU_SPAN_CNT: usize = GpuSpanName::ALL.len();
 pub(crate) const EFFECT_CNT: usize = EffectName::ALL.len();
+pub(crate) const INVALIDATION_REASON_CNT: usize = InvalidationReason::ALL.len();
 
 /// Whether the tick ran past its entry's deadline.
 pub(crate) fn overran(f: &FrameSample) -> bool {

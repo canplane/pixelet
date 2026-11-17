@@ -20,6 +20,7 @@
 //! source gives, with empty children (`set_fold`), until the shard's leaves
 //! take its place.
 
+use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::zoom::{CUBE_ZOOM, SHARD_ZOOM, Zoom, units};
@@ -112,7 +113,7 @@ static DAMAGE: Global<Vec<Aabb>> = Global::new();
 /// (`take_damage`).
 pub(super) fn note_damage(regions: &[Aabb]) {
     DAMAGE.get(Vec::new).extend_from_slice(regions);
-    invalidate();
+    invalidate(InvalidationReason::Scene);
 }
 
 /// Moves into `out` the damage noted since the frame last took it.

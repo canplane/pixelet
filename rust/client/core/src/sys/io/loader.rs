@@ -14,6 +14,7 @@
 //! texture lands (pxl-render `Gpu::image`), and they are read again if the
 //! device is lost.
 
+use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
@@ -183,7 +184,7 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
             } else {
                 Some(Entry::Failed)
             };
-            invalidate();
+            invalidate(InvalidationReason::Completion);
             return;
         }
     };
@@ -204,7 +205,7 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
     };
     *l.at(kind, load) = Some(entry);
     // A frame hands the entry on to its reader.
-    invalidate();
+    invalidate(InvalidationReason::Completion);
 }
 
 /// The renderer has made the texture of the image numbered `image`

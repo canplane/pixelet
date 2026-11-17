@@ -29,6 +29,7 @@
 //! refused: the core sets it aside (sys/io/file.rs `set_aside`), and reads it
 //! again once it is (`on_set_aside`).
 
+use crate::spec::step::InvalidationReason;
 use fnv::FnvHashSet;
 use pxl_engine::object::high;
 use pxl_global::Global;
@@ -121,7 +122,7 @@ fn change(c: Change) {
         make(c);
     } else {
         st.changes.push(c);
-        invalidate();
+        invalidate(InvalidationReason::Pending);
     }
 }
 
@@ -256,7 +257,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), XputeError> {
         state().refused_files.push(id);
         file::set_aside(file::Refused::Object(id));
         changed();
-        invalidate();
+        invalidate(InvalidationReason::Pending);
     }
     result
 }
@@ -291,7 +292,7 @@ pub(crate) fn on_set_aside(id: u64) -> bool {
     // Drop the failed want, so that the next declaration starts a new one.
     st.wants.retain(|&(n, _)| n != id);
     declare(Stream::Object, &st.wants);
-    invalidate();
+    invalidate(InvalidationReason::Pending);
     true
 }
 
@@ -484,7 +485,7 @@ async fn apply_batch(batch: Vec<u8>, n: usize) {
         }
         _ => st.failed_cnt = n,
     }
-    invalidate();
+    invalidate(InvalidationReason::Completion);
 }
 
 #[cfg(test)]

@@ -104,6 +104,34 @@ fn an_input_asks_for_its_frame() {
     }
 }
 
+/// A method whose state asks for its own frame gets it from that state
+/// alone: the link adds no ask of its own to a destination's, a tracked
+/// pose's or the follow mode's.
+#[test]
+fn a_method_whose_state_asks_adds_no_ask() {
+    use crate::domain::control::camera::fixture::place;
+    use crate::spec::step::InvalidationReason;
+    use crate::sys::sched::take_invalidations;
+    place([0.0, 0.0, 0.0], 10.0, 1.0, 0.5);
+    use crate::abi::camera::Tracking;
+    let methods: [(&str, Input); 4] = [
+        ("follow", &|| camera::track(Tracking::Follow)),
+        ("goto", &|| camera::goto(127.0, 37.5)),
+        ("xr pose", &|| {
+            input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+        }),
+        ("xr pose end", &|| input::xr_pose_end()),
+    ];
+    for (name, method) in methods {
+        take_invalidations();
+        assert_eq!(method(), Ok(()), "{name}");
+        let asks = take_invalidations();
+        assert!(asks[InvalidationReason::View as usize] > 0, "{name}");
+        assert_eq!(asks[InvalidationReason::Method as usize], 0, "{name}");
+    }
+    destination::cancel();
+}
+
 /// A text is held to its kind's cap and refused whole one past it,
 /// `too-long`, a chat line and a pin's draft alike, the refusal asking for no
 /// frame; a chat line at its cap is the rule's (pxl-spec `text_fits`), as

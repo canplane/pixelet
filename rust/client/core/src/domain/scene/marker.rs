@@ -28,8 +28,8 @@ use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::lattice::Cell;
 use pxl_spec::space::layer::octant::Octant;
-use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::query::{Ray, World, at_zoom};
 use design::Design;
@@ -48,15 +48,17 @@ fn cell_zoom((zoom, _): Brick) -> Zoom {
 /// The name a holder gives what it shows, stable from one run to the next
 /// and independent of what is painted (`design.rs`). A pin is named by its
 /// entry, a pin's cell whose count it shows by the cell (`pin.rs`), a place
-/// by its tile and its index there, and the chat's line by its speaker, of
-/// whom there is one. The arrangement uses the key only to tell instances
-/// apart, so it can keep an instance's old drawing until its new one is
-/// painted. Where a tap goes is the instance's own (`Instance::tap`).
+/// by the ground leaf cell it stands in, which is its own whatever tile it
+/// was read from (pxl-spec bake/tile/place.rs: a leaf cell keeps one place),
+/// and the chat's line by its speaker, of whom there is one. The arrangement
+/// uses the key only to tell instances apart, so it can keep an instance's
+/// old drawing until its new one is painted. Where a tap goes is the
+/// instance's own (`Instance::tap`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Key {
     Pin(Octant),
     PinCell((Zoom, [i32; 3])),
-    Place(Quadrant, u32),
+    Place(Cell),
     Line,
 }
 

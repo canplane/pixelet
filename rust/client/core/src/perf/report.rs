@@ -13,7 +13,9 @@ use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::FrameReport;
-use crate::perf::frame::{DeviceSample, EFFECT_CNT, FrameSample, GpuSample, RaySample};
+use crate::perf::frame::{
+    DeviceSample, EFFECT_CNT, FrameSample, GpuSample, INVALIDATION_REASON_CNT, RaySample,
+};
 use crate::perf::record::{
     RayRead, perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays,
     perf_recording,
@@ -125,6 +127,9 @@ pub(crate) struct CpuSample {
     /// Each effect's time in the frame, by `EffectName`.
     pub effects: [f64; EFFECT_CNT],
     pub stage_ms: f64,
+    /// The invalidations for a frame since the frame before, by `InvalidationReason`
+    /// (sys/sched.rs `take_invalidations`).
+    pub invalidations: [u32; INVALIDATION_REASON_CNT],
 }
 
 /// Records the frame once its frame is drawn. What taking the record
@@ -159,6 +164,7 @@ pub(crate) fn perf_frame(t: CpuSample) {
         phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
         stage_ms: t.stage_ms,
         effects: t.effects,
+        invalidations: t.invalidations.map(f64::from),
         kind: f64::from(renderer.kind as u8),
         gpu: renderer.gpu,
         terrain_load_cnt,

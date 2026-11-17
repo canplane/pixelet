@@ -1,5 +1,5 @@
 {
-  $description: "The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs\nregisters them, and the effects a frame runs around them. The profiler records and\nreports them by these names (spec/client/core/perf/perf.json5).",
+  $description: "The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs\nregisters them, the effects a frame runs around them, and the reasons a frame is asked for. The profiler records and\nreports them by these names (spec/client/core/perf/perf.json5).",
   STEP_NAME: {
     $type: "enum",
     $value: [
@@ -27,6 +27,12 @@
       "object",
       "setting",
     ],
+    $extensions: { xpute: { names: true } },
+  },
+  INVALIDATION_REASON: {
+    $description: "Why a frame is asked for (pxl-core sys/sched.rs `invalidate`): `method` a method of the UI's applied, `view` the camera or the screen moved, `scene` what is shown changed, `completion` something outside the frame finished and a frame takes it (a read, a parse, a write, the GPU's), `pending` a frame stopped short of its work or put it off and a later one goes on, `animation` an animation's step or a frame of its motion.",
+    $type: "enum",
+    $value: ["method", "view", "scene", "completion", "pending", "animation"],
     $extensions: { xpute: { names: true } },
   },
 }

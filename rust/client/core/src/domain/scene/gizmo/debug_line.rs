@@ -33,8 +33,15 @@ impl DebugMesh {
     /// Sets what is drawn. The first `lines` floats of `vertices` are line
     /// vertices, `DEBUG_VERTEX_FLOATS` each, and the rest are face vertices,
     /// `DEBUG_FACE_FLOATS` each, all relative to `origin`. When the block
-    /// cannot be written, nothing is drawn.
-    pub(crate) fn set(&mut self, draw: &mut DrawList, origin: V3, vertices: &[f32], lines: usize) {
+    /// cannot be written, nothing is drawn and false is returned, for the
+    /// caller to set it again.
+    pub(crate) fn set(
+        &mut self,
+        draw: &mut DrawList,
+        origin: V3,
+        vertices: &[f32],
+        lines: usize,
+    ) -> bool {
         let written = self.block.write(draw, bytes(vertices));
         (self.line_cnt, self.face_cnt) = match written {
             true => (
@@ -44,6 +51,7 @@ impl DebugMesh {
             false => (0, 0),
         };
         self.origin = origin;
+        written
     }
 
     pub(crate) fn draw(&self, draw: &mut DrawList) {

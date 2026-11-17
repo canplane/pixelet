@@ -12,7 +12,6 @@ use pxl_spec::space::coord::zoom::{FINEST_ZOOM, Zoom, units};
 use crate::abi::overlay::{DivisionPart, LonLat, Message, PivotState, Snapshot};
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
-use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::edit::write;
 use crate::domain::control::input::{dragging, zooming};
 use crate::domain::control::navigation::follow_mode::following;
@@ -174,7 +173,7 @@ impl SnapshotMemo {
     /// has changed since it was last sent. What it returns counts as sent.
     pub(crate) fn take_view_changed(&mut self) -> Option<(f64, f64)> {
         let now = (
-            camera_state().intent.azimuth,
+            pose::azimuth().unwrap_or_default(),
             m_per_px(units_per_px_at(dist()), controller::pivot()),
         );
         if self.last_view == Some(now) {

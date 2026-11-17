@@ -85,6 +85,14 @@ fn one(at: Octant, design: Design, pos: Q3) -> Instance {
     }
 }
 
+impl Pin {
+    /// The brick of `zoom` its base stands in.
+    pub(super) fn brick_at(&self, zoom: Zoom) -> Brick {
+        let place = [0, 1].map(|k| libm::floor(self.base[k] / units(zoom)) as i32);
+        (zoom, place)
+    }
+}
+
 /// Reads the pins put up over `brick`, whose columns are `bounds`. A pin
 /// belongs to the brick its base is in, so no pin is read by two bricks.
 pub(super) fn read(brick: Brick, bounds: &Aabb, pins: &mut Vec<Pin>) {
