@@ -4,7 +4,8 @@
 //! service area, the shards the source serves (sys/io/source.rs). An asset
 //! may be placed or taken out only over ground the world knows, between its
 //! bedrock and its ceiling, in shards whose objects are read. Every walker's
-//! walk and every edit asks these limits, and nothing else decides them. The
+//! walk, of its cells or of its two ends where it does not stand, and every
+//! edit asks these limits, and nothing else decides them. The
 //! camera is not a walker and asks none of them (query/support.rs
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 

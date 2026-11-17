@@ -568,5 +568,13 @@ runs the ray to its cap of steps (about 0.77 ms a query); and a ray that ends at
 cap is read as having met nothing, which a lift reads as filled to the world's top
 (`floor_under` from z = -2100 over flat ground at 5 answered 32768).
 
+Later the same day `18598cc6e8` was taken back and the walk closed where it had been
+opened (`68f5c3828e`, `e88d2fa7d3`): a walker stands where a decor of its cell is
+drawn, out to 192 units from the eye, and a walk is walked only where it stands at
+both its ends, so it is under 384 leaf cells an axis; past that a pan walks nothing,
+and reads the surface once where the pivot's height is not known. The same native
+walk of 27 leaf cells took 302 µs before and 279 after the floor's fix beside it
+(`c02a80d07b`). Not measured in the app.
+
 With places on, the same build, a wheel out twenty steps and back sixteen: the scene's
 step 0.8 ms a run and 5.6 at most, the tick 1.4 / 2.6 and 6.4 at most, no long frame.

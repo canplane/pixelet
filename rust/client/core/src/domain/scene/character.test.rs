@@ -136,3 +136,84 @@ fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     let [drawn_x, drawn_y, _] = drawn_at(&mut memo, at, 5.0, 0.25, &camera);
     assert_eq!([drawn_x, drawn_y], [x + 0.75, y + 0.5]);
 }
+
+/// Whether a character alone at `dist` from the eye is drawn after a tick,
+/// and whether a line hangs over its head.
+fn drawn(dist: f64) -> (bool, bool) {
+    const LIVE: usize = 16;
+    set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
+    let mut draw = DrawList::default();
+    let mut models = ModelTable::default();
+    let model = models.add(&mut draw, swaying());
+    let mut character = Character::new(&mut draw, &models, model, Group::Person, 0).unwrap();
+    let frame = Frame {
+        camera: [dist, 0.0, 0.0],
+        px_per_unit: PX_PER_UNIT,
+        ..Frame::default()
+    };
+    character.transform = Some(Transform {
+        at: [0.0; 3],
+        rot: 0.0,
+        scale: 1.0,
+    });
+    character.tick(&mut draw, &models, &frame, false);
+    let drawn = (character.visible, character.over_head().is_some());
+    character.free(&mut draw);
+    drawn
+}
+
+/// A character is drawn out to where the view stops drawing cells a zoom
+/// coarser than the leaves', where a decor of its cell stops being drawn, and
+/// not from there on, however large its model; and a line hangs over its
+/// head only while it is drawn.
+#[test]
+fn a_character_is_drawn_where_it_stands() {
+    use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+    use pxl_spec::space::layer::lattice::{GROUND, draw_dist};
+    let edge = draw_dist(GROUND, LEAF_ZOOM - 1);
+    assert_eq!(drawn(edge * 0.99), (true, true));
+    assert_eq!(drawn(edge), (false, false));
+}
+
+/// A companion's step is walked only where the walker stands at both its
+/// ends for the camera's eye, a height not known taken where it stands.
+#[test]
+fn a_step_is_walked_where_the_walker_stands_at_both_its_ends() {
+    use crate::domain::layer::object::store::Store;
+    use crate::domain::query::test::{flat_at_five, placed};
+    use crate::domain::query::{is_unknown, over, unknown};
+    use crate::domain::scene::character::companion::{Camera, walk_to};
+    use pxl_spec::space::coord::world;
+    use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+    use pxl_spec::space::layer::lattice::{GROUND, draw_dist};
+    let [x, y] = flat_at_five();
+    let world = placed(Store::default());
+    let edge = draw_dist(GROUND, LEAF_ZOOM - 1);
+    let camera = |eye: [f64; 3]| Camera {
+        pivot: [x + 0.5, y + 0.5],
+        floor: Some(5.0),
+        azimuth: 0.0,
+        dragging: false,
+        steered: false,
+        following: false,
+        eye: world::point(eye[0], eye[1], eye[2]),
+    };
+    let from = world::point(x + 0.5, y + 0.5, over(5.0));
+    let beside = camera([x + 0.5, y - 3.0, 8.0]);
+    let near = [x + 3.5, y + 0.5];
+    assert_eq!(
+        walk_to(world, &from, near, &beside),
+        world::point(near[0], near[1], over(5.0)),
+        "walked"
+    );
+    // The far end lies past where the walker stands.
+    let far = [x + 0.5 + edge, y + 0.5];
+    assert!(is_unknown(&walk_to(world, &from, far, &beside)));
+    // A walker of unknown height is measured where it stands, not at its
+    // unknown height's mark.
+    assert_eq!(
+        walk_to(world, &unknown(&from), near, &beside),
+        world::point(near[0], near[1], over(5.0)),
+        "walked from a height not known"
+    );
+}

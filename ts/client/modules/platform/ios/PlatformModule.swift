@@ -98,21 +98,6 @@ public class PlatformModule: Module {
       0
     }
 
-    // ---- the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
-
-    View(KeyboardDock.self) {
-      Events("onLift")
-      Prop("clearance") { (view: KeyboardDock, clearance: Double) in
-        view.clearance = clearance
-      }
-      Prop("rest") { (view: KeyboardDock, rest: Double) in
-        view.rest = rest
-      }
-      Prop("layoutLiftPx") { (view: KeyboardDock, layoutLiftPx: Double) in
-        view.layoutLift = layoutLiftPx
-      }
-    }
-
     // ---- the segmented control (ts/client/src/ui/shared/component/segmented.ios.tsx, SegmentedControl.swift) ----
 
     View(SegmentedControl.self) {

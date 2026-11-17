@@ -9,9 +9,10 @@
 //! times, its joint palette in a heap block of its own, and the place the
 //! companion's walk gives it (`companion.rs`).
 //!
-//! Each view draws a character by its own eye. The world chooses as it does
-//! for decor's lods (`view::lens`), by how many camera grid cells the
-//! character spans. Above the model's edge it is posed as it plays. Between
+//! Each view draws a character by its own eye. The world draws it where it
+//! stands, as a decor is drawn where it does (`query::walker_stands`),
+//! and there chooses as it does for decor's lods (`view::lens`), by how many
+//! camera grid cells the character spans. Above the model's edge it is posed as it plays. Between
 //! the model's edge and the impostor's its pose is held. Below the impostor's
 //! edge it is not drawn, as decor that small is not, and it is not drawn while
 //! the eye is the pivot. A character surface draws it whole, before the
@@ -27,13 +28,14 @@ use pxl_render::gpu::draw::{Draw, DrawId, DrawList, Position, ReceiverBox, scale
 use pxl_spec::asset::catalog::Slot;
 pub(crate) use pxl_spec::asset::character::Group;
 use pxl_spec::asset::character::group::{person, pet};
-use pxl_spec::space::coord::v3;
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
+use crate::domain::query::walker_stands;
 use crate::domain::scene::animation;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
@@ -92,8 +94,8 @@ pub(crate) struct Character {
     /// character is posed again only when it moves where it is seen, or when
     /// the palette does not show its clips.
     posed: bool,
-    /// Whether the character spanned the impostor's edge at the last tick,
-    /// which decides whether it is drawn at all.
+    /// Whether the character stood and spanned the impostor's edge at the
+    /// last tick, which decides whether it is drawn at all.
     visible: bool,
     /// How long, in seconds, the clip has run while it moves the character
     /// where it is seen. It advances by the wall clock between ticks, read at
@@ -184,6 +186,18 @@ impl Character {
         self.row().2
     }
 
+    /// Where the world draws the character, None where it does not (`tick`).
+    fn drawn(&self) -> Option<Transform> {
+        self.transform.filter(|_| self.visible)
+    }
+
+    /// The point over the character's head that a line hangs from, None
+    /// while the world does not draw the character.
+    pub(crate) fn over_head(&self) -> Option<V3> {
+        let [x, y, z] = self.drawn()?.at;
+        Some([x, y, z + self.height_u() + param::HEAD_CLEARANCE_U])
+    }
+
     /// The index of the character's walk clip among its model's animations.
     pub(crate) fn move_clip(&self) -> u32 {
         self.row().3
@@ -247,9 +261,12 @@ impl Character {
         let length = |p: &ClipTime| m.duration(p.clip).filter(|&d| d > 0.0);
         let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.prev.is_some();
-        // In the world, the character is observed where it spans the model's
-        // edge at its distance, as a decor's model is. It is drawn, posed or
-        // not, where it spans the impostor's edge, as a decor's impostor is.
+        // In the world, the character is there where it stands, where a
+        // decor of its cell is drawn (`walker_stands`).
+        // There it is observed where it spans
+        // the model's edge at its distance, as a decor's model is, and
+        // drawn, posed or not, where it spans the impostor's edge, as a
+        // decor's impostor is.
         let (mut seen, mut world_moves, mut dist, mut scale) = (false, false, 0.0, 1.0);
         self.visible = false;
         if let Some(t) = self.transform {
@@ -258,8 +275,9 @@ impl Character {
             let r = f64::from(m.pose_radius(self.cur.map(|p| p.clip)) * scale);
             dist = v3::len(&v3::sub(&about, &frame.camera));
             let cell_there = cell_there(dist);
-            seen = frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
-            self.visible = 2.0 * r >= decor_impostor_angle() * dist;
+            let stands = walker_stands(dist);
+            seen = stands && frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
+            self.visible = stands && 2.0 * r >= decor_impostor_angle() * dist;
             world_moves = seen
                 && (self.prev.is_some()
                     || playing.is_some_and(|p| f64::from(m.motion(p.clip) * scale) >= cell_there));
@@ -366,7 +384,7 @@ impl Character {
         let Some(m) = models.get(self.model).filter(|m| m.handle() != 0) else {
             return;
         };
-        let Some(t) = self.transform.filter(|_| self.visible) else {
+        let Some(t) = self.drawn() else {
             return;
         };
         draw.draw_scaled(

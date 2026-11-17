@@ -22,9 +22,9 @@ import { Backing, BackingPlace } from "@/ui/shared/component/backing.tsx";
 import { CircularButton } from "@/ui/shared/component/circular-button.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import {
-  ease,
   SLIDE,
   SLIDE_AWAY,
+  type Transition,
 } from "@/ui/shared/component/motion/transition.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import {
@@ -173,7 +173,7 @@ const WHOLE_GAP = 12;
 /** The speed, in points per second, past which a released drag flings the
  * sheet on to the next stop. */
 const FLING_PX_PER_S = 500;
-const FOLLOW = ease(0, [0, 0, 1, 1]);
+const FOLLOW: Transition = { durationMs: 0, bezier: [0, 0, 1, 1] };
 /** The size of an iPhone sheet's grabber. */
 const HANDLE = { width: 36, height: 5 };
 const TAP_SLOP_PX = 8;
@@ -212,6 +212,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   // button, because a button would take its drags as well.
   const head = { top: 0, height: PANEL_HEAD_HEIGHT };
   const pull = usePanGesture({
+    runOnJS: true,
     hitSlop: head,
     minDistance: TAP_SLOP_PX,
     onUpdate: (e) => setDrag(e.translationY),
@@ -233,6 +234,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
     onFinalize: () => setDrag(null),
   });
   const tap = useTapGesture({
+    runOnJS: true,
     hitSlop: head,
     maxDistance: TAP_SLOP_PX,
     onActivate: (e) => {

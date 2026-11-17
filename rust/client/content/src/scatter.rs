@@ -181,15 +181,15 @@ pub fn scatter_at(k: usize, cell: [i32; 2]) -> Option<Candidate> {
 /// own size, not the clip level's. It always stands at the leaves', the finest clip level
 /// there is. At a coarser one it stands where its box, in one of the clip level's cells, keeps
 /// an eighth of the cell or more, floored as a folded cube's share is (`share::eighths`), so
-/// a decor stands at the zooms at which a cube of its box is drawn (`stands`). Where it keeps
-/// none, it is none there and at every coarser zoom.
+/// a decor stands at the zooms at which a cube of its box is drawn (`box_stands_at`). Where it
+/// keeps none, it is none there and at every coarser zoom.
 pub const fn stands_at(decor: &Row, variant: u32, cell_zoom: Zoom) -> bool {
-    stands(decor.sizes[variant as usize], UNIT_ZOOM, cell_zoom)
+    box_stands_at(decor.sizes[variant as usize], UNIT_ZOOM, cell_zoom)
 }
 
 /// `stands_at` for a box `[x, y, z]` in cells at `own`, by value: whether the eighths of a
 /// cell at `cell_zoom` that its volume fills, floored (`share::eighths`), are one or more.
-const fn stands([x, y, z]: [u32; 3], own: Zoom, cell_zoom: Zoom) -> bool {
+pub const fn box_stands_at([x, y, z]: [u32; 3], own: Zoom, cell_zoom: Zoom) -> bool {
     let steps = 3 * (own - if own < cell_zoom { own } else { cell_zoom });
     cell_zoom >= LEAF_CELL_ZOOM || (steps < u32::BITS && (EIGHTH_CNT * x * y * z) >> steps >= 1)
 }

@@ -93,13 +93,36 @@ Brought under it at the meeting:
   changes. A rule tried in between (`b8c835dcc8`), that an event asks once, so a
   method whose state asks adds none, was taken back: it made who asks depend on
   whether a state happened to ask, and an ask is a flag, so two draw one frame.
-- **The walk and the ray cross the world alike** (`18598cc6e8`): the step-slide walk the pan
-  and the companions share crossed a shard that holds nothing one leaf cell at a time,
-  where a ray crosses it in one step. Past the service area every answer is exact, so
-  nothing ended the walk, and from the orbit's largest distance, where a CSS pixel is
-  about 146 leaf cells, a drag stopped single frames for 100 to 560 ms. The walk now
-  takes the cells that answer alike as its cell: a leaf cell, or the whole of an empty
-  shard.
+- **A walker stands where a decor of its cell is drawn** (`68f5c3828e`, `e88d2fa7d3`,
+  `ec8803500f`): the step-slide walk the pan and the companions share ended only at a
+  leaf not held, which never comes where the world answers without leaves, past the
+  service area and over a childless tile of sea, and from the orbit's largest distance
+  a drag stopped single frames for 100 to 560 ms. The eye had closed that on
+  2026-10-11 (far out the world was a map) and `5b054bb5fd` of 2026-11-09 opened it.
+  The user's rule: a placed cube has the ground's level of detail, and a glTF mesh
+  placed in the pyramid has a decor's. A walker fills a leaf cell, so it stands where
+  a decor of that box is drawn, out to 192 units from the eye. There alone its
+  character is drawn, which an angle about a sphere decided before (out to 768 times
+  the model's radius); there alone the chat's line hangs over it, which a marker's
+  zooms decided before (out to 3072 units); and a walk is walked only where the
+  walker stands at both its ends for the drawn camera's eye, which the walk itself
+  measures, so it is under 384 leaf cells an axis for any input. Any other move ends
+  where it is sent with its height unknown, one walled staying rather than leave the
+  area. Tried on the way and taken back: the walk crossing an empty shard in one step
+  (`18598cc6e8`), which closed one of the two cases by a second path; the rule of
+  2026-10-11 put back as it was, which tested the walk's start alone by the drawn eye
+  while the pan's length read the distance asked; a walk over the cells of the zoom
+  drawn, which the walker's floors do not hold where a cell is larger than the
+  walker; the ground's leaf zoom alone (96 units), which stopped the walk where the
+  character was still drawn; an angle of the walker's own size; the clip level's
+  reach (384), where a decor is generated and not drawn; and the distance the orbit
+  is asked to stand at, which the terrain and a zoom's ease hold apart from where
+  the eye is.
+- **The floor under a point in a coarser cell** (`c02a80d07b`): a ray down never stops
+  in the cell it starts in, so from over the box a coarser cell is drawn as, within
+  that cell's cube, the floor answered was the cell below's, and a character on
+  coarser ground was drawn sunk a cell. The climb already read that top and dropped
+  it; it hands it on.
 - **One fact, one name** (`c95305007c`): a decor opens into its model at the grid's
   `SPANS`, as the ground's cell opens into its finer ones.
 
@@ -147,6 +170,21 @@ What stands as it is, and why:
   level's zooms before this angle is reached. The value also sets how far the clouds
   are drawn, whether a character is seen, and the size of the fixed ranges
   (`manifest.json5` `fixed_sz`), so changing it moves those for no gain shown.
+- **The orbit's rays read the finest detail** (`orbit.rs` `line_clear`,
+  `toward_eye`), where they can run to the engine's cap of steps over the orbit's
+  distances and end there as having met nothing. Reading them by distance from their
+  start was tried and taken back: the line is the eye's own way, every point of it
+  at no distance from the eye when the eye passes, so its far end, where the eye
+  arrives, would be read coarsest, and the gate beside it reads leaf floors. A ray
+  out of steps is read as one over tiles not held is, as clear: what is not known
+  does not stop the camera.
+- **The floor under an eye deep in the ground** (`orbit.rs` `ground_at`, with a roof
+  over the pivot) is asked at the leaf, a cell at a time, and past about 2040 cells
+  of solid the cap ends it wrongly. It takes a pose tilted below the pivot's level
+  from far, a roof over the pivot and the leaves held where the eye would be. A
+  climb read by distance would close it, at the cost of a second pass in the
+  walker's exact floors to settle what the coarse pass overshoots; it adds state and
+  takes none away.
 - The effects were read and do no real work (0.1 ms at p95).
 
 ## The way of working

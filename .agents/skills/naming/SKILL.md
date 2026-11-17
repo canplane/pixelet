@@ -153,8 +153,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `_px`; `_u` the world's units, `_merc` a meter on the
   EPSG:3857 plane, `_m` a meter on the ground), the unit shown where a person
   reads the value (`29.0 m`). A length takes its unit where it crosses into
-  what does not say it (a prop `spanPx`, a dp value `layoutLiftDp` before it
-  becomes pixels); where its context says it, as a UI style's width, it stays
-  bare.
+  what does not say it (a prop `spanPx`); where its context says it, as a UI
+  style's width, it stays bare.
 - A predicate's call reads as a yes-or-no assertion about its subject
   (`v.is_ground()`, `pool.fits(n)`, `list.contains(x)`).

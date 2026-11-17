@@ -3,6 +3,7 @@
 import { StrictMode } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppLayout } from "@/ui/layout.tsx";
@@ -12,11 +13,13 @@ export function App() {
   return (
     <StrictMode>
       <GestureHandlerRootView style={StyleSheet.absoluteFill}>
-        <SafeAreaProvider>
-          <AppLayout>
-            <WorldScreen />
-          </AppLayout>
-        </SafeAreaProvider>
+        <KeyboardProvider>
+          <SafeAreaProvider>
+            <AppLayout>
+              <WorldScreen />
+            </AppLayout>
+          </SafeAreaProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </StrictMode>
   );

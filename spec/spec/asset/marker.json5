@@ -17,7 +17,7 @@
   MARKER_SHOWN_FROM: {
     $value: 19,
     $type: "u8",
-    $description: "The coarsest camera grid cell a scene marker of these shows at: z19, 32 of them across\na z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at\n(layers/poi/poi.yaml). What someone puts up, by the cells of the brick\nit is read from (pxl-core domain/scene/marker/pin.rs); a chat line's\nbubble, which no brick holds, by the cell where its speaker stands,\nwhich its speaker judges (pxl-core\ndomain/scene/character/companion.rs `line_hangs`).",
+    $description: "The coarsest camera grid cell a scene marker of these shows at: z19, 32 of them across\na z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at\n(layers/poi/poi.yaml). What someone puts up, by the cells of the brick\nit is read from (pxl-core domain/scene/marker/pin.rs); a chat line's\nbubble, which no brick holds, hangs while its speaker is drawn instead\n(pxl-core domain/scene/character/companion.rs `line_hangs`).",
   },
   MARKER_SCALE_STEP: {
     $value: -1,

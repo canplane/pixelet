@@ -3,10 +3,11 @@
 //! The markers' arrangement: where each marker is drawn. Each source reads
 //! its markers over the bricks of the eye's clip levels, the bricks decor is
 //! generated over (domain/view/observation.rs `bricks`). It shows each
-//! marker at the zoom of the camera grid's cell at the marker's own point. A
-//! place shows as Carto draws it at that zoom (`place.rs`). A pin someone put
-//! up shows when it is near enough (`pin.rs`). A line said hangs over its
-//! speaker's head while its speaker shows it (`line.rs`). A brick is only
+//! marker a brick holds at the zoom of the camera grid's cell at the marker's
+//! own point. A place shows as Carto draws it at that zoom (`place.rs`). A
+//! pin someone put up shows when it is near enough (`pin.rs`). A line said,
+//! which no brick holds, hangs over its speaker's head while its speaker is
+//! drawn (`line.rs`). A brick is only
 //! what a source is read over. Each source hands the arrangement an
 //! `Instance`, and the arrangement asks the same of every instance: its
 //! design, its size, its slot and whether it is ready (`design.rs`), and
@@ -40,7 +41,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_render::gpu::draw::DrawList;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::world::BOUNDS;
+use pxl_spec::space::coord::world::BOUND;
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
@@ -188,7 +189,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         o,
         place: settings().place,
         drafted: pin::draft_key(draft),
-        bubble: line::bubble(o.eye),
+        bubble: line::bubble(),
     };
     if !p.waiting && !p.changed && p.last.as_ref() == Some(&seen) {
         return;
@@ -235,7 +236,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         _ => &[],
     };
     let changed_places = &p.changed_places;
-    let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
+    let columns = |s: Brick| region(s, [BOUND.min[2], BOUND.max[2]]);
     // Whether each drawn brick's read is current, so it needs none, asked once for
     // each brick however many pins and places it holds.
     let fresh: Vec<bool> = now
@@ -337,7 +338,8 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     let mut sized = core::mem::take(&mut p.spare);
     sized.clear();
     p.pending.clear();
-    // Each marker shows at the zoom of the grid's cell at its own point.
+    // A pin and a place show at the zoom of the grid's cell at their own
+    // point, and the line while its speaker is drawn.
     let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
     pin::show(&mut pins, o.eye, draft, &mut shown);

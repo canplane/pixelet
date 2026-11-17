@@ -8,7 +8,7 @@
 )]
 
 use crate::space::coord::q3::Q3;
-use crate::space::coord::world::BOUNDS;
+use crate::space::coord::world::BOUND;
 use crate::space::coord::world::ROUND;
 use crate::space::coord::zoom::Zoom;
 use xpute_kit::math::scalar::wrap;
@@ -35,7 +35,7 @@ fn NORMALIZE_LON(lon: f64) -> f64 {
 /// the equator, as wide as X is around, so the edge is atan(sinh π); Y
 /// diverges past it.
 fn CLAMP_LAT(lat: f64) -> f64 {
-    let max = libm::atan(libm::sinh(core::f64::consts::TAU * BOUNDS.max[1] / ROUND)) * RAD_TO_DEG;
+    let max = libm::atan(libm::sinh(core::f64::consts::TAU * BOUND.max[1] / ROUND)) * RAD_TO_DEG;
     lat.clamp(-max, max)
 }
 

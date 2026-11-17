@@ -8,7 +8,7 @@
 //! (`zoom::starts`).
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::world::{BOUNDS, has_digit};
+use crate::space::coord::world::{BOUND, has_digit};
 use crate::space::coord::zoom::{Zoom, starts, units};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
@@ -19,7 +19,7 @@ pub type Node<const D: usize> = (Zoom, [i32; D]);
 /// reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
-    let mut b = BOUNDS;
+    let mut b = BOUND;
     for (k, &v) in at.iter().enumerate() {
         if has_digit(k, zoom) {
             b.min[k] = f64::from(v) * side;
