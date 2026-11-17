@@ -3,6 +3,7 @@
 use super::*;
 use crate::domain::control::camera::fixture::place;
 use crate::domain::control::param;
+use crate::domain::query::{eye_over, over};
 use crate::domain::setting::settings_mut;
 use crate::domain::view::frame::coord::to_world;
 
@@ -40,7 +41,8 @@ fn third_person() {
 }
 
 /// The pivot lies the orbit's distance ahead of the eye in third person,
-/// and at the eye in first person.
+/// and under the eye in first person, by the eye's height over where a
+/// body stands.
 #[test]
 fn pivot_along_facing() {
     third_person();
@@ -49,8 +51,12 @@ fn pivot_along_facing() {
         let at = placed(&mut rng);
         assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
         controller().base = CameraMode::FirstPerson;
+        // The pivot stands over a floor as a body does, and the eye over the
+        // same floor as a body's eye does.
+        let [px, py, pz] = pivot_world().unwrap();
+        let floor = pz - over(0.0);
         assert!(
-            near(pivot_world().unwrap(), eye_world().unwrap(), 1e-12),
+            near([px, py, eye_over(floor)], eye_world().unwrap(), 1e-12),
             "{n}: first person"
         );
         controller().base = CameraMode::Orbit;

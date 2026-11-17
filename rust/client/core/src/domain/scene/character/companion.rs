@@ -174,7 +174,7 @@ pub(crate) fn pivot_floor(goal: Q3, ask: impl FnOnce(World) -> Option<f64>) -> O
 
 /// Steps the person and the pet. Each is the row its setting names, and a
 /// character of another row is let go for it. Each walks to the pivot, and
-/// neither is placed while the eye is the pivot (`camera` is None).
+/// neither is placed in first person (`camera` is None).
 pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let s = companion();
     s.pet_floor.forget_touched();
@@ -465,7 +465,7 @@ impl Walk {
     }
 }
 
-/// A walker's center at `at` on a floor whose top is `floor`.
+/// A body's center at `at` on a floor whose top is `floor`.
 fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
     world_to_canonical(&[x, y, over(floor)])
 }
@@ -496,7 +496,7 @@ pub(crate) fn drawn_at(
     let ([x, y], drawn) = memo.of((at, floor, zoom), || {
         let floor_at = |[x, y]: [f64; 2]| {
             world
-                .floor_under(&world_to_canonical(&[x, y, pos[2]]), zoom)
+                .floor_drawn(&world_to_canonical(&[x, y, pos[2]]), zoom)
                 .val()
                 .flatten()
         };

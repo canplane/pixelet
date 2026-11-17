@@ -54,13 +54,13 @@ fn standing_ones_never_meet() {
 /// so the coarser clip levels' decor is a subset of the finer's, and every one
 /// stands at the leaves'.
 #[test]
-fn stands_finer() {
+fn shows_finer() {
     for decor in &ROWS {
         for v in 0..decor.variant_cnt {
-            assert!(stands_at(decor, v, LEAF_CELL_ZOOM));
+            assert!(shows_at(decor, v, LEAF_CELL_ZOOM));
             for cell_zoom in FIRST_CELL_ZOOM..LEAF_CELL_ZOOM {
-                if stands_at(decor, v, cell_zoom) {
-                    assert!(stands_at(decor, v, cell_zoom + 1), "{v} at z{cell_zoom}");
+                if shows_at(decor, v, cell_zoom) {
+                    assert!(shows_at(decor, v, cell_zoom + 1), "{v} at z{cell_zoom}");
                 }
             }
         }
@@ -96,7 +96,7 @@ fn counts_hand_down_whole() {
 /// that box is drawn (`share::eighths`). This holds for every variant of every decor; a tree
 /// a unit wide and three high stands one zoom coarser than the leaves', and not two.
 #[test]
-fn stands_as_a_cube_keeps() {
+fn shows_as_a_cube_keeps() {
     for d in &ROWS {
         for v in 0..d.variant_cnt {
             let [x, y, z] = d.sizes[v as usize];
@@ -104,7 +104,7 @@ fn stands_as_a_cube_keeps() {
                 let steps = 3 * (UNIT_ZOOM - cell_zoom.min(UNIT_ZOOM));
                 let fill = (u64::from(x * y * z) * u64::from(FULL)) >> steps;
                 assert_eq!(
-                    stands_at(d, v, cell_zoom),
+                    shows_at(d, v, cell_zoom),
                     cell_zoom >= LEAF_CELL_ZOOM || eighths(fill.min(u64::from(FULL)) as u32) >= 1,
                     "{v} z{cell_zoom}"
                 );
@@ -113,7 +113,7 @@ fn stands_as_a_cube_keeps() {
     }
     let tree = &ROWS[0];
     assert_eq!(tree.sizes[0], [1, 1, 3]);
-    assert!(stands_at(tree, 0, LEAF_CELL_ZOOM - 1) && !stands_at(tree, 0, LEAF_CELL_ZOOM - 2));
+    assert!(shows_at(tree, 0, LEAF_CELL_ZOOM - 1) && !shows_at(tree, 0, LEAF_CELL_ZOOM - 2));
 }
 
 /// A leaf cell's count comes up as often at each of its four places under

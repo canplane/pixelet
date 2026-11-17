@@ -505,7 +505,7 @@ pub fn fill_bound((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32
 /// The top of the cell a hit met, as it is drawn (`fill_bound`): the floor of its node `n`
 /// on its grid from the origin `o`, and the share of the node's side by which its top lies
 /// over that floor. The top is its cube's where its word `asset` keeps the cube whole, and its
-/// fill box's otherwise. A walker and decor stand on it (pxl-core domain/query/ray.rs `hit`,
+/// fill box's otherwise. A body and decor stand on it (pxl-core domain/query/ray.rs `hit`,
 /// `support::column_surface`).
 pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
     (n.idx(o)[2], fill_bound(([0.0; 3], [1.0; 3]), asset).1[2])
@@ -655,7 +655,8 @@ pub struct Trace<A> {
 /// The most steps a walk takes, one node looked at each step. The engine's walk (`walk`) and
 /// the one written by hand (pxl-render walk.wgsl), over either node module, end there as if
 /// gone to their reach. A float gone wrong then still ends, which matters on a phone, where a
-/// walk that does not end loses the device. It is far more than a ray takes.
+/// walk that does not end loses the device. It is far more than a ray takes that reads the
+/// world by its distance: the cells it passes grow with how far it has gone.
 pub const STEPS_CAP: u32 = 4096;
 
 /// The descent's stack, one entry for every zoom: what the query handed the node there

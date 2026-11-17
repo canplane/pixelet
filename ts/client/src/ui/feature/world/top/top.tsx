@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
 import { openModal } from "@/ui/shared/modal.ts";
-import { Presence } from "@/ui/shared/component/motion/presence.tsx";
+import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { LEAVE, SETTLE } from "@/ui/shared/component/motion/transition.ts";
 import { HaloIcon } from "./halo.tsx";
 import { CHROME, COLOR, LAYER } from "@/ui/shared/component/theme.ts";
@@ -116,28 +116,28 @@ function SearchStrip() {
       accessibilityLabel={t("world.search.trigger_aria_label")}
       style={STYLE.strip}
     >
-      <Presence
-        show={!shown}
-        from={{ opacity: 0 }}
-        exit={{ opacity: 0 }}
-        transition={SETTLE}
-        exitTransition={LEAVE}
-        style={STYLE.title}
-      >
-        <View style={STYLE.search}>
-          <HaloIcon
-            glyph="magnifyingglass"
-            size={12}
-            weight="semibold"
-            color={COLOR.white}
-          />
-          <CurrentAddress />
+      <View style={STYLE.lines}>
+        <Motion
+          from={{ opacity: 0 }}
+          to={{ opacity: shown ? 0 : 1 }}
+          transition={shown ? LEAVE : SETTLE}
+          style={STYLE.title}
+        >
+          <View style={STYLE.search}>
+            <HaloIcon
+              glyph="magnifyingglass"
+              size={12}
+              weight="semibold"
+              color={COLOR.white}
+            />
+            <CurrentAddress />
+          </View>
+          <SensorIcons />
+        </Motion>
+        <View style={STYLE.gauges}>
+          <CompassBar show={shown} />
+          <MapScaleBar show={shown} />
         </View>
-        <SensorIcons />
-      </Presence>
-      <View style={STYLE.gauges}>
-        <CompassBar show={shown} />
-        <MapScaleBar show={shown} />
       </View>
     </Pressable>
   );
@@ -200,6 +200,11 @@ const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
   return [t, t * t * (3 - 2 * t)] as const;
 });
 
+/** How far the compass's directions stand above the address's line: the
+ * same line holds the two faces' letters at different heights, and this
+ * brings the directions' capitals level with the address to the eye. */
+const GAUGE_LIFT_PX = 2;
+
 const STYLE = StyleSheet.create({
   scrim: {
     position: "absolute",
@@ -233,9 +238,14 @@ const STYLE = StyleSheet.create({
   },
   // The HUD is the strip: the title (the address over the sensors) or, while
   // the view turns or zooms, the gauges in its place. The whole strip takes
-  // the press, whichever shows. It is as high as the buttons' row: the title
-  // stands in its middle, and the gauges hang from its top.
-  strip: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // the press, whichever shows. It is as high as the buttons' row.
+  //
+  // Its lines are the title's: the title stands in the strip's middle, and
+  // keeps its place while the gauges show. The gauges start where it starts,
+  // so the compass's directions stand on the address's line, and what
+  // qualifies each, the sensors or the scale, hangs beneath it.
+  strip: { flex: 1, justifyContent: "center" },
+  lines: { alignSelf: "stretch", alignItems: "center" },
   title: { maxWidth: "100%", alignItems: "center", gap: 8 },
   // The row is bounded, because the web lays out a row that does not wrap at
   // its content's width, and a long address would run over the buttons.
@@ -249,7 +259,7 @@ const STYLE = StyleSheet.create({
   },
   gauges: {
     position: "absolute",
-    top: 0,
+    top: -GAUGE_LIFT_PX,
     left: 0,
     right: 0,
     alignItems: "center",

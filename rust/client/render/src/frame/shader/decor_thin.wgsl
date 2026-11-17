@@ -40,7 +40,7 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       continue;
     }
     let c = candidate_at(j, leaf);
-    if (stands_at(j, variant_of(j, c.seed), cell_zoom) && retained(j, c)) {
+    if (shows_at(j, variant_of(j, c.seed), cell_zoom) && retained(j, c)) {
       let k = atomicAdd(&recs.hdrs[cnt_at(brick, j)], 1u);
       let r = entry_word(brick, j, k) - ENTRY_RECS_AT;
       recs.words[r + 1u] = u32(leaf.x);

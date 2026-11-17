@@ -10,6 +10,10 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
+- What the meeting of 2026-11-17 left open, a ray into ground not held first:
+  [the location zone, and the observation quantized](minutes/20261117-the-location-zone-by-the-codes-own-axioms.md),
+  "Open at the meeting's end".
+
 ## P1
 
 ## P2

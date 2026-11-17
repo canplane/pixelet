@@ -16,7 +16,7 @@ use pxl_spec::space::layer::octant::Octant;
 /// else. Every mechanic (the pick, a walk, the camera's clearance, an edit's
 /// own reads, decor's column surface) asks the stored world (`World::now`).
 /// If the pick saw the preview, a hover would hide what it points at, the
-/// hide would lift, and the pick would hit it again, forever. A walker would
+/// hide would lift, and the pick would hit it again, forever. A body would
 /// fall into a hole not yet dug. The preview moves no revision, so saves
 /// never see a hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

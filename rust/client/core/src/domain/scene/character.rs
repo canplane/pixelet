@@ -10,12 +10,12 @@
 //! companion's walk gives it (`companion.rs`).
 //!
 //! Each view draws a character by its own eye. The world draws it where it
-//! stands, as a decor is drawn where it does (`query::walker_stands`),
+//! stands, as a decor is drawn where it does (`query::body_shown`),
 //! and there chooses as it does for decor's lods (`view::lens`), by how many
 //! camera grid cells the character spans. Above the model's edge it is posed as it plays. Between
 //! the model's edge and the impostor's its pose is held. Below the impostor's
-//! edge it is not drawn, as decor that small is not, and it is not drawn while
-//! the eye is the pivot. A character surface draws it whole, before the
+//! edge it is not drawn, as decor that small is not, and it is not drawn in
+//! first person, where the person is the one looking. A character surface draws it whole, before the
 //! surface's own eye (`surface.rs`).
 
 pub(crate) mod companion;
@@ -35,7 +35,7 @@ use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
-use crate::domain::query::walker_stands;
+use crate::domain::query::body_shown;
 use crate::domain::scene::animation;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
@@ -108,8 +108,8 @@ pub(crate) struct Character {
     clip_time: f64,
     /// The character's draw in the world's list.
     id: DrawId,
-    /// Where the character's walk last placed it in the world. None while the
-    /// eye is the pivot.
+    /// Where the character's walk last placed it in the world. None in first
+    /// person.
     transform: Option<Transform>,
 }
 
@@ -262,7 +262,7 @@ impl Character {
         let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.prev.is_some();
         // In the world, the character is there where it stands, where a
-        // decor of its cell is drawn (`walker_stands`).
+        // decor of its cell is drawn (`body_shown`).
         // There it is observed where it spans
         // the model's edge at its distance, as a decor's model is, and
         // drawn, posed or not, where it spans the impostor's edge, as a
@@ -275,7 +275,7 @@ impl Character {
             let r = f64::from(m.pose_radius(self.cur.map(|p| p.clip)) * scale);
             dist = v3::len(&v3::sub(&about, &frame.camera));
             let cell_there = cell_there(dist);
-            let stands = walker_stands(dist);
+            let stands = body_shown(dist);
             seen = stands && frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
             self.visible = stands && 2.0 * r >= decor_impostor_angle() * dist;
             world_moves = seen

@@ -3,7 +3,7 @@
 //! Queries over what is resident. Every query goes through the world's one
 //! query of what is in a node (`World::node`). On it stand the asset in a
 //! cell at the zoom it is asked (`World::asset`) and the first cell a ray
-//! meets (`first_hit`). An eye casts such rays, and a walker casts them
+//! meets (`first_hit`). An eye casts such rays, and a body casts them
 //! straight up and down its cell (`support.rs`). A query never fetches or
 //! holds anything. It returns an exact answer, a coarser answer with the
 //! tile it lacked, or a lack with that tile.
@@ -48,8 +48,10 @@ mod surface;
 #[path = "query/world.rs"]
 mod world;
 
-pub(crate) use ray::{Hit, HitKind, Ray, at_zoom, by_dist, cell_zoom_at, finest, zoom_range};
-pub(crate) use support::{floor_of, is_unknown, on_floor, over, unknown, walker_stands};
+pub(crate) use ray::{Hit, HitKind, Ray, at_zoom, by_dist, cell_zoom_at, zoom_range};
+pub(crate) use support::{
+    body_room, body_shown, eye_over, floor_of, is_unknown, on_floor, over, unknown,
+};
 pub(crate) use world::{ColumnWalk, World};
 
 use pxl_content::generation::CLAIM_EXTENT;

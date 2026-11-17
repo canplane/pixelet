@@ -364,7 +364,7 @@ pub const PROPAGATE_FLOATS: usize = floats(propagate::FIELDS);
 /// read them. A marker's first three words are the Q3 it stands at, and the
 /// rest are floats.
 pub const MARKER_INSTANCE_WORDS: u32 = 11;
-pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
+pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 5;
 
 /// The floats of a star's record (pass/star.rs, star.wgsl): its direction
 /// and flux, then its color and one float of padding.

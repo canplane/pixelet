@@ -175,7 +175,7 @@ fn a_character_is_drawn_where_it_stands() {
     assert_eq!(drawn(edge), (false, false));
 }
 
-/// A companion's step is walked only where the walker stands at both its
+/// A companion's step is walked only where the body stands at both its
 /// ends for the camera's eye, a height not known taken where it stands.
 #[test]
 fn a_step_is_walked_where_the_walker_stands_at_both_its_ends() {
@@ -206,10 +206,10 @@ fn a_step_is_walked_where_the_walker_stands_at_both_its_ends() {
         world::point(near[0], near[1], over(5.0)),
         "walked"
     );
-    // The far end lies past where the walker stands.
+    // The far end lies past where the body stands.
     let far = [x + 0.5 + edge, y + 0.5];
     assert!(is_unknown(&walk_to(world, &from, far, &beside)));
-    // A walker of unknown height is measured where it stands, not at its
+    // A body of unknown height is measured where it stands, not at its
     // unknown height's mark.
     assert_eq!(
         walk_to(world, &unknown(&from), near, &beside),

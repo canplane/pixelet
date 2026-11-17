@@ -177,7 +177,7 @@ pub const DECORS: [Decor; 4] = [
     // too shallow. The sea is the same `water` ground, and boats stand on it
     // near a coast alone: a tile of open sea is left out of the bake and drawn
     // from a coarser one, at whose cells no boat stands (pxl-content
-    // `scatter::stands_at`), so the clip levels a boat stands at hold sea only in
+    // `scatter::shows_at`), so the clip levels a boat stands at hold sea only in
     // the tiles a coast crosses. Rivers are a few cells wide, so the same per-cell
     // rate reads far denser than on land.
     Decor {

@@ -63,7 +63,7 @@ fn decor_edges_cell_shares() {
 }
 
 /// A decor is generated at the leaves' clip level and at each coarser one where
-/// a variant stands as itself (`scatter::stands_at`). Its clip levels run
+/// a variant stands as itself (`scatter::shows_at`). Its clip levels run
 /// unbroken from the leaves' upward. None of them has cells of which the
 /// decor's largest box fills less than an eighth, since a folded cube of that
 /// box would keep nothing there.

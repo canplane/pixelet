@@ -6,7 +6,7 @@
 //! edge (pxl-spec `area::is_wall`), the face is the wall's.
 //!
 //! The surface is the ground's alone. The support (`support.rs`) uses it as
-//! the place a walker starts looking for what it stands on, and nothing
+//! the place a body starts looking for what it stands on, and nothing
 //! outside the query reads it. What a cell holds, including a cave, a way, a
 //! bridge or what is placed, is the world's answer (`World::asset_of`),
 //! never the ground's.

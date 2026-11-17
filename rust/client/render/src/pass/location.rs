@@ -20,7 +20,10 @@ use crate::pass::model::{DRAW_SZ, UniformBuffer, put_uniform};
 /// The octahedron's vertices: three for each of its eight faces.
 const BEACON_VERTEX_CNT: u32 = 24;
 
-fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTEX_CNT as usize]) {
+/// A unit box's corners about its center, four for each face, and its
+/// triangles. The faces go +x, -x, +y, -y, +z, -z, which the zone's upload
+/// numbers its faces and lines by (location_zone_place.wgsl).
+fn box_lanes() -> ([f32; 72], [u32; BOX_VERTEX_CNT as usize]) {
     let faces: [[[f32; 3]; 3]; 6] = [
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -29,7 +32,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTEX_CNT as usize]) {
         [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     ];
-    let (mut pos, mut uv, mut idx) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTEX_CNT as usize]);
+    let (mut pos, mut idx) = ([0.0; 72], [0u32; BOX_VERTEX_CNT as usize]);
     for (f, [n, u, w]) in faces.iter().enumerate() {
         for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
             .into_iter()
@@ -39,14 +42,12 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTEX_CNT as usize]) {
             for x in 0..3 {
                 pos[k * 3 + x] = n[x] * 0.5 + u[x] * (a - 0.5) + w[x] * (b - 0.5);
             }
-            uv[k * 2] = a;
-            uv[k * 2 + 1] = b;
         }
         for (i, d) in [0, 1, 2, 0, 2, 3].into_iter().enumerate() {
             idx[f * 6 + i] = (f * 4) as u32 + d;
         }
     }
-    (pos, uv, idx)
+    (pos, idx)
 }
 
 /// The floats in one of the octahedron's vertex lanes, three a vertex.
@@ -89,7 +90,6 @@ pub struct LocationPass {
     draws_buf: u32,
     frame_group: u32,
     box_pos: u32,
-    box_uv: u32,
     box_idx: u32,
     oct_pos: u32,
     oct_normal: u32,
@@ -107,7 +107,7 @@ impl LocationPass {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> LocationPass {
         let zone = pipelines.build_world(g, PIPELINE_LOCATION_ZONE);
         let beacon = pipelines.build_world(g, PIPELINE_LOCATION_BEACON);
-        let (box_p, box_uv, box_i) = box_lanes();
+        let (box_p, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
         LocationPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
@@ -117,7 +117,6 @@ impl LocationPass {
             zone,
             beacon,
             box_pos: put(g, bytes(&box_p), buffer_usage::VERTEX),
-            box_uv: put(g, bytes(&box_uv), buffer_usage::VERTEX),
             box_idx: put(g, bytes(&box_i), buffer_usage::INDEX),
             oct_pos: put(g, bytes(&oct_p), buffer_usage::VERTEX),
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
@@ -143,7 +142,6 @@ impl LocationPass {
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
         self.zone_mark.draw(pass, frames, |pass, d, upload| {
             pass.set_vertex_buf(0, self.box_pos, 0, 0);
-            pass.set_vertex_buf(1, self.box_uv, 0, 0);
             pass.set_idx_buf(self.box_idx, 0, 0);
             pass.set_bind_group(2, upload, &[]);
             pass.draw_indexed(BOX_VERTEX_CNT, d[1], 0, 0);
@@ -249,7 +247,6 @@ impl LocationPass {
         pass.set_pipeline(self.zone.id);
         pass.set_bind_group(0, self.frame_group, &[]);
         pass.set_vertex_buf(0, self.box_pos, 0, 0);
-        pass.set_vertex_buf(1, self.box_uv, 0, 0);
         pass.set_idx_buf(self.box_idx, 0, 0);
         for (k, d) in draws.of(PIPELINE_LOCATION_ZONE).enumerate() {
             let Some(upload) = uploads.group_of(d[0]) else {

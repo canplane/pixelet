@@ -12,7 +12,7 @@
 //! ignored. With `stop`, a control goes as far as
 //! it can. With `climb`, the drawn pitch rises instead (`climb_polar`).
 //! Where the way of a control still hits something, a zoom in goes through
-//! it (`dive`) and any other control stops (`Step`).
+//! it (`pull_forward`) and any other control stops (`Step`).
 //!
 //! How far the orbit gets toward what a control asks before terrain is in
 //! the way (`allowed_view`) follows these rules, in the order they are
@@ -34,15 +34,15 @@
 //!   with its pitch raised over the floor under it (`climb_pose`). The eye
 //!   rises only where the column over it is open (`rise_clear`). The intent
 //!   keeps the pitch that was asked.
-//! - **Dive**, under `climb`: a zoom in whose climbed way hits something
-//!   goes through it to the pivot's side (`dive`). No other control goes
+//! - **Pull forward**, under `climb`: a zoom in whose climbed way hits something
+//!   goes through it to the pivot's side (`pull_forward`). No other control goes
 //!   through.
 //!
 //!   | setting | zoom in | anything else |
 //!   | through | as asked | as asked |
 //!   | stop | Stop | Stop |
 //!   | climb | Climb | Climb |
-//!   | climb, its way hit | Dive | Stop |
+//!   | climb, its way hit | PullForward | Stop |
 
 use crate::domain::control::camera::state::{
     Intent, IntentPatch, camera_state, camera_state_mut, ease_pivot, resolved_to,
@@ -55,7 +55,7 @@ use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP}
 use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
-use crate::domain::query::{Hit, Ray, World, finest};
+use crate::domain::query::{Hit, Ray, World};
 use crate::domain::setting::{OrbitObstacleMode, settings};
 use crate::domain::smooth::smooth_vec;
 use crate::domain::view::frame::coord::world_to_canonical;
@@ -64,7 +64,6 @@ use core::cell::Cell;
 use pxl_global::Global;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use xpute_kit::math::scalar::wrap;
 
 pub(crate) struct OrbitState {
@@ -237,13 +236,13 @@ impl<'w> Ground<'w> {
 
 /// The top of the ground at `point`. When the sky is open over the pivot,
 /// it is the top of the point's column, so the eye never settles in a
-/// hollow inside a hill. When the pivot has a roof over it, it is the floor
+/// hollow inside a hill. When the pivot has a ceiling over it, it is the floor
 /// under the point's own cell, so the floor of a cave counts.
 fn ground_at(point: &Q3, pivot: V3, access: &Ground<'_>) -> Option<f64> {
     if access.open(pivot) {
         access.top(point)
     } else {
-        access.world.floor_under(point, LEAF_ZOOM).val().flatten()
+        access.world.floor_under(point).val().flatten()
     }
 }
 
@@ -313,17 +312,17 @@ fn in_solid(at: &ViewPose, access: &Ground<'_>) -> bool {
     ground_under(at, access).is_some_and(|top| top > eye(at).0[2])
 }
 
-/// Where a zoom in whose way hit something goes (`Step::Dive`), at the
+/// Where a zoom in whose way hit something goes (`Step::PullForward`), at the
 /// asked pitch. The eye comes to rest on the pivot's side of the first
 /// thing between the pivot and the eye. It rests at the distance the zoom
 /// asked, or nearer where that is needed to stay on the pivot's side, but
 /// never nearer than `MIN_DIST`. It eases there through the obstacle. None
 /// where nothing on the line stands in the way.
-fn dive(to: &ViewPose, from: &ViewPose, access: &Ground<'_>) -> Option<ViewPose> {
-    let roof = toward_eye(to, from.dist, access)?;
+fn pull_forward(to: &ViewPose, from: &ViewPose, access: &Ground<'_>) -> Option<ViewPose> {
+    let ceiling = toward_eye(to, from.dist, access)?;
     // The eye stops the near plane's distance short of the obstacle, so the
     // near plane never cuts into it.
-    let dist = to.dist.min(roof.t - NEAR).max(MIN_DIST);
+    let dist = to.dist.min(ceiling.t - NEAR).max(MIN_DIST);
     Some(ViewPose { dist, ..*to })
 }
 
@@ -335,8 +334,8 @@ enum Step {
     Climb,
     /// The step stops at this fraction of its way.
     Stop(f64),
-    /// The step goes through what is in the way (`dive`).
-    Dive,
+    /// The step goes through what is in the way (`pull_forward`).
+    PullForward,
 }
 
 impl Step {
@@ -345,7 +344,7 @@ impl Step {
         let way = way_hit(from, to, |at| climb_pose(*at, access), access);
         match way {
             None => Step::Climb,
-            Some(_) if zoom_in => Step::Dive,
+            Some(_) if zoom_in => Step::PullForward,
             Some(t) => Step::Stop(t),
         }
     }
@@ -355,7 +354,7 @@ fn climb_step(to: &ViewPose, from: &ViewPose, access: &Ground<'_>) -> ViewPose {
     match Step::of(to, from, access) {
         Step::Climb => *to,
         Step::Stop(t) => between(from, to, t),
-        Step::Dive => dive(to, from, access).unwrap_or(*to),
+        Step::PullForward => pull_forward(to, from, access).unwrap_or(*to),
     }
 }
 
@@ -381,7 +380,10 @@ fn way_hit(
         let no_deeper = eye(&draw(to)).0[2] >= eye(&last).0[2];
         return (!(under_nearest && no_deeper)).then_some(0.0);
     }
-    if line_clear(eye(&last).0, eye(&draw(to)).0, access) {
+    // Clear where the straight line is, as an eye at its start reads it, and
+    // the eye is in nothing solid where it arrives, as it reads from there.
+    let arrives = draw(to);
+    if line_clear(eye(&last).0, eye(&arrives).0, access) && !in_solid(&arrives, access) {
         return None;
     }
     let (a, b) = (eye(from).0, eye(to).0);
@@ -389,7 +391,7 @@ fn way_hit(
     let sample_cnt = (libm::ceil(moved / 2.0) as u32).clamp(1, COLLISION_STEP_SAMPLE_CNT);
     for i in 1..=sample_cnt {
         let next = draw(&between(from, to, f64::from(i) / f64::from(sample_cnt)));
-        if !rise_clear(&last, &next, access) {
+        if !rise_clear(&last, &next, access) || in_solid(&next, access) {
             return Some(f64::from(i - 1) / f64::from(sample_cnt));
         }
         last = next;
@@ -410,8 +412,10 @@ fn rise_clear(from: &ViewPose, to: &ViewPose, access: &Ground<'_>) -> bool {
         && line_clear(over_b, b, access)
 }
 
-/// Whether the line from `a` to `b` meets nothing a ray cannot see through.
-/// The cell at `a` does not count, and decor never blocks the line.
+/// Whether the line from `a` to `b` meets nothing a ray cannot see through,
+/// read as an eye at `a` reads the world, and what it meets far off read
+/// again from near (`World::first_met`). The cell at `a` does not count, and
+/// decor never blocks the line.
 fn line_clear(a: V3, b: V3, access: &Ground<'_>) -> bool {
     let d = v3::sub(&b, &a);
     let t_max = libm::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
@@ -423,16 +427,11 @@ fn line_clear(a: V3, b: V3, access: &Ground<'_>) -> bool {
         dir: d.map(|v| v / t_max),
         t_max,
     };
-    access
-        .world
-        .first_hit(&ray, finest())
-        .val()
-        .flatten()
-        .is_none()
+    access.world.first_met(&ray).val().flatten().is_none()
 }
 
 /// The first thing met on the ray from the pivot of `at` toward its eye,
-/// within `t_max`. With the eye straight over the pivot, this is a roof.
+/// within `t_max`. With the eye straight over the pivot, this is a ceiling.
 /// Within the eye's own distance, it is what hides the pivot from the eye.
 fn toward_eye(at: &ViewPose, t_max: f64, access: &Ground<'_>) -> Option<Hit> {
     let ray = Ray {
@@ -440,7 +439,7 @@ fn toward_eye(at: &ViewPose, t_max: f64, access: &Ground<'_>) -> Option<Hit> {
         dir: orbit_eye_off(1.0, at.polar, at.azimuth),
         t_max,
     };
-    access.world.first_hit(&ray, finest()).exact().flatten()
+    access.world.first_met(&ray).exact().flatten()
 }
 
 /// The intent the orbit can take on its way from `from` toward `to`. Before
@@ -495,7 +494,7 @@ static CLIMB_PITCH: Global<Memo<MemoKey, f64>> = Global::new();
 /// asks (`steepened`), and the steepened pitch is kept even where it did not
 /// clear the floor. The asked pitch is kept instead where the eye, at the
 /// distance of `at`, would be in something solid even looking straight
-/// down, as under the roof of a tunnel or a cave.
+/// down, as under the ceiling of a tunnel or a cave.
 fn climb_pose(at: ViewPose, access: &Ground<'_>) -> ViewPose {
     if at_nearest(&at) {
         return at;

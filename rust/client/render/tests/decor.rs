@@ -434,7 +434,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                         let c = scatter::candidate_at(j, leaf);
                         let here = scatter::cnt(j, LEAF_CELL_ZOOM, leaf) > 0;
                         if here
-                            && scatter::stands_at(
+                            && scatter::shows_at(
                                 decor,
                                 scatter::variant_of(decor, c.seed),
                                 cell_zoom,
@@ -467,7 +467,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     if row[2] != 0 && [row[0], row[1]] == q {
                         for (j, decor) in ROWS.iter().enumerate() {
                             let c = scatter::candidate_at(j, leaf);
-                            let stands = scatter::stands_at(
+                            let stands = scatter::shows_at(
                                 decor,
                                 scatter::variant_of(decor, c.seed),
                                 cell_zoom,
@@ -1511,7 +1511,7 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
             let c = scatter::candidate_at(j, leaf);
             let here = scatter::cnt(j, LEAF_CELL_ZOOM, leaf) > 0;
             if here
-                && scatter::stands_at(decor, scatter::variant_of(decor, c.seed), cell_zoom)
+                && scatter::shows_at(decor, scatter::variant_of(decor, c.seed), cell_zoom)
                 && scatter::retained(j, &c)
             {
                 leaves.push(leaf);
@@ -1888,7 +1888,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
         let j = n % ROWS.len() as u32;
         let d = &ROWS[j as usize];
         let v = draw.next() % d.variant_cnt;
-        recs[r] = generation::rec_word(j, v, draw.next() & 3, scatter::coarsest_stand(d, v))
+        recs[r] = generation::rec_word(j, v, draw.next() & 3, scatter::coarsest_shown(d, v))
             | (draw.next() % (drawing::REGION_CNT + 1)) << drawing::REGION_SHIFT;
         // Most lie about the eye, where they are drawn. One in seven lies farther off, where it
         // is not drawn.
@@ -3261,7 +3261,7 @@ fn hand_frames_answer_as_the_rust() {
                 j,
                 variant,
                 turn,
-                scatter::coarsest_stand(&ROWS[j as usize], variant),
+                scatter::coarsest_shown(&ROWS[j as usize], variant),
             );
             init[r + 1] = p[0] as u32;
             init[r + 2] = p[1] as u32;

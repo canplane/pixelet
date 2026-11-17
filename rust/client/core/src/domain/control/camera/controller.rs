@@ -2,7 +2,7 @@
 
 //! Which controller moves the camera (camera.rs), and the pivot it turns
 //! about. The orbit's pivot is a point `dist` ahead of the eye. The
-//! first-person camera's pivot is the eye itself. The pivot is derived each
+//! first-person camera's pivot is under the eye, at the person's center. The pivot is derived each
 //! time it is asked for and never kept. A tracker (`tracked_pose`) overrides
 //! either controller while it holds the pose, because a tracked turn can
 //! roll and neither controller has a roll.
@@ -37,7 +37,7 @@ pub(crate) fn dist() -> f64 {
 pub(crate) fn pivot_world() -> Option<V3> {
     match active() {
         Active::Orbit => orbit::pivot_world(),
-        Active::FirstPerson => eye_world(),
+        Active::FirstPerson => first_person::pivot_world(),
         Active::Tracked => Some(pose()?.eye),
     }
 }

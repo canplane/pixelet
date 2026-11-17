@@ -33,6 +33,8 @@ use pxl_global::Global;
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
 use xpute_guest::clock::now;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 // The zone's radius in the ground's leaf cells, from its footprint
 // (`ZONE_FOOTPRINT_U`). The 0.707 taken off is half a cell's diagonal, so a
@@ -43,49 +45,43 @@ const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 /// target snaps to it rather than sliding.
 const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.leaf_cell_zoom());
 
-/// A cell of the zone. `borders` flags which of its sides (top, bottom,
-/// right, left) lie on the zone's border.
-struct ZoneSample {
-    /// Its place, in the ground's cells from the center.
-    at: [i32; 2],
-    off: V3,
-    borders: [f64; 4],
-}
-
 /// How far the zone reaches from its center along an axis, in cells.
 fn zone_extent() -> i32 {
     ZONE_RADIUS_CELL.ceil() as i32
 }
 
-fn zone_samples() -> impl Iterator<Item = ZoneSample> {
+/// Whether the cell `at`, in the ground's cells from the center, lies in the
+/// zone.
+fn in_zone([x, y]: [i32; 2]) -> bool {
+    f64::from(x * x + y * y) <= ZONE_RADIUS2_CELL
+}
+
+/// The zone's cells, in the ground's cells from the center.
+fn zone_cells() -> impl Iterator<Item = [i32; 2]> {
     let range = zone_extent();
-    let flag = |b: bool| if b { 1.0 } else { 0.0 };
     (-range..=range)
-        .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
-        .filter_map(move |(dx, dy)| {
-            let (dx2, dy2) = (dx * dx, dy * dy);
-            if dx2 + dy2 > ZONE_RADIUS2_CELL {
-                return None;
-            }
-            let d_top = dx2 + (dy + 1.0) * (dy + 1.0);
-            let d_bottom = dx2 + (dy - 1.0) * (dy - 1.0);
-            let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
-            let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
-            Some(ZoneSample {
-                at: [dx as i32, dy as i32],
-                off: [
-                    dx * units(GROUND.leaf_cell_zoom()),
-                    dy * units(GROUND.leaf_cell_zoom()),
-                    -units(GROUND.leaf_cell_zoom()),
-                ],
-                borders: [
-                    flag(d_top > ZONE_RADIUS2_CELL),
-                    flag(d_bottom > ZONE_RADIUS2_CELL),
-                    flag(d_right > ZONE_RADIUS2_CELL),
-                    flag(d_left > ZONE_RADIUS2_CELL),
-                ],
-            })
-        })
+        .flat_map(move |x| (-range..=range).map(move |y| [x, y]))
+        .filter(|&at| in_zone(at))
+}
+
+/// A box's faces, as pass/location.rs `box_lanes` orders them: its sides
+/// toward +x, -x, +y and -y, then its top and its bottom. A cell's side `k` is
+/// toward its box's face `k`.
+const SIDES: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const TOP: usize = 4;
+const BOTTOM: usize = 5;
+
+/// The cell beside `at` on its side `k`.
+fn beside([x, y]: [i32; 2], k: usize) -> [i32; 2] {
+    [x + SIDES[k][0], y + SIDES[k][1]]
+}
+
+/// The bit of a line along the edge of face `f` toward face `g`. A face takes
+/// four bits, one for each face across its edges, in the faces' order with
+/// its own axis left out. location_zone.wgsl reads them so.
+fn line_bit(f: usize, g: usize) -> u32 {
+    let idx = if g / 2 > f / 2 { g - 2 } else { g };
+    1 << (4 * f + idx)
 }
 
 static LOCATION: Global<LocationIndicator> = Global::new();
@@ -109,62 +105,75 @@ pub(crate) fn location_draw(draw: &mut DrawList) {
     location().draw(draw);
 }
 
-/// The zone's instances about `center_pos`, `ZONE_INSTANCE_FLOATS` floats
-/// each. The ground is asked of `ground` once
-/// for each cell of the zone and of the ring around it, which the zone's
-/// sides look across to.
+/// The zone's boxes about `center_pos`, `ZONE_INSTANCE_FLOATS` floats each:
+/// the box's center relative to the zone's, the faces it shows and the lines
+/// it draws, each a bit field. The ground is asked of `ground` once for each
+/// cell of the zone and of the ring around it.
+///
+/// A box is the cube of its cell's top, and it shows its top and each side
+/// above a lower cell. The outline lies where a face the zone shows meets a
+/// face of a cell beyond the zone: along the top's edge, along the foot of a
+/// side, and up the upright edge of a side.
 fn lay_zone(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) -> Vec<f32> {
-    let mut instances = Vec::new();
     let cell = units(GROUND.leaf_cell_zoom());
-    const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     let ring = zone_extent() + 1;
     let across = (2 * ring + 1) as usize;
     let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
-    // Each cell's ground height above the zone's center.
-    let mut rise: Vec<Option<f64>> = vec![None; across * across];
-    for s in zone_samples() {
-        for d in [[0, 0]].iter().chain(&BESIDE) {
-            let at = [s.at[0] + d[0], s.at[1] + d[1]];
-            if rise[idx(at)].is_none() {
-                let off = [
-                    s.off[0] + f64::from(d[0]) * cell,
-                    s.off[1] + f64::from(d[1]) * cell,
-                ];
-                let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
+    // Each cell's box, relative to the center, set on the ground under it.
+    let mut boxes: Vec<Option<V3>> = vec![None; across * across];
+    for [x, y] in zone_cells() {
+        for at in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| [x + dx, y + dy])) {
+            boxes[idx(at)].get_or_insert_with(|| {
+                let off = [f64::from(at[0]) * cell, f64::from(at[1]) * cell, -cell];
+                let v = v3::add(&center_pos, &off);
                 // Where a neighboring tile is not loaded, the cell takes the
                 // center's height.
                 let ele = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
-                rise[idx(at)] = Some(ele - center_pos[2]);
-            }
+                v3::center(&[off[0], off[1], off[2] + ele - center_pos[2]], cell)
+            });
         }
     }
-    // The box on the ground of the cell `d` away from the sample, relative to
-    // the center.
-    let box_at = |s: &ZoneSample, d: [i32; 2]| {
-        let delta_ele = rise[idx([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
-        let off = [
-            s.off[0] + f64::from(d[0]) * cell,
-            s.off[1] + f64::from(d[1]) * cell,
-        ];
-        v3::center(&[off[0], off[1], s.off[2] + delta_ele], cell)
-    };
-    for s in zone_samples() {
-        let v = box_at(&s, [0, 0]);
-        // A side face is open to the air where the cell beside it is lower.
-        // The top is always open and the bottom never is. Bit k stands for
-        // face k, in the box's order (+x, -x, +y, -y, +z, -z).
-        let open = BESIDE.iter().enumerate().fold(1 << 4, |open, (k, &d)| {
-            open | u32::from(box_at(&s, d)[2] < v[2]) << k
-        });
+    // Every cell read lies by a cell of the zone, whose box is set above.
+    let box_at = |at: [i32; 2]| boxes[idx(at)].or_bug(Errno::ENOTRECOVERABLE);
+    let z = |at: [i32; 2]| box_at(at)[2];
+    let mut instances = Vec::new();
+    for at in zone_cells() {
+        let here = z(at);
+        let shows = |k: usize| z(beside(at, k)) < here;
+        let mut faces = 1 << TOP;
+        let mut lines = 0;
+        for k in 0..4 {
+            faces |= u32::from(shows(k)) << k;
+            // Toward a cell beyond the zone, the top's edge meets that cell's
+            // top or its side, or the side dropping to it meets its top.
+            if !in_zone(beside(at, k)) {
+                lines |= if shows(k) {
+                    line_bit(k, BOTTOM)
+                } else {
+                    line_bit(TOP, k)
+                };
+            }
+            // Past the upright edge on the side `j` of a side, where the box
+            // shows no side `j`, the face goes on into the side of the cell
+            // beside, or turns to the cell across the corner where that cell
+            // stands as high.
+            for j in (0..4).filter(|j| j / 2 != k / 2) {
+                if shows(k) && !shows(j) {
+                    let next = beside(at, j);
+                    let corner = beside(next, k);
+                    if !in_zone(if z(corner) < here { next } else { corner }) {
+                        lines |= line_bit(k, j);
+                    }
+                }
+            }
+        }
+        let v = box_at(at);
         instances.extend([
             v[0] as f32,
             v[1] as f32,
             v[2] as f32,
-            s.borders[0] as f32,
-            s.borders[1] as f32,
-            s.borders[2] as f32,
-            s.borders[3] as f32,
-            open as f32,
+            faces as f32,
+            lines as f32,
         ]);
     }
     instances
@@ -182,9 +191,9 @@ fn beacon_speed() -> f64 {
 }
 
 /// The floats of one zone instance: the box's center relative to the zone's
-/// (3), its border flags (4), and the faces it draws open to the air (1, a bit
-/// for each face). location_zone.wgsl reads this stride (pxl-render
-/// frame/shader/word.rs `LOCATION_ZONE_INSTANCE_FLOATS`).
+/// (3), the faces it shows (1, a bit for each face) and the lines it draws (1,
+/// `line_bit`). location_zone_place.wgsl and location_zone.wgsl read this
+/// stride (pxl-render frame/shader/word.rs `LOCATION_ZONE_INSTANCE_FLOATS`).
 pub(crate) const ZONE_INSTANCE_FLOATS: usize = word::LOCATION_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown, and its beacon: where the fix puts them (`center`,

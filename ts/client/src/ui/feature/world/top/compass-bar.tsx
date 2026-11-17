@@ -1,7 +1,7 @@
 // @pxl/client/ui/feature/world/top/compass-bar.tsx
 
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { G } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -13,6 +13,7 @@ import {
   COLOR,
   GAUGE_FACE,
   GAUGE_TRACKING_EM,
+  TEXT_SCALE_CAP,
   TEXT_STYLE,
 } from "@/ui/shared/component/theme.ts";
 import { useView } from "@/ui/shared/watch.ts";
@@ -25,8 +26,9 @@ const STEP_DEG = 15;
 const TICK_PX = 4;
 const MAJOR_TICK_PX = 6;
 const LABEL_WIDTH_PX = 32;
-/** The labels' line. */
-const LINE_HEIGHT_PX = 20;
+/** The labels' line, the address's (current-address.tsx), so that the
+ * directions stand on the line the address stands on. */
+const LINE_HEIGHT_PX = TEXT_STYLE.body.lineHeight;
 /** Between the labels' line and the ticks, so that a direction stands 6
  * pixels above its tick, as the scale's label stands below its own. */
 const LABEL_GAP_PX = 1;
@@ -69,6 +71,11 @@ export function CompassBar({ show }: { show: boolean }) {
   const azimuthDeg = (useView((v) => v.azimuth) * 180) / Math.PI;
   const [width, setWidth] = useState(0);
   const shown = marks(azimuthDeg, width);
+  // The labels' line grows with the system's text size as the address's
+  // does, so the two stay one line.
+  const line =
+    LINE_HEIGHT_PX *
+    Math.min(useWindowDimensions().fontScale, TEXT_SCALE_CAP.chrome);
 
   return (
     <Presence
@@ -80,7 +87,7 @@ export function CompassBar({ show }: { show: boolean }) {
       style={STYLE.root}
     >
       <View
-        style={STYLE.labels}
+        style={[STYLE.labels, { height: line }]}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       >
         {shown.map(({ deg, x, opacity }) => (
@@ -109,7 +116,6 @@ const STYLE = StyleSheet.create({
   root: { width: "100%", maxWidth: COMPASS_MAX_PX, alignItems: "center" },
   labels: {
     alignSelf: "stretch",
-    height: LINE_HEIGHT_PX,
     marginBottom: LABEL_GAP_PX,
   },
   label: {

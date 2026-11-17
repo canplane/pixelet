@@ -111,7 +111,7 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 /// zoom from `FIRST_CELL_ZOOM`. A decor is generated at the leaves' zoom, and
 /// at each coarser zoom where one of its variants stands as itself, by its
 /// own size rather than the clip level's cell (pxl-content
-/// `scatter::stands_at`), and is still large enough for an impostor. Every
+/// `scatter::shows_at`), and is still large enough for an impostor. Every
 /// one of those zooms reads the decor of the same cells. No zoom finer than
 /// the leaves' is needed, since a finer clip level lies within the leaves'
 /// one. `on` is the decor setting, which the caller reads, because the
