@@ -21,7 +21,7 @@ const _: () = assert!(
 );
 
 /// Every point the world holds, in units. X is unbounded, since it wraps around.
-pub const BOUNDS: Aabb = {
+pub const BOUND: Aabb = {
     let (y, z) = (
         (1u64 << (EXTENT[1] - 1)) as f64,
         (1u64 << (EXTENT[2] - 1)) as f64,
@@ -32,13 +32,13 @@ pub const BOUNDS: Aabb = {
     }
 };
 
-/// `v` with Y and Z held inside `BOUNDS`, half-open.
+/// `v` with Y and Z held inside `BOUND`, half-open.
 pub fn within(v: V3) -> V3 {
-    let top = |k: usize| BOUNDS.max[k] - 1.0 / ONE as f64;
+    let top = |k: usize| BOUND.max[k] - 1.0 / ONE as f64;
     [
         v[0],
-        v[1].clamp(BOUNDS.min[1], top(1)),
-        v[2].clamp(BOUNDS.min[2], top(2)),
+        v[1].clamp(BOUND.min[1], top(1)),
+        v[2].clamp(BOUND.min[2], top(2)),
     ]
 }
 
@@ -159,7 +159,7 @@ pub fn base_of(zoom: Zoom, idx: [i32; 3]) -> Q3 {
 /// has no digit of.
 pub fn cube(zoom: Zoom, idx: [i32; 3]) -> Aabb {
     let side = units(zoom);
-    let mut b = BOUNDS;
+    let mut b = BOUND;
     for (k, &v) in idx.iter().enumerate() {
         if has_digit(k, zoom) {
             b.min[k] = f64::from(v) * side;

@@ -3,7 +3,7 @@
 /**
  * Metro bundles the client, ts/client/src, natively and for the web. A
  * platform's own file is named by React Native's suffixes: the web file
- * motion.web.tsx beside the native motion.native.tsx, and an override beside
+ * backdrop.web.ts beside the native backdrop.native.ts, and an override beside
  * its default (pill.ios.tsx beside pill.tsx). Which file each takes, every
  * alias, which is tsconfig.json's, and every workspace package, which
  * resolves to its source, are ts/build/path.ts's, so that Metro reads the

@@ -40,8 +40,8 @@ fn a_coarser_node_leaves_an_exact_answer_alone() {
 fn what_objects_wrote_drops_an_exact_answer() {
     changes().ground.clear();
     changes().damage = vec![Aabb {
-        min: [1.0, 1.0, BOUNDS.min[2]],
-        max: [2.0, 2.0, BOUNDS.max[2]],
+        min: [1.0, 1.0, BOUND.min[2]],
+        max: [2.0, 2.0, BOUND.max[2]],
     }];
     let mut memo = Memo(Some((0u32, COLUMNS, true)));
     memo.forget_touched_at_leaf(|&exact| exact);
@@ -62,8 +62,19 @@ fn queries_report_the_columns_they_read() {
     world.surface_support(&point(at[0], at[1], 0.0));
     assert_eq!(read_rect().0, Some([c, c.map(|v| v + cell)]));
     let from = point(at[0], at[1], over(5.0));
-    world.step_slide(&from, &point(at[0] + 3.0 * cell, at[1], 0.0), true);
+    world.step_slide(&from, &point(at[0] + 3.0 * cell, at[1], 0.0), &from, true);
     assert_eq!(read_rect().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
+    // A walker of known height that does not stand reads nothing, however
+    // far it goes.
+    *read_rect() = ReadRect::default();
+    let high = point(at[0], at[1], 1000.0);
+    world.step_slide(
+        &from,
+        &point(at[0] + 3000.0 * cell, at[1], 0.0),
+        &high,
+        true,
+    );
+    assert_eq!(read_rect().0, None);
 }
 
 /// A memo keeps what a cell's asset answers and asks again when a change
@@ -82,8 +93,8 @@ fn a_memo_keeps_a_cell_until_its_column_changes() {
     memo.forget_touched();
     assert!(memo.0.is_some(), "no change touched the column");
     changes().damage = vec![Aabb {
-        min: [x, y, BOUNDS.min[2]],
-        max: [x + 1.0, y + 1.0, BOUNDS.max[2]],
+        min: [x, y, BOUND.min[2]],
+        max: [x + 1.0, y + 1.0, BOUND.max[2]],
     }];
     memo.forget_touched();
     assert!(memo.0.is_none(), "a write over the column drops it");

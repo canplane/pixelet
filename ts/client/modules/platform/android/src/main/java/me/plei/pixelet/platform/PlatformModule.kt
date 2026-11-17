@@ -80,17 +80,6 @@ class PlatformModule : Module() {
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
       insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()
     }
-
-    // ---- the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx, KeyboardDock.kt) ----
-
-    View(KeyboardDock::class) {
-      Events("onLift")
-      // The UI's lengths are in density-independent pixels, and the view's are
-      // in the screen's pixels.
-      Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
-      Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }
-      Prop("layoutLiftPx") { view: KeyboardDock, layoutLiftDp: Double -> view.layoutLift = view.px(layoutLiftDp) }
-    }
   }
 
   private fun preferences() = context.getSharedPreferences("pxl", Context.MODE_PRIVATE)

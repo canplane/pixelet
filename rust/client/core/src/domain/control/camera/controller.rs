@@ -110,7 +110,12 @@ pub(crate) fn pan_across(cx: f64, cy: f64) {
 
 fn pan_by(lx: f64, ly: f64) {
     let Some(from) = pivot_to() else { return };
-    put_pivot(pan_to(&from, lx, ly, camera().azimuth), Motion::Smooth);
+    // Before the camera has an eye, the pan's start stands for it.
+    let eye = eye_world().map_or(from, |eye| world_to_canonical(&eye));
+    put_pivot(
+        pan_to(&from, lx, ly, camera().azimuth, &eye),
+        Motion::Smooth,
+    );
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

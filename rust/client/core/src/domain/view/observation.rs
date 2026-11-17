@@ -134,7 +134,7 @@ pub(crate) fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
             continue;
         }
         let Some(b) = world
-            .bounds(&mut walk, (zoom, xy), cell_zoom)
+            .bound(&mut walk, (zoom, xy), cell_zoom)
             .val()
             .flatten()
         else {
@@ -202,17 +202,17 @@ impl ByEye {
 }
 
 /// The order a layer's tile `p` is read in, judged by the box of what stands
-/// in it. That box is the world's bounds over the tile at the grid zoom the
-/// tile's own cells fold into, walked on from where `walk` last stopped.
-/// Where nothing is known or nothing stands, the tile's whole region is used.
+/// in it (`World::bound`), at the grid zoom the tile's own cells fold into,
+/// walked on from where `walk` last stopped. Where nothing is known or
+/// nothing stands, the tile's whole region is used.
 pub(crate) fn order_of_tile(
     o: &Observation,
     lattice: Lattice,
     p: Quadrant,
     walk: &mut ColumnWalk,
 ) -> Order {
-    let bounds = World::now().bounds(walk, p.node(), lattice.grid_zoom(p.zoom));
-    order_of(o, &bounds.val().flatten().unwrap_or(p.region()))
+    let bound = World::now().bound(walk, p.node(), lattice.grid_zoom(p.zoom));
+    order_of(o, &bound.val().flatten().unwrap_or(p.region()))
 }
 
 /// Where the box `b` stands in the view of `o`: whether it is seen, and how

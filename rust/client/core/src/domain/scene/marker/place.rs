@@ -21,7 +21,7 @@ use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{PLACE_FIRST, PLACE_LATTICE, stands, symbol_of};
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{BOUNDS, idx_of, wrap_idx};
+use pxl_spec::space::coord::world::{BOUND, idx_of, wrap_idx};
 use pxl_spec::space::coord::zoom::{Zoom, idx_at};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 
@@ -140,7 +140,7 @@ fn cell_zoom_of(p: &Place, eye: V3) -> Zoom {
 
 /// Asks the surface under `p` at `detail`.
 fn ask(p: &mut Place, detail: Zoom) {
-    let top = surface(&p.ground.mid(), (BOUNDS.max[2], BOUNDS.min[2]), detail);
+    let top = surface(&p.ground.mid(), (BOUND.max[2], BOUND.min[2]), detail);
     (p.top, p.asked) = (top, Some(detail));
 }
 

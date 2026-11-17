@@ -15,10 +15,10 @@
 use crate::domain::param;
 use crate::domain::query::World;
 use crate::domain::query::change::Memo;
-use crate::domain::query::{cell_zoom_at, floor_of, is_unknown, over};
+use crate::domain::query::{floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
-    BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
-    SETTLE_DELAY_S, WALK_EPS,
+    BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF, SETTLE_DELAY_S,
+    WALK_EPS,
 };
 use crate::domain::scene::character::{Character, Group};
 use crate::domain::scene::frame::Frame;
@@ -35,9 +35,7 @@ use pxl_global::Global;
 use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::{Draw, DrawList};
 use pxl_spec::asset::character::IDLE_CLIP;
-use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::lattice::{GROUND, Grid};
 use xpute_guest::clock;
@@ -137,7 +135,8 @@ pub(crate) struct Camera {
     pub steered: bool,
     /// Whether the map follows the device.
     pub following: bool,
-    /// The eye, which decides what a character is drawn standing on.
+    /// The eye, which decides what a character is drawn standing on and
+    /// whether it walks (`walk_to`).
     pub eye: Q3,
 }
 
@@ -234,7 +233,7 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         let from = center(camera.pivot, floor);
         let world = World::now();
         pet_floor.of((camera.pivot, floor, target), || {
-            let end = walk_to(world, &from, target);
+            let end = walk_to(world, &from, target, &camera);
             match reached(to_world(&end)) && !is_unknown(&end) {
                 true => floor_of(&end),
                 false => floor,
@@ -448,7 +447,7 @@ impl Walk {
         if arrived {
             *stands = center(at, arrive_floor);
         } else if moved {
-            let end = walk_to(World::now(), stands, at);
+            let end = walk_to(World::now(), stands, at, camera);
             let [x, y, _] = to_world(&end);
             (at, *stands) = if follows && gap([x, y], at) > WALK_EPS {
                 (target, center(target, arrive_floor))
@@ -471,9 +470,10 @@ fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
     world_to_canonical(&[x, y, over(floor)])
 }
 
-/// Slides a step through `world` from `from` toward `to` (`World::step_slide`).
-fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
-    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), true)
+/// Slides a step through `world` from `from` toward `to`, seen from the
+/// camera's eye (`World::step_slide`).
+pub(super) fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2], camera: &Camera) -> Q3 {
+    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), &camera.eye, true)
 }
 
 /// Where a body `half` wide on each side is drawn for `at`, on the floor the
@@ -534,19 +534,12 @@ pub(crate) fn clear_of_walls(
     clear
 }
 
-/// Where the person's line hangs over its head, seen from `eye`. A line
-/// hangs only while the walk places the person, and only where the camera
-/// grid's cell at its feet is one a marker shows at (`marker_shows`), so the
-/// line reads where the markers about it do.
-pub(crate) fn line_hangs(eye: V3) -> Option<Q3> {
+/// Where the person's line hangs over its head: only while the walk places
+/// the person and the world draws it (`Character::over_head`), so no line
+/// hangs over a person that is not drawn.
+pub(crate) fn line_hangs() -> Option<Q3> {
     let person = companion().characters[Group::Person as usize].as_ref()?;
-    let feet = person.transform?.at;
-    let over = [
-        feet[0],
-        feet[1],
-        feet[2] + person.height_u() + HEAD_CLEARANCE_U,
-    ];
-    marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
+    person.over_head().map(|over| world_to_canonical(&over))
 }
 
 /// Each character's model and skin image for the world's skinned pass. The

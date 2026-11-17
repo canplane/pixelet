@@ -235,7 +235,11 @@ on and what an edit takes are the world's at its finest held zoom, not the
 eye's: the walker stands on the first cell that fills under it, the orbit camera
 keeps clear of what is there, and the pointer asks at the finest zoom and
 judges what it struck by the zoom the eye's rays draw there
-(`domain/control/edit/pick.rs`).
+(`domain/control/edit/pick.rs`). Whether a walker is there at all is the
+eye's: it fills a leaf cell, and it stands, its character drawn and its walk
+walked, at the zooms at which a cube of that cell is drawn, as a decor of
+that box is; past them it goes where it is sent (`domain/query/support.rs`
+`walker_stands`).
 
 Decor is part of that answer on the CPU alone, since the GPU draws it as models
 and its rays never ask for it: a leaf cell the layers leave void is the decor

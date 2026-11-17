@@ -1,8 +1,8 @@
 // @pxl/client/ui/shared/component/above-keyboard.native.tsx
 
-import { requireNativeView } from "expo";
-import { type ComponentType, useState } from "react";
-import type { NativeSyntheticEvent, ViewProps } from "react-native";
+import { StyleSheet } from "react-native";
+import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 
 import {
   type AboveKeyboardProps,
@@ -11,23 +11,13 @@ import {
 import { LAYER } from "@/ui/shared/component/theme.ts";
 import { useSafeArea } from "@/service/platform/safe-area.ts";
 
-interface KeyboardDockProps extends ViewProps {
-  clearance: number;
-  rest: number;
-  layoutLiftPx: number;
-  onLift: (event: NativeSyntheticEvent<{ lift: number }>) => void;
-}
-
-const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView(
-  "PxlPlatform",
-  "KeyboardDock",
-);
-
 /**
- * The layer stands `inset` above an open keyboard. The native view lifts it
- * within the keyboard's own animation. Once the keyboard is still, the native
- * view reports the lift and the layout here takes it on, so that presses
- * hit-test where the layer is drawn.
+ * The layer stands `inset` above an open keyboard, or where it rests with none
+ * up. react-native-keyboard-controller gives the keyboard's height on the UI
+ * thread as the keyboard moves, each frame on Android and its end inside the
+ * keyboard's own animation on iOS, and the layer is laid out from it, so that
+ * the layer and the keys move as one and presses hit-test where the layer is
+ * drawn.
  */
 export function AboveKeyboard({
   inset,
@@ -35,23 +25,22 @@ export function AboveKeyboard({
   children,
 }: AboveKeyboardProps) {
   const rest = bottomRest(useSafeArea(), inset);
-  const [layoutLift, setLayoutLift] = useState(0);
+  // The height is zero with no keyboard up and the keyboard's own, negated,
+  // with one up.
+  const { height } = useReanimatedKeyboardAnimation();
+  const bottom = useAnimatedStyle(() => ({
+    bottom: Math.max(rest, inset - height.value) + lift,
+  }));
   return (
-    <KeyboardDock
-      clearance={inset}
-      rest={rest}
-      layoutLiftPx={layoutLift}
-      onLift={(event) => setLayoutLift(event.nativeEvent.lift)}
-      style={{
-        position: "absolute",
-        left: inset,
-        right: inset,
-        bottom: rest + lift + layoutLift,
-        zIndex: LAYER.bottom,
-        pointerEvents: "box-none",
-      }}
+    <Animated.View
+      pointerEvents="box-none"
+      style={[STYLE.layer, { left: inset, right: inset }, bottom]}
     >
       {children}
-    </KeyboardDock>
+    </Animated.View>
   );
 }
+
+const STYLE = StyleSheet.create({
+  layer: { position: "absolute", zIndex: LAYER.bottom },
+});

@@ -50,8 +50,6 @@ import type * as backing from "@/ui/shared/component/backing.tsx";
 import * as backingIos from "@/ui/shared/component/backing.ios.tsx";
 import type * as icon from "@/ui/shared/component/icon.tsx";
 import * as iconIos from "@/ui/shared/component/icon.ios.tsx";
-import type * as motionWeb from "@/ui/shared/component/motion/motion.web.tsx";
-import * as motionNative from "@/ui/shared/component/motion/motion.native.tsx";
 import type * as palette from "@/ui/shared/component/palette.ts";
 import * as paletteIos from "@/ui/shared/component/palette.ios.ts";
 import type * as panel from "@/ui/shared/component/panel.tsx";
@@ -88,7 +86,6 @@ export const CONFORMS = [
   backdropNative satisfies typeof backdropWeb,
   backingIos satisfies typeof backing,
   iconIos satisfies typeof icon,
-  motionNative satisfies typeof motionWeb,
   paletteIos satisfies typeof palette,
   panelAndroid satisfies typeof panel,
   panelIos satisfies typeof panel,

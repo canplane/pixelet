@@ -38,7 +38,7 @@ impl World {
 }
 
 /// What a walk over columns carries from one column to the next
-/// (`World::bounds`): the ground's lines and the objects' tree, each stepped
+/// (`World::bound`): the ground's lines and the objects' tree, each stepped
 /// down from where the last column left off. It stays valid only while
 /// neither the ground nor the objects move.
 #[derive(Default)]
@@ -51,7 +51,7 @@ impl World {
     /// The box the ground and what is placed fill in the node, as its cells
     /// at `cell_zoom` are read. The walk steps on from where `walk` last
     /// went.
-    pub(crate) fn bounds(
+    pub(crate) fn bound(
         &self,
         walk: &mut ColumnWalk,
         node: Node<2>,

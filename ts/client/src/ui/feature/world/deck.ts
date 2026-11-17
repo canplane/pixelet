@@ -65,6 +65,7 @@ export function useDeckSwipe(
   { enabled = true, drag }: { enabled?: boolean; drag?: (on: boolean) => void },
 ): PanGesture {
   return usePanGesture({
+    runOnJS: true,
     enabled,
     activeOffsetY: [-SWIPE_PX, SWIPE_PX],
     failOffsetX: [-SLOP_PX, SLOP_PX],

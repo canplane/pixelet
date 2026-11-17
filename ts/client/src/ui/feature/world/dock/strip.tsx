@@ -81,6 +81,7 @@ function useSizeGesture(
   g: SizeGesture,
 ) {
   const hold = usePanGesture({
+    runOnJS: true,
     activateAfterLongPress: LONG_PRESS_MS,
     onBegin: () => {
       if (swatch.current) g.pressIn(swatch.current);
@@ -93,6 +94,7 @@ function useSizeGesture(
     onFinalize: g.end,
   });
   const press = useTapGesture({
+    runOnJS: true,
     maxDuration: LONG_PRESS_MS,
     maxDistance: SLOP_PX,
     onActivate: g.press,

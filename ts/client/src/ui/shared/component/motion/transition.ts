@@ -1,132 +1,51 @@
 // @pxl/client/ui/shared/component/motion/transition.ts
 
 /**
- * Every motion is solved here, ahead of time, into a sampled curve, which each
- * platform plays on its compositor. No code runs per frame: the core spends
- * the JS thread's frame time, so a curve stepped per frame would stutter while
- * the world loads.
+ * The curves the UI's motions take, each a duration and a cubic Bézier, as
+ * CSS writes a timing function. react-native-reanimated plays them off the JS
+ * thread, on the web and natively alike.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-/** A motion's progress, sampled at evenly spaced moments over `durationMs`.
- * The samples run from 0 to 1, and past 1 where a spring overshoots. */
 export interface Transition {
   durationMs: f64;
-  samples: readonly f64[];
+  bezier: readonly [f64, f64, f64, f64];
   delayMs?: f64;
 }
 
-/** A spring counts as settled once it stays this close to its target, as a
- * fraction of the whole move. */
-const REST = 0.001;
-const STEP_MS = 1;
-const MAX_MS = 3000;
-const SAMPLES = 64;
+/** Leaves fast and lands without a bounce, so that a target moving mid-flight
+ * does not make the view ring. */
+export const SNAP: Transition = {
+  durationMs: 464,
+  bezier: [0.24, 0.8, 0.12, 1],
+};
 
-/** The constants of a spring that moves from 0 to 1, starting at rest, by
- * m x'' + c x' + k x = k: `mass` is m, `damping` c and `stiffness` k. */
-interface Spring {
-  stiffness: f64;
-  damping: f64;
-  mass: f64;
-}
+export const SETTLE: Transition = { durationMs: 300, bezier: [0, 0, 0.58, 1] };
 
-function position(s: Spring, seconds: f64): f64 {
-  const w0 = Math.sqrt(s.stiffness / s.mass);
-  const zeta = s.damping / (2 * Math.sqrt(s.stiffness * s.mass));
-  if (zeta < 1) {
-    const wd = w0 * Math.sqrt(1 - zeta * zeta);
-    return (
-      1 -
-      Math.exp(-zeta * w0 * seconds) *
-        (Math.cos(wd * seconds) + ((zeta * w0) / wd) * Math.sin(wd * seconds))
-    );
-  }
-  if (zeta === 1) return 1 - Math.exp(-w0 * seconds) * (1 + w0 * seconds);
-  const root = Math.sqrt(zeta * zeta - 1);
-  const r1 = -w0 * (zeta - root);
-  const r2 = -w0 * (zeta + root);
-  return (
-    1 - (r2 * Math.exp(r1 * seconds) - r1 * Math.exp(r2 * seconds)) / (r2 - r1)
-  );
-}
+export const LEAVE: Transition = { durationMs: 150, bezier: [0, 0, 0.58, 1] };
 
-export function spring(s: Spring): Transition {
-  let lastMs = 0;
-  for (let t = 0; t <= MAX_MS; t += STEP_MS) {
-    if (Math.abs(1 - position(s, t / 1000)) > REST) lastMs = t;
-  }
-  const durationMs = lastMs + STEP_MS;
-  const samples = Array.from({ length: SAMPLES + 1 }, (_, i) =>
-    i === SAMPLES ? 1 : position(s, (durationMs * i) / SAMPLES / 1000),
-  );
-  return { durationMs, samples };
-}
+export const FADE: Transition = { durationMs: 200, bezier: [0, 0, 0.58, 1] };
 
-/** Finds the curve's y at `x` by bisection on the curve's parameter. Bisection
- * is safe because x rises monotonically for every control point CSS allows. */
-function bezierAt(
-  [x1, y1, x2, y2]: readonly [f64, f64, f64, f64],
-  x: f64,
-): f64 {
-  const at = (a: f64, b: f64, t: f64) =>
-    3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 32; i++) {
-    const mid = (lo + hi) / 2;
-    if (at(x1, x2, mid) < x) lo = mid;
-    else hi = mid;
-  }
-  return at(y1, y2, (lo + hi) / 2);
-}
-
-export function ease(
-  durationMs: f64,
-  bezier: readonly [f64, f64, f64, f64],
-): Transition {
-  return {
-    durationMs,
-    samples: Array.from({ length: SAMPLES + 1 }, (_, i) =>
-      bezierAt(bezier, i / SAMPLES),
-    ),
-  };
-}
-
-export function curveAt(t: Transition, p: f64): f64 {
-  const at = Math.min(1, Math.max(0, p)) * (t.samples.length - 1);
-  const i = Math.floor(at);
-  if (i >= t.samples.length - 1) return t.samples[t.samples.length - 1];
-  return t.samples[i] + (t.samples[i + 1] - t.samples[i]) * (at - i);
-}
-
-/** An overdamped spring, so that a target moving mid-flight does not make the
- * view ring. */
-export const SNAP: Transition = spring({
-  stiffness: 500,
-  damping: 40,
-  mass: 0.5,
-});
-
-export const SETTLE: Transition = ease(300, [0, 0, 0.58, 1]);
-
-export const LEAVE: Transition = ease(150, [0, 0, 0.58, 1]);
-
-export const FADE: Transition = ease(200, [0, 0, 0.58, 1]);
-
-/** A critically damped spring: it leaves at full speed and lands without a
- * bounce. */
-export const SLIDE: Transition = spring({
-  stiffness: 420,
-  damping: 41,
-  mass: 1,
-});
+/** A sheet's slide in: it leaves at full speed and lands without a bounce. */
+export const SLIDE: Transition = {
+  durationMs: 451,
+  bezier: [0.32, 0.68, 0.12, 1],
+};
 
 /** Material Design's emphasized accelerate easing. */
-export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
+export const SLIDE_AWAY: Transition = {
+  durationMs: 200,
+  bezier: [0.3, 0, 0.8, 0.15],
+};
 
-export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);
+export const DIM: Transition = { durationMs: 500, bezier: [0.42, 0, 0.58, 1] };
+
+/** Overshoots its end and comes back to it. */
+export const POP: Transition = {
+  durationMs: 400,
+  bezier: [0.34, 1.56, 0.64, 1],
+};
 
 export function after(t: Transition, delayMs: f64): Transition {
   return { ...t, delayMs };

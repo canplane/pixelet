@@ -10,7 +10,7 @@ use pxl_spec::bake::tile::terrain::{GROUND_COLUMN, GroundCells, TerrainTile};
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM, Zoom, units};
-use pxl_spec::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
+use pxl_spec::space::layer::lattice::{self, GROUND, Grid, TILE_CELLS};
 
 use super::*;
 use crate::domain::layer::instance::Instance;
@@ -308,7 +308,7 @@ fn ray_from_above_meets_ground() {
         .flatten()
         .unwrap()
         .point[2];
-    let high = 2.0 * world::BOUNDS.max[2];
+    let high = 2.0 * world::BOUND.max[2];
     let over = Ray {
         origin: [at[0], at[1], high],
         dir: [0.0, 0.0, -1.0],
@@ -503,9 +503,10 @@ fn ray_goes_on_from_the_last() {
 }
 
 /// A cell coarser than what is placed in it is read as the cast draws it
-/// there: one column, whatever is placed finer. From over it or from inside
-/// the box it is drawn as, its floor is that box's top (`cast::top`), where
-/// a ray at that zoom meets it.
+/// there: one column, whatever is placed finer. From over it, from inside
+/// the box it is drawn as, from that box's top, or from over it within the
+/// cell's own cube, its floor is that box's top (`cast::top`), where a ray at that zoom meets
+/// it.
 #[test]
 fn coarse_cell_floored_as_drawn() {
     let [x, y] = flat_at_five();
@@ -523,13 +524,31 @@ fn coarse_cell_floored_as_drawn() {
         .unwrap()
         .cube
         .max[2];
-    for z in [drawn + 3.0, drawn - 0.25] {
+    let side = units(GROUND.cell_zoom(zoom));
+    let cube_top = libm::ceil(drawn / side) * side;
+    assert!(drawn < cube_top, "the cell is filled short of its cube");
+    for z in [drawn + 3.0, drawn - 0.25, (drawn + cube_top) / 2.0] {
         assert_eq!(
             access.floor_under(&world::point(at[0], at[1], z), zoom),
             Answer::Exact(Some(drawn)),
             "from {z}"
         );
     }
+    // A cell keeping one eighth of its cube tops at three quarters of its
+    // side, a height a position holds: from exactly there too.
+    write(store::object_mut(), [x, y, 8.0], OBJECT_COARSEST, red);
+    let top = access
+        .first_hit(&down(at), at_zoom(zoom))
+        .exact()
+        .flatten()
+        .unwrap()
+        .cube
+        .max[2];
+    assert_eq!(top, 9.5);
+    assert_eq!(
+        access.floor_under(&world::point(at[0], at[1], top), zoom),
+        Answer::Exact(Some(top))
+    );
 }
 
 /// Quake III's step-slide, a column at a time. When blocked, the walker
@@ -549,7 +568,7 @@ fn walker_climbs_or_slides() {
     let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.leaf_cell_zoom()) / 2.0;
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     let access = placed(store);
-    let to = access.step_slide(&from, &east, true);
+    let to = access.step_slide(&from, &east, &from, true);
     assert_eq!(
         (q3::to_real(i64::from(to[0])), floor(to)),
         (x + 1.5, 8.0),
@@ -558,159 +577,84 @@ fn walker_climbs_or_slides() {
     // A roof two cells over the walker stops the climb before it tops the
     // wall.
     write(store::object_mut(), [x, y, 7.0], OBJECT_COARSEST, red);
-    let to = access.step_slide(&from, &east, true);
+    let to = access.step_slide(&from, &east, &from, true);
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "stopped at the wall"
     );
     assert_eq!(floor(to), 5.0);
     // Going north-east, the east is slid along and the north is walked.
-    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), true);
+    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), &from, true);
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "slid along the wall"
     );
     assert_eq!((q3::to_real(i64::from(to[1])), floor(to)), (y + 1.5, 5.0));
+    // The walker stands out to where the view stops drawing cells a zoom
+    // coarser than the leaves', as a decor of its cell is drawn, and for an
+    // eye that near it walks as for one beside it. For an eye that far, or
+    // toward an end that far from the eye, it does not: it goes where it is
+    // sent, through the wall, its height not known.
+    let edge = lattice::draw_dist(GROUND, LEAF_ZOOM - 1);
+    let over_it = |height: f64| world::point(x + 0.5, y + 0.5, over(5.0) + height);
+    assert_eq!(
+        access.step_slide(&from, &east, &over_it(edge * 0.99), true),
+        access.step_slide(&from, &east, &from, true)
+    );
+    assert_eq!(
+        access.step_slide(&from, &east, &over_it(edge), true),
+        unknown(&east)
+    );
+    let far = world::point(x + 0.5 + edge, y + 0.5, 0.0);
+    assert_eq!(access.step_slide(&from, &far, &from, true), unknown(&far));
 }
 
-/// Holds the world as the app holds it past the service area, and returns
-/// the corner where four shards past it meet, in units. A source is declared
-/// that serves one shard elsewhere. Over the corner, the tile at the
-/// source's coarsest zoom is the layer's empty one (`Base::empty`: void cells
-/// at sea level, no child), resident, with its cells in the clip levels
-/// around the corner. Every tile under it is absent and answered from it.
-/// Nothing is placed.
-fn past_area() -> [f64; 2] {
+/// A move that is not walked asks the area of its two ends alone. One
+/// walled and within it stays where it is rather than leave; one not walled
+/// goes; and one already past the area goes on freely.
+#[test]
+fn walker_not_standing_keeps_to_the_area() {
     use crate::sys::io::source;
     use pxl_spec::bake::publication::FORMAT;
     use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-    let side = units(SHARD_ZOOM);
-    let corner = [side, -side];
-    let empty = Leaf {
-        tile: TerrainTile::empty().unwrap(),
-        asset_ids: vec![Sentinel::Void as u8; SPAN * SPAN],
-        ele: vec![0; CELL_CNT],
-    };
-    let coarsest = GROUND
-        .cell_of(MIN_ZOOM, &point(corner[0], corner[1]))
-        .tile();
-    resident(corner, &[(coarsest, empty)]);
     source::declare(MIN_ZOOM, &FORMAT, ["0103300"]).unwrap();
-    *store::object_mut() = Store::default();
-    let world = World::now();
-    for at in [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]] {
-        let at = point(corner[0] + at[0], corner[1] + at[1]);
-        assert!(world.past(&at), "{at:?}");
-        assert_eq!(world.surface_support(&at), Answer::Exact(Some(0.0)));
-    }
-    corner
-}
-
-/// Where a walker standing on sea level at `from` ends when it goes `way`,
-/// taken as one `step_slide` after another, each half a leaf cell long or
-/// shorter.
-fn slid_by_cells(world: &World, from: [f64; 2], way: [f64; 2], walled: bool) -> Q3 {
-    let cnt = (2.0 * way[0].abs().max(way[1].abs())).ceil();
-    (1..=cnt as u32).fold(world::point(from[0], from[1], over(0.0)), |at, i| {
-        let share = f64::from(i) / cnt;
-        let to = point(from[0] + way[0] * share, from[1] + way[1] * share);
-        world.step_slide(&at, &to, walled)
-    })
-}
-
-/// Past the service area a walk ends where the same walk ends when it is
-/// taken a leaf cell at a time, at the same height: within a shard, out of
-/// its outermost cell, and across the edge or the corner where shards meet,
-/// along an axis or across both, for a walker that is walled and for one
-/// that is not.
-#[test]
-fn walk_past_area_ends_as_by_cells() {
-    let corner = past_area();
-    let world = World::now();
-    // Each walk's start, from the corner, and its way, in leaf cells.
-    let walks = [
-        ([-300.5, -1000.5], [600.0, 0.0]),
-        ([-1000.5, 300.5], [0.0, -600.0]),
-        ([-300.5, -200.5], [600.0, 450.0]),
-        ([300.5, 200.5], [-600.0, -450.0]),
-        ([-0.5, -700.5], [-400.0, 300.0]),
-        ([-5000.5, -4000.5], [300.0, -200.0]),
-    ];
-    for (start, way) in walks {
-        let from = [corner[0] + start[0], corner[1] + start[1]];
-        let to = point(from[0] + way[0], from[1] + way[1]);
-        for walled in [false, true] {
-            let end = world.step_slide(&world::point(from[0], from[1], over(0.0)), &to, walled);
-            assert_eq!(
-                end,
-                slid_by_cells(&world, from, way, walled),
-                "{start:?} {way:?} walled {walled}"
-            );
-            assert_eq!(end, on_floor(&to, 0.0), "{start:?} {way:?} walled {walled}");
-        }
-    }
-}
-
-/// A walk of any length past the service area ends at its `to`, standing on
-/// the Earth at sea level: a pan at the orbit's largest distance crosses
-/// tens of thousands of leaf cells in a frame.
-#[test]
-fn long_walk_past_area_stands() {
-    let corner = past_area();
-    let world = World::now();
-    let from = world::point(corner[0] - 40_000.5, corner[1] - 30_000.5, over(0.0));
-    let to = point(corner[0] + 60_000.5, corner[1] + 20_000.5);
-    for walled in [false, true] {
-        assert_eq!(world.step_slide(&from, &to, walled), on_floor(&to, 0.0));
-    }
-}
-
-/// A walker that starts over the floor past the service area ends on the
-/// floor, as the first step of a walk a leaf cell at a time drops it: where
-/// its way ends within the shard it starts in, where it leaves the shard,
-/// and where it ends on the low edge of the cell it starts in, which is in
-/// the cell under it.
-#[test]
-fn walk_past_area_drops_to_the_floor() {
-    let corner = past_area();
-    let world = World::now();
-    let start = [corner[0] - 3000.5, corner[1] - 3000.5];
-    let from = world::point(start[0], start[1], over(5.0));
-    for way in [[2000.0, 700.0], [5000.0, 700.0], [-0.5, 0.0]] {
-        let to = point(start[0] + way[0], start[1] + way[1]);
-        for walled in [false, true] {
-            assert_eq!(
-                world.step_slide(&from, &to, walled),
-                on_floor(&to, 0.0),
-                "{way:?}"
-            );
-        }
-    }
-}
-
-/// A shard past the service area that holds something placed is walked a
-/// leaf cell at a time: a wall on the way, with a roof over the cell before
-/// it, stops the walker there, as it does when the walk is taken a leaf cell
-/// at a time.
-#[test]
-fn walk_past_area_stopped_by_placed() {
-    let corner = past_area();
-    let [x, y] = [corner[0] - 1000.0, corner[1] - 1000.0];
-    let red = cube::Object::Red as AssetId;
-    let store = store::object_mut();
-    for z in [0.0, 1.0, 2.0] {
-        write(store, [x + 100.0, y, z], OBJECT_COARSEST, red);
-    }
-    write(store, [x + 99.0, y, 2.0], OBJECT_COARSEST, red);
-    let world = World::now();
-    let (from, way) = ([x + 0.5, y + 0.5], [300.0, 0.0]);
-    let to = point(from[0] + way[0], from[1] + way[1]);
-    for walled in [false, true] {
-        let end = world.step_slide(&world::point(from[0], from[1], over(0.0)), &to, walled);
-        assert_eq!(end, slid_by_cells(&world, from, way, walled));
-        assert!(q3::to_real(i64::from(end[0])) < x + 100.0, "{end:?}");
-        assert_eq!(floor_of(&end), 0.0);
-    }
+    let world = placed(Store::default());
+    let side = units(SHARD_ZOOM);
+    let middle = |[i, j]: [i32; 2]| {
+        world::point(
+            (f64::from(i) + 0.5) * side,
+            (f64::from(j) + 0.5) * side,
+            over(0.0),
+        )
+    };
+    // A shard the source serves, and going east from it the first two it
+    // does not.
+    let served = (-128..128)
+        .flat_map(|i| (-128..128).map(move |j| [i, j]))
+        .find(|&c| !world.past(&middle(c)))
+        .unwrap();
+    let east = (1..)
+        .find(|&k| world.past(&middle([served[0] + k, served[1]])))
+        .unwrap();
+    let [inside, outside, further] =
+        [0, east, east + 1].map(|k| middle([served[0] + k, served[1]]));
+    assert!(world.within(&inside) && !world.within(&outside));
+    // The ends lie a shard apart, farther than a walker stands for any
+    // eye: here one beside the start.
+    let eye = inside;
+    assert_eq!(world.step_slide(&inside, &outside, &eye, true), inside);
+    assert_eq!(
+        world.step_slide(&inside, &outside, &eye, false),
+        unknown(&outside)
+    );
+    assert_eq!(
+        world.step_slide(&outside, &further, &eye, true),
+        unknown(&further)
+    );
+    // A walker that cannot be stood, no ground held under it, is walled the
+    // same.
+    let lost = unknown(&inside);
+    assert_eq!(world.step_slide(&lost, &outside, &eye, true), lost);
 }
 
 /// A height picks the floor nearest it: the ground under a deck or the deck,
@@ -908,8 +852,8 @@ fn generated_decor_stays() {
     let near = |store: Store| {
         let world = placed(store);
         let space = Aabb {
-            min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
-            max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+            min: [x - 8.0, y - 8.0, world::BOUND.min[2]],
+            max: [x + 8.0, y + 8.0, world::BOUND.max[2]],
         };
         world.generated_over(&space)
     };
@@ -938,8 +882,8 @@ fn generated_decor_edit_removes() {
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
     let space = Aabb {
-        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
-        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+        min: [x - 8.0, y - 8.0, world::BOUND.min[2]],
+        max: [x + 8.0, y + 8.0, world::BOUND.max[2]],
     };
     let at = |tree: &Instance| {
         let [cx, cy, cz] = tree.generated_in().unwrap();
@@ -984,8 +928,8 @@ fn generated_decor_struck_where_generated() {
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
     let space = Aabb {
-        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
-        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+        min: [x - 8.0, y - 8.0, world::BOUND.min[2]],
+        max: [x + 8.0, y + 8.0, world::BOUND.max[2]],
     };
     let generates = |i: &Instance| {
         let [cx, cy, _] = i.generated_in().unwrap();

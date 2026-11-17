@@ -14,6 +14,13 @@
  * drag still moves the world. In message mode the pointer counts as off the
  * world, so that nothing hovers there and no tool previews what a tap would
  * do.
+ *
+ * Every gesture runs on the JS thread (`runOnJS`), where the core is sent
+ * to; react-native-reanimated would else run its callbacks on the UI's. Its
+ * Babel plugin still hands each callback the values around it as they stood
+ * when the callback was made, so a callback only passes its event to a
+ * function here, and the functions alone read and write what this file
+ * holds.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -125,6 +132,55 @@ function turnTo(x: f64, y: f64): void {
   angle = now;
 }
 
+function beginPress(x: f64, y: f64): void {
+  pressed = true;
+  putKeyboardAway();
+  taps = dockMode() !== DockMode.MESSAGE;
+  if (!taps) setDockMode(DockMode.PALETTE);
+  if (pressShifted()) beginTurn(x, y);
+  sendDragMode();
+}
+
+function setFingerCount(count: f64): void {
+  fingerCount = count;
+  if (fingerCount > 1) taps = false;
+  sendDragMode();
+}
+
+/** The drag of every finger down, at their middle: one finger pans, and two
+ * moving up or down together tilt. */
+function dragTo(x: f64, y: f64, dx: f64, dy: f64, count: f64): void {
+  setFingerCount(count);
+  if (fingerCount > 1) input.tilt(tiltOf(dy));
+  else if (turning) turnTo(x, y);
+  else input.pan(dx, dy);
+}
+
+function endPress(): void {
+  pressed = false;
+  fingerCount = 0;
+  turning = false;
+  sendDragMode();
+}
+
+function beginSecondaryPress(x: f64, y: f64): void {
+  beginTurn(x, y);
+  sendDragMode();
+}
+
+function endSecondaryPress(): void {
+  turning = false;
+  sendDragMode();
+}
+
+function tapAt(x: f64, y: f64): void {
+  if (taps && !pressShifted()) input.tap(x, y);
+}
+
+function hoverAt(x: f64, y: f64): void {
+  if (dockMode() !== DockMode.MESSAGE) input.hover(x, y);
+}
+
 export function WorldGestures({
   style,
   children,
@@ -132,77 +188,51 @@ export function WorldGestures({
   style: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  // The drag of every finger down, at their middle: one finger pans, and two
-  // moving up or down together tilt. A pinch and a twist are told apart from
-  // it only once they pass their own thresholds, so the fingers are counted
-  // here.
+  // A pinch and a twist are told apart from the drag only once they pass
+  // their own thresholds, so the drag counts the fingers.
   const primary = usePanGesture({
+    runOnJS: true,
     minDistance: TAP_SLOP_PX,
     averageTouches: true,
     mouseButton: MouseButton.LEFT,
-    onBegin: (e) => {
-      pressed = true;
-      putKeyboardAway();
-      taps = dockMode() !== DockMode.MESSAGE;
-      if (!taps) setDockMode(DockMode.PALETTE);
-      if (pressShifted()) beginTurn(e.x, e.y);
-      sendDragMode();
-    },
-    onTouchesDown: (e) => {
-      fingerCount = e.numberOfTouches;
-      if (fingerCount > 1) taps = false;
-      sendDragMode();
-    },
-    onUpdate: (e) => {
-      fingerCount = e.numberOfPointers;
-      sendDragMode();
-      if (fingerCount > 1) input.tilt(tiltOf(e.changeY));
-      else if (turning) turnTo(e.x, e.y);
-      else input.pan(e.changeX, e.changeY);
-    },
-    onFinalize: () => {
-      pressed = false;
-      fingerCount = 0;
-      turning = false;
-      sendDragMode();
-    },
+    onBegin: (e) => beginPress(e.x, e.y),
+    onTouchesDown: (e) => setFingerCount(e.numberOfTouches),
+    onUpdate: (e) => dragTo(e.x, e.y, e.changeX, e.changeY, e.numberOfPointers),
+    onFinalize: () => endPress(),
   });
   // A button picks among a mouse's presses alone, so a finger is left to
   // the primary.
   const secondary = usePanGesture({
+    runOnJS: true,
     minDistance: TAP_SLOP_PX,
     mouseButton: MouseButton.RIGHT,
     onBegin: (e) => {
-      if (e.pointerType !== PointerType.MOUSE) return;
-      beginTurn(e.x, e.y);
-      sendDragMode();
+      if (e.pointerType === PointerType.MOUSE) beginSecondaryPress(e.x, e.y);
     },
     onUpdate: (e) => {
       if (e.pointerType === PointerType.MOUSE) turnTo(e.x, e.y);
     },
     onFinalize: (e) => {
-      if (e.pointerType !== PointerType.MOUSE) return;
-      turning = false;
-      sendDragMode();
+      if (e.pointerType === PointerType.MOUSE) endSecondaryPress();
     },
   });
   const pinch = usePinchGesture({
+    runOnJS: true,
     onUpdate: (e) => input.zoom(e.scaleChange),
   });
   const twist = useRotationGesture({
+    runOnJS: true,
     onUpdate: (e) => input.turn(-e.rotationChange),
   });
   const tap = useTapGesture({
+    runOnJS: true,
     maxDistance: TAP_SLOP_PX,
-    onActivate: (e) => {
-      if (taps && !pressShifted()) input.tap(e.x, e.y);
-    },
+    onActivate: (e) => tapAt(e.x, e.y),
   });
   const hover = useHoverGesture({
-    onUpdate: (e) => {
-      if (dockMode() !== DockMode.MESSAGE) input.hover(e.x, e.y);
-    },
-    onFinalize: input.out,
+    runOnJS: true,
+    onUpdate: (e) => hoverAt(e.x, e.y),
+    onFinalize: () => input.out(),
   });
   const gestures = useSimultaneousGestures(
     primary,

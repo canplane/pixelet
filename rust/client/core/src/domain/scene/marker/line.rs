@@ -10,22 +10,20 @@ use crate::domain::scene::character::companion::line_hangs;
 use crate::domain::scene::marker::chat::shown_line;
 use crate::domain::scene::marker::design::Design;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::V3;
 
 /// What the arrangement compares of the line, by value: its bubble while the
-/// line is said, and where the bubble hangs while it shows, seen from the
-/// eye.
+/// line is said, and where the bubble hangs while it shows.
 #[derive(Clone, PartialEq)]
 pub(super) struct Bubble {
     line: Option<Design>,
     pos: Option<Q3>,
 }
 
-/// The line as it is now, seen from `eye`.
-pub(super) fn bubble(eye: V3) -> Bubble {
+/// The line as it is now.
+pub(super) fn bubble() -> Bubble {
     Bubble {
         line: shown_line(),
-        pos: line_hangs(eye),
+        pos: line_hangs(),
     }
 }
 

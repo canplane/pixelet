@@ -49,7 +49,7 @@ mod surface;
 mod world;
 
 pub(crate) use ray::{Hit, HitKind, Ray, at_zoom, by_dist, cell_zoom_at, finest, zoom_range};
-pub(crate) use support::{floor_of, is_unknown, on_floor, over, unknown};
+pub(crate) use support::{floor_of, is_unknown, on_floor, over, unknown, walker_stands};
 pub(crate) use world::{ColumnWalk, World};
 
 use pxl_content::generation::CLAIM_EXTENT;

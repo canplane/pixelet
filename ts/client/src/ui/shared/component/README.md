@@ -1,11 +1,11 @@
 # Where the platforms part in the UI's pieces
 
 A piece the platforms draw differently is a pair of files, or one file and its
-overrides beside it, as React Native names them: `motion/motion.web.tsx` is the
-web's and `motion/motion.native.tsx` both iOS's and Android's;
+overrides beside it, as React Native names them: `backdrop.web.ts` is the
+web's and `backdrop.native.ts` both iOS's and Android's;
 `segmented.tsx` is the web's and Android's, `segmented.ios.tsx` an iPhone's.
 Metro takes the file of the platform it builds for (`ts/build/path.ts`
-`platformFile`), and every import names the plain file (`motion.tsx`,
+`platformFile`), and every import names the plain file (`backdrop.ts`,
 `segmented.tsx`). An override re-exports the default and replaces only what it
 draws itself, and `ts/client/src/conform.ts` holds each native file to the web
 file's exports and each override to its default's.
@@ -29,7 +29,7 @@ the colors that part do in `theme.ts`.
 | `text-field`     | system clear button                                                               | the web's          | its own clear button                                |
 | `icon`           | SF Symbols (expo-symbols)                                                         | the web's Phosphor | Phosphor                                            |
 | `palette`        | system colors                                                                     | the web's          | iOS's light values                                  |
-| `above-keyboard` | `KeyboardDock.swift`                                                              | `KeyboardDock.kt`  | visual viewport                                     |
+| `above-keyboard` | react-native-keyboard-controller                                                  | the iPhone's       | visual viewport                                     |
 
 Android takes the web's own drawing wherever Material's controls would read as
 any Android app's. Its backing is the fill made solid: it cannot blur the map,
