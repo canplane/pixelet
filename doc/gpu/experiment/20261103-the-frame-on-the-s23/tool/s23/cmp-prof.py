@@ -1,6 +1,6 @@
 # prof.py <out dir> <tag> <url> : one fresh page as script/compare-perf.py loads it, its drive and its report.
 import importlib.util, os, sys, time
-spec = importlib.util.spec_from_file_location("compare", "/Users/sanghoon/git/canplane/pixelet/script/compare-perf.py")
+spec = importlib.util.spec_from_file_location("compare", "~/git/canplane/pixelet/script/compare-perf.py")
 c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
 out, tag, url = sys.argv[1:4]
 os.makedirs(out, exist_ok=True)

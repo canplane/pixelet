@@ -1,4 +1,4 @@
-   Compiling pxl-render v0.0.0 (/Users/sanghoon/git/canplane/pixelet-decor/rust/client/render)
+   Compiling pxl-render v0.0.0 (~/git/canplane/pixelet-decor/rust/client/render)
     Finished `test` profile [optimized + debuginfo] target(s) in 1.32s
      Running tests/decor.rs (target/session/dd264d10-d7bf-4986-97f1-da00580bf1cd/debug/deps/decor-70b590083297ee7f)
 

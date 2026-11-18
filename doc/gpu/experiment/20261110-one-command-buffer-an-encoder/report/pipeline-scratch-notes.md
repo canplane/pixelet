@@ -1,10 +1,10 @@
 # Why 17 compute pipelines on the S23 each held a 12,582,912 B block: raw evidence recovered from the transcript
 
-Source: the subagent transcript aaaf8bda710c46603 (`/Users/sanghoon/.claude/projects/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/subagents/agent-aaaf8bda710c46603.jsonl`, linked from `/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/aaaf8bda710c46603.output`).
+Source: the subagent transcript aaaf8bda710c46603 (`~/.claude/projects/-Users-<user>-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/subagents/agent-aaaf8bda710c46603.jsonl`, linked from `<scratch>/tasks/aaaf8bda710c46603.output`).
 
 Conventions. `##### [n] KIND` is the zero-based line n of the JSONL; TOOL_USE is the command or input the agent sent, TOOL_RESULT the tool output as it stands. Blocks are fenced with `~~~~~`. Only two entries are the agent's own prose: [15] (one line) and [322] (the final report, section 7). A figure marked **[agent only]** below appears in the transcript only in that prose, not in a tool output. Where a result was shortened by the harness, it says so inside the block (`[... earlier output omitted ...]`). Tool results do not carry the id of the call they answer; each result follows its call in order.
 
-Setup facts from the task prompt [0] and the first commands: device S23 R3CW40HBB9E (adb devices: `model:SM_S911N device:dm1q`), Android 16, wgpu 30.0.1, naga 30.0.1 (Cargo.lock, [66]), ash 0.38.0+1.3.281 ([66]), worktree `tmp/agent-pvt/wt` at HEAD 7cb5490263 ([36]).
+Setup facts from the task prompt [0] and the first commands: device S23 <serial> (adb devices: `model:SM_S911N device:dm1q`), Android 16, wgpu 30.0.1, naga 30.0.1 (Cargo.lock, [66]), ash 0.38.0+1.3.281 ([66]), worktree `tmp/agent-pvt/wt` at HEAD 7cb5490263 ([36]).
 
 ## 1. How the block was established
 
@@ -14,7 +14,7 @@ The WGSL modules the build assembles (`out/shader/assembled/*.wgsl`, 87 files, n
 
 ~~~~~
 ##### [73] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt; sed -n 2826,2880p xpute/rust/vendor/wgpu-hal/src/vulkan/adapter.rs; grep -n "naga" rust/Cargo.toml rust/client/render/Cargo.toml xpute/rust/gpu/Cargo.toml | head; grep -n "override \|var<immediate>\|var<push_constant>" -r rust/client/render/src/frame/shader --include=*.wgsl | head; (cd rust && CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host cargo check -p pxl-render 2>&1 | tail -3); find /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host -type d -name assembled
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt; sed -n 2826,2880p xpute/rust/vendor/wgpu-hal/src/vulkan/adapter.rs; grep -n "naga" rust/Cargo.toml rust/client/render/Cargo.toml xpute/rust/gpu/Cargo.toml | head; grep -n "override \|var<immediate>\|var<push_constant>" -r rust/client/render/src/frame/shader --include=*.wgsl | head; (cd rust && CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target-host cargo check -p pxl-render 2>&1 | tail -3); find ~/git/canplane/pixelet/tmp/agent-pvt/target-host -type d -name assembled
 
 ##### [74] TOOL_RESULT
             spv::Options {
@@ -76,9 +76,9 @@ rust/client/render/Cargo.toml:40:naga = { version = "30", features = ["wgsl-in"]
 rust/client/render/Cargo.toml:47:wgpu = { version = "30", default-features = false, features = ["wgsl", "metal", "vulkan", "naga-ir"] }
 (eval):1: no matches found: --include=*.wgsl
    Compiling half v2.7.1
-   Compiling pxl-render v0.0.0 (/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render)
+   Compiling pxl-render v0.0.0 (~/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render)
     Finished `dev` profile [optimized + debuginfo] target(s) in 27.89s
-/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled
+~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled
 
 ~~~~~
 
@@ -86,7 +86,7 @@ Harness crate: Cargo.toml, src/main.rs in full, and the Android build command ([
 
 ~~~~~
 ##### [81] TOOL_USE Bash
-mkdir -p /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness/src && cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness && cat > Cargo.toml <<'EOF'
+mkdir -p ~/git/canplane/pixelet/tmp/agent-pvt/harness/src && cd ~/git/canplane/pixelet/tmp/agent-pvt/harness && cat > Cargo.toml <<'EOF'
 [package]
 name = "pvt"
 version = "0.0.0"
@@ -415,7 +415,7 @@ fn main() {
     }
 }
 EOF
-export CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness
+export CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target-harness
 NDK=$HOME/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/bin
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/aarch64-linux-android33-clang
 export CC_aarch64_linux_android=$NDK/aarch64-linux-android33-clang
@@ -450,7 +450,7 @@ cargo build --target aarch64-linux-android 2>&1 | tail -30
    Compiling naga-types v30.0.1
    Compiling zerocopy-derive v0.8.63
    Compiling half v2.7.1
-   Compiling pvt v0.0.0 (/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness)
+   Compiling pvt v0.0.0 (~/git/canplane/pixelet/tmp/agent-pvt/harness)
     Finished `dev` profile [optimized + debuginfo] target(s) in 48.04s
 
 ~~~~~
@@ -459,7 +459,7 @@ Patch of the harness (`p_next` reset), build, push to the phone, first run ([85]
 
 ~~~~~
 ##### [85] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness && python3 - <<'EOF'
+cd ~/git/canplane/pixelet/tmp/agent-pvt/harness && python3 - <<'EOF'
 p='src/main.rs'
 s=open(p).read()
 a='''        let f2 = vk::PhysicalDeviceFeatures2::default().features(f2.features);
@@ -474,23 +474,23 @@ b=a+'''        f11.p_next = std::ptr::null_mut();
 assert a in s
 open(p,'w').write(s.replace(a,b))
 EOF
-export CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness
+export CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target-harness
 NDK=$HOME/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/bin
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/aarch64-linux-android33-clang
 export CC_aarch64_linux_android=$NDK/aarch64-linux-android33-clang
 cargo build --target aarch64-linux-android 2>&1 | tail -3
 ADB=~/Library/Android/sdk/platform-tools/adb
-A=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled
-$ADB -s R3CW40HBB9E shell mkdir -p /data/local/tmp/pvt/a
-$ADB -s R3CW40HBB9E push $CARGO_TARGET_DIR/aarch64-linux-android/debug/pvt /data/local/tmp/pvt/ 2>&1 | tail -1
-$ADB -s R3CW40HBB9E push $A/. /data/local/tmp/pvt/a/ 2>&1 | tail -1
-$ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt a/queue_last_samples.wgsl 2>&1 | head -60; ls a | head -100'; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+A=~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled
+$ADB -s <serial> shell mkdir -p /data/local/tmp/pvt/a
+$ADB -s <serial> push $CARGO_TARGET_DIR/aarch64-linux-android/debug/pvt /data/local/tmp/pvt/ 2>&1 | tail -1
+$ADB -s <serial> push $A/. /data/local/tmp/pvt/a/ 2>&1 | tail -1
+$ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt a/queue_last_samples.wgsl 2>&1 | head -60; ls a | head -100'; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [86] TOOL_RESULT
-   Compiling pvt v0.0.0 (/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness)
+   Compiling pvt v0.0.0 (~/git/canplane/pixelet/tmp/agent-pvt/harness)
     Finished `dev` profile [optimized + debuginfo] target(s) in 1.36s
-/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness/aarch64-linux-android/debug/pvt: 1 file pushed, 0 skipped. 138.4 MB/s (40981248 bytes in 0.282s)
-/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/./: 87 files pushed, 0 skipped. 15.2 MB/s (1343115 bytes in 0.084s)
+~/git/canplane/pixelet/tmp/agent-pvt/target-harness/aarch64-linux-android/debug/pvt: 1 file pushed, 0 skipped. 138.4 MB/s (40981248 bytes in 0.282s)
+~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/./: 87 files pushed, 0 skipped. 15.2 MB/s (1343115 bytes in 0.084s)
 device "Adreno (TM) 740" api 1.3.128 driver 0x802a4001
 driver "Qualcomm Technologies Inc. Adreno Vulkan Driver" info "Driver Build: 3df4c357f0, I515341007c, 1769513954\nDate: 01/27/26\nCompiler Version: E031.41.03.64\nDriver Branch: \n"
 memory_report true executable_properties true robustness2 true
@@ -589,10 +589,10 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 world_asked.wgsl
 
 ##### [89] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; $ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt a/*.wgsl 2>&1' > $S/all.txt; wc -l $S/all.txt; sed -n 1,50p $S/all.txt | cut -c1-200; grep -c pipeline_allocs $S/all.txt; grep pipeline_allocs $S/all.txt | awk '{print $NF, $(NF-1)}' | sort | uniq -c | sort -n | tail -5; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; $ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt a/*.wgsl 2>&1' > $S/all.txt; wc -l $S/all.txt; sed -n 1,50p $S/all.txt | cut -c1-200; grep -c pipeline_allocs $S/all.txt; grep pipeline_allocs $S/all.txt | awk '{print $NF, $(NF-1)}' | sort | uniq -c | sort -n | tail -5; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [90] TOOL_RESULT
-       9 /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/all.txt
+       9 <scratch>/all.txt
 device "Adreno (TM) 740" api 1.3.128 driver 0x802a4001
 driver "Qualcomm Technologies Inc. Adreno Vulkan Driver" info "Driver Build: 3df4c357f0, I515341007c, 1769513954\nDate: 01/27/26\nCompiler Version: E031.41.03.64\nDriver Branch: \n"
 memory_report true executable_properties true robustness2 true
@@ -612,20 +612,20 @@ Driver and device lines are in [86] above (`device "Adreno (TM) 740" api 1.3.128
 
 ~~~~~
 ##### [93] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness && sed -i '' 's/fake_missing_bindings: false/fake_missing_bindings: true/' src/main.rs
-export CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness
+cd ~/git/canplane/pixelet/tmp/agent-pvt/harness && sed -i '' 's/fake_missing_bindings: false/fake_missing_bindings: true/' src/main.rs
+export CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target-harness
 NDK=$HOME/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/bin
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/aarch64-linux-android33-clang
 export CC_aarch64_linux_android=$NDK/aarch64-linux-android33-clang
 cargo build --target aarch64-linux-android 2>&1 | tail -1
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad
-$ADB -s R3CW40HBB9E push $CARGO_TARGET_DIR/aarch64-linux-android/debug/pvt /data/local/tmp/pvt/ 2>&1 | tail -1
-$ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt a/*.wgsl 2>&1' > $S/all.txt; wc -l $S/all.txt; grep -c pipeline_allocs $S/all.txt; grep -m1 -A40 pipeline_allocs $S/all.txt | cut -c1-200; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>
+$ADB -s <serial> push $CARGO_TARGET_DIR/aarch64-linux-android/debug/pvt /data/local/tmp/pvt/ 2>&1 | tail -1
+$ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt a/*.wgsl 2>&1' > $S/all.txt; wc -l $S/all.txt; grep -c pipeline_allocs $S/all.txt; grep -m1 -A40 pipeline_allocs $S/all.txt | cut -c1-200; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [94] TOOL_RESULT
     Finished `dev` profile [optimized + debuginfo] target(s) in 0.95s
-/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness/aarch64-linux-android/debug/pvt: 1 file pushed, 0 skipped. 156.7 MB/s (40981248 bytes in 0.249s)
-    1769 /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/all.txt
+~/git/canplane/pixelet/tmp/agent-pvt/target-harness/aarch64-linux-android/debug/pvt: 1 file pushed, 0 skipped. 156.7 MB/s (40981248 bytes in 0.249s)
+    1769 <scratch>/all.txt
 63
 15.wgsl exposure_cs 124ms spirv_words 8504 pipeline_allocs [24608, 256]
   exe 0 "Compute Shader" "Adreno Shader" stages COMPUTE subgroup 64
@@ -664,9 +664,9 @@ Script ([97]) and result ([98]): columns `file entry ms words allocs | instr reg
 
 ~~~~~
 ##### [97] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; python3 - <<'EOF'
+S=<scratch>; python3 - <<'EOF'
 import re
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+S='<scratch>'
 rows=[];cur=None
 for l in open(S+'/all.txt'):
     m=re.match(r'(\S+) (\S+) (\d+)ms spirv_words (\d+) pipeline_allocs \[(.*)\]',l)
@@ -680,7 +680,7 @@ print('file entry ms words allocs | instr regs scratch(slots) hp')
 for r in rows:
     print(r['f'],r['e'],r['ms'],r['w'],r['a'],'|',r.get('Instruction count all'),r.get('Overall register footprint per shader instance'),r.get('Scratch memory usage per shader instance'),r.get('Half precision register footprint per shader instance'),r.get('Shader processor utilization percentage'))
 EOF
-~/Library/Android/sdk/platform-tools/adb -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+~/Library/Android/sdk/platform-tools/adb -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [98] TOOL_RESULT
 file entry ms words allocs | instr regs scratch(slots) hp
@@ -756,9 +756,9 @@ Rule check over every pipeline in the saved outputs ([146]/[147]): block expecte
 
 ~~~~~
 ##### [146] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; python3 - <<'EOF'
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; python3 - <<'EOF'
 import re,glob,math
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+S='<scratch>'
 exec(open(S+'/tab.py').read().split("for p in sys.argv")[0])
 tot=0;mis=0;neq=[]
 for f in glob.glob(S+'/x/*.txt')+[S+'/all.txt']:
@@ -773,7 +773,7 @@ for f in glob.glob(S+'/x/*.txt')+[S+'/all.txt']:
 print('pipelines',tot,'mismatch',len(neq))
 print(neq[:10])
 EOF
-$ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"; $ADB -s R3CW40HBB9E shell pm list packages | grep -i chrome; $ADB -s R3CW40HBB9E shell dumpsys package com.android.chrome | grep versionName | head -1
+$ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"; $ADB -s <serial> shell pm list packages | grep -i chrome; $ADB -s <serial> shell dumpsys package com.android.chrome | grep versionName | head -1
 
 ##### [147] TOOL_RESULT
 pipelines 542 mismatch 1
@@ -790,8 +790,8 @@ Synthetic spill shaders n0020..n0800 ([105]/[106]) and m0620..m1000 with the cal
 
 ~~~~~
 ##### [105] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; mkdir -p $S/syn; python3 - <<'EOF'
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; mkdir -p $S/syn; python3 - <<'EOF'
+S='<scratch>'
 for n in [20,40,44,48,50,52,56,60,70,80,100,120,150,180,200,250,300,400,600,800]:
     out="@group(0) @binding(0) var<storage, read_write> d: array<vec4<u32>>;\n@compute @workgroup_size(1) fn main() {\n"
     for i in range(n): out+=f"  let v{i} = d[{i}];\n"
@@ -802,10 +802,10 @@ for n in [20,40,44,48,50,52,56,60,70,80,100,120,150,180,200,250,300,400,600,800]
     out+=";\n}\n"
     open(f"{S}/syn/n{n:04d}.wgsl","w").write(out)
 EOF
-$ADB -s R3CW40HBB9E shell mkdir -p /data/local/tmp/pvt/syn; $ADB -s R3CW40HBB9E push $S/syn/. /data/local/tmp/pvt/syn/ 2>&1 | tail -1; $ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt syn/*.wgsl 2>&1' > $S/x/syn.txt; python3 $S/tab.py $S/x/syn.txt | cut -c1-120; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+$ADB -s <serial> shell mkdir -p /data/local/tmp/pvt/syn; $ADB -s <serial> push $S/syn/. /data/local/tmp/pvt/syn/ 2>&1 | tail -1; $ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt syn/*.wgsl 2>&1' > $S/x/syn.txt; python3 $S/tab.py $S/x/syn.txt | cut -c1-120; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [106] TOOL_RESULT
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/syn/./: 20 files pushed, 0 skipped. 5.9 MB/s (243720 bytes in 0.039s)
+<scratch>/syn/./: 20 files pushed, 0 skipped. 5.9 MB/s (243720 bytes in 0.039s)
 == syn.txt
   n0020.wgsl main 23 ms 1495 w [2720, 352] I 502 R 25 HR 0 S 0 SP 18
   n0040.wgsl main 27 ms 2655 w [3616, 224] I 940 R 45 HR 0 S 0 SP 12
@@ -832,7 +832,7 @@ $ADB -s R3CW40HBB9E shell mkdir -p /data/local/tmp/pvt/syn; $ADB -s R3CW40HBB9E 
 
 ~~~~~
 ##### [207] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; mkdir -p $S/call; cat > $S/call/one.wgsl <<'EOF'
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; mkdir -p $S/call; cat > $S/call/one.wgsl <<'EOF'
 @group(0) @binding(0) var<storage, read_write> d: array<vec4<u32>>;
 fn h(a: vec4<u32>, b: vec4<u32>) -> vec4<u32> {
   var s = a;
@@ -890,7 +890,7 @@ fn h2(a: vec4<u32>, b: vec4<u32>) -> vec4<u32> {
   d[0] = h2(d[3], a) + a;
 }
 EOF
-$ADB -s R3CW40HBB9E shell mkdir -p /data/local/tmp/pvt/call; $ADB -s R3CW40HBB9E push $S/call/. /data/local/tmp/pvt/call/ 2>&1 | tail -1; for N in 620 700 780 850 1000; do n=$N; python3 - <<EOF
+$ADB -s <serial> shell mkdir -p /data/local/tmp/pvt/call; $ADB -s <serial> push $S/call/. /data/local/tmp/pvt/call/ 2>&1 | tail -1; for N in 620 700 780 850 1000; do n=$N; python3 - <<EOF
 n=$N
 S='$S'
 out="@group(0) @binding(0) var<storage, read_write> d: array<vec4<u32>>;\n@compute @workgroup_size(1) fn main() {\n"
@@ -902,14 +902,14 @@ for i in range(n): out+=f" + v{i}"
 out+=";\n}\n"
 open(f"{S}/syn/m{n:04d}.wgsl","w").write(out)
 EOF
-done; $ADB -s R3CW40HBB9E push $S/syn/. /data/local/tmp/pvt/syn/ 2>&1 | tail -1; $ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt call/one.wgsl call/two.wgsl call/twoinlined.wgsl syn/m*.wgsl 2>&1' > $S/x/call.txt; python3 $S/tab.py $S/x/call.txt | cut -c1-110; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -iE "mName=(AP|BAT)" | head -3
+done; $ADB -s <serial> push $S/syn/. /data/local/tmp/pvt/syn/ 2>&1 | tail -1; $ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ./pvt call/one.wgsl call/two.wgsl call/twoinlined.wgsl syn/m*.wgsl 2>&1' > $S/x/call.txt; python3 $S/tab.py $S/x/call.txt | cut -c1-110; $ADB -s <serial> shell dumpsys thermalservice | grep -iE "mName=(AP|BAT)" | head -3
 
 ~~~~~
 
 ~~~~~
 ##### [209] TOOL_RESULT
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/call/./: 3 files pushed, 0 skipped. 0.1 MB/s (1402 bytes in 0.019s)
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/syn/./: 25 files pushed, 0 skipped. 6.4 MB/s (511230 bytes in 0.076s)
+<scratch>/call/./: 3 files pushed, 0 skipped. 0.1 MB/s (1402 bytes in 0.019s)
+<scratch>/syn/./: 25 files pushed, 0 skipped. 6.4 MB/s (511230 bytes in 0.076s)
 == call.txt
   one.wgsl main 8 ms 473 w [928, 352] I 118 R 6 HR 0 S 0 SP 50
   two.wgsl main 8 ms 505 w [1696, 352] I 231 R 6 HR 0 S 0 SP 50
@@ -935,7 +935,7 @@ Runs: `base`; `nocapture` (CAPTURE=0, PIPELINE_CREATE_CAPTURE_STATISTICS off); `
 
 ~~~~~
 ##### [101] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; mkdir -p $S/x; cat > $S/tab.py <<'EOF'
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; mkdir -p $S/x; cat > $S/tab.py <<'EOF'
 import re,sys
 def rows(path):
     rs=[];cur=None
@@ -953,9 +953,9 @@ for p in sys.argv[1:]:
         print(' ',r['f'],r['e'],r['ms'],'ms',r['w'],'w',r['a'],'I',r.get('Instruction count all'),'R',r.get('Overall register footprint per shader instance'),'HR',r.get('Half precision register footprint per shader instance'),'S',r.get('Scratch memory usage per shader instance'),'SP',r.get('Shader processor utilization percentage'))
 EOF
 LIST="a/39.wgsl a/26.wgsl a/43.wgsl a/34.wgsl a/67.wgsl a/71.wgsl a/73.wgsl a/36.wgsl a/81.wgsl a/82.wgsl a/83.wgsl a/84.wgsl a/world_asked.wgsl"
-run() { n=$1; shift; $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && STATS_ALL=1 $* ./pvt $LIST 2>&1" > $S/x/$n.txt; }
+run() { n=$1; shift; $ADB -s <serial> shell "cd /data/local/tmp/pvt && STATS_ALL=1 $* ./pvt $LIST 2>&1" > $S/x/$n.txt; }
 run base; run nocapture CAPTURE=0; run idxunchecked INDEX=unchecked; run noloop LOOP_BOUND=0; run nodiv INT_DIV=0; run alloff INDEX=unchecked LOOP_BOUND=0 INT_DIV=0 BUFFER=unchecked IMAGE=unchecked; run bufrestrict BUFFER=restrict; run varying VARYING=1
-python3 $S/tab.py $S/x/base.txt $S/x/nocapture.txt $S/x/idxunchecked.txt $S/x/noloop.txt $S/x/nodiv.txt $S/x/alloff.txt $S/x/bufrestrict.txt $S/x/varying.txt | cut -c1-110; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+python3 $S/tab.py $S/x/base.txt $S/x/nocapture.txt $S/x/idxunchecked.txt $S/x/noloop.txt $S/x/nodiv.txt $S/x/alloff.txt $S/x/bufrestrict.txt $S/x/varying.txt | cut -c1-110; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [102] TOOL_RESULT
 == base.txt
@@ -1119,7 +1119,7 @@ Constant ids the stubs refer to ([133]/[134]) and the part lists of the modules 
 
 ~~~~~
 ##### [111] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/frame/shader; sed -n 410,440p part.rs; grep -n "fn \|loop\|while\|for (" world.wgsl | sed -n 1,120p; A=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; wc -l $A/39.wgsl $A/81.wgsl $A/34.wgsl $A/43.wgsl $A/26.wgsl $A/world_asked.wgsl; grep -n "^fn \|@compute" $A/39.wgsl | wc -l
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/frame/shader; sed -n 410,440p part.rs; grep -n "fn \|loop\|while\|for (" world.wgsl | sed -n 1,120p; A=~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; wc -l $A/39.wgsl $A/81.wgsl $A/34.wgsl $A/43.wgsl $A/26.wgsl $A/world_asked.wgsl; grep -n "^fn \|@compute" $A/39.wgsl | wc -l
 
 ##### [112] TOOL_RESULT
     &[
@@ -1203,12 +1203,12 @@ cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/
 648:fn hollow(node_zoom: u32, node: vec3<i32>) -> u32 {
 673:fn world_root(zoom: u32, c: vec3<i32>) -> vec3<u32> {
 681:fn world_cell(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
-    1614 /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/39.wgsl
-    1605 /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/81.wgsl
-    2382 /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/34.wgsl
-    1479 /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/43.wgsl
-    1432 /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/26.wgsl
-    1293 /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/world_asked.wgsl
+    1614 ~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/39.wgsl
+    1605 ~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/81.wgsl
+    2382 ~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/34.wgsl
+    1479 ~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/43.wgsl
+    1432 ~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/26.wgsl
+    1293 ~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled/world_asked.wgsl
     9805 total
      149
 
@@ -1216,7 +1216,7 @@ cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/
 
 ~~~~~
 ##### [133] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/frame/shader; grep -n "SHADER_QUEUE_LAST\|SHADER_QUEUE_ASK\|SHADER_DECOR\b\|SHADER_FACE\b\|SHADER_FACES\|pub const SHADER" part.rs group.rs sequence.rs ../mod.rs 2>/dev/null | head -40; grep -rn "SHADER_QUEUE_LAST\b" .. | grep -v "wgsl" | head -8
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/frame/shader; grep -n "SHADER_QUEUE_LAST\|SHADER_QUEUE_ASK\|SHADER_DECOR\b\|SHADER_FACE\b\|SHADER_FACES\|pub const SHADER" part.rs group.rs sequence.rs ../mod.rs 2>/dev/null | head -40; grep -rn "SHADER_QUEUE_LAST\b" .. | grep -v "wgsl" | head -8
 
 ##### [134] TOOL_RESULT
 part.rs:27:pub const SHADER_BOX: u32 = 0;
@@ -1271,10 +1271,10 @@ First attempt, stub.py and its run on module 81 ([117]/[118]); the push found 0 
 
 ~~~~~
 ##### [117] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cat > $S/stub.py <<'EOF'
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cat > $S/stub.py <<'EOF'
 import re,sys,os
-SHADER='/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/frame/shader'
-A='/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled'
+SHADER='~/git/canplane/pixelet/tmp/agent-pvt/wt/rust/client/render/src/frame/shader'
+A='~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled'
 def fns(file):
     src=open(f'{SHADER}/{file}').read()
     return re.findall(r'^fn (\w+)\(',src,re.M)
@@ -1308,19 +1308,19 @@ ns=[]
 for f in ['world.wgsl','world_split.wgsl','world_rule.wgsl','way.wgsl','answer.wgsl','ask.wgsl','queue_walk.wgsl']:
     ns+=stub.fns(f)
 print(' '.join(dict.fromkeys(ns)))"); echo $NAMES | wc -w
-rm -rf $S/ab; for m in 81 26 43; do python3 $S/stub.py $S/ab/$m $m $NAMES; done; ls $S/ab/81 | wc -l; $ADB -s R3CW40HBB9E shell rm -rf /data/local/tmp/pvt/ab; $ADB -s R3CW40HBB9E shell mkdir -p /data/local/tmp/pvt/ab; $ADB -s R3CW40HBB9E push $S/ab/81 /data/local/tmp/pvt/ab/ 2>&1 | tail -1; $ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ENTRY=queue_ask_cs ./pvt ab/81/*.wgsl 2>&1' > $S/x/ab81.txt; python3 - <<EOF
+rm -rf $S/ab; for m in 81 26 43; do python3 $S/stub.py $S/ab/$m $m $NAMES; done; ls $S/ab/81 | wc -l; $ADB -s <serial> shell rm -rf /data/local/tmp/pvt/ab; $ADB -s <serial> shell mkdir -p /data/local/tmp/pvt/ab; $ADB -s <serial> push $S/ab/81 /data/local/tmp/pvt/ab/ 2>&1 | tail -1; $ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ENTRY=queue_ask_cs ./pvt ab/81/*.wgsl 2>&1' > $S/x/ab81.txt; python3 - <<EOF
 import sys; sys.path.insert(0,'$S')
 import re
 exec(open('$S/tab.py').read().split("for p in sys.argv")[0])
 for r in rows('$S/x/ab81.txt'):
     print(r['f'],r['a'][1:2],'I',r.get('Instruction count all'),'R',r.get('Overall register footprint per shader instance'),'S',r.get('Scratch memory usage per shader instance'))
 EOF
-grep -c "error" $S/x/ab81.txt; grep "error" $S/x/ab81.txt | head -20 | cut -c1-200; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+grep -c "error" $S/x/ab81.txt; grep "error" $S/x/ab81.txt | head -20 | cut -c1-200; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [118] TOOL_RESULT
      114
        0
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/ab/81/: 0 files pushed, 0 skipped.
+<scratch>/ab/81/: 0 files pushed, 0 skipped.
 0
 
 ~~~~~
@@ -1329,7 +1329,7 @@ Check that `stub.py` produces output for `hollow` ([121]/[122]):
 
 ~~~~~
 ##### [121] TOOL_USE Bash
-A=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; grep -n "hollow\b\|fn world_node\|fn ground_cell" $A/81.wgsl | head; sed -n 1,12p $A/81.wgsl | cut -c1-150; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; python3 $S/stub.py /tmp/_x 81 hollow; echo rc $?
+A=~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; grep -n "hollow\b\|fn world_node\|fn ground_cell" $A/81.wgsl | head; sed -n 1,12p $A/81.wgsl | cut -c1-150; S=<scratch>; python3 $S/stub.py /tmp/_x 81 hollow; echo rc $?
 
 ##### [122] TOOL_RESULT
 774:fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
@@ -1356,24 +1356,24 @@ Corrected run on module 81, `ENTRY=queue_ask_cs`, one function stubbed at a time
 
 ~~~~~
 ##### [125] TOOL_USE Bash
-rm -rf /tmp/_x; ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S; NAMES=$(python3 -c "
+rm -rf /tmp/_x; ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S; NAMES=$(python3 -c "
 import sys; sys.path.insert(0,'$S'); import stub
 ns=[]
 for f in ['world.wgsl','world_split.wgsl','world_rule.wgsl','way.wgsl','answer.wgsl','ask.wgsl','queue_walk.wgsl']:
     ns+=stub.fns(f)
 print(' '.join(dict.fromkeys(ns)))"); echo $NAMES > $S/names.txt
-rm -rf $S/ab; for m in 81 26 43; do python3 $S/stub.py $S/ab/$m $m ${=NAMES}; done; ls $S/ab/81 | wc -l; $ADB -s R3CW40HBB9E shell rm -rf /data/local/tmp/pvt/ab; $ADB -s R3CW40HBB9E shell mkdir -p /data/local/tmp/pvt/ab; $ADB -s R3CW40HBB9E push $S/ab/81 /data/local/tmp/pvt/ab/ 2>&1 | tail -1; $ADB -s R3CW40HBB9E shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ENTRY=queue_ask_cs ./pvt ab/81/*.wgsl 2>&1' > $S/x/ab81.txt; cat > $S/show.py <<'EOF'
+rm -rf $S/ab; for m in 81 26 43; do python3 $S/stub.py $S/ab/$m $m ${=NAMES}; done; ls $S/ab/81 | wc -l; $ADB -s <serial> shell rm -rf /data/local/tmp/pvt/ab; $ADB -s <serial> shell mkdir -p /data/local/tmp/pvt/ab; $ADB -s <serial> push $S/ab/81 /data/local/tmp/pvt/ab/ 2>&1 | tail -1; $ADB -s <serial> shell 'cd /data/local/tmp/pvt && STATS_ALL=1 ENTRY=queue_ask_cs ./pvt ab/81/*.wgsl 2>&1' > $S/x/ab81.txt; cat > $S/show.py <<'EOF'
 import sys,re
-exec(open('/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/tab.py').read().split("for p in sys.argv")[0])
+exec(open('<scratch>/tab.py').read().split("for p in sys.argv")[0])
 rs=rows(sys.argv[1])
 for r in rs:
     print(r['f'].ljust(40),'block',(r['a'][1]if len(r['a'])>2 else 0),'prog',r['a'][0],'I',r.get('Instruction count all'),'R',r.get('Overall register footprint per shader instance'),'S',r.get('Scratch memory usage per shader instance'))
 EOF
-python3 $S/show.py $S/x/ab81.txt | sort -t'S' -k3 -n ; grep -c "error" $S/x/ab81.txt; grep "error" $S/x/ab81.txt | head -20 | cut -c1-200; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+python3 $S/show.py $S/x/ab81.txt | sort -t'S' -k3 -n ; grep -c "error" $S/x/ab81.txt; grep "error" $S/x/ab81.txt | head -20 | cut -c1-200; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [126] TOOL_RESULT
       96
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/ab/81/: 96 files pushed, 0 skipped. 33.5 MB/s (4837152 bytes in 0.138s)
+<scratch>/ab/81/: 96 files pushed, 0 skipped. 33.5 MB/s (4837152 bytes in 0.138s)
 81.bound_of.wgsl                         block 12582912 prog 77824 I 15830 R 34 S 8
 81.bound_over.wgsl                       block 0 prog 17568 I 4188 R 16 S 0
 81.box_along_z.wgsl                      block 12582912 prog 77824 I 15955 R 35 S 8
@@ -1478,10 +1478,10 @@ Runs on modules 26 (decor_cs), 43 (face_cs) and 67 (queue_last_cs) with all worl
 
 ~~~~~
 ##### [129] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S; N=$(cat names.txt); rm -rf ab/67 ab/34; python3 stub.py ab/67 67 ${=N}; python3 stub.py ab/34 34 hollow hollow_from cave_key cave_holds cave_blocks hand_down spawn tunnel_at ground_cell ground_column by_depth opens grounds top_of bound_over tree_val placed_four path slot_at world_cell world_node world_answer may_ask way_at_cell fills is_folded tree_data cut_holds voxel world_split; for m in 26 43 67; do $ADB -s R3CW40HBB9E push ab/$m /data/local/tmp/pvt/ab/ 2>&1 | tail -1; done; for m in 26 43 67; do case $m in 26) e=decor_cs;; 43) e=face_cs;; 67) e=queue_last_cs;; esac; $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && STATS_ALL=1 ENTRY=$e ./pvt ab/$m/*.wgsl 2>&1" > x/ab$m.txt; python3 show.py x/ab$m.txt | awk '$NF==0' | cut -c1-80; echo "-- $m S=0 above, rest S:"; python3 show.py x/ab$m.txt | awk '{print $NF}' | sort -n | uniq -c | head -30 | tr '\n' ';'; echo; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"; done
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S; N=$(cat names.txt); rm -rf ab/67 ab/34; python3 stub.py ab/67 67 ${=N}; python3 stub.py ab/34 34 hollow hollow_from cave_key cave_holds cave_blocks hand_down spawn tunnel_at ground_cell ground_column by_depth opens grounds top_of bound_over tree_val placed_four path slot_at world_cell world_node world_answer may_ask way_at_cell fills is_folded tree_data cut_holds voxel world_split; for m in 26 43 67; do $ADB -s <serial> push ab/$m /data/local/tmp/pvt/ab/ 2>&1 | tail -1; done; for m in 26 43 67; do case $m in 26) e=decor_cs;; 43) e=face_cs;; 67) e=queue_last_cs;; esac; $ADB -s <serial> shell "cd /data/local/tmp/pvt && STATS_ALL=1 ENTRY=$e ./pvt ab/$m/*.wgsl 2>&1" > x/ab$m.txt; python3 show.py x/ab$m.txt | awk '$NF==0' | cut -c1-80; echo "-- $m S=0 above, rest S:"; python3 show.py x/ab$m.txt | awk '{print $NF}' | sort -n | uniq -c | head -30 | tr '\n' ';'; echo; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"; done
 
 ##### [130] TOOL_RESULT
-[… earlier output omitted; full output: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bmo1h6qrh.output]
+[… earlier output omitted; full output: <scratch>/tasks/bmo1h6qrh.output]
 26.ground_column.wgsl                    block 0 prog 28064 I 6492 R 26 S 0
 26.grounds.wgsl                          block 0 prog 31904 I 7183 R 30 S 0
 26.hollow.wgsl                           block 0 prog 32928 I 7455 R 30 S 0
@@ -1509,8 +1509,8 @@ ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-s
 43.world_node.wgsl                       block 0 prog 5536 I 1154 R 12 S 0
 -- 43 S=0 above, rest S:
   12 0;   1 12;   5 18;   7 20;  47 22;   2 24;   1 44;   1 68;
-Command was moved to the background (ID: bmo1h6qrh) after running for 180s. Output is being written to: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bmo1h6qrh.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.
-Session cwd remains /Users/sanghoon/git/canplane/pixelet; directory changes made by the backgrounded command do not apply to subsequent commands.
+Command was moved to the background (ID: bmo1h6qrh) after running for 180s. Output is being written to: <scratch>/tasks/bmo1h6qrh.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.
+Session cwd remains ~/git/canplane/pixelet; directory changes made by the backgrounded command do not apply to subsequent commands.
 
 ~~~~~
 
@@ -1524,7 +1524,7 @@ No human input has been received since the last genuine user message in this con
 <task-notification>
 <task-id>bmo1h6qrh</task-id>
 <tool-use-id>toolu_01DTYUZVPTMa5DDbCL3d6Fj7</tool-use-id>
-<output-file>/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bmo1h6qrh.output</output-file>
+<output-file><scratch>/tasks/bmo1h6qrh.output</output-file>
 <status>failed</status>
 <summary>Background command "Stub each world function in decor, face and queue_last" failed with exit code 1</summary>
 </task-notification>
@@ -1535,7 +1535,7 @@ The saved output files, read afterwards ([142]/[143]): for 26 the stubs with S=0
 
 ~~~~~
 ##### [142] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; tail -30 /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bmo1h6qrh.output | cut -c1-200; wc -l $S/x/ab67.txt; python3 $S/show.py $S/x/ab26.txt | awk '$NF==0' | cut -c1-90; ~/Library/Android/sdk/platform-tools/adb devices; ~/Library/Android/sdk/platform-tools/adb -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+S=<scratch>; tail -30 <scratch>/tasks/bmo1h6qrh.output | cut -c1-200; wc -l $S/x/ab67.txt; python3 $S/show.py $S/x/ab26.txt | awk '$NF==0' | cut -c1-90; ~/Library/Android/sdk/platform-tools/adb devices; ~/Library/Android/sdk/platform-tools/adb -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [143] TOOL_RESULT
 26.tree_data.wgsl                        block 0 prog 77824 I 15243 R 48 S 0
@@ -1568,7 +1568,7 @@ S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-496
    6 0;   1 8;   8 12;   5 14;   1 40;   1 44;   3 48;   1 52;   3 56;  13 60;  29 64;  10 68;   6 72;  13 76;   1 80;   1 88;   1 92;
 
 [exited with code 1]
-    2889 /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/x/ab67.txt
+    2889 <scratch>/x/ab67.txt
 26.bound_over.wgsl                       block 0 prog 20384 I 4742 R 27 S 0
 26.by_depth.wgsl                         block 0 prog 31904 I 7209 R 30 S 0
 26.cave_blocks.wgsl                      block 0 prog 33568 I 7631 R 30 S 0
@@ -1588,7 +1588,7 @@ S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-496
 26.voxel.wgsl                            block 0 prog 77824 I 16076 R 48 S 0
 26.world_cell.wgsl                       block 0 prog 18336 I 4217 R 24 S 0
 List of devices attached
-R3CW40HBB9E	device
+<serial>	device
 
 ~~~~~
 
@@ -1600,7 +1600,7 @@ Sorted S=0/S>0 list for 67 again, in the command of [191] (first line of its res
 
 ~~~~~
 ##### [173] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/harness && python3 - <<'EOF'
+cd ~/git/canplane/pixelet/tmp/agent-pvt/harness && python3 - <<'EOF'
 p='src/main.rs'
 s=open(p).read()
 a='''                let sm = dev.create_shader_module(&vk::ShaderModuleCreateInfo::default().code(&code), None).unwrap();'''
@@ -1618,20 +1618,20 @@ b='''                let code = match std::env::var("SPV_IN") {
 assert a in s
 open(p,'w').write(s.replace(a,b))
 EOF
-export CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness
+export CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target-harness
 NDK=$HOME/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/bin
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK/aarch64-linux-android33-clang
 export CC_aarch64_linux_android=$NDK/aarch64-linux-android33-clang
 cargo build --target aarch64-linux-android 2>&1 | tail -1
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad
-$ADB -s R3CW40HBB9E push $CARGO_TARGET_DIR/aarch64-linux-android/debug/pvt /data/local/tmp/pvt/ 2>&1 | tail -1
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>
+$ADB -s <serial> push $CARGO_TARGET_DIR/aarch64-linux-android/debug/pvt /data/local/tmp/pvt/ 2>&1 | tail -1
 LIST="a/39.wgsl a/26.wgsl a/43.wgsl a/34.wgsl a/67.wgsl a/71.wgsl a/73.wgsl a/36.wgsl a/81.wgsl a/82.wgsl a/83.wgsl a/84.wgsl a/world_asked.wgsl"
-$ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && rm -rf spv && mkdir spv && SPV_DIR=spv ./pvt $LIST 2>&1" | tail -2 | cut -c1-100
-rm -rf $S/spv $S/opt; mkdir -p $S/spv $S/opt; $ADB -s R3CW40HBB9E pull /data/local/tmp/pvt/spv/. $S/spv/ 2>&1 | tail -1; ls $S/spv | head -3; ls $S/spv | wc -l; spirv-opt --version | head -1; cd $S/spv; for f in *.spv; do spirv-opt -O --target-env=vulkan1.3 -o $S/opt/$f $f 2>&1 | head -3; done; ls -la $S/opt | head -5; ls $S/opt | wc -l
+$ADB -s <serial> shell "cd /data/local/tmp/pvt && rm -rf spv && mkdir spv && SPV_DIR=spv ./pvt $LIST 2>&1" | tail -2 | cut -c1-100
+rm -rf $S/spv $S/opt; mkdir -p $S/spv $S/opt; $ADB -s <serial> pull /data/local/tmp/pvt/spv/. $S/spv/ 2>&1 | tail -1; ls $S/spv | head -3; ls $S/spv | wc -l; spirv-opt --version | head -1; cd $S/spv; for f in *.spv; do spirv-opt -O --target-env=vulkan1.3 -o $S/opt/$f $f 2>&1 | head -3; done; ls -la $S/opt | head -5; ls $S/opt | wc -l
 
 ##### [174] TOOL_RESULT
     Finished `dev` profile [optimized + debuginfo] target(s) in 3.58s
-/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-harness/aarch64-linux-android/debug/pvt: 1 file pushed, 0 skipped. 142.2 MB/s (41012168 bytes in 0.275s)
+~/git/canplane/pixelet/tmp/agent-pvt/target-harness/aarch64-linux-android/debug/pvt: 1 file pushed, 0 skipped. 142.2 MB/s (41012168 bytes in 0.275s)
   exe 0 "Compute Shader" "Adreno Shader" stages COMPUTE subgroup 64
   stats Instruction count all=24162; ALU instruction count 32bit=10123; ALU instruction count 16bit=
 /data/local/tmp/pvt/spv/./: 18 files pulled, 0 skipped. 12.6 MB/s (2142692 bytes in 0.162s)
@@ -1642,20 +1642,20 @@ rm -rf $S/spv $S/opt; mkdir -p $S/spv $S/opt; $ADB -s R3CW40HBB9E pull /data/loc
 SPIRV-Tools v2026.4 unknown hash, 2026-09-10T13:28:18+00:00
 
 total 7856
-drwxr-xr-x@ 20 sanghoon  wheel     640 11월 10 04:04 .
-drwx------@ 18 sanghoon  wheel     576 11월 10 04:04 ..
--rw-r--r--@  1 sanghoon  wheel  196920 11월 10 04:04 26.wgsl.decor_cs.spv
--rw-r--r--@  1 sanghoon  wheel  580516 11월 10 04:04 34.wgsl.queue_last_cs.spv
+drwxr-xr-x@ 20 <user>  wheel     640 Nov 10 04:04 .
+drwx------@ 18 <user>  wheel     576 Nov 10 04:04 ..
+-rw-r--r--@  1 <user>  wheel  196920 Nov 10 04:04 26.wgsl.decor_cs.spv
+-rw-r--r--@  1 <user>  wheel  580516 Nov 10 04:04 34.wgsl.queue_last_cs.spv
       18
 
 ##### [177] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S/opt; for f in *.spv; do spirv-val --target-env vulkan1.3 $f 2>&1 | head -2; done; ls -S | head -3; $ADB -s R3CW40HBB9E shell "rm -rf /data/local/tmp/pvt/opt; mkdir /data/local/tmp/pvt/opt"; $ADB -s R3CW40HBB9E push $S/opt/. /data/local/tmp/pvt/opt/ 2>&1 | tail -1; LIST="a/39.wgsl a/26.wgsl a/43.wgsl a/34.wgsl a/67.wgsl a/71.wgsl a/73.wgsl a/36.wgsl a/81.wgsl a/82.wgsl a/83.wgsl a/84.wgsl a/world_asked.wgsl"; $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && SPV_IN=opt STATS_ALL=1 ./pvt $LIST 2>&1" > $S/x/opt.txt; grep -c error $S/x/opt.txt; python3 $S/tab.py $S/x/opt.txt | cut -c1-120; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S/opt; for f in *.spv; do spirv-val --target-env vulkan1.3 $f 2>&1 | head -2; done; ls -S | head -3; $ADB -s <serial> shell "rm -rf /data/local/tmp/pvt/opt; mkdir /data/local/tmp/pvt/opt"; $ADB -s <serial> push $S/opt/. /data/local/tmp/pvt/opt/ 2>&1 | tail -1; LIST="a/39.wgsl a/26.wgsl a/43.wgsl a/34.wgsl a/67.wgsl a/71.wgsl a/73.wgsl a/36.wgsl a/81.wgsl a/82.wgsl a/83.wgsl a/84.wgsl a/world_asked.wgsl"; $ADB -s <serial> shell "cd /data/local/tmp/pvt && SPV_IN=opt STATS_ALL=1 ./pvt $LIST 2>&1" > $S/x/opt.txt; grep -c error $S/x/opt.txt; python3 $S/tab.py $S/x/opt.txt | cut -c1-120; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [178] TOOL_RESULT
 34.wgsl.queue_last_cs.spv
 world_asked.wgsl.world_asked_cs.spv
 73.wgsl.queue_last_cs.spv
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/opt/./: 18 files pushed, 0 skipped. 70.6 MB/s (3988084 bytes in 0.054s)
+<scratch>/opt/./: 18 files pushed, 0 skipped. 70.6 MB/s (3988084 bytes in 0.054s)
 0
 == opt.txt
   39.wgsl queue_ask_cs 351 ms 47556 w [77824, 256] I 16195 R 38 HR 48 S 0 SP 12
@@ -1683,7 +1683,7 @@ Passes `--inline-entry-points-exhaustive --eliminate-dead-functions` alone (`inl
 
 ~~~~~
 ##### [181] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S; declare -A V; V[inl]="--inline-entry-points-exhaustive --eliminate-dead-functions"; V[ssa]="--eliminate-local-single-store --eliminate-local-single-block --ssa-rewrite"; V[inlssa]="--inline-entry-points-exhaustive --eliminate-dead-functions --eliminate-local-single-store --eliminate-local-single-block --ssa-rewrite"; V[dce]="--inline-entry-points-exhaustive --eliminate-dead-functions --eliminate-local-single-store --eliminate-local-single-block --ssa-rewrite --ccp --eliminate-dead-branches --merge-blocks --simplify-instructions --eliminate-dead-code-aggressive"; for k in inl ssa inlssa dce; do rm -rf o_$k; mkdir o_$k; for f in spv/81.wgsl.queue_ask_cs.spv spv/26.wgsl.decor_cs.spv spv/43.wgsl.face_cs.spv spv/67.wgsl.queue_last_cs.spv; do spirv-opt ${=V[$k]} --target-env=vulkan1.3 -o o_$k/$(basename $f) $f 2>&1 | head -2; spirv-val --target-env vulkan1.3 o_$k/$(basename $f) 2>&1 | head -1; done; $ADB -s R3CW40HBB9E shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s R3CW40HBB9E push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-40; $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ENTRY=queue_ask_cs,decor_cs,face_cs,queue_last_cs ./pvt a/81.wgsl a/26.wgsl a/43.wgsl a/67.wgsl 2>&1" > x/o_$k.txt; echo "=== $k"; python3 tab.py x/o_$k.txt | grep -v "^==" | cut -c1-110; done; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S; declare -A V; V[inl]="--inline-entry-points-exhaustive --eliminate-dead-functions"; V[ssa]="--eliminate-local-single-store --eliminate-local-single-block --ssa-rewrite"; V[inlssa]="--inline-entry-points-exhaustive --eliminate-dead-functions --eliminate-local-single-store --eliminate-local-single-block --ssa-rewrite"; V[dce]="--inline-entry-points-exhaustive --eliminate-dead-functions --eliminate-local-single-store --eliminate-local-single-block --ssa-rewrite --ccp --eliminate-dead-branches --merge-blocks --simplify-instructions --eliminate-dead-code-aggressive"; for k in inl ssa inlssa dce; do rm -rf o_$k; mkdir o_$k; for f in spv/81.wgsl.queue_ask_cs.spv spv/26.wgsl.decor_cs.spv spv/43.wgsl.face_cs.spv spv/67.wgsl.queue_last_cs.spv; do spirv-opt ${=V[$k]} --target-env=vulkan1.3 -o o_$k/$(basename $f) $f 2>&1 | head -2; spirv-val --target-env vulkan1.3 o_$k/$(basename $f) 2>&1 | head -1; done; $ADB -s <serial> shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s <serial> push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-40; $ADB -s <serial> shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ENTRY=queue_ask_cs,decor_cs,face_cs,queue_last_cs ./pvt a/81.wgsl a/26.wgsl a/43.wgsl a/67.wgsl 2>&1" > x/o_$k.txt; echo "=== $k"; python3 tab.py x/o_$k.txt | grep -v "^==" | cut -c1-110; done; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [182] TOOL_RESULT
 warning: line 0: The function '%5142 = OpFunction %2 None %5143' could not be inlined because the return instruction is not at the end of the function. This could be fixed by running merge-return before inlining.
@@ -1753,7 +1753,7 @@ Adding `--wrap-opkill --merge-return` ([185]/[187]; result lists show `Module co
 
 ~~~~~
 ##### [185] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S; A=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; diff $A/81.wgsl $A/82.wgsl | head -30 | cut -c1-200; diff $A/81.wgsl $A/39.wgsl | grep -c '^[<>]'; diff $A/67.wgsl $A/73.wgsl | grep -c '^[<>]'; declare -A V; INL="--wrap-opkill --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; V[inl]="$INL"; V[inl_ssa]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive"; V[ifc]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive --if-conversion"; for k in inl inl_ssa ifc; do rm -rf o_$k; mkdir o_$k; for f in spv/81.wgsl.queue_ask_cs.spv spv/26.wgsl.decor_cs.spv spv/43.wgsl.face_cs.spv spv/67.wgsl.queue_last_cs.spv; do spirv-opt ${=V[$k]} --target-env=vulkan1.3 -o o_$k/$(basename $f) $f 2>&1 | head -2|cut -c1-150; spirv-val --target-env vulkan1.3 o_$k/$(basename $f) 2>&1 | head -1; done; $ADB -s R3CW40HBB9E shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s R3CW40HBB9E push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-40; $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ENTRY=queue_ask_cs,decor_cs,face_cs,queue_last_cs ./pvt a/81.wgsl a/26.wgsl a/43.wgsl a/67.wgsl 2>&1" > x/o_$k.txt; echo "=== $k"; python3 tab.py x/o_$k.txt | grep -v "^==" | cut -c1-110; done; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S; A=~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; diff $A/81.wgsl $A/82.wgsl | head -30 | cut -c1-200; diff $A/81.wgsl $A/39.wgsl | grep -c '^[<>]'; diff $A/67.wgsl $A/73.wgsl | grep -c '^[<>]'; declare -A V; INL="--wrap-opkill --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; V[inl]="$INL"; V[inl_ssa]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive"; V[ifc]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive --if-conversion"; for k in inl inl_ssa ifc; do rm -rf o_$k; mkdir o_$k; for f in spv/81.wgsl.queue_ask_cs.spv spv/26.wgsl.decor_cs.spv spv/43.wgsl.face_cs.spv spv/67.wgsl.queue_last_cs.spv; do spirv-opt ${=V[$k]} --target-env=vulkan1.3 -o o_$k/$(basename $f) $f 2>&1 | head -2|cut -c1-150; spirv-val --target-env vulkan1.3 o_$k/$(basename $f) 2>&1 | head -1; done; $ADB -s <serial> shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s <serial> push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-40; $ADB -s <serial> shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ENTRY=queue_ask_cs,decor_cs,face_cs,queue_last_cs ./pvt a/81.wgsl a/26.wgsl a/43.wgsl a/67.wgsl 2>&1" > x/o_$k.txt; echo "=== $k"; python3 tab.py x/o_$k.txt | grep -v "^==" | cut -c1-110; done; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ~~~~~
 
@@ -1839,7 +1839,7 @@ Adding `--eliminate-dead-branches` before `--merge-return` ([191]/[192]); `noinl
 
 ~~~~~
 ##### [191] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S; python3 show.py x/ab67.txt | sort -k10 -n -t'S' | awk '{print $NF, $1, $9, $10}' | sort -n | head -25 | tr '\n' ';'; echo; declare -A V; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; V[inl]="$INL"; V[inl_ssa]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive"; V[inl_ifc]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive --if-conversion"; V[noinl]="--wrap-opkill --eliminate-dead-branches --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive --if-conversion --ccp --simplify-instructions"; for k in inl inl_ssa inl_ifc noinl; do rm -rf o_$k; mkdir o_$k; for f in spv/81.wgsl.queue_ask_cs.spv spv/26.wgsl.decor_cs.spv spv/43.wgsl.face_cs.spv spv/67.wgsl.queue_last_cs.spv; do spirv-opt ${=V[$k]} --target-env=vulkan1.3 -o o_$k/$(basename $f) $f 2>&1 | head -1|cut -c1-150; done; $ADB -s R3CW40HBB9E shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s R3CW40HBB9E push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-40; $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ENTRY=queue_ask_cs,decor_cs,face_cs,queue_last_cs ./pvt a/81.wgsl a/26.wgsl a/43.wgsl a/67.wgsl 2>&1" > x/o_$k.txt; echo "=== $k"; python3 tab.py x/o_$k.txt | grep -v "^==" | cut -c1-110; done; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S; python3 show.py x/ab67.txt | sort -k10 -n -t'S' | awk '{print $NF, $1, $9, $10}' | sort -n | head -25 | tr '\n' ';'; echo; declare -A V; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; V[inl]="$INL"; V[inl_ssa]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive"; V[inl_ifc]="$INL --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive --if-conversion"; V[noinl]="--wrap-opkill --eliminate-dead-branches --eliminate-local-single-block --eliminate-local-single-store --ssa-rewrite --eliminate-dead-code-aggressive --if-conversion --ccp --simplify-instructions"; for k in inl inl_ssa inl_ifc noinl; do rm -rf o_$k; mkdir o_$k; for f in spv/81.wgsl.queue_ask_cs.spv spv/26.wgsl.decor_cs.spv spv/43.wgsl.face_cs.spv spv/67.wgsl.queue_last_cs.spv; do spirv-opt ${=V[$k]} --target-env=vulkan1.3 -o o_$k/$(basename $f) $f 2>&1 | head -1|cut -c1-150; done; $ADB -s <serial> shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s <serial> push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-40; $ADB -s <serial> shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ENTRY=queue_ask_cs,decor_cs,face_cs,queue_last_cs ./pvt a/81.wgsl a/26.wgsl a/43.wgsl a/67.wgsl 2>&1" > x/o_$k.txt; echo "=== $k"; python3 tab.py x/o_$k.txt | grep -v "^==" | cut -c1-110; done; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [192] TOOL_RESULT
 0 67.ask_node.wgsl 19 S;0 67.load.wgsl 1 S;0 67.may_ask.wgsl 27 S;0 67.node_answer.wgsl 19 S;0 67.world_answer.wgsl 27 S;0 67.world_node.wgsl 29 S;8 67.world_cell.wgsl 33 S;12 67.bound_over.wgsl 34 S;12 67.by_depth.wgsl 34 S;12 67.ground_cell.wgsl 33 S;12 67.ground_column.wgsl 34 S;12 67.grounds.wgsl 34 S;12 67.hollow.wgsl 34 S;12 67.opens.wgsl 34 S;12 67.top_of.wgsl 34 S;14 67.cave_blocks.wgsl 34 S;14 67.cave_holds.wgsl 34 S;14 67.cave_key.wgsl 48 S;14 67.hollow_from.wgsl 47 S;14 67.tunnel_at.wgsl 45 S;40 67.cover.wgsl 48 S;44 67.is_aside.wgsl 48 S;48 67.eighths.wgsl 48 S;48 67.fills.wgsl 48 S;48 67.tunnels_down.wgsl 48 S;
@@ -1874,10 +1874,10 @@ All 18 SPIR-V files, `INL` (`--wrap-opkill --eliminate-dead-branches --merge-ret
 
 ~~~~~
 ##### [195] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cd $S; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; CTRL="--wrap-opkill --eliminate-dead-branches --merge-return --eliminate-dead-functions"; rm -rf o_all o_ctrl; mkdir o_all o_ctrl; for f in spv/*.spv; do spirv-opt ${=INL} --target-env=vulkan1.3 -o o_all/$(basename $f) $f 2>&1 | head -1|cut -c1-150; spirv-opt ${=CTRL} --target-env=vulkan1.3 -o o_ctrl/$(basename $f) $f 2>&1 | head -1|cut -c1-150; done; for k in all ctrl; do $ADB -s R3CW40HBB9E shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s R3CW40HBB9E push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-60; done; LIST="a/39.wgsl a/26.wgsl a/43.wgsl a/34.wgsl a/67.wgsl a/71.wgsl a/73.wgsl a/36.wgsl a/81.wgsl a/82.wgsl a/83.wgsl a/84.wgsl a/world_asked.wgsl"; for k in ctrl all; do $ADB -s R3CW40HBB9E shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ./pvt $LIST 2>&1" > x/o2_$k.txt; echo "== $k"; python3 tab.py x/o2_$k.txt | grep -v "^==" | cut -c1-115; done; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; cd $S; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; CTRL="--wrap-opkill --eliminate-dead-branches --merge-return --eliminate-dead-functions"; rm -rf o_all o_ctrl; mkdir o_all o_ctrl; for f in spv/*.spv; do spirv-opt ${=INL} --target-env=vulkan1.3 -o o_all/$(basename $f) $f 2>&1 | head -1|cut -c1-150; spirv-opt ${=CTRL} --target-env=vulkan1.3 -o o_ctrl/$(basename $f) $f 2>&1 | head -1|cut -c1-150; done; for k in all ctrl; do $ADB -s <serial> shell "rm -rf /data/local/tmp/pvt/o_$k; mkdir /data/local/tmp/pvt/o_$k"; $ADB -s <serial> push o_$k/. /data/local/tmp/pvt/o_$k/ 2>&1 | tail -1 | cut -c1-60; done; LIST="a/39.wgsl a/26.wgsl a/43.wgsl a/34.wgsl a/67.wgsl a/71.wgsl a/73.wgsl a/36.wgsl a/81.wgsl a/82.wgsl a/83.wgsl a/84.wgsl a/world_asked.wgsl"; for k in ctrl all; do $ADB -s <serial> shell "cd /data/local/tmp/pvt && SPV_IN=o_$k STATS_ALL=1 ./pvt $LIST 2>&1" > x/o2_$k.txt; echo "== $k"; python3 tab.py x/o2_$k.txt | grep -v "^==" | cut -c1-115; done; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [196] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt; sed -n 1,200p script/perf/android-app.py | cut -c1-140
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt; sed -n 1,200p script/perf/android-app.py | cut -c1-140
 
 ##### [197] TOOL_RESULT
 o_all/./: 18 files pushed, 0 skipped. 99.6 MB/s (7330504 byt
@@ -1927,13 +1927,13 @@ Same passes applied to the SPIR-V that the app itself dumped (section 4), with `
 
 ~~~~~
 ##### [271] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; cd $S/app_dump; ls -lS | awk 'NR<=3{print $5,$NF}'; for f in $S/app_dump/queue_ask_cs-*.spv; do spirv-val --target-env vulkan1.3 $f 2>&1 | head -1; done; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; rm -rf $S/app_opt; mkdir -p $S/app_opt; BIG=$(ls -S queue_last_cs-*.spv | head -1); echo "big $BIG $(ls -la $BIG | awk '{print $5/4}')"; for f in queue_ask_cs-*.spv queue_ask_parked_cs-*.spv decor_cs-*.spv queue_last_cs-*.spv; do [ "$f" = "$BIG" ] && continue; spirv-opt ${=INL} --target-env=vulkan1.3 -o $S/app_opt/$f $f 2>&1 | head -1 | cut -c1-150; spirv-val --target-env vulkan1.3 $S/app_opt/$f 2>&1 | head -1 | cut -c1-200; done; ls $S/app_opt | wc -l; cat > $S/run.py <<'EOF'
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; cd $S/app_dump; ls -lS | awk 'NR<=3{print $5,$NF}'; for f in $S/app_dump/queue_ask_cs-*.spv; do spirv-val --target-env vulkan1.3 $f 2>&1 | head -1; done; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; rm -rf $S/app_opt; mkdir -p $S/app_opt; BIG=$(ls -S queue_last_cs-*.spv | head -1); echo "big $BIG $(ls -la $BIG | awk '{print $5/4}')"; for f in queue_ask_cs-*.spv queue_ask_parked_cs-*.spv decor_cs-*.spv queue_last_cs-*.spv; do [ "$f" = "$BIG" ] && continue; spirv-opt ${=INL} --target-env=vulkan1.3 -o $S/app_opt/$f $f 2>&1 | head -1 | cut -c1-150; spirv-val --target-env vulkan1.3 $S/app_opt/$f 2>&1 | head -1 | cut -c1-200; done; ls $S/app_opt | wc -l; cat > $S/run.py <<'EOF'
 import subprocess,sys,time,threading,json,os,re
-ADB=os.path.expanduser('~/Library/Android/sdk/platform-tools/adb');D='R3CW40HBB9E'
+ADB=os.path.expanduser('~/Library/Android/sdk/platform-tools/adb');D='<serial>'
 name=sys.argv[1]
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
-APK='/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk'
-WT='/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt'
+S='<scratch>'
+APK='~/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk'
+WT='~/git/canplane/pixelet/tmp/agent-pvt/wt'
 out=f'{S}/run/{name}'; os.makedirs(out,exist_ok=True)
 def sh(*a):
     return subprocess.run([ADB,'-s',D,'shell',*a],capture_output=True,text=True).stdout
@@ -1998,7 +1998,7 @@ Chrome version ([147], section 1.4): `versionName=156.0.8078.79`. A local page (
 
 ~~~~~
 ##### [137] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; mkdir -p $S/page; A=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; cp $A/{39,81,82,83,84,26,43,34,67,71,73,36,33,65,70,30}.wgsl $S/page/; cat > $S/page/index.html <<'EOF'
+S=<scratch>; mkdir -p $S/page; A=~/git/canplane/pixelet/tmp/agent-pvt/target-host/debug/build/pxl-render-620b1a18f5baaa45/out/shader/assembled; cp $A/{39,81,82,83,84,26,43,34,67,71,73,36,33,65,70,30}.wgsl $S/page/; cat > $S/page/index.html <<'EOF'
 <!doctype html><meta charset=utf-8><title>pvt</title><body><pre id=l></pre><script>
 const log=async m=>{document.getElementById('l').textContent+=m+'\n';await fetch('/log?m='+encodeURIComponent(m));};
 const list=[['33','cell_cs'],['65','queue_cs'],['70','queue_cs'],['30','decor_mark_cs'],
@@ -2056,8 +2056,8 @@ Start of Chrome, page log and temperature ([158]/[159]):
 
 ~~~~~
 ##### [158] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; rm -f $S/page.log; nohup python3 $S/page_server.py $S/page $S/page.log >/dev/null 2>&1 &
-sleep 1; $ADB -s R3CW40HBB9E reverse tcp:8765 tcp:8765; $ADB -s R3CW40HBB9E shell am force-stop com.android.chrome; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"; $ADB -s R3CW40HBB9E shell am start -a android.intent.action.VIEW -d http://localhost:8765/index.html com.android.chrome 2>&1 | tail -1; sleep 6; $ADB -s R3CW40HBB9E shell ps -A | grep -i "chrome" | head; cat $S/page.log
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; rm -f $S/page.log; nohup python3 $S/page_server.py $S/page $S/page.log >/dev/null 2>&1 &
+sleep 1; $ADB -s <serial> reverse tcp:8765 tcp:8765; $ADB -s <serial> shell am force-stop com.android.chrome; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"; $ADB -s <serial> shell am start -a android.intent.action.VIEW -d http://localhost:8765/index.html com.android.chrome 2>&1 | tail -1; sleep 6; $ADB -s <serial> shell ps -A | grep -i "chrome" | head; cat $S/page.log
 
 ##### [159] TOOL_RESULT
 8765
@@ -2076,10 +2076,10 @@ Sampling loop and page log ([162]/[163]):
 
 ~~~~~
 ##### [162] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; PID=$($ADB -s R3CW40HBB9E shell pidof com.android.chrome:privileged_process0); rm -f $S/chrome_mem.txt; end=$(( $(date +%s) + 100 )); while [ $(date +%s) -lt $end ]; do t=$(python3 -c "import time;print(int(time.time()*1000))"); m=$($ADB -s R3CW40HBB9E shell dumpsys meminfo $PID | grep -E "GL mtrack|Graphics:" | tr -s ' ' | tr '\n' ';'); echo "$t $m" >> $S/chrome_mem.txt; sleep 1.5; done; wc -l $S/chrome_mem.txt; cat $S/page.log | cut -c1-150; $ADB -s R3CW40HBB9E shell dumpsys thermalservice | grep -i "name: AP"
+ADB=~/Library/Android/sdk/platform-tools/adb; S=<scratch>; PID=$($ADB -s <serial> shell pidof com.android.chrome:privileged_process0); rm -f $S/chrome_mem.txt; end=$(( $(date +%s) + 100 )); while [ $(date +%s) -lt $end ]; do t=$(python3 -c "import time;print(int(time.time()*1000))"); m=$($ADB -s <serial> shell dumpsys meminfo $PID | grep -E "GL mtrack|Graphics:" | tr -s ' ' | tr '\n' ';'); echo "$t $m" >> $S/chrome_mem.txt; sleep 1.5; done; wc -l $S/chrome_mem.txt; cat $S/page.log | cut -c1-150; $ADB -s <serial> shell dumpsys thermalservice | grep -i "name: AP"
 
 ##### [163] TOOL_RESULT
-      57 /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/chrome_mem.txt
+      57 <scratch>/chrome_mem.txt
 adapter qualcomm adreno-7xx  
 start 1794250857131
 made 33 cell_cs 63ms at 1794250865223
@@ -2111,9 +2111,9 @@ First attribution (before/after the same sample; regex also matched the EGL line
 
 ~~~~~
 ##### [165] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; python3 - <<'EOF'
+S=<scratch>; python3 - <<'EOF'
 import re,bisect
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+S='<scratch>'
 sam=[]
 for l in open(S+'/chrome_mem.txt'):
     t,rest=l.split(' ',1)
@@ -2170,9 +2170,9 @@ Second attribution (sample 800 ms after each pipeline's completion), the `GL mtr
 
 ~~~~~
 ##### [169] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; python3 - <<'EOF'
+S=<scratch>; python3 - <<'EOF'
 import re,bisect
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+S='<scratch>'
 sam=[]
 for l in open(S+'/chrome_mem.txt'):
     t,rest=l.split(' ',1)
@@ -2227,7 +2227,7 @@ Added to the worktree's `xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs` ([201]
 
 ~~~~~
 ##### [201] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt && python3 - <<'EOF'
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt && python3 - <<'EOF'
 p='xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs'
 s=open(p).read()
 a='''                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
@@ -2320,18 +2320,18 @@ def polled(ev):
             time.sleep(1)
 
 ##### [205] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt && python3 - <<'EOF'
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt && python3 - <<'EOF'
 p='script/perf/android-app.py'
 s=open(p).read()
 s=s.replace('''    subprocess.run([ADB, "uninstall", APP], stdout=subprocess.DEVNULL)
     adb("install", apk)''','''    adb("install", "-r", apk)''')
 open(p,'w').write(s)
 EOF
-cd ts/client/android && env PXL_PERF_DRIVE=1 NODE_ENV=production ANDROID_HOME=$HOME/Library/Android/sdk CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target jenv exec ./gradlew :app:assembleMobileRelease -q > /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/build1.log 2>&1; echo exit $?; ls -la app/build/outputs/apk/mobile/release/*.apk
+cd ts/client/android && env PXL_PERF_DRIVE=1 NODE_ENV=production ANDROID_HOME=$HOME/Library/Android/sdk CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target jenv exec ./gradlew :app:assembleMobileRelease -q > <scratch>/build1.log 2>&1; echo exit $?; ls -la app/build/outputs/apk/mobile/release/*.apk
 
 ##### [206] TOOL_RESULT
-Command running in background with ID: bx5v22owe. Output is being written to: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bx5v22owe.output. You will be notified when it completes — do not poll that file or sleep while waiting. Read the file only if the user asks for progress, or if you need a line it prints before you can go on, such as a server's ready line or port.
-Session cwd remains /Users/sanghoon/git/canplane/pixelet; directory changes made by the backgrounded command do not apply to subsequent commands.
+Command running in background with ID: bx5v22owe. Output is being written to: <scratch>/tasks/bx5v22owe.output. You will be notified when it completes — do not poll that file or sleep while waiting. Read the file only if the user asks for progress, or if you need a line it prints before you can go on, such as a server's ready line or port.
+Session cwd remains ~/git/canplane/pixelet; directory changes made by the backgrounded command do not apply to subsequent commands.
 
 ~~~~~
 
@@ -2339,15 +2339,15 @@ Build ([225]/[226]) and first install and run; the dump directory was not found 
 
 ~~~~~
 ##### [225] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; f=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bx5v22owe.output; for i in $(seq 1 110); do if [ -s $f ] && grep -q "^exit" $f; then break; fi; python3 -c "import time;time.sleep(5)"; done; cat $f | tail -5; tail -5 $S/build1.log | cut -c1-300
+S=<scratch>; f=<scratch>/tasks/bx5v22owe.output; for i in $(seq 1 110); do if [ -s $f ] && grep -q "^exit" $f; then break; fi; python3 -c "import time;time.sleep(5)"; done; cat $f | tail -5; tail -5 $S/build1.log | cut -c1-300
 
 ##### [226] TOOL_RESULT
 exit 0
--rw-r--r--@ 1 sanghoon  staff  45512923 11월 10 04:13 app/build/outputs/apk/mobile/release/app-mobile-release.apk
+-rw-r--r--@ 1 <user>  staff  45512923 Nov 10 04:13 app/build/outputs/apk/mobile/release/app-mobile-release.apk
 
 [exited with code 0]
 434
-[core-build] release pxl-core aarch64-linux-android -> /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/ts/native/android/build/core/release/arm64-v8a/libpxl_core.so
+[core-build] release pxl-core aarch64-linux-android -> ~/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/ts/native/android/build/core/release/arm64-v8a/libpxl_core.so
 [33m---------- Expo Max Sdk Override Plugin ----------[0m
 [32m>>> No 'android:maxSdkVersion' conflicts found[0m
 [33m--------------------------------------------------[0m
@@ -2356,7 +2356,7 @@ exit 0
 
 ~~~~~
 ##### [231] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; APK=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk; pkill -f page_server.py; $ADB -s $D reverse --remove tcp:8765; $ADB -s $D shell am force-stop com.android.chrome; $ADB -s $D install -r $APK 2>&1 | tail -1; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(45)"; $ADB -s $D shell ls /sdcard/Android/data/me.plei.pixelet/files/pvt/dump 2>&1 | wc -l; $ADB -s $D shell "ls /sdcard/Android/data/me.plei.pixelet/files/pvt/dump 2>&1 | head -5"; $ADB -s $D shell dumpsys meminfo me.plei.pixelet | grep -E "GL mtrack|Graphics:|EGL mtrack"; $ADB -s $D shell dumpsys thermalservice | grep -E "mName=AP" | head -1
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; APK=~/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk; pkill -f page_server.py; $ADB -s $D reverse --remove tcp:8765; $ADB -s $D shell am force-stop com.android.chrome; $ADB -s $D install -r $APK 2>&1 | tail -1; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(45)"; $ADB -s $D shell ls /sdcard/Android/data/me.plei.pixelet/files/pvt/dump 2>&1 | wc -l; $ADB -s $D shell "ls /sdcard/Android/data/me.plei.pixelet/files/pvt/dump 2>&1 | head -5"; $ADB -s $D shell dumpsys meminfo me.plei.pixelet | grep -E "GL mtrack|Graphics:|EGL mtrack"; $ADB -s $D shell dumpsys thermalservice | grep -E "mName=AP" | head -1
 
 ##### [232] TOOL_RESULT
 Success
@@ -2369,7 +2369,7 @@ ls: /sdcard/Android/data/me.plei.pixelet/files/pvt/dump: No such file or directo
 	Temperature{mValue=38.3, mType=0, mName=AP, mStatus=0}
 
 ##### [235] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; $ADB -s $D shell "ls -la /sdcard/Android/data/me.plei.pixelet/ /sdcard/Android/data/me.plei.pixelet/files 2>&1 | head -20; ls -d /storage/emulated/0/Android/data/me.plei.pixelet"; $ADB -s $D logcat -d -t 20000 2>/dev/null | grep -iE "PVT|avc.*(sdcard|Android/data)|pxl.*(denied|permission)" | tail -5 | cut -c1-200; cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt; grep -n "cache_dir\|filesDir\|files_dir\|getExternalFilesDir\|data_dir\|DataDirectory" -r xpute/rust/runtime/src xpute/rust/kit/src 2>/dev/null | head -8; grep -rn "filesDir\|getExternalFilesDir\|cacheDir" xpute/ts/native/android/src ts/client/android/app/src/main/java 2>/dev/null | head -8
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; $ADB -s $D shell "ls -la /sdcard/Android/data/me.plei.pixelet/ /sdcard/Android/data/me.plei.pixelet/files 2>&1 | head -20; ls -d /storage/emulated/0/Android/data/me.plei.pixelet"; $ADB -s $D logcat -d -t 20000 2>/dev/null | grep -iE "PVT|avc.*(sdcard|Android/data)|pxl.*(denied|permission)" | tail -5 | cut -c1-200; cd ~/git/canplane/pixelet/tmp/agent-pvt/wt; grep -n "cache_dir\|filesDir\|files_dir\|getExternalFilesDir\|data_dir\|DataDirectory" -r xpute/rust/runtime/src xpute/rust/kit/src 2>/dev/null | head -8; grep -rn "filesDir\|getExternalFilesDir\|cacheDir" xpute/ts/native/android/src ts/client/android/app/src/main/java 2>/dev/null | head -8
 
 ##### [236] TOOL_RESULT
 ls: /sdcard/Android/data/me.plei.pixelet/: No such file or directory
@@ -2382,7 +2382,7 @@ ls: /storage/emulated/0/Android/data/me.plei.pixelet: No such file or directory
 11-10 04:14:29.187 23797 23797 I adbd    : adbd service requested 'shell,v2,TERM=xterm-256color,raw:ls /sdcard/Android/data/me.plei.pixelet/files/pvt/dump 2>&1 | head -5'
 
 ##### [239] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; P=/sdcard/Android/data/me.plei.pixelet/files/pvt; $ADB -s $D shell am force-stop me.plei.pixelet; $ADB -s $D shell "mkdir -p $P/dump $P/opt && chmod -R 777 /sdcard/Android/data/me.plei.pixelet 2>&1; ls -la $P"; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(45)"; $ADB -s $D shell "ls $P/dump | wc -l; ls $P/dump | head -3"; $ADB -s $D logcat -d -t 3000 2>/dev/null | grep -iE "avc.*denied.*me.plei|fatal" | tail -3 | cut -c1-200
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; P=/sdcard/Android/data/me.plei.pixelet/files/pvt; $ADB -s $D shell am force-stop me.plei.pixelet; $ADB -s $D shell "mkdir -p $P/dump $P/opt && chmod -R 777 /sdcard/Android/data/me.plei.pixelet 2>&1; ls -la $P"; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(45)"; $ADB -s $D shell "ls $P/dump | wc -l; ls $P/dump | head -3"; $ADB -s $D logcat -d -t 3000 2>/dev/null | grep -iE "avc.*denied.*me.plei|fatal" | tail -3 | cut -c1-200
 
 ##### [240] TOOL_RESULT
 total 12
@@ -2397,7 +2397,7 @@ cast_tiles_cs-43be71736b91fd57.spv
 cell_cs-8cdceb92afeb7e56.spv
 
 ##### [243] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; P=/sdcard/Android/data/me.plei.pixelet/files/pvt; rm -rf $S/app_dump $S/app_opt; mkdir -p $S/app_dump $S/app_opt; $ADB -s $D pull $P/dump/. $S/app_dump/ 2>&1 | tail -1 | cut -c1-80; cd $S/app_dump; ls | wc -l; ls -S | grep -E "queue_ask|queue_last|decor_cs|face_cs" | wc -l; ls -lS | grep -E "queue_ask|queue_last|decor_cs|face_cs" | awk '{print $5, $NF}'; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; BIG=$(ls -S queue_last_cs-*.spv | head -1); echo "keep as is: face_cs and biggest queue_last $BIG"; for f in queue_ask_cs-*.spv queue_ask_parked_cs-*.spv decor_cs-*.spv queue_last_cs-*.spv; do if [ "$f" = "$BIG" ]; then continue; fi; spirv-opt ${=INL} --target-env=vulkan1.3 -o $S/app_opt/$f $f 2>&1 | head -1 | cut -c1-120; spirv-val --target-env vulkan1.3 $S/app_opt/$f 2>&1 | head -1; done; ls $S/app_opt | wc -l; du -sh $S/app_opt; $ADB -s $D push $S/app_opt/. $P/opt/ 2>&1 | tail -1 | cut -c1-80; $ADB -s $D shell "ls $P/opt | wc -l"
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; P=/sdcard/Android/data/me.plei.pixelet/files/pvt; rm -rf $S/app_dump $S/app_opt; mkdir -p $S/app_dump $S/app_opt; $ADB -s $D pull $P/dump/. $S/app_dump/ 2>&1 | tail -1 | cut -c1-80; cd $S/app_dump; ls | wc -l; ls -S | grep -E "queue_ask|queue_last|decor_cs|face_cs" | wc -l; ls -lS | grep -E "queue_ask|queue_last|decor_cs|face_cs" | awk '{print $5, $NF}'; INL="--wrap-opkill --eliminate-dead-branches --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions"; BIG=$(ls -S queue_last_cs-*.spv | head -1); echo "keep as is: face_cs and biggest queue_last $BIG"; for f in queue_ask_cs-*.spv queue_ask_parked_cs-*.spv decor_cs-*.spv queue_last_cs-*.spv; do if [ "$f" = "$BIG" ]; then continue; fi; spirv-opt ${=INL} --target-env=vulkan1.3 -o $S/app_opt/$f $f 2>&1 | head -1 | cut -c1-120; spirv-val --target-env vulkan1.3 $S/app_opt/$f 2>&1 | head -1; done; ls $S/app_opt | wc -l; du -sh $S/app_opt; $ADB -s $D push $S/app_opt/. $P/opt/ 2>&1 | tail -1 | cut -c1-80; $ADB -s $D shell "ls $P/opt | wc -l"
 
 ##### [244] TOOL_RESULT
 Exit code 1
@@ -2409,7 +2409,7 @@ keep as is: face_cs and biggest queue_last
 (eval):1: no matches found: queue_ask_cs-*.spv
 
 ##### [247] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; rm -rf $S/app_dump; $ADB -s $D pull $P/dump $S/app_dump 2>&1 | tail -2 | cut -c1-100; ls $S/app_dump | wc -l; ls $S/app_dump | head -3; ls $S/app_dump/dump 2>/dev/null | wc -l
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; rm -rf $S/app_dump; $ADB -s $D pull $P/dump $S/app_dump 2>&1 | tail -2 | cut -c1-100; ls $S/app_dump | wc -l; ls $S/app_dump | head -3; ls $S/app_dump/dump 2>/dev/null | wc -l
 
 ##### [248] TOOL_RESULT
 adb: error: failed to copy '/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt/dump/exposure
@@ -2418,7 +2418,7 @@ pull: building file list...
        0
 
 ##### [251] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; rm -rf $S/app_dump; mkdir -p $S/app_dump; $ADB -s $D pull $P/dump/queue_ask_cs-*.spv $S/app_dump 2>&1 | tail -1 | cut -c1-200; $ADB -s $D shell "ls -la $P/dump | head -6; cat $P/dump/cast_cs-*.spv | wc -c"; for n in $($ADB -s $D shell "ls $P/dump" | tr -d '\r'); do $ADB -s $D exec-out "cat $P/dump/$n" > $S/app_dump/$n 2>/dev/null; done; ls $S/app_dump | wc -l; ls -la $S/app_dump | awk '$5==0' | wc -l; ls -S $S/app_dump | head -3
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; rm -rf $S/app_dump; mkdir -p $S/app_dump; $ADB -s $D pull $P/dump/queue_ask_cs-*.spv $S/app_dump 2>&1 | tail -1 | cut -c1-200; $ADB -s $D shell "ls -la $P/dump | head -6; cat $P/dump/cast_cs-*.spv | wc -c"; for n in $($ADB -s $D shell "ls $P/dump" | tr -d '\r'); do $ADB -s $D exec-out "cat $P/dump/$n" > $S/app_dump/$n 2>/dev/null; done; ls $S/app_dump | wc -l; ls -la $S/app_dump | awk '$5==0' | wc -l; ls -S $S/app_dump | head -3
 
 ##### [252] TOOL_RESULT
 (eval):1: no matches found: /storage/emulated/0/Android/data/me.plei.pixelet/files/pvt/dump/queue_ask_cs-*.spv
@@ -2442,12 +2442,12 @@ SPIR-V word counts of the dumped files against the harness's, and the hash mappi
 
 ~~~~~
 ##### [255] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; $ADB -s $D shell "ls -la $P/dump" | grep -E "queue_ask|queue_last|decor_cs|face_cs" | awk '{print $5/4, $NF}' | sort -n; python3 - <<EOF
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; $ADB -s $D shell "ls -la $P/dump" | grep -E "queue_ask|queue_last|decor_cs|face_cs" | awk '{print $5/4, $NF}' | sort -n; python3 - <<EOF
 import re
 exec(open('$S/tab.py').read().split("for p in sys.argv")[0])
 for r in rows('$S/x/base.txt'): print(r['w'], r['f'], r['e'])
 EOF
-grep -n "binding_map\|vk_binding\|BindingInfo" /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs | head -20
+grep -n "binding_map\|vk_binding\|BindingInfo" ~/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs | head -20
 
 ##### [256] TOOL_RESULT
 24936 decor_cs-f5a7df335dce153d.spv
@@ -2507,9 +2507,9 @@ grep -n "binding_map\|vk_binding\|BindingInfo" /Users/sanghoon/git/canplane/pixe
 2028:                    &desc.layout.binding_map,
 
 ##### [259] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; sed -n 1436,1460p /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs; python3 - <<'EOF'
+S=<scratch>; sed -n 1436,1460p ~/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs; python3 - <<'EOF'
 import glob,os
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+S='<scratch>'
 def fnv(b):
     h=0xcbf29ce484222325
     for x in b:
@@ -2573,7 +2573,7 @@ Hook patched to also write to `/sdcard/Android/media/me.plei.pixelet/pvt/dump` w
 
 ~~~~~
 ##### [263] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt && python3 - <<'EOF'
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt && python3 - <<'EOF'
 p='xpute/rust/vendor/wgpu-hal/src/vulkan/device.rs'
 s=open(p).read()
 a='''    let _ = std::fs::write(format!("{dump}/{name}"), bytes);
@@ -2593,15 +2593,15 @@ b='''    let path = format!("{dump}/{name}");
 assert a in s
 open(p,'w').write(s.replace(a,b))
 EOF
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; $ADB -s $D shell "mkdir -p /sdcard/Android/media/me.plei.pixelet/pvt/dump; chmod -R 777 /sdcard/Android/media/me.plei.pixelet 2>&1 | head -2; ls -ld /sdcard/Android/media/me.plei.pixelet/pvt/dump"; cd ts/client/android && env PXL_PERF_DRIVE=1 NODE_ENV=production ANDROID_HOME=$HOME/Library/Android/sdk CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target jenv exec ./gradlew :app:assembleMobileRelease -q > /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/build2.log 2>&1; echo exit $?; ls -la app/build/outputs/apk/mobile/release/*.apk
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; $ADB -s $D shell "mkdir -p /sdcard/Android/media/me.plei.pixelet/pvt/dump; chmod -R 777 /sdcard/Android/media/me.plei.pixelet 2>&1 | head -2; ls -ld /sdcard/Android/media/me.plei.pixelet/pvt/dump"; cd ts/client/android && env PXL_PERF_DRIVE=1 NODE_ENV=production ANDROID_HOME=$HOME/Library/Android/sdk CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target jenv exec ./gradlew :app:assembleMobileRelease -q > <scratch>/build2.log 2>&1; echo exit $?; ls -la app/build/outputs/apk/mobile/release/*.apk
 
 ##### [264] TOOL_RESULT
 drwxrws--- 2 u0_a304 media_rw 3452 2026-11-10 04:17 /sdcard/Android/media/me.plei.pixelet/pvt/dump
 exit 0
--rw-r--r--@ 1 sanghoon  staff  45512923 11월 10 04:19 app/build/outputs/apk/mobile/release/app-mobile-release.apk
+-rw-r--r--@ 1 <user>  staff  45512923 Nov 10 04:19 app/build/outputs/apk/mobile/release/app-mobile-release.apk
 
 ##### [267] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; APK=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; M=/storage/emulated/0/Android/media/me.plei.pixelet/pvt/dump; $ADB -s $D shell am force-stop me.plei.pixelet; $ADB -s $D install -r $APK 2>&1 | tail -1; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(40)"; $ADB -s $D shell "ls -la $P/dump | head -3; cat $P/dump/cast_cs-*.spv | wc -c; ls -la $M | head -3; ls $M | wc -l"; rm -rf $S/app_dump; mkdir -p $S/app_dump; for n in $($ADB -s $D shell "ls $P/dump" | tr -d '\r'); do $ADB -s $D exec-out "cat $P/dump/$n" > $S/app_dump/$n 2>/dev/null; done; ls $S/app_dump | wc -l; ls -la $S/app_dump | awk '$5==0' | wc -l; $ADB -s $D shell dumpsys thermalservice | grep -E "mName=AP" | head -1
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; S=<scratch>; APK=~/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; M=/storage/emulated/0/Android/media/me.plei.pixelet/pvt/dump; $ADB -s $D shell am force-stop me.plei.pixelet; $ADB -s $D install -r $APK 2>&1 | tail -1; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(40)"; $ADB -s $D shell "ls -la $P/dump | head -3; cat $P/dump/cast_cs-*.spv | wc -c; ls -la $M | head -3; ls $M | wc -l"; rm -rf $S/app_dump; mkdir -p $S/app_dump; for n in $($ADB -s $D shell "ls $P/dump" | tr -d '\r'); do $ADB -s $D exec-out "cat $P/dump/$n" > $S/app_dump/$n 2>/dev/null; done; ls $S/app_dump | wc -l; ls -la $S/app_dump | awk '$5==0' | wc -l; $ADB -s $D shell dumpsys thermalservice | grep -E "mName=AP" | head -1
 
 ##### [268] TOOL_RESULT
 Success
@@ -2630,13 +2630,13 @@ base1 (no opt files; [275]/[276]):
 
 ~~~~~
 ##### [275] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; $ADB -s $D shell "ls $P/opt | wc -l"; $ADB -s $D shell "rm -f $P/opt/*"; python3 $S/run.py base1 2>&1 | tail -15 | cut -c1-1000
+S=<scratch>; ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; $ADB -s $D shell "ls $P/opt | wc -l"; $ADB -s $D shell "rm -f $P/opt/*"; python3 $S/run.py base1 2>&1 | tail -15 | cut -c1-1000
 
 ##### [276] TOOL_RESULT
 0
 AP before 44.2
 rc 0
-release: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/run/base1
+release: <scratch>/run/base1
 
 
 AP after 46.3
@@ -2649,16 +2649,16 @@ treat1, all 15 optimised files pushed ([279]/[280]):
 
 ~~~~~
 ##### [279] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; sed -i '' "s/g=re.search(r'GL mtrack\\\\s+(\\\\d+)',o)/g=re.search(r'(?<!E)GL mtrack\\\\s+(\\\\d+)',o)/" $S/run.py; grep -n "GL mtrack" $S/run.py | head -3; $ADB -s $D push $S/app_opt/. $P/opt/ 2>&1 | tail -1 | cut -c1-80; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py treat1 2>&1 | tail -12 | cut -c1-900; $ADB -s $D logcat -d -t 2000 2>/dev/null | grep -i "PVT replaced" | wc -l
+S=<scratch>; ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; sed -i '' "s/g=re.search(r'GL mtrack\\\\s+(\\\\d+)',o)/g=re.search(r'(?<!E)GL mtrack\\\\s+(\\\\d+)',o)/" $S/run.py; grep -n "GL mtrack" $S/run.py | head -3; $ADB -s $D push $S/app_opt/. $P/opt/ 2>&1 | tail -1 | cut -c1-80; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py treat1 2>&1 | tail -12 | cut -c1-900; $ADB -s $D logcat -d -t 2000 2>/dev/null | grep -i "PVT replaced" | wc -l
 
 ##### [280] TOOL_RESULT
 18:        g=re.search(r'(?<!E)GL mtrack\s+(\d+)',o); gr=re.search(r'Graphics:\s+(\d+)',o); e=re.search(r'EGL mtrack\s+(\d+)',o)
 30:    gl=[s[1] for s in samples]; print('GL mtrack KB first',gl[0],'peak',max(gl),'last',gl[-1],'n',len(gl))
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-
+<scratch>/86fe84e1-f3d6-4964-
 15
 AP before 41.4
 rc 0
-release: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/run/treat1
+release: <scratch>/run/treat1
 
 
 AP after 46.0
@@ -2672,14 +2672,14 @@ base2 (cooled to AP <= 41.0 first) ([283]/[284]):
 
 ~~~~~
 ##### [283] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; for i in $(seq 1 40); do T=$($ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1 | sed -E 's/.*mValue=([0-9.]+).*/\1/'); python3 -c "import sys;sys.exit(0 if float('$T')<=41.0 else 1)" && break; python3 -c "import time;time.sleep(8)"; done; echo cooled to $T after $i; $ADB -s $D shell "rm -f $P/opt/*; ls $P/opt | wc -l"; python3 $S/run.py base2 2>&1 | tail -8 | cut -c1-900
+S=<scratch>; ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; for i in $(seq 1 40); do T=$($ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1 | sed -E 's/.*mValue=([0-9.]+).*/\1/'); python3 -c "import sys;sys.exit(0 if float('$T')<=41.0 else 1)" && break; python3 -c "import time;time.sleep(8)"; done; echo cooled to $T after $i; $ADB -s $D shell "rm -f $P/opt/*; ls $P/opt | wc -l"; python3 $S/run.py base2 2>&1 | tail -8 | cut -c1-900
 
 ##### [284] TOOL_RESULT
 cooled to 39.7 after 2
 0
 AP before 39.7
 rc 0
-release: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/run/base2
+release: <scratch>/run/base2
 
 
 AP after 45.9
@@ -2692,15 +2692,15 @@ treat2 (cooled to AP <= 40.0) ([287]/[288]):
 
 ~~~~~
 ##### [287] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; for i in $(seq 1 60); do T=$($ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1 | sed -E 's/.*mValue=([0-9.]+).*/\1/'); python3 -c "import sys;sys.exit(0 if float('$T')<=40.0 else 1)" && break; python3 -c "import time;time.sleep(8)"; done; echo cooled to $T after $i; $ADB -s $D push $S/app_opt/. $P/opt/ 2>&1 | tail -1 | cut -c1-60; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py treat2 2>&1 | tail -8 | cut -c1-900
+S=<scratch>; ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; for i in $(seq 1 60); do T=$($ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1 | sed -E 's/.*mValue=([0-9.]+).*/\1/'); python3 -c "import sys;sys.exit(0 if float('$T')<=40.0 else 1)" && break; python3 -c "import time;time.sleep(8)"; done; echo cooled to $T after $i; $ADB -s $D push $S/app_opt/. $P/opt/ 2>&1 | tail -1 | cut -c1-60; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py treat2 2>&1 | tail -8 | cut -c1-900
 
 ##### [288] TOOL_RESULT
 cooled to 40.0 after 2
-/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet
+<scratch>
 15
 AP before 40.0
 rc 0
-release: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/run/treat2
+release: <scratch>/run/treat2
 
 
 AP after 46.2
@@ -2713,7 +2713,7 @@ ask1 (only the 10 queue_ask files) and last1 (queue_last x4 and decor_cs, 5 file
 
 ~~~~~
 ##### [291] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; cool(){ for i in $(seq 1 60); do T=$($ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1 | sed -E 's/.*mValue=([0-9.]+).*/\1/'); python3 -c "import sys;sys.exit(0 if float('$T')<=40.0 else 1)" && break; python3 -c "import time;time.sleep(8)"; done; echo cooled $T; }; cool; $ADB -s $D shell "rm -f $P/opt/*"; for f in $S/app_opt/queue_ask*.spv; do $ADB -s $D push $f $P/opt/ >/dev/null 2>&1; done; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py ask1 2>&1 | tail -3 | cut -c1-700; cool; $ADB -s $D shell "rm -f $P/opt/*"; for f in $S/app_opt/queue_last*.spv $S/app_opt/decor*.spv; do $ADB -s $D push $f $P/opt/ >/dev/null 2>&1; done; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py last1 2>&1 | tail -3 | cut -c1-700
+S=<scratch>; ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; P=/storage/emulated/0/Android/data/me.plei.pixelet/files/pvt; cool(){ for i in $(seq 1 60); do T=$($ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1 | sed -E 's/.*mValue=([0-9.]+).*/\1/'); python3 -c "import sys;sys.exit(0 if float('$T')<=40.0 else 1)" && break; python3 -c "import time;time.sleep(8)"; done; echo cooled $T; }; cool; $ADB -s $D shell "rm -f $P/opt/*"; for f in $S/app_opt/queue_ask*.spv; do $ADB -s $D push $f $P/opt/ >/dev/null 2>&1; done; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py ask1 2>&1 | tail -3 | cut -c1-700; cool; $ADB -s $D shell "rm -f $P/opt/*"; for f in $S/app_opt/queue_last*.spv $S/app_opt/decor*.spv; do $ADB -s $D push $f $P/opt/ >/dev/null 2>&1; done; $ADB -s $D shell "ls $P/opt | wc -l"; python3 $S/run.py last1 2>&1 | tail -3 | cut -c1-700
 
 ##### [292] TOOL_RESULT
 cooled 39.9
@@ -2723,10 +2723,10 @@ GL mtrack KB first 520784 peak 1170480 last 1166128 n 19
 {"build": "release", "load": 197.059322, "gpu": [63.22275887314224, 136.4953091675949, 283, 281], "tick": [1.5683329105377197, 3.2816150188446045]}
 cooled 40.0
 5
-Command was moved to the background (ID: br8ah0uxh) after running for 180s. Output is being written to: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/br8ah0uxh.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.
+Command was moved to the background (ID: br8ah0uxh) after running for 180s. Output is being written to: <scratch>/tasks/br8ah0uxh.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.
 
 ##### [295] TOOL_USE Bash
-f=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/br8ah0uxh.output; for i in $(seq 1 60); do grep -q "GL mtrack KB\|exited\|rc 1" $f 2>/dev/null && break; python3 -c "import time;time.sleep(5)"; done; python3 -c "import time;time.sleep(3)"; cut -c1-800 $f | tail -4
+f=<scratch>/tasks/br8ah0uxh.output; for i in $(seq 1 60); do grep -q "GL mtrack KB\|exited\|rc 1" $f 2>/dev/null && break; python3 -c "import time;time.sleep(5)"; done; python3 -c "import time;time.sleep(3)"; cut -c1-800 $f | tail -4
 
 ##### [296] TOOL_RESULT
 GL mtrack KB first 520784 peak 1170480 last 1166128 n 19
@@ -2735,7 +2735,7 @@ cooled 40.0
 5
 
 ##### [298] TOOL_USE Bash
-f=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/br8ah0uxh.output; for i in $(seq 1 80); do [ $(grep -c "GL mtrack KB" $f) -ge 2 ] && break; python3 -c "import time;time.sleep(5)"; done; python3 -c "import time;time.sleep(3)"; cut -c1-800 $f | tail -3; ls /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/run/
+f=<scratch>/tasks/br8ah0uxh.output; for i in $(seq 1 80); do [ $(grep -c "GL mtrack KB" $f) -ge 2 ] && break; python3 -c "import time;time.sleep(5)"; done; python3 -c "import time;time.sleep(3)"; cut -c1-800 $f | tail -3; ls <scratch>/run/
 
 ##### [299] TOOL_RESULT
 {"build": "release", "load": 198.42599, "gpu": [71.47103992176818, 180.12030810253142, 236, 233], "tick": [2.0575000047683716, 3.3135929107666016]}
@@ -2754,16 +2754,16 @@ Summary table the agent printed from the saved values.json / mem.json of the six
 
 ~~~~~
 ##### [304] TOOL_USE Bash
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad; cut -c1-900 /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/br8ah0uxh.output | grep -E "AP|GL mtrack|build"; python3 - <<'EOF'
+S=<scratch>; cut -c1-900 <scratch>/tasks/br8ah0uxh.output | grep -E "AP|GL mtrack|build"; python3 - <<'EOF'
 import json
-S='/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad'
+S='<scratch>'
 for n in ['base1','treat1','base2','treat2','ask1','last1']:
     v=json.load(open(f'{S}/run/{n}/values.json'))
     m=json.load(open(f'{S}/run/{n}/mem.json'))
     gl=[s[1] for s in m]
     print(n,'gpu p50 %.1f p95 %.1f frames %d'%(v['gpu'][0],v['gpu'][1],v['gpu'][2]),'load',round(v['load']),'GL peak MiB %.1f last %.1f'%(max(gl)/1024,gl[-1]/1024),'graphics peak MiB %.1f'%(max(s[3] for s in m)/1024))
 EOF
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt && git checkout . && git clean -fd >/dev/null 2>&1; git status --short | head -5; echo reverted; cd ts/client/android && env -u PXL_PERF_DRIVE NODE_ENV=production ANDROID_HOME=$HOME/Library/Android/sdk CARGO_TARGET_DIR=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/target jenv exec ./gradlew :app:assembleMobileRelease -q > $S/build3.log 2>&1; echo exit $?; ls -la app/build/outputs/apk/mobile/release/*.apk; tail -3 $S/build3.log | cut -c1-200
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt && git checkout . && git clean -fd >/dev/null 2>&1; git status --short | head -5; echo reverted; cd ts/client/android && env -u PXL_PERF_DRIVE NODE_ENV=production ANDROID_HOME=$HOME/Library/Android/sdk CARGO_TARGET_DIR=~/git/canplane/pixelet/tmp/agent-pvt/target jenv exec ./gradlew :app:assembleMobileRelease -q > $S/build3.log 2>&1; echo exit $?; ls -la app/build/outputs/apk/mobile/release/*.apk; tail -3 $S/build3.log | cut -c1-200
 
 ##### [305] TOOL_RESULT
 AP after 47.4
@@ -2780,8 +2780,8 @@ ask1 gpu p50 63.2 p95 136.5 frames 283 load 197 GL peak MiB 1143.0 last 1138.8 g
 last1 gpu p50 71.5 p95 180.1 frames 236 load 198 GL peak MiB 1203.0 last 1197.6 graphics peak MiB 1281.6
 Updated 2 paths from the index
 reverted
-Command was moved to the background (ID: bd826iuh0) after running for 180s. Output is being written to: /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bd826iuh0.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.
-Session cwd remains /Users/sanghoon/git/canplane/pixelet; directory changes made by the backgrounded command do not apply to subsequent commands.
+Command was moved to the background (ID: bd826iuh0) after running for 180s. Output is being written to: <scratch>/tasks/bd826iuh0.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.
+Session cwd remains ~/git/canplane/pixelet; directory changes made by the backgrounded command do not apply to subsequent commands.
 ~~~~~
 
 Compile times in the app were not recorded in the transcript. The compile times the agent cites are the harness's `ms` column in sections 1.3, 2.1, 2.3 (for instance `ctrl` against `all` in [197], section 2.3).
@@ -2790,7 +2790,7 @@ Compile times in the app were not recorded in the transcript. The compile times 
 
 ~~~~~
 ##### [308] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; $ADB -s $D shell am force-stop me.plei.pixelet; $ADB -s $D shell "rm -rf /data/local/tmp/pvt; rm -rf /storage/emulated/0/Android/data/me.plei.pixelet /storage/emulated/0/Android/media/me.plei.pixelet 2>&1 | head -3; ls -d /storage/emulated/0/Android/data/me.plei.pixelet /storage/emulated/0/Android/media/me.plei.pixelet 2>&1; ls -d /data/local/tmp/pvt 2>&1"; $ADB -s $D reverse --list; f=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bd826iuh0.output; for i in $(seq 1 100); do grep -q "exit " $f 2>/dev/null && break; python3 -c "import time;time.sleep(5)"; done; tail -4 $f | cut -c1-200
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; $ADB -s $D shell am force-stop me.plei.pixelet; $ADB -s $D shell "rm -rf /data/local/tmp/pvt; rm -rf /storage/emulated/0/Android/data/me.plei.pixelet /storage/emulated/0/Android/media/me.plei.pixelet 2>&1 | head -3; ls -d /storage/emulated/0/Android/data/me.plei.pixelet /storage/emulated/0/Android/media/me.plei.pixelet 2>&1; ls -d /data/local/tmp/pvt 2>&1"; $ADB -s $D reverse --list; f=<scratch>/tasks/bd826iuh0.output; for i in $(seq 1 100); do grep -q "exit " $f 2>/dev/null && break; python3 -c "import time;time.sleep(5)"; done; tail -4 $f | cut -c1-200
 
 ##### [309] TOOL_RESULT
 ls: /storage/emulated/0/Android/data/me.plei.pixelet: No such file or directory
@@ -2798,7 +2798,7 @@ ls: /storage/emulated/0/Android/media/me.plei.pixelet: No such file or directory
 ls: /data/local/tmp/pvt: No such file or directory
 
 434
-[core-build] release pxl-core aarch64-linux-android -> /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/ts/native/android/build/core/release/arm64-v8a/libpxl_core.so
+[core-build] release pxl-core aarch64-linux-android -> ~/git/canplane/pixelet/tmp/agent-pvt/wt/xpute/ts/native/android/build/core/release/arm64-v8a/libpxl_core.so
 
 [exited with code 0]
 
@@ -2811,19 +2811,19 @@ No human input has been received since the last genuine user message in this con
 <task-notification>
 <task-id>bd826iuh0</task-id>
 <tool-use-id>toolu_011A1KgnFJ2z13zWGJv5tbPG</tool-use-id>
-<output-file>/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bd826iuh0.output</output-file>
+<output-file><scratch>/tasks/bd826iuh0.output</output-file>
 <status>completed</status>
 <summary>Background command "Summarize the runs, revert the worktree and build the clean release" completed (exit code 0)</summary>
 </task-notification>
 
 ##### [314] TOOL_USE Bash
-cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android; cat /private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/c14f41d9-f5a8-4ff5-8c72-5f69969b5645/tasks/bd826iuh0.output | grep -n "exit\|apk" | head; ls -la app/build/outputs/apk/mobile/release/*.apk; APK=app/build/outputs/apk/mobile/release/app-mobile-release.apk; unzip -l $APK | grep -i "index.android\|assets/.*bundle" | head; unzip -p $APK assets/index.android.bundle | LC_ALL=C grep -c "PXLPERF"; cd /Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt; grep -n "PXL_PERF_DRIVE" ts/client/babel.config.ts ts/client/android/app/build.gradle ts/client/plugin/android-build.ts | head; git status --short | head
+cd ~/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android; cat <scratch>/tasks/bd826iuh0.output | grep -n "exit\|apk" | head; ls -la app/build/outputs/apk/mobile/release/*.apk; APK=app/build/outputs/apk/mobile/release/app-mobile-release.apk; unzip -l $APK | grep -i "index.android\|assets/.*bundle" | head; unzip -p $APK assets/index.android.bundle | LC_ALL=C grep -c "PXLPERF"; cd ~/git/canplane/pixelet/tmp/agent-pvt/wt; grep -n "PXL_PERF_DRIVE" ts/client/babel.config.ts ts/client/android/app/build.gradle ts/client/plugin/android-build.ts | head; git status --short | head
 
 ##### [315] TOOL_RESULT
 15:exit 0
-16:-rw-r--r--@ 1 sanghoon  staff  45505879 11월 10 04:37 app/build/outputs/apk/mobile/release/app-mobile-release.apk
+16:-rw-r--r--@ 1 <user>  staff  45505879 Nov 10 04:37 app/build/outputs/apk/mobile/release/app-mobile-release.apk
 21:[exited with code 0]
--rw-r--r--@ 1 sanghoon  staff  45505879 11월 10 04:37 app/build/outputs/apk/mobile/release/app-mobile-release.apk
+-rw-r--r--@ 1 <user>  staff  45505879 Nov 10 04:37 app/build/outputs/apk/mobile/release/app-mobile-release.apk
   2078508  01-01-1981 01:01   assets/index.android.bundle
 ts/client/android/app/build.gradle:194:    inputs.property("PXL_PERF_DRIVE", System.getenv("PXL_PERF_DRIVE") ?: "")
 ts/client/plugin/android-build.ts:24: * - A build's JavaScript is bundled again when `PXL_PERF_DRIVE` changes, so a
@@ -2831,7 +2831,7 @@ ts/client/plugin/android-build.ts:56:    inputs.property("PXL_PERF_DRIVE", Syste
 ts/client/babel.config.ts:150:  const drive = process.env.PXL_PERF_DRIVE === "1";
 
 ##### [318] TOOL_USE Bash
-ADB=~/Library/Android/sdk/platform-tools/adb; D=R3CW40HBB9E; APK=/Users/sanghoon/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk; unzip -p $APK assets/index.android.bundle 2>/dev/null > /tmp/_b.bin; ls -la /tmp/_b.bin | awk '{print $5}'; LC_ALL=C grep -c "PXLPERF" /tmp/_b.bin; rm -f /tmp/_b.bin; $ADB -s $D install -r $APK 2>&1 | tail -1; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(25)"; $ADB -s $D shell pidof me.plei.pixelet; $ADB -s $D shell dumpsys package me.plei.pixelet | grep -E "ACCESS_(FINE|COARSE)_LOCATION: granted" | head -2; $ADB -s $D shell dumpsys meminfo me.plei.pixelet | grep -E "^ *Graphics:"; $ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1; cd /Users/sanghoon/git/canplane/pixelet && git worktree remove --force tmp/agent-pvt/wt && git worktree prune && rm -rf tmp/agent-pvt; git worktree list; ls tmp; git status --short | head -5
+ADB=~/Library/Android/sdk/platform-tools/adb; D=<serial>; APK=~/git/canplane/pixelet/tmp/agent-pvt/wt/ts/client/android/app/build/outputs/apk/mobile/release/app-mobile-release.apk; unzip -p $APK assets/index.android.bundle 2>/dev/null > /tmp/_b.bin; ls -la /tmp/_b.bin | awk '{print $5}'; LC_ALL=C grep -c "PXLPERF" /tmp/_b.bin; rm -f /tmp/_b.bin; $ADB -s $D install -r $APK 2>&1 | tail -1; $ADB -s $D shell am start -S -n me.plei.pixelet/.MainActivity 2>&1 | tail -1; python3 -c "import time;time.sleep(25)"; $ADB -s $D shell pidof me.plei.pixelet; $ADB -s $D shell dumpsys package me.plei.pixelet | grep -E "ACCESS_(FINE|COARSE)_LOCATION: granted" | head -2; $ADB -s $D shell dumpsys meminfo me.plei.pixelet | grep -E "^ *Graphics:"; $ADB -s $D shell dumpsys thermalservice | grep -E "mValue=[0-9.]+, mType=0, mName=AP" | head -1; cd ~/git/canplane/pixelet && git worktree remove --force tmp/agent-pvt/wt && git worktree prune && rm -rf tmp/agent-pvt; git worktree list; ls tmp; git status --short | head -5
 
 ##### [319] TOOL_RESULT
 2078508
@@ -2842,12 +2842,12 @@ Starting: Intent { cmp=me.plei.pixelet/.MainActivity }
         android.permission.ACCESS_COARSE_LOCATION: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
             Graphics:  1095752                        1095752
 	Temperature{mValue=40.3, mType=0, mName=AP, mStatus=0}
-/Users/sanghoon/git/canplane/pixelet                                                 57660b0363 [main]
-/Users/sanghoon/git/canplane/pixelet/.agents/worktrees/asset-reduction               57660b0363 [asset-reduction]
-/Users/sanghoon/git/canplane/pixelet/.agents/worktrees/axis-reduction                b8aae23d78 [axis-reduction]
-/Users/sanghoon/git/canplane/pixelet/.agents/worktrees/decor-zoom                    576391033e (detached HEAD)
-/Users/sanghoon/git/canplane/pixelet/.agents/worktrees/viewer                        57660b0363 [viewer]
-/Users/sanghoon/git/canplane/pixelet/tmp/rel-86fe84e1-f3d6-4964-89c6-46bdebff6a0c/wt 11e8c145b0 (detached HEAD)
+~/git/canplane/pixelet                                                 57660b0363 [main]
+~/git/canplane/pixelet/.agents/worktrees/asset-reduction               57660b0363 [asset-reduction]
+~/git/canplane/pixelet/.agents/worktrees/axis-reduction                b8aae23d78 [axis-reduction]
+~/git/canplane/pixelet/.agents/worktrees/decor-zoom                    576391033e (detached HEAD)
+~/git/canplane/pixelet/.agents/worktrees/viewer                        57660b0363 [viewer]
+~/git/canplane/pixelet/tmp/rel-86fe84e1-f3d6-4964-89c6-46bdebff6a0c/wt 11e8c145b0 (detached HEAD)
 chk-86fe84e1-f3d6-4964-89c6-46bdebff6a0c
 metro
 perf
@@ -3704,6 +3704,6 @@ App runs used a `PXL_PERF_DRIVE=1` release build with a hook in wgpu-hal that sw
 - Whether the block is committed in full or lazily. It does appear in `GL mtrack`.
 - Why inlining the walks costs GPU time (inferred: code size). Rendering with inlined shaders was not checked by eye; the perf drive completed.
 
-The phone runs a clean release build without the perf drive, location permission kept. The worktree and `tmp/agent-pvt` are removed. My files on the phone are gone, and Chrome was force-stopped. Logs are in `/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/x/` and `/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/86fe84e1-f3d6-4964-89c6-46bdebff6a0c/scratchpad/run/`.
+The phone runs a clean release build without the perf drive, location permission kept. The worktree and `tmp/agent-pvt` are removed. My files on the phone are gone, and Chrome was force-stopped. Logs are in `<scratch>/x/` and `<scratch>/run/`.
 ~~~~~
 

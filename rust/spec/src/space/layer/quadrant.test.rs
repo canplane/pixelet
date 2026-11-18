@@ -26,33 +26,33 @@ fn point_wrap_x_clamp_y() {
     }
 }
 
-/// A Bundang tile, (11569, 3671): rows count from the south and a first
+/// The tile of Seoul's city hall, (11557, 3693): rows count from the south and a first
 /// digit is the signs. The bucket's keys are these names.
-const BUNDANG: [i32; 2] = [11569, 3671];
-const BUNDANG_NAME: &str = "010332102130223";
+const CITY_HALL: [i32; 2] = [11557, 3693];
+const CITY_HALL_NAME: &str = "010332102302303";
 
 #[test]
 fn known_tile_name() {
-    let leaf = Quadrant::new(LEAF_ZOOM, BUNDANG);
-    assert_eq!(leaf.key(), BUNDANG_NAME);
-    assert_eq!(Quadrant::of_key(BUNDANG_NAME), Some(leaf));
+    let leaf = Quadrant::new(LEAF_ZOOM, CITY_HALL);
+    assert_eq!(leaf.key(), CITY_HALL_NAME);
+    assert_eq!(Quadrant::of_key(CITY_HALL_NAME), Some(leaf));
 }
 
 /// One prefix is one region at every zoom, and a name's length is its zoom.
 #[test]
 fn tile_name_prefix() {
     for zoom in MIN_ZOOM..LEAF_ZOOM {
-        let coarse = Quadrant::over(zoom, BUNDANG).key();
+        let coarse = Quadrant::over(zoom, CITY_HALL).key();
         assert_eq!(coarse.len(), zoom as usize);
-        assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
+        assert!(CITY_HALL_NAME.starts_with(&coarse), "z{zoom} {coarse}");
     }
 }
 
 #[test]
 fn tile_name_round_trip() {
     let n = 1i32 << LEAF_ZOOM;
-    for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
-        for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
+    for x in [-n / 2, -12345, -1, 0, 1, 11557, n / 2 - 1] {
+        for y in [-n / 2, -7777, -1, 0, 1, 3693, n / 2 - 1] {
             for zoom in MIN_ZOOM..=LEAF_ZOOM {
                 let p = Quadrant::over(zoom, [x, y]);
                 assert_eq!(Quadrant::of_key(&p.key()), Some(p), "({x}, {y}) at z{zoom}");

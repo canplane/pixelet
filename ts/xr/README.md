@@ -63,7 +63,7 @@ npx metavr tools install spatialsim
 npx metavr ssim start    # an emulator adb sees, emulator-5554 if it is the first
 adb install -r app/build/outputs/apk/quest/release/app-quest-release.apk
 adb shell cmd location set-location-enabled true
-adb emu geo fix 127.0437 37.2741
+adb emu geo fix 126.9780 37.5665
 ```
 
 ### An Apple Vision Pro
@@ -76,6 +76,6 @@ The iPhone app runs unchanged on visionOS, in a window. In the simulator, from
 xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Release \
   -destination 'id=<Vision Pro simulator id>' -derivedDataPath build/derived
 xcrun simctl install <id> build/derived/Build/Products/Release-iphonesimulator/pixelet.app
-xcrun simctl location <id> set 37.2741,127.0437
+xcrun simctl location <id> set 37.5665,126.9780
 xcrun simctl launch <id> me.plei.pixelet
 ```
