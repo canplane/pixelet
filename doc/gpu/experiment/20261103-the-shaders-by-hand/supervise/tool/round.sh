@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Fresh copy of the tree, the implementer's test run as it stands, the mutant loop added on the copy.
 SP=<scratch>
-R=~/git/canplane/pixelet
+R=$(git -C ${0:A:h} rev-parse --show-toplevel)
 rsync -a --delete --exclude target --exclude node_modules --exclude .git --include='rust/***' --include='xpute/' --include='xpute/rust/***' --exclude='*' $R/ $SP/copy/
 python3 $SP/tool/patch.py $SP/copy/rust/client/render/tests/world.rs
 python3 - <<PY

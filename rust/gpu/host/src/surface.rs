@@ -147,7 +147,7 @@ impl GpuHost {
             // clear, as a premultiplied canvas does. Metal offers only opaque
             // and post-multiplied, so post-multiplied stands in there. An
             // opaque surface takes opaque or inherit, whichever it offers
-            // (Adreno 740 offers inherit), as `Auto` picks.
+            // (an Android phone's Vulkan offers inherit), as `Auto` picks.
             let alpha_mode = if premultiplied {
                 [
                     wgpu::CompositeAlphaMode::PreMultiplied,

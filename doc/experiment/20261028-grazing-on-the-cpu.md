@@ -23,8 +23,8 @@ together with the screen in
 ## How
 
 A throwaway example built from an export of `458155604`, not committed
-(`rust/target/session/01896805-…/e1/rust/spec/core/examples/grazing_probe.rs`
-in pixelet-d3's session target).
+(`rust/target/session/<id>/e1/rust/spec/core/examples/grazing_probe.rs`
+in another session's target).
 
 **The ground.** A y-invariant heightfield implements `cast::Query`:
 - It is solid under `h(x)` units, with columns a leaf cell wide.

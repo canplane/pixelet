@@ -93,8 +93,9 @@ pub struct Device {
 }
 
 /// A span's timestamps. Each pass it is handed to writes a begin and an end of its own
-/// (`Gpu::stamp_pass`), and the span's time is the sum of its passes' (`take_stamps`). On the
-/// S23's Chrome a render pass that writes an end without a begin loses its indirect draws.
+/// (`Gpu::stamp_pass`), and the span's time is the sum of its passes' (`take_stamps`). On an
+/// Android phone's Chrome a render pass that writes an end without a begin loses its indirect
+/// draws.
 #[derive(Clone, Copy)]
 pub struct Stamp<'a> {
     g: &'a Gpu,

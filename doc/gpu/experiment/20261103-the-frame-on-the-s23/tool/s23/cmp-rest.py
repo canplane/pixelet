@@ -1,6 +1,6 @@
 # rest.py <out dir> <tag> <url> : a fresh page, 8 s of the drive, then 65 s untouched: the window read holds only standing frames; shots during the drive and at rest.
-import base64, importlib.util, os, sys, time
-spec = importlib.util.spec_from_file_location("compare", "~/git/canplane/pixelet/script/compare-perf.py")
+import base64, importlib.util, os, subprocess, sys, time
+spec = importlib.util.spec_from_file_location("compare", subprocess.check_output(["git", "-C", os.path.dirname(os.path.abspath(__file__)), "rev-parse", "--show-toplevel"], text=True).strip() + "/script/compare-perf.py")
 c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
 out, tag, url = sys.argv[1:4]
 os.makedirs(out, exist_ok=True)

@@ -121,4 +121,4 @@ is touched.
 - **Order.** The prune taken off for the eye in an export, seen on the
   screen. Then this rule, side by side against `76c992698`. Both are seen, not
   timed; the timing comes once, at the end.
-- **The hold.** Nothing here starts before pixelet-d6's shadow work is done.
+- **The hold.** Nothing here starts before another session's shadow work is done.

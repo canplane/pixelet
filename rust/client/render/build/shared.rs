@@ -928,7 +928,7 @@ fn ray() -> String {
 
 /// The raster's words (pxl-engine raster.rs) and the corners of a box's vertices, first as
 /// raster.rs `corner` winds them and then wound the other way, packed three bits a corner and
-/// ten corners a word, which `raster_corner` reads back. The Galaxy S23's Vulkan driver refuses
+/// ten corners a word, which `raster_corner` reads back. An Android phone's Vulkan driver refuses
 /// a render pipeline whose vertex stage indexes a constant array of vectors at a place computed
 /// as it runs, and takes the same table packed into u32 words. A hit's box that holds the eye
 /// is drawn at a depth just short of 1, the depth of a lack. Every float written here is

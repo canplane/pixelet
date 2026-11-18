@@ -186,7 +186,7 @@ Landed:
 - native wakes through the program's strobe.
 
 In progress:
-- **Receiver tiles derived per tile from the eye's samples** (pixelet-59). Every light
+- **Receiver tiles derived per tile from the eye's samples** (another session). Every light
   pass and the map's lay go indirect off their count, so with no receiver the light
   path runs nothing.
 - **A defect found in census-a's footprint zoom.** The slant takes each ray's own

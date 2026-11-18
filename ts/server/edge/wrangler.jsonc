@@ -24,7 +24,7 @@
   // `origins`.
   "routes": [{ "pattern": "plei.me", "custom_domain": true }],
 
-  // Off, so that pixelet.canplane.workers.dev does not answer. Left up, it
+  // Off, so that the Worker's workers.dev hostname does not answer. Left up, it
   // would let anyone pass around every WAF rule written against the zone by
   // using that hostname instead. A protected surface and an unprotected one
   // cannot both be kept.

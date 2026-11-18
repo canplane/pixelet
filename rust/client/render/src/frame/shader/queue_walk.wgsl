@@ -20,9 +20,9 @@
 /// where it finds no room to park, shows nothing, where the last walk shows a lack's deepest node held
 /// (queue_last.wgsl `shows`). The cache does not hold that node as a cell: the walk passed it
 /// as a split. To find it these walks would take the world's query whole, and they are kept to
-/// the cache so that their pipelines stay small: the S23 refuses a pipeline with too many words
-/// live across its loop (cached.wgsl), and a driver that inlines writes a query asked from two
-/// places twice. A pool runs out only where a frame parks more than `ray::POOL_CAP` holes.
+/// the cache so that their pipelines stay small: an Android phone refuses a pipeline with too many
+/// words live across its loop (cached.wgsl), and a driver that inlines writes a query asked from
+/// two places twice. A pool runs out only where a frame parks more than `ray::POOL_CAP` holes.
 fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
   return w;
 }

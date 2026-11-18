@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/cached.wgsl
 
 // How the walk that only reads the node cache answers a node (walk.wgsl). It uses no atomics
-// and never asks the world, so a thread holds few words across its loop: on the Galaxy S23,
+// and never asks the world, so a thread holds few words across its loop: on an Android phone,
 // atomic loads cost several times plain ones, and a pipeline with about 200 words live across a
 // loop is refused. No thread of the pass writes what it reads, so an entry is read whole, as
 // the pass before left it. A node that no slot keeps at the zooms asked ends the walk there,

@@ -70,7 +70,7 @@ pub(crate) const SCALE_MISSED: f64 = 1.5;
 pub(crate) const SCALE_PROBE_WINDOW_CNT: u32 = 10;
 
 /// The windows after a step up, 4 s, within which going over takes the step
-/// back and doubles the wait before the next. On a Galaxy S23, a step up whose
+/// back and doubles the wait before the next. On an Android phone, a step up whose
 /// prediction missed by a few percent went over within 3 s.
 pub(crate) const RES_TRUST_WINDOW_CNT: u32 = 8;
 

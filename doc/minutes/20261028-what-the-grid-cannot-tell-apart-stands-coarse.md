@@ -1,7 +1,7 @@
 # What the grid cannot tell apart stands coarse
 
 **2026-10-28** — recorded with the user. Written against main at `8ee81810d`
-(2026-10-28 00:00 KST). The checkout also held pixelet-d6's uncommitted reshape
+(2026-10-28 00:00 KST). The checkout also held another session's uncommitted reshape
 of the observer's passes at the time. The record states a direction to build
 from the code as it stands. Nothing in it is built yet.
 
@@ -176,7 +176,7 @@ Read with the morning's philosophy:
 The fix lives in the walk and the zoom rule, which every source and observer
 share. It is never in a source or a pass alone.
 
-pixelet-d3's reading sits beside this. The user likes it, but it is not the
+Another session's reading sits beside this. The user likes it, but it is not the
 core, and where the two part the user's stands.
 
 - The distance zoom stays the finest any ray asks, the eye's bound for what is
@@ -199,7 +199,7 @@ core, and where the two part the user's stands.
   grazing ray stops at a coarse node, and the prune becomes cutting the
   descent there and drawing that node's box. It no longer means passing its
   content as air; the prune that passed it as air is gone. The cost is the look. A node is a cube, so one coarse
-  enough along the screen's depth is as coarse across it (pixelet-d6, 10-27
+  enough along the screen's depth is as coarse across it (another session, 10-27
   10:16).
 - **Concern: the observed pyramid's room.** The observation cache is keyed to
   the pyramid's nodes in a table of fixed size (`observed`). Per-pixel walks

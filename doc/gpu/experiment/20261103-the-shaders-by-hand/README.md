@@ -814,7 +814,7 @@ passes by hand (`5d7113c02`), the decor modules are 2–47 KB, where two generat
 were 349 KB each; the wall fell from 13.1 to 10.4 s, one cold load each, and it ends
 at `face_cs`, then `light_sample_cs` and `sample_cs`; `generate` p95 on the circle
 fell from 14.0 to 0.9 ms. Each figure comes from one cold load, the two of a pair
-in that order, as `pixelet-ec` recorded them.
+in that order, as another session recorded them.
 
 `sample_cs` and `light_sample_cs` by hand cut their spans: 9.4 fps against the
 base's 9.6, `sample` p95 13.7 ms against 50.3, and `light_sample` 5.8 against 64.6,
@@ -958,7 +958,7 @@ On the Mac at noon at `e8d616ba4`, a no-decor control build was set against shad
 on and off: the trees' blobs are in the difference with the decor in the map and
 gone without it, so the map's decor draws cast. An on/off shot alone could not have
 said so. On the S23 at noon at `e8d616ba4`, shadows off, on and off with no camera
-move (`pixelet-ec`), the crown's dark blob reads on the ground in the difference:
+move (another session), the crown's dark blob reads on the ground in the difference:
 5.55% of pixels differ by more than 8 between on and off, against 0.14% between off
 and off. The same
 crown had read as no shadow by eye at `6e9a7cb83`; the shadow is soft and the eye
@@ -1000,7 +1000,7 @@ phases) beside another session's test drove the load average to 141, and the mac
 stalled until the Claude process went down, taking every background run with it.
 Since then one GPU job runs at a time, with one worker and no build beside a sweep,
 and every run that opens a GPU device, across sessions, holds
-`lockf -k ~/git/canplane/.gpu.lock`, built first, one mutant a hold.
+`lockf -k <scratch>/.gpu.lock`, built first, one mutant a hold.
 The kill goes on the test binary, inside the lock: a brief's
 `perl -e 'alarm 120; exec @ARGV' lockf … cargo test` killed `lockf` alone, and a
 mutant's test binary ran six minutes past it, outside the lock, beside a second sweep
@@ -1042,7 +1042,7 @@ cherry-pick with 15 files in conflict, and it was deleted.
 Merges broke what no GPU test ran over. In the merge of decor onto way, a
 replacement of `side` by `resume` done by text in part.rs broke decor's generated
 `side` part, and the world test got the world's parts twice; the build and
-`pixelet-3b` found it, and nothing ran a GPU test after it. Since the decor merge,
+another session found it, and nothing ran a GPU test after it. Since the decor merge,
 the "world and walk" module of main's tests/world.rs listed clipmap, seed, clip and
 palette and then `hand`, which held them again, so naga refused the world test
 before any case ran; the supervisor found it while running world.rs for a shared

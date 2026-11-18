@@ -930,7 +930,7 @@ the lock, and the device ran hot once a batch. Its work in flight on the evening
 | light: own spans, incremental stand/propagate, receivers by stood tiles, pending ≠ owed, seen store once, counts per observer | rest agent |
 | whole-frame harness under validation | harness agent |
 | declared access + build-time hazard check | access agent |
-| Phase 2: drift a frame word (first), draws as changes, bind once a pass | pixelet-b9 |
+| Phase 2: drift a frame word (first), draws as changes, bind once a pass | another session |
 
 Its next steps were: (1) one table, with the band out of the key, one record and the drawable
 state in the node cache's entries, waiting on the stale and rest batches; (2) frame kinds and
