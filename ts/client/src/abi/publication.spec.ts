@@ -63,9 +63,9 @@ export const VERSION_CHARS =
  * before its name (pxl-spec bake/source.rs `is_version`). */
 export const VERSION_SZ = 32 as number;
 
-/** The imagery's sphere, the picture whole, in place of a tile's name under
- * the imagery layer's version: no tile of the pyramid. */
-export const TILE_SPHERE = "sphere";
+/** The imagery's global picture, in place of a tile's name under the imagery
+ * layer's version: no tile of the pyramid. */
+export const TILE_GLOBAL = "global";
 
 /** A kind's object in a published set, the one place its segments are
  * ordered: the version its source declares, then the tile's name. A version

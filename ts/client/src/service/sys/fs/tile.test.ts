@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import {
-  TILE_SPHERE,
+  TILE_GLOBAL,
   tile_object,
   type BASE_KINDS,
 } from "@/abi/publication.spec.ts";
@@ -25,8 +25,8 @@ test("versionOf - each kind's tile at each zoom, a shard's own version or not, i
     );
   }
   assert.deepStrictEqual(
-    tile_object(versionOf(DECLARATION, "imagery", TILE_SPHERE), TILE_SPHERE),
-    FIXTURE.sphere,
+    tile_object(versionOf(DECLARATION, "imagery", TILE_GLOBAL), TILE_GLOBAL),
+    FIXTURE.global,
   );
 });
 

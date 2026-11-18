@@ -2,9 +2,9 @@
 
 //! The asset files, each read at most once: the catalog, which is asked for
 //! first (`catalog`), the models and images its slots name, and the imagery's
-//! sphere. An asset is a want in the request scheduler just as a tile is, on
-//! the same credits, and it stays wanted until it arrives. A slot names no
-//! file until the catalog lands, and its reader treats it as still loading.
+//! global picture. An asset is a want in the request scheduler just as a tile
+//! is, on the same credits, and it stays wanted until it arrives. A slot names
+//! no file until the catalog lands, and its reader treats it as still loading.
 //!
 //! A canceled read leaves its asset unasked, so that it is asked
 //! again (`arrival`); any other failed read is final. Bytes that do not read
@@ -52,7 +52,7 @@ struct Loader {
     /// to the highest number asked, and an unasked number holds None. One
     /// file can be wanted as several kinds, so each kind has its own row.
     entries: [Vec<Option<Entry>>; KIND_CNT],
-    sphere: [Option<Entry>; KIND_CNT],
+    global: [Option<Entry>; KIND_CNT],
     catalog: Option<Catalog>,
     /// Scratch for `load_wants`, so that declaring the wants every frame
     /// allocates nothing.
@@ -64,7 +64,7 @@ static LOADER: Global<Loader> = Global::new();
 fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
         entries: Default::default(),
-        sphere: Default::default(),
+        global: Default::default(),
         catalog: None,
         wants: Vec::new(),
     })
@@ -73,7 +73,7 @@ fn loader() -> &'static mut Loader {
 impl Loader {
     fn at(&mut self, kind: LoadKind, load: Load) -> &mut Option<Entry> {
         let n = match load {
-            Load::Sphere => return &mut self.sphere[kind as usize],
+            Load::Global => return &mut self.global[kind as usize],
             Load::File(n) => n as usize,
         };
         let row = &mut self.entries[kind as usize];
@@ -128,15 +128,15 @@ pub(crate) fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
 }
 
 /// The files asked for and not yet read, by id, in the form a stream
-/// declares its wants. They come by kind, the files by number and the sphere
-/// after them. The sphere is wanted only once its source declares the
+/// declares its wants. They come by kind, the files by number and the global
+/// picture after them. It is wanted only once its source declares the
 /// version it is opened under.
 pub(crate) fn load_wants() -> &'static [(u64, Order)] {
     let l = loader();
     l.wants.clear();
     for kind in LoadKind::ALL {
         let files = (0..l.entries[kind as usize].len() as u32).map(Load::File);
-        for load in files.chain(source::min_zoom().map(|_| Load::Sphere)) {
+        for load in files.chain(source::min_zoom().map(|_| Load::Global)) {
             if matches!(l.at(kind, load), Some(Entry::Pending)) {
                 l.wants.push((id_of(kind, load), Order::LAST));
             }
@@ -226,7 +226,7 @@ pub(crate) fn on_image_complete(image: u32) {
 pub(crate) fn on_images_lost() {
     let l = loader();
     let image = LoadKind::Image as usize;
-    for entry in l.entries[image].iter_mut().chain([&mut l.sphere[image]]) {
+    for entry in l.entries[image].iter_mut().chain([&mut l.global[image]]) {
         if matches!(entry, Some(Entry::InReader)) {
             *entry = None;
         }

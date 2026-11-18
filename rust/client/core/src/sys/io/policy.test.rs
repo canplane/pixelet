@@ -10,9 +10,9 @@ fn object_top_ranked() {
     assert_eq!((r.class, r.detail), (OBJECT, 0));
 }
 
-/// The pictures start before the catalog's models. The imagery's sphere, any
-/// other picture and the imagery's tiles all rank ahead of every model, and the
-/// models still rank ahead of places.
+/// The pictures start before the catalog's models. The imagery's global
+/// picture, any other picture and the imagery's tiles all rank ahead of every
+/// model, and the models still rank ahead of places.
 #[test]
 fn pictures_before_models() {
     use crate::sys::load::id_of;
@@ -22,9 +22,9 @@ fn pictures_before_models() {
         id_of(LoadKind::Gltf, Load::File(0)),
         Order::LAST,
     );
-    let sphere = rank(
+    let global = rank(
         Stream::Asset,
-        id_of(LoadKind::Image, Load::Sphere),
+        id_of(LoadKind::Image, Load::Global),
         Order::LAST,
     );
     let picture = rank(
@@ -42,7 +42,7 @@ fn pictures_before_models() {
         Quadrant::of_key("0103").expect("a tile").id(),
         Order::FIRST,
     );
-    assert!(sphere.class < model.class);
+    assert!(global.class < model.class);
     assert!(picture.class < model.class);
     assert!(imagery.class < model.class);
     assert!(model.class < place.class);

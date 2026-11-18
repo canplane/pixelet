@@ -157,7 +157,7 @@ pub struct FrameInput<'a> {
     /// The texture pack's image; none while it loads.
     pub pack: Option<Image>,
     pub moon: Option<Image>,
-    pub imagery_sphere: Option<Image>,
+    pub imagery_global: Option<Image>,
     pub imagery_layer: ImageryLayer<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
@@ -950,8 +950,8 @@ impl Renderer {
         read.mark(self.moon.step(g, &self.mip, input.moon));
         read.mark(
             self.atmosphere
-                .imagery_sphere
-                .step(g, &self.mip, input.imagery_sphere),
+                .imagery_global
+                .step(g, &self.mip, input.imagery_global),
         );
         let mut cast = input.cast.take();
         // What the frame cannot put off is recorded before what can wait.

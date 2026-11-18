@@ -59,19 +59,19 @@ pub(crate) fn publication_outputs() -> Result<Vec<Output>, String> {
         ));
     }
     let object_doc = object_node.doc().unwrap_or_default();
-    let sphere_node = spec
-        .get("TILE_SPHERE")
-        .ok_or("publication.json5: no TILE_SPHERE")?;
-    let sphere = sphere_node.val().str().unwrap_or_default();
-    if sphere.is_empty()
-        || !sphere.bytes().all(|b| b.is_ascii_lowercase())
-        || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b))
+    let global_node = spec
+        .get("TILE_GLOBAL")
+        .ok_or("publication.json5: no TILE_GLOBAL")?;
+    let global = global_node.val().str().unwrap_or_default();
+    if global.is_empty()
+        || !global.bytes().all(|b| b.is_ascii_lowercase())
+        || global.bytes().all(|b| (b'0'..=b'3').contains(&b))
     {
         return Err(format!(
-            "publication.json5: TILE_SPHERE {sphere:?} is no name a tile could have"
+            "publication.json5: TILE_GLOBAL {global:?} is no name a tile could have"
         ));
     }
-    let sphere_doc = sphere_node.doc().unwrap_or_default();
+    let global_doc = global_node.doc().unwrap_or_default();
 
     let table: Vec<(String, Node)> = spec
         .entries()
@@ -144,8 +144,8 @@ pub(crate) fn publication_outputs() -> Result<Vec<Output>, String> {
     ));
     edge.push(format!("export const TILE_OBJECT = String.raw`{pattern}`;"));
     edge.push("".into());
-    edge.extend(ts_doc(&sphere_doc, ""));
-    edge.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
+    edge.extend(ts_doc(&global_doc, ""));
+    edge.push(format!("export const TILE_GLOBAL = {};", json_str(global)));
     outs.push(Output::new(
         "ts/server/edge/publication.spec.ts",
         file(&edge),

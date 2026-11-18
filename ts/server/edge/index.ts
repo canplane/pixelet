@@ -66,7 +66,7 @@ import {
   BASE_KINDS,
   BASE_KIND_IMAGERY,
   TILE_OBJECT,
-  TILE_SPHERE,
+  TILE_GLOBAL,
 } from "./publication.spec.ts";
 
 /**
@@ -75,7 +75,7 @@ import {
  * - `<kind>/<object>`: a baked page. The kind is one of `BASE_KINDS`, and the
  *   object is laid out under it as spec/spec/bake/publication.json5 says
  *   (`TILE_OBJECT`). The imagery lies whole beside its tiles
- *   (`TILE_SPHERE`).
+ *   (`TILE_GLOBAL`).
  * - `asset/<sha256>.<ext>`: a model or an image, named by its bytes alone
  *   (pxl-tool's asset). A catalog names it by its path, and the
  *   shipped table maps the path to the key. A changed file gets a new name.
@@ -86,7 +86,7 @@ const SOURCE_KEY = "source";
 
 const KINDS = BASE_KINDS.join("|");
 const KEY_RE = new RegExp(
-  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|${BASE_KINDS[BASE_KIND_IMAGERY]}\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|${BASE_KINDS[BASE_KIND_IMAGERY]}\/[^/]+\/${TILE_GLOBAL}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** The header in which a cached entry keeps the encoding of its bytes. It

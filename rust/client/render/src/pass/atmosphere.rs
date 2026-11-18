@@ -242,10 +242,10 @@ pub struct Atmosphere {
     moon_mu: f32,
     /// The words the exposure texel was last drawn from (`EXPOSURE_READS`).
     exposure_read: Read,
-    /// The imagery's sphere, zero until its image has come
+    /// The imagery's global picture, zero until its image has come
     /// (`ImageMap::step`). Until then the land past the terrain shows only the
     /// air before it.
-    pub imagery_sphere: ImageMap,
+    pub imagery_global: ImageMap,
     imagery_tiles: (u32, u32),
     /// The air before each point (atmos_froxel.wgsl): the sun's half and the moon's, each
     /// drawn with its light's view from the same reads, per unit of its light and unexposed.
@@ -345,7 +345,7 @@ impl Atmosphere {
             exposure_read: Read::default(),
             sun_mu: 1.0,
             moon_mu: 1.0,
-            imagery_sphere: ImageMap::new(g, imagery::PICTURE.0, imagery::PICTURE.1),
+            imagery_global: ImageMap::new(g, imagery::GLOBAL_SIZE.0, imagery::GLOBAL_SIZE.1),
             imagery_tiles: {
                 let texture = g.texture(
                     TILE_CELLS,
@@ -430,7 +430,7 @@ impl Atmosphere {
         [
             view_entry(10, self.views[SKY_VIEW]),
             view_entry(15, self.views[MOON_VIEW]),
-            view_entry(16, self.imagery_sphere.view),
+            view_entry(16, self.imagery_global.view),
             view_entry(17, self.imagery_tiles.1),
         ]
     }

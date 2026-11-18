@@ -42,6 +42,6 @@ export function name_BaseKind(val: BaseKind): string {
 /** A tile's object under its kind, `{version}/{name}`, as a pattern. */
 export const TILE_OBJECT = String.raw`[^\/]+\/[0-3]+`;
 
-/** The imagery's sphere, the picture whole, in place of a tile's name under
- * the imagery layer's version: no tile of the pyramid. */
-export const TILE_SPHERE = "sphere";
+/** The imagery's global picture, in place of a tile's name under the imagery
+ * layer's version: no tile of the pyramid. */
+export const TILE_GLOBAL = "global";
