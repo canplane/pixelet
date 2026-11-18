@@ -105,6 +105,10 @@ case's wrong answers with it.
 - A walk's steps should not grow with how far it goes. Time a query from near
   and from very far: by distance the two are of one order.
 
+> Since 2026-11-18 (`0778e18a47`, `d079616413`): the mechanism is `World::near`, which
+> every ray of control reads by, and it reads again from half way to what it met,
+> a zoom finer a pass, starting each pass outside what it looks for.
+
 ## The last of it
 
 The orbit's rays (`orbit.rs` `line_clear`, `toward_eye`) and the pointer's
@@ -150,3 +154,12 @@ The names were a second thread. I had been calling things by words nobody had
 chosen, in Korean and in English, and the user could not tell what I meant.
 The world's box was `BOUNDS` and is `BOUND`. A walker is a walker and a column is
 the code's word, not mine to translate.
+
+> Since 2026-11-18 (`65c734f32c`): `World::near` was itself a second rule beside
+> perspective, a far hit read again from nearer inside one query, and is gone. A reader
+> asks from where it stands.
+
+> Since 2026-11-18 (this note's commit): reading from where the asker stands was a
+> second rule too, for an asker that is not the eye. Near and far are told from the
+> observer's eye alone, for a body's rays as for the camera's, and a reader passes no
+> eye and no zoom of its own.
