@@ -44,6 +44,31 @@ or a low bit is said where it lives, in the code and the module beside it, for
 the reader who goes down to look. What it must not do is say the system keeps
 a promise it does not.
 
+## Revising one
+
+A document is revised by the lens it is written with, wide, not by its
+sentences one at a time.
+
+- Each section's idea is said in one line first. A section whose idea cannot
+  be said, or that reaches it late under its support, is the finding.
+- What is caught is a view: a structure, a boundary, an owner or a flow told
+  as the code no longer has it; an idea the system stands on that the document
+  does not state; two sections telling one idea.
+- The model is what is checked against the code: the promise, the parts, how
+  they meet and what each does not know. The count of sentences verified is no
+  measure.
+- A detail is not sharpened. One that is off, or that takes a clause to make
+  exact, goes down to the module beside its code, or out. A sentence is added
+  only where a reader would hold the model wrong without it, never to make a
+  detail exact, and a revision that leaves a document longer is read again for
+  what it added.
+- Each level says its own and leaves the rest to the one below: a README what
+  the thing is and why, `ARCHITECTURE.md` the model and why it is so, a
+  module's README its part's duty and contract, the code its conditions, the
+  spec what is promised to the bit.
+- A statement goes when the code contradicts it or the argument does not need
+  it, never because it was not looked up.
+
 ## Rules
 
 - **One theme, carried through.** A document is written from its theme, not

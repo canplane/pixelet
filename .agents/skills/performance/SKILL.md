@@ -43,6 +43,12 @@ Make the program faster while keeping every condition the design met.
   and the run ends with `the page is hidden`; a window beside it or over part
   of it does not. Nothing raises a window: a run that needs the screen waits
   until the user can leave it shown.
+- A phone that locks itself ends a run: a run takes longer than a minute, and a
+  locked iPhone drops safaridriver's session with nothing said, the progress
+  lines stopping at 45 to 70 s. Before a phone's runs, ask the user to set its
+  auto-lock to never (the iPhone) or keep the screen on while plugged in (the
+  Android phone, `adb shell svc power stayon usb`, put back after), and to
+  leave Safari's Remote Automation on and no private tab in front.
 - Every run writes the same into `<dir>`, and all of it is read: `values.json`
   (`build`, `longest`, `gpu`, `tick`) for the comparison, `report.txt` for where
   the time went, `trace.json` at ui.perfetto.dev for a frame on the timeline;
@@ -92,6 +98,13 @@ Make the program faster while keeping every condition the design met.
   on one device, and a rise is first read in the code: the report's `steps` and
   `spans` name where the time went. A run whose device another process kept
   busy (its `state` lines) is void and is run again with its device to itself.
+- The Mac's Safari stalls by WebKit's own fault
+  (`doc/gpu/lesson/the-gpu-is-shared.md`, `doc/upstream.md`): the frames stop
+  at once, `gpu_util` stands at 100% with the page's and its GPU process's CPU
+  at 0%, and the core may stop in `createCommandEncoder` or a mapped range. Such
+  a run is void and is no finding against a change: Safari is quit, the WebKit
+  processes left exiting are counted (`ps`; only a reboot clears them, which is
+  the user's), nothing else uses the Mac's GPU, and the run is taken again.
 - `script/perf/gate.py <vendor> <base> <change> [rounds]` runs
   only when the user orders a comparison, on the two builds they name, the
   deployed build included. It only assembles: it runs the vendor's script on them
