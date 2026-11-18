@@ -1,25 +1,22 @@
 // @pxl/client/ui/feature/world/pill.tsx
 
 /**
- * A pill whose place and width can move. On the web and on Android it moves by
- * transforms alone. It does not scale, because scaling squashes its round
- * ends, and it does not animate its width, because that leaves ghosts over
- * the canvas in iOS WebKit. So it is drawn as a fixed circle at its left end
- * and a full-width body that slides out from under a clip at the circle's
- * center. The circle lies wholly under the body, because two pieces cut to
- * meet leave a hairline between them. The two pieces' shadows are clipped
- * apart so that they do not double, and they meet cleanly only on whole
- * pixels. An iPhone lays the pill out again and lets the system animate it
- * (pill.ios.tsx).
+ * A pill whose place and width can move, by transforms alone: on the web, on
+ * Android, and on an iPhone where it is solid or the system has no glass. It
+ * does not scale, because scaling squashes its round ends, and it does not
+ * animate its width, because that leaves ghosts over the canvas in iOS WebKit.
+ * So it is drawn as a fixed circle at its left end and a full-width body that
+ * slides out from under a clip at the circle's center. The circle lies wholly
+ * under the body, because two pieces cut to meet leave a hairline between them.
+ * The two pieces' shadows are clipped apart so that they do not double, and
+ * they meet cleanly only on whole pixels. A shadow's piece is filled too, so
+ * that the fill's soft edge lies over the fill and the ground does not show
+ * through it. On an iPhone a pill of glass is laid out again and the system
+ * animates it (pill.ios.tsx).
  */
 
 import type { ReactNode } from "react";
-import {
-  type ColorValue,
-  StyleSheet,
-  View,
-  type ViewStyle,
-} from "react-native";
+import { type ColorValue, StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { BackingPlace } from "@/ui/shared/component/backing.tsx";
@@ -32,16 +29,12 @@ import { useDim } from "@/ui/shared/component/motion/dim.ts";
 import { touchOutset } from "@/ui/shared/component/touch.ts";
 import { PILL_STYLE } from "./pill-style.ts";
 
-export interface PillProps {
+interface BasePillProps {
   x: f64;
   width: f64;
   height: f64;
   spanPx: f64;
   fill: ColorValue;
-  tint?: ColorValue;
-  place: BackingPlace;
-  interactive?: boolean;
-  border?: { width: f64; color: ColorValue };
   shadow?: string;
   fade?: f64;
   fadeFrom?: f64;
@@ -56,15 +49,28 @@ export interface PillProps {
   onContentWidth?: (width: f64) => void;
 }
 
+/** A pill of glass where an iPhone has glass, which `tint` and `place` set;
+ * elsewhere it is its fill. */
+export interface GlassPillProps extends BasePillProps {
+  solid?: false;
+  tint?: ColorValue;
+  place: BackingPlace;
+}
+
+/** A pill drawn as its fill on every platform. */
+interface SolidPillProps extends BasePillProps {
+  solid: true;
+}
+
+export type PillProps = GlassPillProps | SolidPillProps;
+
 const SHADOW_ROOM = 32;
-// `tint`, `place` and `interactive` only apply on an iPhone.
 export function Pill({
   x,
   width,
   height,
   spanPx,
   fill,
-  border,
   shadow,
   fade = 1,
   fadeFrom,
@@ -78,10 +84,6 @@ export function Pill({
   const dim = useDim(fade, fadeTransition, fadeFrom);
   const r = height / 2;
   const slide = width - spanPx;
-  const edge: ViewStyle = {
-    borderRadius: r,
-    ...(border && { borderWidth: border.width, borderColor: border.color }),
-  };
   const clipLeft = {
     left: -SHADOW_ROOM,
     top: -SHADOW_ROOM,
@@ -151,6 +153,7 @@ export function Pill({
                         width: height,
                         height,
                         borderRadius: r,
+                        backgroundColor: fill,
                         boxShadow: shadow,
                       }}
                     />
@@ -166,6 +169,7 @@ export function Pill({
                           STYLE.fill,
                           {
                             borderRadius: r,
+                            backgroundColor: fill,
                             boxShadow: shadow,
                           },
                         ]}
@@ -177,9 +181,9 @@ export function Pill({
 
               <View
                 style={[
-                  edge,
                   STYLE.circle,
                   {
+                    borderRadius: r,
                     width: height,
                     height,
                     backgroundColor: fill,
@@ -192,7 +196,12 @@ export function Pill({
                   transition={transition}
                   style={body}
                 >
-                  <View style={[edge, STYLE.fill, { backgroundColor: fill }]} />
+                  <View
+                    style={[
+                      STYLE.fill,
+                      { borderRadius: r, backgroundColor: fill },
+                    ]}
+                  />
                 </Motion>
               </View>
 
