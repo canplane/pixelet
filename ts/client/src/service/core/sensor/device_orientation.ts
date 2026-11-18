@@ -80,11 +80,22 @@ export function requestOrientation(): boolean {
     store.status = SENSOR_STATUS_UNAVAILABLE;
     return false;
   }
-  store.status = SENSOR_STATUS_LOADING;
+  // What the last tracking answered stands until the new one answers, as the
+  // location's does: only a first tracking, with nothing answered yet, reads
+  // as Loading.
+  if (store.status === SENSOR_STATUS_IDLE) store.status = SENSOR_STATUS_LOADING;
   orientation.command = ORIENTATION_COMMAND_START;
   orientation.lastEventAt = performance.now();
   setIsTrackingOrientation(store, true);
   return true;
+}
+
+/** The platform grants the compass: a refusal or a loss no longer holds, and
+ * its failure gives way to Loading until the first heading. */
+export function orientationGranted(): void {
+  const store = deviceOrientationStore();
+  if (store.status === SENSOR_STATUS_ERROR)
+    store.status = SENSOR_STATUS_LOADING;
 }
 
 /** The compass is lost, or its permission refused. */

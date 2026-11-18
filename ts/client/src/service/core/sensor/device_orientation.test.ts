@@ -9,6 +9,7 @@ import {
   onOrientationLost,
   orientationClose,
   orientationEvent,
+  orientationGranted,
   orientationStop,
   orientationUnavailable,
   platform,
@@ -17,6 +18,7 @@ import {
 } from "./device_orientation.ts";
 import {
   deviceOrientationStore,
+  SENSOR_STATUS_ERROR,
   SENSOR_STATUS_LOADING,
   SENSOR_STATUS_READY,
   SENSOR_STATUS_UNAVAILABLE,
@@ -44,7 +46,7 @@ test("orientationUnavailable - a missing compass sets the compass's status alone
 
 test("orientationStop - a hidden spell stops the heading, and asking again starts it", () => {
   // Hiding stops a tracked heading and keeps its status; asking again starts
-  // it afresh, a failed compass alike.
+  // it, a failed compass alike, and the status stands until it answers.
   pageCompass();
   orientationClose();
   takeOrientationCommand();
@@ -58,9 +60,12 @@ test("orientationStop - a hidden spell stops the heading, and asking again start
   assert.equal(deviceOrientationStore().status, SENSOR_STATUS_READY);
   assert.ok(requestOrientation());
   assert.equal(takeOrientationCommand(), ORIENTATION_COMMAND_START);
-  assert.equal(deviceOrientationStore().status, SENSOR_STATUS_LOADING);
+  assert.equal(deviceOrientationStore().status, SENSOR_STATUS_READY);
 
   onOrientationLost();
   assert.ok(requestOrientation());
   assert.equal(takeOrientationCommand(), ORIENTATION_COMMAND_START);
+  assert.equal(deviceOrientationStore().status, SENSOR_STATUS_ERROR);
+  orientationGranted();
+  assert.equal(deviceOrientationStore().status, SENSOR_STATUS_LOADING);
 });

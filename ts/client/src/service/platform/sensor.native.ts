@@ -163,6 +163,10 @@ function geolocationStart(): void {
       () => geolocationFail(watch, "other"),
     );
     watchKeep(watch, subscription);
+    // The watch runs, granted and with the location on: a refusal or the
+    // location switched off no longer holds, as iOS's authorization change
+    // tells it.
+    if (!watch.stopped) listener.permission("geolocation", "granted");
   })().catch(() => geolocationFail(watch, "other"));
 }
 
@@ -198,6 +202,7 @@ function orientationStart(): void {
       },
     );
     watchKeep(watch, subscription);
+    if (!watch.stopped) listener.permission("orientation", "granted");
   })().catch((err) => {
     console.error("[sensor] heading:", err);
     orientationFail(watch, false);

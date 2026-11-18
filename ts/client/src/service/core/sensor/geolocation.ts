@@ -15,8 +15,10 @@ import {
   failedSensorState,
   ofSensorState,
   setLocation,
+  SENSOR_STATUS_ERROR,
   SENSOR_STATUS_IDLE,
   SENSOR_STATUS_LOADING,
+  SENSOR_STATUS_READY,
 } from "./reading.ts";
 
 export type GeolocationCommand =
@@ -54,9 +56,13 @@ export function startWatching(): void {
     store.state = failedSensorState("device.geolocation.unsupported");
     return;
   }
-  // A watch started again after a hidden spell keeps the location it had and
-  // reads as Loading until it gives a fix of its own.
-  store.state = ofSensorState(SENSOR_STATUS_LOADING);
+  // What the last watch answered, a fix or a failure, stands until the new
+  // watch answers: a watch started again after a hidden spell or after a
+  // failure changes nothing shown until then. Only a first watch, with
+  // nothing answered yet, reads as Loading.
+  if (store.state.status === SENSOR_STATUS_IDLE) {
+    store.state = ofSensorState(SENSOR_STATUS_LOADING);
+  }
   store.isTrackingLocation = true;
   geolocation.command = GEOLOCATION_COMMAND_START;
 }
@@ -70,6 +76,17 @@ export function stopWatching(): void {
     store.isTrackingLocation = false;
     geolocation.command = GEOLOCATION_COMMAND_STOP;
   }
+}
+
+/** The platform grants the location: a refusal, or the location switched off,
+ * no longer holds. Its failure gives way to the location held, or to Loading
+ * until the watch's first fix. */
+export function geolocationGranted(): void {
+  const store = deviceLocationStore();
+  if (store.state.status !== SENSOR_STATUS_ERROR) return;
+  store.state = ofSensorState(
+    store.location === null ? SENSOR_STATUS_LOADING : SENSOR_STATUS_READY,
+  );
 }
 
 export function geolocationClose(): void {
@@ -106,9 +123,9 @@ const ERR_KEY: Readonly<Record<GeolocationError, string>> = {
 
 /** A location error. Whether the watch runs on past it (`watching`) is the
  * platform's to say. One it rides out leaves the watch running, and the
- * location reads as failed until the next fix. One that ended it leaves
- * nothing watching and no location, and a grant, a return to the foreground
- * or a press starts the watch again. */
+ * location reads as failed until the next fix or a grant. One that ended it
+ * leaves nothing watching and no location, and a grant, a return to the
+ * foreground or a press starts the watch again. */
 export function geolocationError(
   error: GeolocationError,
   watching: boolean,

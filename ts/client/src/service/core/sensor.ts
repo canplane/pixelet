@@ -32,6 +32,7 @@ import {
   ORIENTATION_COMMAND_START,
   ORIENTATION_COMMAND_STOP,
   onOrientationLost,
+  orientationGranted,
   orientationClose,
   orientationEvent,
   orientationStop,
@@ -48,6 +49,7 @@ import {
   geolocationClose,
   geolocationError,
   geolocationFix,
+  geolocationGranted,
   platform as geolocationPlatform,
   startWatching,
   stopWatching,
@@ -118,12 +120,17 @@ export const SENSOR_LISTENER: SensorListener = {
     onOrientationLost();
     post();
   },
-  // A grant made outside the app, in the settings, starts the sensor; a
-  // refused compass reads as failed.
+  // A grant clears the sensor's failure and starts it; a refused compass
+  // reads as failed.
   permission: (which, answer) => {
     if (answer === "granted") {
-      if (which === "geolocation") startLocation();
-      else void startOrientation();
+      if (which === "geolocation") {
+        geolocationGranted();
+        startLocation();
+      } else {
+        orientationGranted();
+        void startOrientation();
+      }
     } else if (which === "orientation") onOrientationLost();
     post();
   },

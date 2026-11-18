@@ -9,6 +9,7 @@ import {
   geolocationClose,
   geolocationError,
   geolocationFix,
+  geolocationGranted,
   platform,
   startWatching,
   stopWatching,
@@ -19,6 +20,7 @@ import {
   SENSOR_STATUS_ERROR,
   SENSOR_STATUS_IDLE,
   SENSOR_STATUS_LOADING,
+  SENSOR_STATUS_READY,
 } from "./reading.ts";
 
 /** Opens the location afresh on a platform that has one. */
@@ -50,13 +52,33 @@ test("geolocationError - the platform says whether the watch runs on", () => {
   assert.equal(store.state.status, SENSOR_STATUS_ERROR);
   startWatching();
   assert.equal(takeGeolocationCommand(), GEOLOCATION_COMMAND_START);
+  assert.equal(deviceLocationStore().state.status, SENSOR_STATUS_ERROR);
+});
+
+test("geolocationGranted - a grant clears the failure, and nothing else", () => {
+  // A refusal that ended the watch stands through a restart, until the
+  // platform grants the location: then it reads as Loading, with no location
+  // to show. A failure the watch rides out, with a location held, gives way
+  // to that location. A grant over no failure changes nothing.
+  opened();
+  geolocationError("denied", false);
+  startWatching();
+  assert.equal(deviceLocationStore().state.status, SENSOR_STATUS_ERROR);
+  geolocationGranted();
   assert.equal(deviceLocationStore().state.status, SENSOR_STATUS_LOADING);
+
+  geolocationFix(126.9784, 37.5667, null, 5, null);
+  geolocationError("unavailable", true);
+  geolocationGranted();
+  assert.equal(deviceLocationStore().state.status, SENSOR_STATUS_READY);
+  geolocationGranted();
+  assert.equal(deviceLocationStore().state.status, SENSOR_STATUS_READY);
 });
 
 test("stopWatching - a hidden spell keeps the location", () => {
   // Hiding the app stops the watch and keeps what it read: on the return the
-  // location is still known, and reads as Loading until a fix of the new
-  // watch.
+  // location is still known, and its state stands until a fix of the new
+  // watch replaces it.
   opened();
   geolocationFix(126.9784, 37.5667, null, 5, null);
   stopWatching();
@@ -66,7 +88,7 @@ test("stopWatching - a hidden spell keeps the location", () => {
   assert.equal(takeGeolocationCommand(), GEOLOCATION_COMMAND_START);
   let store = deviceLocationStore();
   assert.notEqual(store.location, null);
-  assert.equal(store.state.status, SENSOR_STATUS_LOADING);
+  assert.equal(store.state.status, SENSOR_STATUS_READY);
 
   geolocationClose();
   store = deviceLocationStore();
