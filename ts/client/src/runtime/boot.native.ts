@@ -15,8 +15,9 @@
  */
 
 import { state_on } from "@pxl/gpu/expo";
-import { sender } from "@xpute/link";
-import { open_ui, start, stopped_on, trap_on } from "@xpute/expo";
+import { sender } from "@xpute/link/wait.ts";
+import { open_ui, start } from "@xpute/expo/ui.ts";
+import { stopped_on, trap_on } from "@xpute/expo/xpute.ts";
 import { stopped } from "@/service/sys/abort.ts";
 import { GPU_STATE, setGpu } from "@/service/sys/gpu.ts";
 import { mountFiles } from "@/service/sys/fs/file.ts";

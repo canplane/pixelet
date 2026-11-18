@@ -8,8 +8,7 @@
 import { test, vi } from "vitest";
 import assert from "node:assert/strict";
 
-import { Side } from "@xpute/link";
-import { NAMED } from "@xpute/link/link.ts";
+import { NAMED, Side } from "@xpute/link/link.ts";
 import { LEVEL_ERROR } from "@xpute/host/abi/log/log.enum.ts";
 import type { Log, Trap } from "./message.ts";
 import { run } from "./worker.ts";

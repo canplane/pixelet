@@ -78,6 +78,15 @@ On iOS, generate the project with `--platform ios`, run `pod install` in
 `ts/client/ios`, and build `pixelet.xcworkspace` in Xcode. `make dev-native`
 starts Metro for a Debug build on either platform.
 
+The build compiles the core itself, as a step of xpute's native module, so a
+change under `rust/` needs only another build, and so does a change to a native
+module's `build.gradle`, which Gradle reads where it lies. A podspec's change
+reaches a build through `pod install`. A config plugin (`ts/client/plugin/`)
+writes into the generated project and leaves what it already wrote there, so
+its change takes the project generated again with `--clean`, which removes
+`ios/` or `android/` whole, anything put there by hand with it, and then `pod
+install`.
+
 ## Making data
 
 Every kind of tile is baked by its own target (`terrain`, `place`, `division`

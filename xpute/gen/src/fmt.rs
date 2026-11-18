@@ -11,10 +11,10 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 pub fn format_text(path: &str, text: String) -> Result<String, String> {
-    let mut cmd = if path.ends_with(".rs") {
+    let (mut cmd, formatter) = if path.ends_with(".rs") {
         let mut c = Command::new("rustfmt");
         c.args(["--edition", "2024", "--emit", "stdout"]);
-        c
+        (c, "rustfmt".to_string())
     } else if [".ts", ".json", ".json5"].iter().any(|e| path.ends_with(e)) {
         let file = Path::new(path);
         let Some(tree) = file
@@ -24,9 +24,10 @@ pub fn format_text(path: &str, text: String) -> Result<String, String> {
         else {
             return Ok(text);
         };
-        let mut c = Command::new(tree.join("node_modules/.bin/prettier"));
+        let prettier = tree.join("node_modules/.bin/prettier");
+        let mut c = Command::new(&prettier);
         c.arg("--stdin-filepath").arg(file).current_dir(tree);
-        c
+        (c, prettier.display().to_string())
     } else {
         return Ok(text);
     };
@@ -35,7 +36,7 @@ pub fn format_text(path: &str, text: String) -> Result<String, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("fmt {path}: {e}"))?;
+        .map_err(|e| format!("fmt {path}: {formatter}: {e}"))?;
     child
         .stdin
         .take()

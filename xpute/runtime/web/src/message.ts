@@ -9,9 +9,9 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import type { Handle, Method, Tag } from "@xpute/link";
+import type { Handle, Method, Tag } from "@xpute/link/link.ts";
 import type { Token } from "@xpute/link/abi/types.ts";
-import type { UiStop } from "@xpute/host";
+import type { UiStop } from "@xpute/host/runtime.ts";
 import type { Level } from "@xpute/host/abi/log/log.enum.ts";
 
 /** The prefixes the UI opens objects under, each `[handle, prefix]`, the

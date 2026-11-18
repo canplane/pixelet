@@ -21,7 +21,7 @@
 import type { F64Array, U8Array } from "@xpute/kit/abi/array.ts";
 import { type f64, type u32, U32_MAX, U64_MAX } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import { PHASES } from "@/abi/phase.spec.ts";
 import { BASE_KINDS } from "@/abi/publication.spec.ts";
 import {

@@ -21,6 +21,7 @@ them serves no reader.
 | `CONTRIBUTING.md` | someone working on it | how-to | what do I type to set it up, run it and check it? |
 | a README beside the code | someone working in that module | explanation | how does this module work? |
 | `infra/README.md` | an operator | how-to | how is production set up and run by hand? |
+| `xpute/USAGE.md` | someone building a program on xpute | how-to | what do I write and type to run my code on it? |
 
 xpute has the same cut under its own theme. The reference is `spec/` and the
 generated code's comments.

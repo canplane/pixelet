@@ -3,7 +3,7 @@
 /** The core as the UI reaches it: the UI's end, which the core's interfaces
  * are called over by their named handles (`ui`). */
 
-import type { Sender } from "@xpute/link";
+import type { Sender } from "@xpute/link/link.ts";
 
 export let ui: Sender;
 

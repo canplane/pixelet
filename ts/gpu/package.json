@@ -3,9 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./link": "./link/src/mod.ts",
     "./link/*": "./link/src/*",
-    "./host": "./host/src/mod.ts",
     "./host/*": "./host/src/*",
     "./expo": "./expo/src/mod.ts"
   },

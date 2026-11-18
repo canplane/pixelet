@@ -7,7 +7,7 @@
 
 import { mount } from "./abi/log/log.ts";
 import type { Level } from "./abi/log/log.enum.ts";
-import type { Side } from "@xpute/link";
+import type { Side } from "@xpute/link/link.ts";
 import { runtime } from "./runtime.ts";
 
 /** Hands its runtime a record of the host's, or of what it implements:

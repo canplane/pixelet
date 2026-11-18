@@ -31,8 +31,6 @@ import {
   DROP,
   End,
   type Handle,
-  Lift,
-  Lower,
   type Memory,
   type Method,
   type Packet,
@@ -40,7 +38,8 @@ import {
   ROOT,
   store_uri,
   type Tag,
-} from "@xpute/link";
+} from "@xpute/link/link.ts";
+import { Lift, Lower } from "@xpute/link/cabi.ts";
 import { frame, HDR_SZ, read as read_frame } from "@xpute/link/frame.ts";
 import { XPUTE } from "./xpute.ts";
 

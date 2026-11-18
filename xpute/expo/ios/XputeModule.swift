@@ -4,7 +4,7 @@ import CXpute
 import ExpoModulesCore
 import Foundation
 
-/// This is xpute's native module on iOS (src/mod.ts), over xpute's C ABI
+/// This is xpute's native module on iOS (src/xpute.ts), over xpute's C ABI
 /// (xpute.h): it starts the runtime on the guest's thread, carries the UI's
 /// link to it and back, and tells it of the app's lifecycle itself.
 /// android/'s XputeModule.kt is the same module under the same names.

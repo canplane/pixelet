@@ -3,7 +3,7 @@
 import { test, vi } from "vitest";
 import assert from "node:assert/strict";
 
-import type { GpuState } from "../../link/src/mod.ts";
+import type { GpuState } from "../../link/src/gpu.ts";
 
 /** The GPU's native module as the host stands: the state now, and what each
  * listener is told as it changes. */

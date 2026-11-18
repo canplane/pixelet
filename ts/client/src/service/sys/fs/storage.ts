@@ -21,7 +21,7 @@ import {
 } from "@xpute/kit/codec/encoding.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ENOTRECOVERABLE } from "@xpute/kit/status/errno.spec.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import {
   ERROR_CODE_BAD_MESSAGE,
   ERROR_CODE_IO,

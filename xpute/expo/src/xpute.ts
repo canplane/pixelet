@@ -1,9 +1,16 @@
 // @xpute/expo/xpute.ts
 
-/** The module's native functions and events (ios/, android/). */
+/**
+ * xpute's native module, which an Expo app autolinks (ios/, android/), by its
+ * native functions and events. It starts the runtime linked into the app
+ * beside the guest, on the guest's own thread (ios/CXpute/xpute.h
+ * `xpute_start`), and carries the UI's calls to it and back (ui.ts). The
+ * module tells the runtime of the app's lifecycle itself (Swift, Kotlin), not
+ * through JavaScript.
+ */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { UiStop } from "@xpute/host";
+import type { UiStop } from "@xpute/host/runtime.ts";
 import type { Level } from "@xpute/host/abi/log/log.enum.ts";
 import { requireNativeModule } from "expo";
 

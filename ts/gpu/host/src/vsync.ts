@@ -9,7 +9,7 @@
  * mounted, as a display link calls at every frame, so each gap is one
  * frame's but across a pause, as while the page is hidden. */
 
-import { mark } from "@xpute/host";
+import { mark } from "@xpute/host/clock.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Side } from "@xpute/link/link.ts";

@@ -74,6 +74,9 @@ semicolon_if_nothing_returned = "warn"
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
+# The Rust the crates are built and tested with (rust-toolchain.toml), which
+# cargo refuses to build them below.
+rust-version = "1.100"
 publish = true
 # The library crates (kit, link, guest, host, native runtime, gen) carry
 # these for a registry.

@@ -18,7 +18,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { type Callee, ComponentError, type Memory } from "@xpute/link";
+import { type Callee, ComponentError, type Memory } from "@xpute/link/link.ts";
 import * as file from "@xpute/host/abi/fs/file.ts";
 import { ERROR_CODE_IO } from "@xpute/host/abi/fs/types.enum.ts";
 

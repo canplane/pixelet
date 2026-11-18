@@ -14,7 +14,7 @@
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Callee, Memory } from "@xpute/link";
+import type { Callee, Memory } from "@xpute/link/link.ts";
 import type { Lent } from "@xpute/link/abi/types.ts";
 
 import * as text from "@/abi/text.ts";

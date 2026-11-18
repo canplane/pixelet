@@ -6,7 +6,7 @@
  * web.ts, pxl-gpu-host native.rs). */
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import type { GpuState } from "@pxl/gpu/link";
+import type { GpuState } from "@pxl/gpu/link/gpu.ts";
 
 /**
  * What the client has of a GPU. The core cannot say this itself, because a

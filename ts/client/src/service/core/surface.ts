@@ -8,7 +8,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as surface from "@pxl/gpu/host/abi/surface.ts";
 import { SURFACE_URI } from "@pxl/gpu/link/api.spec.ts";
-import { drop, open, uri } from "@xpute/link";
+import { drop, open, uri } from "@xpute/link/link.ts";
 import { type SurfaceDriver } from "@/service/platform/types.ts";
 import { ui } from "@/service/core/core.ts";
 

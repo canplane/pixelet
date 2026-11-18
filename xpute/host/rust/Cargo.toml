@@ -2,6 +2,7 @@
 name = "xpute-host"
 description = "xpute's host in Rust: its end of the link, the bindings mounted there, and what it implements for the guest"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 publish.workspace = true
 license.workspace = true

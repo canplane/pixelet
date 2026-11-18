@@ -18,8 +18,13 @@ import {
   ERRNO_EPIPE,
 } from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/error.ts";
-import { type Handle, type Imports, type Method, Side } from "@xpute/link";
-import { init, type Stop } from "@xpute/host";
+import {
+  type Handle,
+  type Imports,
+  type Method,
+  Side,
+} from "@xpute/link/link.ts";
+import { init, type Stop } from "@xpute/host/runtime.ts";
 import { type Level, LEVEL_ERROR } from "@xpute/host/abi/log/log.enum.ts";
 import { tell_attached } from "./life.ts";
 import type { Instantiate, Log, Stopped, Trap } from "./message.ts";

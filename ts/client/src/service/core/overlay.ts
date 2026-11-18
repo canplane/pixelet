@@ -1,6 +1,6 @@
 // @pxl/client/service/core/overlay.ts
 
-import type { Callee } from "@xpute/link";
+import type { Callee } from "@xpute/link/link.ts";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
 

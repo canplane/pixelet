@@ -19,7 +19,6 @@
     "@xpute/kit": "workspace:*",
     "@xpute/golden": "workspace:*",
     "@types/node": "^26",
-    "koffi": "^3.3.8",
     "oxlint": "^1.93.0",
     "prettier": "^3.10.1",
     "typescript": "^7.0.2",

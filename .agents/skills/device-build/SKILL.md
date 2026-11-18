@@ -13,7 +13,7 @@ library then has its source paths numbered by `PxlPlatform.podspec` and
 `build.gradle` (`ts/client/modules/platform/`), under the prefixes the build
 plugins (`ts/client/plugin/`) hand cargo as `RUSTFLAGS`.
 
-After the app moves, pnpm's links are remade or a config plugin is dropped from `app.config.ts`, prebuild again with `--clean` and run `pod install` again.
+After the app moves, pnpm's links are remade, a config plugin is dropped from `app.config.ts` or the text one writes changes (a plugin leaves what it already wrote), prebuild again with `--clean` and run `pod install` again. `--clean` removes `ios/` or `android/` whole, `ios/.xcode.env.local` with it.
 
 A **Release** build embeds the JavaScript bundle. A **Debug** build loads it
 from Metro (`make dev-native`) on port 8081. The running Metro serves your tree

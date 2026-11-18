@@ -5,7 +5,7 @@
  * the UI's panic screen. */
 
 import { strerror } from "@xpute/kit/status/error.ts";
-import type { UiStop } from "@xpute/host";
+import type { UiStop } from "@xpute/host/runtime.ts";
 import { BUILD_NUMBER } from "@/build.ts";
 
 let code: string | null = null;

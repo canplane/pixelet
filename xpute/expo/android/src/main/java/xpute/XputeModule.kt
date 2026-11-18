@@ -9,7 +9,7 @@ import expo.modules.kotlin.typedarray.Uint8Array
 import java.nio.ByteBuffer
 
 /**
- * This is xpute's native module on Android (src/mod.ts), the same as
+ * This is xpute's native module on Android (src/xpute.ts), the same as
  * ios/XputeModule.swift under the same names: it starts the runtime
  * (Runtime.kt) on the guest's thread, carries the UI's calls to it and back,
  * and tells it of the app's lifecycle itself. A u32 crosses from JavaScript as

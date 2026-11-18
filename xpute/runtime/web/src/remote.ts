@@ -17,11 +17,11 @@ import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
 import {
   DROP,
   type Handle,
-  type Lift,
   type Method,
   type Side,
   type Tag,
-} from "@xpute/link";
+} from "@xpute/link/link.ts";
+import { type Lift } from "@xpute/link/cabi.ts";
 import type { Prefixes, ToPage, ToWorker } from "./message.ts";
 
 /** The least of a port the worker takes: what posts a message and what

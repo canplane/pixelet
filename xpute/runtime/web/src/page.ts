@@ -32,16 +32,15 @@ import {
   DROP,
   End,
   type Handle,
-  Lift,
-  Lower,
   type Method,
   type Packet,
   pkt_of,
   ROOT,
-  sender,
   type Tag,
-} from "@xpute/link";
-import type { UiStop } from "@xpute/host";
+} from "@xpute/link/link.ts";
+import { Lift, Lower } from "@xpute/link/cabi.ts";
+import { sender } from "@xpute/link/wait.ts";
+import type { UiStop } from "@xpute/host/runtime.ts";
 import { tell_life } from "./life.ts";
 import type {
   Instantiate,

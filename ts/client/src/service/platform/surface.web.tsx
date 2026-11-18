@@ -2,7 +2,7 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { clamp, round } from "@xpute/kit/math/scalar.ts";
-import { give } from "@xpute/runtime-web";
+import { give } from "@xpute/runtime-web/page.ts";
 import { useEffect, useRef } from "react";
 
 import type {

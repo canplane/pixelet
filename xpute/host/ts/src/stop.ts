@@ -7,7 +7,7 @@
  * runtime's to tell, as a stop and a trap. */
 
 import * as stop from "./abi/stop/stop.ts";
-import type { Side } from "@xpute/link";
+import type { Side } from "@xpute/link/link.ts";
 import { runtime } from "./runtime.ts";
 
 export function mount_stop(side: Pick<Side, "mount_named">): void {

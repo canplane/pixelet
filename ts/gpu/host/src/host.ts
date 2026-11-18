@@ -23,9 +23,9 @@ import {
   SURFACE_PREFERRED,
   DEVICE,
 } from "../../link/src/api.spec.ts";
-import { type GpuConfig } from "../../link/src/mod.ts";
+import { type GpuConfig } from "../../link/src/gpu.ts";
 import { handle_slot } from "../../link/src/handle.ts";
-import { log } from "@xpute/host";
+import { log } from "@xpute/host/log.ts";
 import { LEVEL_ERROR, LEVEL_WARN } from "@xpute/host/abi/log/log.enum.ts";
 import { Belt } from "./belt.ts";
 import {

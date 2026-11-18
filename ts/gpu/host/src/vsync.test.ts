@@ -3,7 +3,7 @@
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
 
-import { mark } from "@xpute/host";
+import { mark } from "@xpute/host/clock.ts";
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
 import { Lift, Lower } from "@xpute/link/cabi.ts";
 import type { Args, LinkObject, Side, Tag } from "@xpute/link/link.ts";

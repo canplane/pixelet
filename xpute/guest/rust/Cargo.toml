@@ -2,6 +2,7 @@
 name = "xpute-guest"
 description = "xpute's guest end: its side of the link, the clocks it reads, its log and its stop"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 publish.workspace = true
 license.workspace = true

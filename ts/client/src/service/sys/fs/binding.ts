@@ -12,7 +12,7 @@
  * (object.ts). The settings and the object files can be set aside. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import {
   ERROR_CODE_NO_ENTRY,
   ERROR_CODE_READ_ONLY,
