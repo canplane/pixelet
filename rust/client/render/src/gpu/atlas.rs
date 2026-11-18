@@ -43,7 +43,7 @@ pub struct DisplayList {
     icons: Vec<Icon>,
 }
 
-/// One of Carto's symbols (pxl-spec asset/symbol.spec.rs), centered at `at` and drawn as
+/// One of the place symbols (pxl-spec asset/symbol.spec.rs), centered at `at` and drawn as
 /// its mask in `color`.
 struct Icon {
     symbol: usize,
@@ -146,7 +146,7 @@ impl DisplayList {
         ));
     }
 
-    /// Carto's symbol whose index among `SYMBOL_MASKS` is `symbol`, centered at (cx, cy).
+    /// The symbol whose index among `SYMBOL_MASKS` is `symbol`, centered at (cx, cy).
     pub fn icon(&mut self, symbol: usize, color: Rgba, cx: f32, cy: f32) {
         self.icons.push(Icon {
             symbol,

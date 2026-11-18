@@ -9,15 +9,17 @@
 // ingested from. A release whose taxonomy moved takes a purge by command, and a
 // category missing here is a place with no kind, which no theme row draws.
 //
-// What OpenStreetMap Carto draws for a place of each category: the tags Carto
+// What a place of each category is drawn as: the tags OpenStreetMap Carto
 // styles it under (`carto`, the attributes `style/amenity-points.mss` reads,
-// anything else null as a point's are), the web zoom from which it shows as a
-// dot (`marker-width` with no file) and as its icon (`symbol`, under Carto's
-// `symbols/`), the zoom from which its name shows (`#text-point`'s
-// `text-name: [name]`), the icon's fill and the label's. Each value is the
-// one Carto's rules give for those tags at that zoom, colors computed from
-// its variables (`darken` as LESS does). A category with no row is one Carto
-// draws no point for, so it is neither carried in a tile nor drawn.
+// anything else null as a point's are), the web zoom from which it shows as
+// a dot (`marker-width` with no file) and as its icon, the zoom from which
+// its name shows (`#text-point`'s `text-name: [name]`), its group, and the
+// icon (`symbol`), Maki's file of it under asset/raw/place/symbol/. Each
+// zoom is the one Carto's rules give for those tags. A group's colors are
+// two of IBM Carbon's color tokens (`@carbon/colors` 11.62.0), a hue at its
+// steps 60 and 70: `fill` the icon's disc and the dot, `ink` the name. A
+// category with no row is one Carto draws no point for, so it is neither
+// carried in a tile nor drawn.
 
 use crate::color::Rgba;
 
@@ -324,62 +326,61 @@ pub const LABEL_ZOOM: [u8; 256] = [
 
 /// A category's icon or dot fill, category k at `FILL[k - 1]`.
 pub const FILL: [Rgba; 256] = [
-    0, 0, 0, 0x8461c4ff, 0, 0xc77400ff, 0, 0, 0xac39acff, 0, 0, 0x0092daff, 0, 0x0c8416ff,
-    0x734a08ff, 0, 0, 0xac39acff, 0, 0x734a08ff, 0x4863a0ff, 0xac39acff, 0xac39acff, 0, 0, 0, 0, 0,
-    0, 0x734a08ff, 0xc77400ff, 0, 0x0092daff, 0xbf0000ff, 0xac39acff, 0, 0, 0x000000ff, 0, 0, 0,
-    0xc77400ff, 0x0092daff, 0, 0, 0x734a08ff, 0x734a08ff, 0xc77400ff, 0, 0x000000ff, 0x734a08ff, 0,
-    0xc77400ff, 0, 0, 0, 0x734a08ff, 0, 0, 0xac39acff, 0x4863a0ff, 0x734a08ff, 0x734a08ff,
-    0x734a08ff, 0xbf0000ff, 0xac39acff, 0, 0, 0xac39acff, 0, 0x0c8416ff, 0, 0, 0, 0, 0xac39acff, 0,
-    0x4863a0ff, 0xbf0000ff, 0xbf0000ff, 0, 0x0092daff, 0, 0, 0, 0, 0, 0xac39acff, 0xac39acff,
-    0xc77400ff, 0, 0x734a08ff, 0x0c8416ff, 0xac39acff, 0xac39acff, 0, 0, 0xc77400ff, 0, 0xc77400ff,
-    0, 0x734a08ff, 0x0092daff, 0, 0, 0x0092daff, 0, 0x0c8416ff, 0x4863a0ff, 0x4863a0ff, 0x0c8416ff,
-    0xac39acff, 0, 0, 0x000000ff, 0, 0, 0xbf0000ff, 0x0092daff, 0, 0, 0, 0x0092daff, 0, 0x734a08ff,
-    0x000000ff, 0, 0, 0, 0xac39acff, 0, 0x734a08ff, 0x666666ff, 0, 0xc77400ff, 0, 0, 0xac39acff, 0,
-    0, 0x734a08ff, 0, 0, 0, 0x734a08ff, 0xd08f55ff, 0x734a08ff, 0x734a08ff, 0xac39acff, 0,
-    0x000000ff, 0, 0, 0x734a08ff, 0xc77400ff, 0xac39acff, 0xbf0000ff, 0, 0x0092daff, 0xbf0000ff,
-    0x734a08ff, 0xac39acff, 0xac39acff, 0xbf0000ff, 0, 0, 0, 0x000000ff, 0, 0x0c8416ff, 0x734a08ff,
-    0, 0, 0xbf0000ff, 0xac39acff, 0x0092daff, 0, 0, 0xaad3dfff, 0, 0x734a08ff, 0, 0, 0, 0, 0, 0,
-    0x000000ff, 0, 0, 0xbf0000ff, 0, 0, 0xc77400ff, 0, 0, 0x0092daff, 0, 0x734a08ff, 0xac39acff, 0,
-    0x4c4c00ff, 0, 0xac39acff, 0, 0, 0, 0xc77400ff, 0, 0x734a08ff, 0, 0, 0xbf0000ff, 0, 0xac39acff,
-    0, 0, 0, 0xac39acff, 0, 0, 0, 0, 0, 0, 0, 0x734a08ff, 0xac39acff, 0xac39acff, 0, 0, 0x0092daff,
-    0, 0, 0, 0x734a08ff, 0, 0x0092daff, 0xac39acff, 0, 0, 0xac39acff, 0, 0xac39acff, 0xac39acff,
-    0xac39acff, 0xbf0000ff, 0xbf0000ff, 0xac39acff, 0x4d80b3ff, 0, 0, 0xac39acff, 0, 0, 0,
+    0, 0, 0, 0x0f62feff, 0, 0xba4e00ff, 0, 0, 0xd02670ff, 0, 0, 0x0f62feff, 0, 0x198038ff,
+    0x007d79ff, 0, 0, 0xd02670ff, 0, 0x007d79ff, 0x8a3ffcff, 0xd02670ff, 0xd02670ff, 0, 0, 0, 0, 0,
+    0, 0x007d79ff, 0xba4e00ff, 0, 0x0f62feff, 0xda1e28ff, 0xd02670ff, 0, 0, 0x697077ff, 0, 0, 0,
+    0xba4e00ff, 0x0f62feff, 0, 0, 0x007d79ff, 0x007d79ff, 0xba4e00ff, 0, 0x697077ff, 0x007d79ff, 0,
+    0xba4e00ff, 0, 0, 0, 0x007d79ff, 0, 0, 0xd02670ff, 0x8a3ffcff, 0x007d79ff, 0x007d79ff,
+    0x007d79ff, 0xda1e28ff, 0xd02670ff, 0, 0, 0xd02670ff, 0, 0x198038ff, 0, 0, 0, 0, 0xd02670ff, 0,
+    0x8a3ffcff, 0xda1e28ff, 0xda1e28ff, 0, 0x0f62feff, 0, 0, 0, 0, 0, 0xd02670ff, 0xd02670ff,
+    0xba4e00ff, 0, 0x007d79ff, 0x198038ff, 0xd02670ff, 0xd02670ff, 0, 0, 0xba4e00ff, 0, 0xba4e00ff,
+    0, 0x007d79ff, 0x0f62feff, 0, 0, 0x0f62feff, 0, 0x198038ff, 0x8a3ffcff, 0x8a3ffcff, 0x198038ff,
+    0xd02670ff, 0, 0, 0x697077ff, 0, 0, 0xda1e28ff, 0x0f62feff, 0, 0, 0, 0x0f62feff, 0, 0x007d79ff,
+    0x697077ff, 0, 0, 0, 0xd02670ff, 0, 0x007d79ff, 0x007d79ff, 0, 0xba4e00ff, 0, 0, 0xd02670ff, 0,
+    0, 0x007d79ff, 0, 0, 0, 0x007d79ff, 0x198038ff, 0x007d79ff, 0x007d79ff, 0xd02670ff, 0,
+    0x697077ff, 0, 0, 0x007d79ff, 0xba4e00ff, 0xd02670ff, 0xda1e28ff, 0, 0x0f62feff, 0xda1e28ff,
+    0x007d79ff, 0xd02670ff, 0xd02670ff, 0xda1e28ff, 0, 0, 0, 0x697077ff, 0, 0x198038ff, 0x007d79ff,
+    0, 0, 0xda1e28ff, 0xd02670ff, 0x0f62feff, 0, 0, 0x198038ff, 0, 0x007d79ff, 0, 0, 0, 0, 0, 0,
+    0x697077ff, 0, 0, 0xda1e28ff, 0, 0, 0xba4e00ff, 0, 0, 0x0f62feff, 0, 0x007d79ff, 0xd02670ff, 0,
+    0xda1e28ff, 0, 0xd02670ff, 0, 0, 0, 0xba4e00ff, 0, 0x007d79ff, 0, 0, 0xda1e28ff, 0, 0xd02670ff,
+    0, 0, 0, 0xd02670ff, 0, 0, 0, 0, 0, 0, 0, 0x007d79ff, 0xd02670ff, 0xd02670ff, 0, 0, 0x0f62feff,
+    0, 0, 0, 0x007d79ff, 0, 0x0f62feff, 0xd02670ff, 0, 0, 0xd02670ff, 0, 0xd02670ff, 0xd02670ff,
+    0xd02670ff, 0xda1e28ff, 0xda1e28ff, 0xd02670ff, 0x198038ff, 0, 0, 0xd02670ff, 0, 0, 0,
 ];
 
 /// A category's label fill, its ink, category k at `INK[k - 1]`.
 pub const INK: [Rgba; 256] = [
-    0, 0, 0, 0x5e3b9eff, 0, 0xae6500ff, 0, 0, 0x993399ff, 0, 0, 0x0066ffff, 0, 0x0c8416ff,
-    0x734a08ff, 0, 0, 0x993399ff, 0, 0, 0x4863a0ff, 0x993399ff, 0x993399ff, 0, 0, 0, 0, 0, 0,
-    0x734a08ff, 0xae6500ff, 0, 0x0066ffff, 0xbf0000ff, 0x993399ff, 0, 0, 0x000033ff, 0, 0, 0,
-    0xae6500ff, 0x0066ffff, 0, 0, 0x734a08ff, 0x734a08ff, 0xae6500ff, 0, 0x000033ff, 0x734a08ff, 0,
-    0xae6500ff, 0, 0, 0, 0x734a08ff, 0, 0, 0x993399ff, 0x4863a0ff, 0x734a08ff, 0x734a08ff,
-    0x734a08ff, 0xbf0000ff, 0x993399ff, 0, 0, 0x993399ff, 0, 0x0c8416ff, 0, 0, 0, 0, 0x993399ff, 0,
-    0x4863a0ff, 0xbf0000ff, 0xbf0000ff, 0, 0, 0, 0, 0, 0, 0, 0x993399ff, 0x993399ff, 0xae6500ff, 0,
-    0x734a08ff, 0x0c8416ff, 0x993399ff, 0x993399ff, 0, 0, 0xae6500ff, 0, 0xae6500ff, 0, 0x734a08ff,
-    0x0066ffff, 0, 0, 0x0066ffff, 0, 0x0c8416ff, 0x4863a0ff, 0x4863a0ff, 0x0c8416ff, 0x993399ff, 0,
-    0, 0x000033ff, 0, 0, 0xbf0000ff, 0x0066ffff, 0, 0, 0, 0x0066ffff, 0, 0x734a08ff, 0x000033ff, 0,
-    0, 0, 0x993399ff, 0, 0x734a08ff, 0x333333ff, 0, 0xae6500ff, 0, 0, 0x993399ff, 0, 0, 0x734a08ff,
-    0, 0, 0, 0x734a08ff, 0x6e441eff, 0x734a08ff, 0x734a08ff, 0x993399ff, 0, 0x000033ff, 0, 0,
-    0x734a08ff, 0xae6500ff, 0x993399ff, 0xbf0000ff, 0, 0x0066ffff, 0xbf0000ff, 0x734a08ff,
-    0x993399ff, 0x993399ff, 0xbf0000ff, 0, 0, 0, 0x000033ff, 0, 0x0c8416ff, 0x734a08ff, 0, 0,
-    0xbf0000ff, 0x993399ff, 0x0066ffff, 0, 0, 0x576ddfff, 0, 0, 0, 0, 0, 0, 0, 0, 0x000033ff, 0, 0,
-    0xbf0000ff, 0, 0, 0xae6500ff, 0, 0, 0x0066ffff, 0, 0x734a08ff, 0x993399ff, 0, 0x4c4c00ff, 0,
-    0x993399ff, 0, 0, 0, 0xae6500ff, 0, 0x734a08ff, 0, 0, 0xbf0000ff, 0, 0x993399ff, 0, 0, 0,
-    0x993399ff, 0, 0, 0, 0, 0, 0, 0, 0x734a08ff, 0x993399ff, 0x993399ff, 0, 0, 0x0066ffff, 0, 0, 0,
-    0x734a08ff, 0, 0x0066ffff, 0x993399ff, 0, 0, 0x993399ff, 0, 0x993399ff, 0x993399ff, 0x993399ff,
-    0xbf0000ff, 0xbf0000ff, 0x993399ff, 0x4d80b3ff, 0, 0, 0x993399ff, 0, 0, 0,
+    0, 0, 0, 0x0043ceff, 0, 0x8a3800ff, 0, 0, 0x9f1853ff, 0, 0, 0x0043ceff, 0, 0x0e6027ff,
+    0x005d5dff, 0, 0, 0x9f1853ff, 0, 0x005d5dff, 0x6929c4ff, 0x9f1853ff, 0x9f1853ff, 0, 0, 0, 0, 0,
+    0, 0x005d5dff, 0x8a3800ff, 0, 0x0043ceff, 0xa2191fff, 0x9f1853ff, 0, 0, 0x4d5358ff, 0, 0, 0,
+    0x8a3800ff, 0x0043ceff, 0, 0, 0x005d5dff, 0x005d5dff, 0x8a3800ff, 0, 0x4d5358ff, 0x005d5dff, 0,
+    0x8a3800ff, 0, 0, 0, 0x005d5dff, 0, 0, 0x9f1853ff, 0x6929c4ff, 0x005d5dff, 0x005d5dff,
+    0x005d5dff, 0xa2191fff, 0x9f1853ff, 0, 0, 0x9f1853ff, 0, 0x0e6027ff, 0, 0, 0, 0, 0x9f1853ff, 0,
+    0x6929c4ff, 0xa2191fff, 0xa2191fff, 0, 0x0043ceff, 0, 0, 0, 0, 0, 0x9f1853ff, 0x9f1853ff,
+    0x8a3800ff, 0, 0x005d5dff, 0x0e6027ff, 0x9f1853ff, 0x9f1853ff, 0, 0, 0x8a3800ff, 0, 0x8a3800ff,
+    0, 0x005d5dff, 0x0043ceff, 0, 0, 0x0043ceff, 0, 0x0e6027ff, 0x6929c4ff, 0x6929c4ff, 0x0e6027ff,
+    0x9f1853ff, 0, 0, 0x4d5358ff, 0, 0, 0xa2191fff, 0x0043ceff, 0, 0, 0, 0x0043ceff, 0, 0x005d5dff,
+    0x4d5358ff, 0, 0, 0, 0x9f1853ff, 0, 0x005d5dff, 0x005d5dff, 0, 0x8a3800ff, 0, 0, 0x9f1853ff, 0,
+    0, 0x005d5dff, 0, 0, 0, 0x005d5dff, 0x0e6027ff, 0x005d5dff, 0x005d5dff, 0x9f1853ff, 0,
+    0x4d5358ff, 0, 0, 0x005d5dff, 0x8a3800ff, 0x9f1853ff, 0xa2191fff, 0, 0x0043ceff, 0xa2191fff,
+    0x005d5dff, 0x9f1853ff, 0x9f1853ff, 0xa2191fff, 0, 0, 0, 0x4d5358ff, 0, 0x0e6027ff, 0x005d5dff,
+    0, 0, 0xa2191fff, 0x9f1853ff, 0x0043ceff, 0, 0, 0x0e6027ff, 0, 0x005d5dff, 0, 0, 0, 0, 0, 0,
+    0x4d5358ff, 0, 0, 0xa2191fff, 0, 0, 0x8a3800ff, 0, 0, 0x0043ceff, 0, 0x005d5dff, 0x9f1853ff, 0,
+    0xa2191fff, 0, 0x9f1853ff, 0, 0, 0, 0x8a3800ff, 0, 0x005d5dff, 0, 0, 0xa2191fff, 0, 0x9f1853ff,
+    0, 0, 0, 0x9f1853ff, 0, 0, 0, 0, 0, 0, 0, 0x005d5dff, 0x9f1853ff, 0x9f1853ff, 0, 0, 0x0043ceff,
+    0, 0, 0, 0x005d5dff, 0, 0x0043ceff, 0x9f1853ff, 0, 0, 0x9f1853ff, 0, 0x9f1853ff, 0x9f1853ff,
+    0x9f1853ff, 0xa2191fff, 0xa2191fff, 0x9f1853ff, 0x0e6027ff, 0, 0, 0x9f1853ff, 0, 0, 0,
 ];
 
 /// A category's icon, its symbol's number (asset/symbol.spec.rs), 0 for none, category k at `SYMBOL[k - 1]`.
 pub const SYMBOL: [u16; 256] = [
-    0, 0, 0, 1, 0, 5, 0, 0, 0, 0, 0, 62, 0, 35, 48, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 5,
-    0, 66, 13, 18, 0, 0, 43, 0, 0, 0, 6, 64, 0, 0, 7, 31, 25, 0, 44, 10, 0, 6, 0, 0, 0, 10, 0, 0,
-    51, 0, 11, 2, 19, 12, 53, 0, 0, 0, 0, 58, 0, 0, 0, 0, 0, 0, 42, 17, 13, 0, 8, 0, 0, 0, 0, 0,
-    56, 50, 14, 0, 15, 36, 0, 0, 0, 0, 25, 0, 14, 0, 32, 16, 0, 0, 16, 0, 37, 0, 0, 36, 54, 0, 0,
-    45, 0, 0, 17, 67, 0, 0, 0, 67, 0, 24, 46, 0, 0, 0, 55, 0, 18, 39, 0, 5, 0, 0, 56, 0, 0, 33, 0,
-    0, 0, 34, 40, 9, 68, 0, 0, 47, 0, 0, 19, 6, 0, 13, 0, 20, 13, 28, 57, 49, 21, 0, 0, 0, 22, 0,
-    38, 23, 0, 0, 13, 52, 66, 0, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 22, 0, 0, 13, 0, 0, 25, 0, 0, 65,
-    0, 63, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 26, 0, 0, 17, 0, 0, 0, 0, 0, 59, 0, 0, 0, 0, 0, 0, 0, 63,
-    60, 61, 0, 0, 27, 0, 0, 0, 28, 0, 30, 0, 0, 0, 0, 0, 0, 0, 0, 13, 13, 61, 41, 0, 0, 61, 0, 0,
-    0,
+    0, 0, 0, 1, 0, 4, 0, 0, 0, 0, 0, 31, 0, 21, 2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 4,
+    0, 31, 14, 29, 0, 0, 42, 0, 0, 0, 5, 6, 0, 0, 7, 8, 46, 0, 43, 53, 0, 5, 0, 0, 0, 53, 0, 0, 12,
+    0, 53, 50, 35, 13, 48, 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 16, 27, 14, 0, 9, 0, 0, 0, 0, 0, 48,
+    11, 17, 0, 18, 19, 0, 0, 0, 0, 46, 0, 17, 0, 8, 20, 0, 0, 20, 0, 23, 0, 0, 19, 26, 0, 0, 38, 0,
+    0, 27, 31, 0, 0, 0, 31, 0, 41, 44, 0, 0, 0, 28, 0, 29, 30, 0, 4, 0, 0, 48, 0, 0, 32, 0, 0, 0,
+    32, 33, 10, 34, 0, 0, 45, 0, 0, 35, 5, 0, 14, 0, 36, 14, 50, 22, 25, 37, 0, 0, 0, 38, 0, 39,
+    40, 0, 0, 14, 48, 31, 0, 0, 0, 0, 51, 0, 0, 0, 0, 0, 0, 38, 0, 0, 14, 0, 0, 46, 0, 0, 6, 0, 2,
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 47, 0, 0, 27, 0, 0, 0, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 2, 24, 54,
+    0, 0, 49, 0, 0, 0, 50, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 14, 14, 54, 55, 0, 0, 54, 0, 0, 0,
 ];

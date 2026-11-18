@@ -25,14 +25,14 @@ pub enum Paint {
         ink: u32,
         logical_w: f64,
     },
-    /// A place drawn as Carto draws it: a dot, or a disc when `icon` is set,
+    /// A place drawn as Carto lays it out: a dot, or a disc when `icon` is set,
     /// in color `fill`, and under it the place's name in color `ink`.
     Point {
         /// The place's name as laid out, one entry a line. It is empty when
         /// the place shows no name.
         lines: Vec<String>,
         icon: bool,
-        /// The index in `SYMBOL_MASKS` of Carto's symbol for the place, drawn
+        /// The index in `SYMBOL_MASKS` of the place's symbol, drawn
         /// on the disc. With none, the disc is drawn bare.
         symbol: Option<u16>,
         fill: u32,

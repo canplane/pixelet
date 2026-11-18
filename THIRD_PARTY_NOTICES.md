@@ -6,8 +6,8 @@ asks for a notice to travel with the copy. xpute, the system pixelet runs on,
 is developed in this repository and keeps its own record of what it ported:
 [xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
-This file covers what is copied into the tree: source, a font and drawings.
-Crates and npm packages that are merely depended on are not listed:
+This file covers what is copied into the tree: source, a font, drawings and
+colors. Crates and npm packages that are merely depended on are not listed:
 `rust/Cargo.toml` and the `package.json` files name them, and each carries its
 own license where it is published. The models and textures under `asset/` are
 recorded there, each pack with its license beside it
@@ -58,11 +58,21 @@ The screen-space ambient occlusion is [N8AO][n8ao] 1.10.1 (CC0 1.0), ported to
 WGSL and to reversed depth, and the blue noise it reads is N8AO's
 (`rust/client/render/src/pass/ao.rs`). CC0 asks for no notice.
 
-## gravitystorm/openstreetmap-carto — `asset/raw/place/symbol/`
+## mapbox/maki — `asset/raw/place/symbol/`
 
-The place icons are [OpenStreetMap Carto][carto]'s `symbols/` (CC0 1.0), drawn
-into the code that carries them. The ground's palette and paint order follow
-the same style. CC0 asks for no notice.
+The place icons are Mapbox's [Maki][maki] 8.2.0 (CC0 1.0), drawn into the code
+that carries them. CC0 asks for no notice.
+
+## carbon-design-system/carbon — `spec/spec/bake/place_theme.json5`, `rust/client/render/src/look/marker.rs`
+
+The places' colors and the markers' dark gray are IBM's [Carbon][carbon] color
+tokens, `@carbon/colors` 11.62.0 (Apache-2.0), copied as values. The license's
+text is [LICENSES/Apache-2.0.txt](./LICENSES/Apache-2.0.txt).
+
+## gravitystorm/openstreetmap-carto — `spec/spec/asset/color.json5`, `cube.json5`, `spec/spec/bake/place_theme.json5`
+
+The ground's palette and paint order, and the places' categories and zooms,
+follow [OpenStreetMap Carto][carto] (CC0 1.0). CC0 asks for no notice.
 
 ## u_DIN 1451 Mittelschrift — `ts/client/public/font/`
 
@@ -73,4 +83,6 @@ license is served beside it (`uDIN1451Mittelschrift-OFL.txt`).
 [arnis]: https://github.com/louis-e/arnis
 [n8ao]: https://github.com/N8python/n8ao
 [carto]: https://github.com/gravitystorm/openstreetmap-carto
+[maki]: https://github.com/mapbox/maki
+[carbon]: https://github.com/carbon-design-system/carbon
 [processing]: https://github.com/louis-e/arnis/tree/c96872e0fa21573402d1b731ea87f796e8caa1d2/src/element_processing

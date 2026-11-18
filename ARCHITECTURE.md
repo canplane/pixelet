@@ -562,7 +562,7 @@ whatever asks. The machinery under it is earlier work:
 | The clipmap (Tanner, Migdal and Jones 1998) | The clipmap, and the shadow map's box: a square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves |
 | Burns and Hunt's visibility buffer (JCGT 2013) | The raster: each pixel keeps the number of the nearest box drawn over it and reads the rest off that |
 | Overture's schema | The divisions: a division is one of its subtypes |
-| OpenStreetMap Carto | The ground's palette and paint order, way widths, and the places' icons and zooms |
+| OpenStreetMap Carto | The ground's palette and paint order, way widths, and the places' categories and zooms |
 | [Arnis](https://github.com/louis-e/arnis) | Bridges and tunnels: the bake's solve for their clearances, ramps, decks and piers, ported |
 | Bruneton; Hillaire (EGSR 2020) | The air: the atmosphere's tables of transmittance and irradiance, multiple scattering, the sky view and the aerial-perspective volume |
 | Unreal's SkyAtmosphere, OPAC, Cornette–Shanks | The Earth's scattering numbers, the haze and the Mie phase |

@@ -24,7 +24,8 @@ import { WEIGHT } from "@/ui/shared/component/theme.ts";
  * and TermsOfUse.jsx): one line, and its attribution guide, which carries
  * each source's terms. The land polygons' notice is the one in their
  * package's README. GEDTM30's carries the elements CC BY asks for. Arnis's is
- * the one in its NOTICE. NASA's imagery is credited as NASA asks, and the
+ * the one in its NOTICE. IBM Carbon's colors are copied as values and it is
+ * named with its license. NASA's imagery is credited as NASA asks, and the
  * star catalog as CDS asks of what it serves. GEDTM30's own inputs
  * (Copernicus DEM, AW3D30) bind GEDTM30's makers, who took them from their
  * licensors, and not those who take GEDTM30. What is CC0 asks for no notice
@@ -90,7 +91,23 @@ export function AttributionSection() {
               name="OpenStreetMap Carto"
               href="https://github.com/gravitystorm/openstreetmap-carto"
             >
+              <Line>
+                The ground's palette and the places' categories and zooms, {cc0}
+              </Line>
+            </Provider>
+            <Provider name="Maki" href="https://github.com/mapbox/maki">
               <Line>Place icons, {cc0}</Line>
+            </Provider>
+            <Provider
+              name="IBM Carbon"
+              href="https://github.com/carbon-design-system/carbon"
+            >
+              <Line>
+                Place colors,{" "}
+                <Link href="https://www.apache.org/licenses/LICENSE-2.0">
+                  Apache 2.0
+                </Link>
+              </Line>
             </Provider>
             <Provider
               name="louis-e/arnis"

@@ -19,7 +19,8 @@ use crate::space::layer::octant::Octant;
 pub const MARKER: AssetId = asset_id(Kind::Marker, 0);
 
 /// A mark's cell: 16 pixels of the web map's 256-pixel tile, four zooms
-/// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.
+/// finer than the tile, the cell Carto keeps its icons apart in, which holds
+/// a place's 15-pixel icon.
 pub(crate) const MARK_STEP_CNT: Zoom = 4;
 
 /// A marker's cell where the camera grid's cell is at `cell_zoom`: its scale on

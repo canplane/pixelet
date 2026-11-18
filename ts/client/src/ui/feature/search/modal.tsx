@@ -81,18 +81,18 @@ function ResultRow({
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={STYLE.row}>
       {theme && (
-        <View style={STYLE.badge}>
+        <View style={[STYLE.badge, symbol && { backgroundColor: theme.fill }]}>
           {symbol ? (
             <Svg
-              width={SYMBOL_SIZE}
-              height={SYMBOL_SIZE}
+              width={symbol.box[0]}
+              height={symbol.box[1]}
               viewBox={`0 0 ${symbol.box[0]} ${symbol.box[1]}`}
             >
               {symbol.shapes.map(([d, evenOdd], i) => (
                 <Path
                   key={i}
                   d={d}
-                  fill={theme.fill}
+                  fill={COLOR.white}
                   fillRule={evenOdd ? "evenodd" : "nonzero"}
                 />
               ))}
@@ -464,10 +464,10 @@ const STYLE = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
 });
 
-/** How Carto draws a place of `category`, the same way the world draws it
- * (place_theme.spec.ts): its symbol in its fill color, or a dot of that fill
- * for a category with no symbol. It is null for a category Carto draws no
- * point for. */
+/** How a place of `category` is drawn in a result, as the world draws it
+ * (place_theme.spec.ts): its Maki symbol white on a disc of its category's
+ * fill, or a dot of that fill for a category with no symbol. It is null for
+ * a category Carto draws no point for. */
 function placeTheme(
   category: number,
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {
@@ -475,5 +475,3 @@ function placeTheme(
   if (fill === null || fill === undefined) return null;
   return { fill: hex(fill), symbol: PLACE_SYMBOLS[SYMBOL[category - 1] - 1] };
 }
-
-const SYMBOL_SIZE = 18;

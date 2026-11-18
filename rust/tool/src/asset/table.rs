@@ -103,9 +103,9 @@ pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
         "texture pack, a file of the table: `columns` tiles of `cell` pixels per row,",
         "tile n at column n % columns and row n / columns, `tiles` the path each",
         "holds, `means` each one's mean color in linear light, and `faces` the cube",
-        "face — group, type, face — each tile is. Then Carto's place symbols, which",
-        "the client carries in its binary: each by its path as Carto gives it, in the",
-        "order of their masks, which numbers each from 1.",
+        "face — group, type, face — each tile is. Then the place symbols, Maki's,",
+        "which the client carries in its binary: each by its file's name as Maki gives",
+        "it, in the order of their masks, which numbers each from 1.",
     ]
     .join("\n");
     // A token whose value is a list, one item a line, under `key`, at `pad`,
