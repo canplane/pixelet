@@ -166,8 +166,8 @@ a ground cube from OpenStreetMap Carto's palette or pixelet's own. Elevation
 comes as samples from which the client works out each cell's, so a cell's
 elevation is never sent, and bridges and tunnels come as lines with a top and a
 width. Beside terrain are the **places** Carto would label, the administrative
-**divisions**, and a picture of the **earth** seen from orbit. Every base layer
-but the earth is a **pyramid**: a tile at one zoom is the four under it folded
+**divisions**, and the **imagery** of the Earth seen from orbit. Every base
+layer but the imagery is a **pyramid**: a tile at one zoom is the four under it folded
 into one, by the layer's own rule. A faraway region is drawn from a single
 coarse tile that already summarizes everything under it, the way a texture is
 drawn from its mipmap, so a view from orbit reads a handful of tiles, not the
@@ -179,7 +179,7 @@ asks for its tiles, receives them, caches them and answers a missing one by a
 coarser tile. A kind differs in what its tile holds, in how four fold into one,
 and in what it asks for: its ask scope, which of demand's four reasons, told
 below, the layer asks by, and the tiles its readers pin. It differs in nothing
-else. The earth's picture is the one layer that is no pyramid: it is baked at
+else. The imagery is the one layer that is no pyramid: it is baked at
 its top zoom alone, and one picture of the whole sphere answers wherever no tile
 is held.
 

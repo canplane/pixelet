@@ -587,7 +587,7 @@ const ASK_SCOPE: &str = r"\bASK_SCOPE\b";
 const ASK_SCOPE_USERS: [&str; 5] = [
     "rust/client/core/src/domain/layer.rs",
     "rust/client/core/src/domain/layer/division.rs",
-    "rust/client/core/src/domain/layer/earth.rs",
+    "rust/client/core/src/domain/layer/imagery.rs",
     "rust/client/core/src/domain/layer/tile_cache.rs",
     "rust/client/core/src/domain/view/demand.rs",
 ];

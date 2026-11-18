@@ -16,7 +16,7 @@ use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use pxl_spec::bake::tile::place::PlaceTile;
 
-use crate::domain::layer::earth::EarthTile;
+use crate::domain::layer::imagery::ImageryTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Body;
@@ -53,7 +53,7 @@ pub(crate) trait DemandedBase: Base {
 
 static TERRAIN: Global<Demand<IndexedTerrainTile>> = Global::new();
 static PLACE: Global<Demand<PlaceTile>> = Global::new();
-static EARTH: Global<Demand<EarthTile>> = Global::new();
+static IMAGERY: Global<Demand<ImageryTile>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
 impl DemandedBase for IndexedTerrainTile {
@@ -74,9 +74,9 @@ impl DemandedBase for DivisionTile {
     }
 }
 
-impl DemandedBase for EarthTile {
-    fn demand() -> &'static mut Demand<EarthTile> {
-        EARTH.get(Demand::default)
+impl DemandedBase for ImageryTile {
+    fn demand() -> &'static mut Demand<ImageryTile> {
+        IMAGERY.get(Demand::default)
     }
 }
 
@@ -107,7 +107,7 @@ const fn layer<L: DemandedBase>() -> Layer {
 const LAYERS: [Layer; 5] = [
     layer::<IndexedTerrainTile>(),
     layer::<PlaceTile>(),
-    layer::<EarthTile>(),
+    layer::<ImageryTile>(),
     layer::<DivisionTile>(),
     Layer {
         stream: Stream::Object,

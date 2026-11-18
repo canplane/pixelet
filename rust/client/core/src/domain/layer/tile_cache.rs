@@ -66,7 +66,7 @@ pub(crate) struct TileCache<L: Base> {
     tiles: FnvHashMap<Quadrant, Entry<L>>,
     /// The tile each slot holds. It is the inverse of `Resident::slot`, and
     /// only `put` and `remove` write either side, so the two always agree.
-    /// The GPU hand-off starts from a slot and walks this side (earth.rs
+    /// The GPU hand-off starts from a slot and walks this side (imagery.rs
     /// `upload`).
     in_slot: Vec<Option<Quadrant>>,
     free: Vec<u32>,

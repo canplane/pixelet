@@ -242,18 +242,18 @@ uniform! {
         MOON_COLOR: Vec3 = 8,
         KM_PER_U: F32 = 11,
         /// How far the eye's rays run, in units (pxl-engine `eye::FAR`).
-        /// Past it the land is drawn from the Earth's picture alone.
+        /// Past it the land is drawn from the imagery alone.
         DRAWN: F32 = 12,
         /// The floor under the eye over sea level, in km.
         FLOOR_KM: F32 = 13,
-        /// The window of Earth tiles the air reads. `EARTH_WINDOW` holds the
+        /// The window of imagery tiles the air reads. `IMAGERY_WINDOW` holds the
         /// south-west tile's column and row; the tiles across the window and
-        /// around the world are the shaders' `EARTH_ACROSS` and `EARTH_AROUND`.
-        /// `EARTH_TILES` holds each tile's layer plus one in `EARTH_TILE_BITS`
+        /// around the world are the shaders' `IMAGERY_ACROSS` and `IMAGERY_AROUND`.
+        /// `IMAGERY_TILES` holds each tile's layer plus one in `IMAGERY_TILE_BITS`
         /// bits, row by row, and zero where the global picture stands in for
         /// the tile.
-        EARTH_WINDOW: Vec2i = 14,
-        EARTH_TILES: Vec4u = 16,
+        IMAGERY_WINDOW: Vec2i = 14,
+        IMAGERY_TILES: Vec4u = 16,
         /// How each light's sky view and its share of the air's volume were
         /// laid out (pass/atmosphere.rs `prepare`), the sun's and then the
         /// moon's. A layout holds how far the horizon dips below the level,
@@ -505,9 +505,9 @@ pub const UNIFORMS: [(&str, &[Field]); 14] = [
 pub const CLOUD_TILE_UNITS: u32 = 32;
 pub const CLOUD_TILE_TEXELS: u32 = 1024;
 
-/// The bits each Earth tile's layer takes in the air's `EARTH_TILES` words
+/// The bits each imagery tile's layer takes in the air's `IMAGERY_TILES` words
 /// (pass/atmosphere.rs).
-pub const EARTH_TILE_BITS: u32 = 4;
+pub const IMAGERY_TILE_BITS: u32 = 4;
 
 /// The side in texels of the moon's near side as `make download-moon` cuts it.
 /// The disc's radius is half of it.

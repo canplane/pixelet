@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "Tile objects as the core named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the Earth's sphere. tile.ts must make the same (tile.test.ts)."
+    "Tile objects as the core named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the imagery's sphere. tile.ts must make the same (tile.test.ts)."
   ],
   "source": {
     "min_zoom": 4,
@@ -8,13 +8,13 @@
       "terrain": 12,
       "place": 10,
       "division": 8,
-      "earth": 2
+      "imagery": 2
     },
     "version": {
       "terrain": "v10.2026-10-09.1",
       "place": "v10.2026-10-09.1",
       "division": "v7.2026-10-09.1",
-      "earth": "v1.2026-10-05.1"
+      "imagery": "v1.2026-10-05.1"
     },
     "shard": {
       "0103300": {},
@@ -338,103 +338,103 @@
       "object": "v7.2026-10-09.1/000000000000000"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/01033"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/010330"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103300"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/01033001"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103300123"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/010330012301230"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/010332"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103321"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/01033210"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/010332103"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103321032"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/010332103210321"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103322"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/01033220"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/010332201230123"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/0103301"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/01032"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/2310"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/231012"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/231012301230123"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/3333"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/33333"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/333333333333333"
     },
     {
-      "kind": "earth",
+      "kind": "imagery",
       "object": "v1.2026-10-05.1/000000000000000"
     }
   ],

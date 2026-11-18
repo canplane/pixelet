@@ -34,7 +34,7 @@ fn src_serves_by_shard() {
 fn unfollowable_decl_refused() {
     let f = formats();
     // One declaration gives terrain a format past the one this client reads,
-    // and another gives the Earth no format.
+    // and another gives the imagery no format.
     let mut unread = f.clone();
     unread[BaseKind::Terrain as usize] += 1;
     let short = &f[..f.len() - 1];

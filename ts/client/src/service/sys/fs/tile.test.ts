@@ -25,7 +25,7 @@ test("versionOf - each kind's tile at each zoom, a shard's own version or not, i
     );
   }
   assert.deepStrictEqual(
-    tile_object(versionOf(DECLARATION, "earth", TILE_SPHERE), TILE_SPHERE),
+    tile_object(versionOf(DECLARATION, "imagery", TILE_SPHERE), TILE_SPHERE),
     FIXTURE.sphere,
   );
 });

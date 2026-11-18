@@ -21,7 +21,7 @@ infra/
 ├── local/    the two databases for development
 ├── prod/     the VM's stack: compose and Caddy
 ├── geo/      what fills db-geo
-└── earth/    the Earth's picture, NASA's, which the earth bake reads as files
+└── imagery/  the imagery, NASA's, which its bake reads as files
 ```
 
 ## 1. Databases
@@ -169,7 +169,7 @@ the app itself:
 | `terrain/<version>/`    | packed XTP tile                                 | name, 4–15               | immutable; a re-bake is a new version                            |
 | `place/<version>/`      | XTP count tile                                  | name, 7–15               | immutable; a re-bake is a new version                            |
 | `division/<version>/`   | XTP division tile                               | name, 4–12               | immutable; a re-bake is a new version                            |
-| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 4                  | immutable; a re-bake is a new version                            |
+| `imagery/<version>/`    | packed imagery tile; `sphere`, its picture whole | name, 4                  | immutable; a re-bake is a new version                            |
 | `asset/`                | glb, png, webp, not packed                      | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted at any time |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |
@@ -269,6 +269,6 @@ before shortening, rewording or dropping one.
 | OpenStreetMap Land Polygons | [ODbL](https://opendatacommons.org/licenses/odbl/)               | The [package](https://osmdata.openstreetmap.de/data/land-polygons.html)'s own line: `This data is Copyright 2026 OpenStreetMap contributors. It is available under the Open Database License (ODbL).` The year is the data's, and moves with `geo/coastline/source.json`'s pin. |
 | GEDTM30                     | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)        | CC BY's elements, since it gives no line: `Modified GEDTM30 by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under CC BY 4.0`, linking v1.2's record ([10.5281/zenodo.18887460](https://doi.org/10.5281/zenodo.18887460)).                                                    |
 | Arnis                       | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)        | Code, not data: the piers are ported from it ([THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)), so the app shows its NOTICE's `Copyright (c) 2022-2026 Louis Erbkamm (louis-e)`, as Apache 2.0 §4(d) asks.                                                                  |
-| NASA Earth Observatory      | none: NASA's imagery is not copyrighted, its credit asked        | The Earth's picture (Blue Marble Next Generation, Black Marble): `NASA Earth Observatory (Reto Stöckli; Miguel Román and the Black Marble team)`, as `infra/earth/source.json` gives it. |
+| NASA Earth Observatory      | none: NASA's imagery is not copyrighted, its credit asked        | The imagery (Blue Marble Next Generation, Black Marble): `NASA Earth Observatory (Reto Stöckli; Miguel Román and the Black Marble team)`, as `infra/imagery/source.json` gives it. |
 | NASA SVS                    | none: as above                                                   | The Moon's map (CGI Moon Kit): `NASA's Scientific Visualization Studio`. |
 | Yale Bright Star Catalogue  | CDS asks that the catalogue and CDS be acknowledged              | The stars (V/50): `The stars, as CDS, Strasbourg serves the catalogue`. |

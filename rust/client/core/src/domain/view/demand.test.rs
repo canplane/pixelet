@@ -21,7 +21,7 @@ static PROBE_TILES: Global<TileCache<Probe>> = Global::new();
 static PROBE: Global<Demand<Probe>> = Global::new();
 
 impl Tile for Probe {
-    const KIND: BaseKind = BaseKind::Earth;
+    const KIND: BaseKind = BaseKind::Imagery;
     const LEAF: Zoom = LEAF_ZOOM;
 
     fn occupancy(&self) -> Occupancy {

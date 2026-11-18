@@ -1,6 +1,6 @@
 // pxl-render/gpu/image_map.rs
 
-//! A picture the sky draws from, the moon's face or the Earth's, in a texture
+//! A picture the sky draws from, the moon's face or the imagery's sphere, in a texture
 //! with its mip chain. Until it arrives the shaders draw its mean.
 
 use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};

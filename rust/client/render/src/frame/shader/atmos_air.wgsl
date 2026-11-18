@@ -4,8 +4,8 @@
 // the terrain, are seen through the air.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
-@group(0) @binding(16) var earth_map: texture_2d_array<f32>;
-@group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
+@group(0) @binding(16) var imagery_sphere: texture_2d_array<f32>;
+@group(0) @binding(17) var imagery_tiles: texture_2d_array<f32>;
 @group(0) @binding(22) var air_volume: texture_3d<f32>;
 
 // Reads light `k`'s half of the volume, the sun's or the moon's, at cell `c`
@@ -79,14 +79,14 @@ fn map_of(p: vec3f) -> vec2f {
   return frame_map().xy + p.xy / frame_map().z;
 }
 
-// The Earth's reflectance at the map's place `mercator`, with the square root
+// The imagery's reflectance at the map's place `mercator`, with the square root
 // of its city lights in alpha. It reads the global picture at the place's
 // latitude and longitude, which is zero until the picture has loaded, and a
 // held tile over that.
-fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
+fn imagery_at(mercator: vec2f, octaves: f32) -> vec4f {
   let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
   let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);
-  let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
+  let global = textureSampleLevel(imagery_sphere, atmos_sampler, uv, 0, 0.0);
   // A tile holds a ground cell a texel and takes over from the global
   // picture, which is eight times coarser. It fades in over the octave in
   // which a pixel goes from covering two cells, at the tiles' reach, to one.
@@ -94,22 +94,22 @@ fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
   if (share <= 0.0) {
     return global;
   }
-  let w = atmos_earth_window();
-  let at = mercator / TAU * f32(EARTH_AROUND);
+  let w = atmos_imagery_window();
+  let at = mercator / TAU * f32(IMAGERY_AROUND);
   let tile = vec2i(floor(at));
-  let d = vec2i(((tile.x - w.x) % EARTH_AROUND + EARTH_AROUND) % EARTH_AROUND, tile.y - w.y);
-  if (all(d >= vec2i(0)) && all(d < vec2i(EARTH_ACROSS))) {
-    let k = u32(d.y * EARTH_ACROSS + d.x);
-    let per_word = 32u / EARTH_TILE_BITS;
-    let layer = (atmos_earth_tiles()[k / per_word] >> (EARTH_TILE_BITS * (k % per_word))) & ((1u << EARTH_TILE_BITS) - 1u);
+  let d = vec2i(((tile.x - w.x) % IMAGERY_AROUND + IMAGERY_AROUND) % IMAGERY_AROUND, tile.y - w.y);
+  if (all(d >= vec2i(0)) && all(d < vec2i(IMAGERY_ACROSS))) {
+    let k = u32(d.y * IMAGERY_ACROSS + d.x);
+    let per_word = 32u / IMAGERY_TILE_BITS;
+    let layer = (atmos_imagery_tiles()[k / per_word] >> (IMAGERY_TILE_BITS * (k % per_word))) & ((1u << IMAGERY_TILE_BITS) - 1u);
     if (layer > 0u) {
-      return mix(global, textureSampleLevel(earth_tiles, atmos_sampler, fract(at), i32(layer - 1u), 0.0), share);
+      return mix(global, textureSampleLevel(imagery_tiles, atmos_sampler, fract(at), i32(layer - 1u), 0.0), share);
     }
   }
   return global;
 }
 
-// The city lights as shown, from `lights`, the square root `earth_face`
+// The city lights as shown, from `lights`, the square root `imagery_at`
 // holds. They come on as night falls on them, over the same heights of the
 // sun as everywhere night is shown (pxl-content param.rs `night::FALL`).
 fn city_shown(lights: f32, up: vec3f) -> vec3f {
@@ -138,10 +138,10 @@ fn beyond(dir: vec3f) -> vec3f {
   let d = to_land(dir);
   let p = dir * d;
   let seen = seen_from_eye(p);
-  let octaves = log2(d / EARTH_DIST);
+  let octaves = log2(d / IMAGERY_DIST);
   let n = frame_up();
-  let face = earth_face(map_of(p), octaves);
-  let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, light_of(p)) + city_shown(face.a, n);
+  let imagery = imagery_at(map_of(p), octaves);
+  let lit = LIGHT_IMAGERY_GAIN * imagery.rgb * surface_light(n, n, light_of(p)) + city_shown(imagery.a, n);
   let land = clamp(log2(d / atmos_drawn()) + 1.0, 0.0, 1.0);
   return seen.scattered + seen.transmittance * land * lit;
 }

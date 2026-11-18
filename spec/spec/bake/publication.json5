@@ -3,7 +3,7 @@
   BASE_KIND: {
     $type: "enum",
     $description: "The base layers a version is published for, each a kind a baked page is published under.",
-    $value: ["terrain", "place", "division", "earth"],
+    $value: ["terrain", "place", "division", "imagery"],
     $extensions: { xpute: { repr: "u32", names: true } },
   },
   FORMAT: {
@@ -13,7 +13,7 @@
     terrain: { $value: 12 },
     place: { $value: 10 },
     division: { $value: 9 },
-    earth: { $value: 2 },
+    imagery: { $value: 2 },
   },
   VERSION_CHARS: {
     $description: "What a version is written in: one segment of a tile's URL, with no character it would\nhave to escape.",
@@ -29,7 +29,7 @@
     $value: "{version}/{name}",
   },
   TILE_SPHERE: {
-    $description: "The Earth's picture whole, in place of a tile's name under the earth\nlayer's version: the sphere's, no tile of the pyramid.",
+    $description: "The imagery's sphere, the picture whole, in place of a tile's name under\nthe imagery layer's version: no tile of the pyramid.",
     $value: "sphere",
   },
 }

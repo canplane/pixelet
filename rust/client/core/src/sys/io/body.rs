@@ -1,6 +1,6 @@
 // pxl-core/sys/io/body.rs
 
-//! The memory a body is read into. Terrain's and the Earth's bodies, the
+//! The memory a body is read into. Terrain's and the imagery's bodies, the
 //! largest flow, take slots in `.fixed`: `BODY_SLOT_CNT` of them (sys/io/param.rs),
 //! each as long as the longest such body, so that flow's memory is fixed and
 //! takes nothing of the heap. Every other stream's body is a heap buffer of
@@ -9,8 +9,8 @@
 //! A slot is held by its guard, `Slot`, from `take` until the guard drops. A
 //! read lends it (xpute-link `Lend`) and the read's answer hands it
 //! back, so a read stopped mid-way still holds its slot until the host
-//! has answered. A layer holds a body until it is decoded; an Earth body
-//! until a drawn frame takes its texels (domain/layer/earth.rs `upload`). With
+//! has answered. A layer holds a body until it is decoded; an imagery body
+//! until a drawn frame takes its texels (domain/layer/imagery.rs `upload`). With
 //! every slot out a body waits for one given back (sys/io/room.rs
 //! `Refusal::bodies`), and the next slot given back asks for a frame, in which
 //! the want is asked again.

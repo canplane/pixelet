@@ -1,17 +1,17 @@
-// pxl-geo-bake/bin/earth.rs
+// pxl-geo-bake/bin/imagery.rs
 
-//! The Earth's picture, both its forms from one source: NASA's Blue Marble Next
+//! The imagery, both its forms from one source: NASA's Blue Marble Next
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
-//! eight tiles), as `infra/earth/source.json` names them and
-//! `make download-earth` keeps them. Each is averaged in linear light over what a
+//! eight tiles), as `infra/imagery/source.json` names them and
+//! `make download-imagery` keeps them. Each is averaged in linear light over what a
 //! texel covers.
-//!  - The earth layer's tiles (pxl-spec `bake/tile/earth.rs`) at its top
+//!  - The imagery layer's tiles (pxl-spec `bake/tile/imagery.rs`) at its top
 //!    zoom, one ground cell to a texel, are written to its set,
-//!    `./out/earth/<name>`, flat under the tiles' names as every kind's set is.
+//!    `./out/imagery/<name>`, flat under the tiles' names as every kind's set is.
 //!    A tile of one color says nothing the global picture does not, and has no
 //!    object. The copy an upload takes lies beside the set, in
-//!    `./out/earth.publish/` (`script/publish.py`).
+//!    `./out/imagery.publish/` (`script/publish.py`).
 //!  - The global picture every tile falls back to, 2048 × 1024, belongs to the
 //!    sphere and is no tile of the pyramid. It lies beside the tiles under its
 //!    own name (`TILE_SPHERE`), packed as they are, and is published with them.
@@ -19,7 +19,7 @@
 //! Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black
 //! Marble team).
 //!
-//!   make bake-earth
+//!   make bake-imagery
 
 use pxl_spec::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
 use std::path::{Path, PathBuf};
@@ -32,16 +32,16 @@ use pxl_geo_bake::pyramid::{MANIFEST, TileSet};
 use pxl_geo_bake::tile::walk::{self, Outcome};
 use pxl_geo_bake::util::{Level, git_sha, pack, write_atomic, write_manifest};
 use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_SPHERE};
-use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::bake::tile::imagery::{self, IMAGERY_ZOOM};
 use pxl_spec::color;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-/// What it reads, and where `make download-earth` keeps it.
-const SRC: &str = "infra/earth/source.json";
-const RAW: &str = "infra/earth/raw";
-const GLOBAL: (u32, u32) = earth::PICTURE;
+/// What it reads, and where `make download-imagery` keeps it.
+const SRC: &str = "infra/imagery/source.json";
+const RAW: &str = "infra/imagery/raw";
+const GLOBAL: (u32, u32) = imagery::PICTURE;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -110,10 +110,11 @@ fn lights_byte(v: f32) -> u8 {
     (libm::sqrt(v.clamp(0.0, 1.0) as f64) * 255.0).round_ties_even() as u8
 }
 
-/// A file `SRC` names, as `make download-earth` kept it.
+/// A file `SRC` names, as `make download-imagery` kept it.
 fn src(url: &str) -> Result<Vec<u8>, String> {
     let path = Path::new(RAW).join(url.rsplit('/').next().ok_or("a file name")?);
-    std::fs::read(&path).map_err(|e| format!("{}: {e} — run `make download-earth`", path.display()))
+    std::fs::read(&path)
+        .map_err(|e| format!("{}: {e} — run `make download-imagery`", path.display()))
 }
 
 /// An equirectangular raster read in linear light.
@@ -167,8 +168,8 @@ fn lon_lat(x: f64, y: f64) -> [f64; 2] {
 }
 
 fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
-    let tile = Quadrant::new(EARTH_ZOOM, [px, py]);
-    let mut rgba = vec![0u8; earth::EARTH_SZ];
+    let tile = Quadrant::new(IMAGERY_ZOOM, [px, py]);
+    let mut rgba = vec![0u8; imagery::TILE_SZ];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
             let idx = GROUND.cell_idx(tx, ty);
@@ -242,7 +243,7 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     )
     .map_err(|e| e.to_string())?;
     println!(
-        "[earth] global -> {} ({} KiB)",
+        "[imagery] global -> {} ({} KiB)",
         out.display(),
         encoded.len() / 1024
     );
@@ -282,7 +283,7 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 
 fn run() -> Result<(), String> {
     cli::enter()?;
-    let out = PathBuf::from("./out/earth");
+    let out = PathBuf::from("./out/imagery");
     let text = std::fs::read_to_string(SRC).map_err(|e| format!("{SRC}: {e}"))?;
     let named: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("{SRC}: {e}"))?;
@@ -323,13 +324,13 @@ fn run() -> Result<(), String> {
         set.remove(p)?;
     }
     // Every tile of the zoom: the Mercator square, one world across and as high.
-    let half = (1 << EARTH_ZOOM) / 2;
+    let half = (1 << IMAGERY_ZOOM) / 2;
     let tiles: Vec<[i32; 2]> = (-half..half)
         .flat_map(|y| (-half..half).map(move |x| [x, y]))
         .collect();
     let bands: Vec<&[[i32; 2]]> = tiles.chunks(1).collect();
     let t = walk::over(
-        "earth",
+        "imagery",
         &bands,
         std::thread::available_parallelism().map_or(4, |n| n.get()),
         64,
@@ -339,9 +340,9 @@ fn run() -> Result<(), String> {
             let Some(rgba) = tile_texels(px, py, &day_plate, &night_plate) else {
                 return Ok(Outcome::Empty);
             };
-            let pkt = earth::encode(&rgba).map_err(|e| format!("{e:?}"))?;
+            let pkt = imagery::encode(&rgba).map_err(|e| format!("{e:?}"))?;
             let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
-            set.write(Quadrant::new(EARTH_ZOOM, [px, py]), &packed)?;
+            set.write(Quadrant::new(IMAGERY_ZOOM, [px, py]), &packed)?;
             Ok(Outcome::Tile {
                 bytes: packed.len() as u64,
             })
@@ -353,7 +354,7 @@ fn run() -> Result<(), String> {
     write_manifest(
         &out.join(MANIFEST),
         git_sha().as_deref(),
-        serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": FORMAT[BaseKind::Earth as usize] }),
+        serde_json::json!({ "objects": t.baked + 1, "z": IMAGERY_ZOOM, "format": FORMAT[BaseKind::Imagery as usize] }),
     )?;
     // The copy an upload takes (`script/publish.py`), the global picture with the tiles.
     let copy = set.publish(|_| true)?;
@@ -363,5 +364,5 @@ fn run() -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    cli::main("earth", run)
+    cli::main("imagery", run)
 }

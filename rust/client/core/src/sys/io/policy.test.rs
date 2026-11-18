@@ -10,8 +10,8 @@ fn object_top_ranked() {
     assert_eq!((r.class, r.detail), (OBJECT, 0));
 }
 
-/// The pictures start before the catalog's models. The Earth's sphere, any
-/// other picture and the Earth's tiles all rank ahead of every model, and the
+/// The pictures start before the catalog's models. The imagery's sphere, any
+/// other picture and the imagery's tiles all rank ahead of every model, and the
 /// models still rank ahead of places.
 #[test]
 fn pictures_before_models() {
@@ -32,8 +32,8 @@ fn pictures_before_models() {
         id_of(LoadKind::Image, Load::File(7)),
         Order::LAST,
     );
-    let earth = rank(
-        Stream::Earth,
+    let imagery = rank(
+        Stream::Imagery,
         Quadrant::of_key("0103").expect("a tile").id(),
         Order::FIRST,
     );
@@ -44,6 +44,6 @@ fn pictures_before_models() {
     );
     assert!(sphere.class < model.class);
     assert!(picture.class < model.class);
-    assert!(earth.class < model.class);
+    assert!(imagery.class < model.class);
     assert!(model.class < place.class);
 }

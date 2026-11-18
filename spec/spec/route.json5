@@ -11,7 +11,7 @@
     },
     TILE_ROOT: {
       path: { $value: "/tile" },
-      $description: "Baked tiles by kind, version and name: under the root a kind's own, and\nunder that its object as a published set lays it out (bake/publication.json5\n`OBJECT`, and `SPHERE` for the Earth's picture whole). Its own root for\nthe reason the asset root is: the bake\nputs them in the bucket and the edge serves them, so neither server\nanswers them, and the edge tells them from the geo server's routes by\nthe root alone.",
+      $description: "Baked tiles by kind, version and name: under the root a kind's own, and\nunder that its object as a published set lays it out (bake/publication.json5\n`OBJECT`, and `SPHERE` for the imagery's sphere). Its own root for\nthe reason the asset root is: the bake\nputs them in the bucket and the edge serves them, so neither server\nanswers them, and the edge tells them from the geo server's routes by\nthe root alone.",
     },
     ASSET_ROOT: {
       path: { $value: "/asset" },

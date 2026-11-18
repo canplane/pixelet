@@ -12,7 +12,7 @@ an observation needs, and a layer holds what it is asked for.
 
 A layer is a payload and a one-zoom fold: a tile at zoom z is folded from the
 tiles at z + 1 under it, by the layer's own rule (pxl-spec `bake/fold.rs` and
-each tile's `fold`; the object store has its own, and the earth, at one zoom,
+each tile's `fold`; the object store has its own, and the imagery, at one zoom,
 none). The terrain and the object store each answer the query of a
 node at a zoom the asker states, by their own methods (`terrain/query.rs`,
 `object/store.rs`), and no other layer answers it:
@@ -30,7 +30,7 @@ asked, not what a tile holds.
 A tile owns what is its own, and what it owns goes when it goes. Its vectors are
 its own; a fixed room is right only for what is known at compile time and mostly
 in use, as a tile's elevation is. A packet is owned the same way: a layer
-decodes it and drops it, or, as the earth does, holds it in the tile until the
+decodes it and drops it, or, as the imagery does, holds it in the tile until the
 GPU has its texels.
 
 ## The base
@@ -50,8 +50,8 @@ lands.
 **Places** (`place.rs`) hold what Carto shows at a tile's zoom, a place a cell
 one icon wide, each with the zoom it shows from. **Divisions** (`division.rs`)
 hold the finest administrative division each cell is in, from `DIVISION_LEAF`
-up. The **earth** (`earth.rs`) is the planet's picture at one zoom only, held
-for the floor's tiles (`earth::window`), each holding its packet until the GPU
+up. The **imagery** (`imagery.rs`) is the planet's picture at one zoom only, held
+for the floor's tiles (`imagery::window`), each holding its packet until the GPU
 has its texels and then which device generation does, and answered by a coarser
 picture of the whole globe where none is held.
 

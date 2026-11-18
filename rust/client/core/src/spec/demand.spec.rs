@@ -13,7 +13,7 @@ pub enum StreamName {
     Place = 1,
     Division = 2,
     Asset = 3,
-    Earth = 4,
+    Imagery = 4,
     Object = 5,
 }
 
@@ -24,7 +24,7 @@ impl StreamName {
         StreamName::Place,
         StreamName::Division,
         StreamName::Asset,
-        StreamName::Earth,
+        StreamName::Imagery,
         StreamName::Object,
     ];
 
@@ -35,7 +35,7 @@ impl StreamName {
             1 => Some(StreamName::Place),
             2 => Some(StreamName::Division),
             3 => Some(StreamName::Asset),
-            4 => Some(StreamName::Earth),
+            4 => Some(StreamName::Imagery),
             5 => Some(StreamName::Object),
             _ => None,
         }
@@ -48,7 +48,7 @@ impl StreamName {
             StreamName::Place => "place",
             StreamName::Division => "division",
             StreamName::Asset => "asset",
-            StreamName::Earth => "earth",
+            StreamName::Imagery => "imagery",
             StreamName::Object => "object",
         }
     }

@@ -11,7 +11,7 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
 
 // The shadow and the occlusion are both visibility, each applied to its own light
 // (atmos_light.wgsl `surface_light_in`). The color is opaque up to the drawn edge: where
-// ground is drawn, the Earth's picture never shows through it. `lit` is the shadow map's
+// ground is drawn, the imagery never shows through it. `lit` is the shadow map's
 // visibility, which applies only to the light the map is cast from (shadow.wgsl
 // `shadow_light`).
 fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, ao: f32, seen: Air, l: Light) -> vec3f {

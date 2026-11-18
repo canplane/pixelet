@@ -28,7 +28,7 @@ use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::support;
 use crate::domain::eye;
 use crate::domain::layer::division;
-use crate::domain::layer::earth::EarthTile;
+use crate::domain::layer::imagery::ImageryTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::change;
@@ -146,7 +146,7 @@ fn demand_tick(_: &mut TickContext) {
         true => PlaceTile::demand().step(None, &[]),
         false => PlaceTile::demand().idle(),
     }
-    EarthTile::demand().step(None, &[]);
+    ImageryTile::demand().step(None, &[]);
     DivisionTile::demand().step(division::tile(controller::pivot()), &[]);
     demand::object_step();
 }
@@ -430,11 +430,11 @@ fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
 /// before the layers observe.
 fn changes_step() {
     static CHANGED: Global<[Vec<Quadrant>; 3]> = Global::new();
-    let [places, earth, divisions] = CHANGED.get(Default::default);
+    let [places, imagery, divisions] = CHANGED.get(Default::default);
     let shared = change::take();
     gpu::note_damage(change::damage());
     PlaceTile::tile_cache().take_changed(places);
-    EarthTile::tile_cache().take_changed(earth);
+    ImageryTile::tile_cache().take_changed(imagery);
     DivisionTile::tile_cache().take_changed(divisions);
     if shared {
         IndexedTerrainTile::demand().on_changed();
@@ -443,8 +443,8 @@ fn changes_step() {
         PlaceTile::demand().on_changed();
         marker::on_changed(places);
     }
-    if shared || !earth.is_empty() {
-        EarthTile::demand().on_changed();
+    if shared || !imagery.is_empty() {
+        ImageryTile::demand().on_changed();
     }
     if !divisions.is_empty() {
         DivisionTile::demand().on_changed();

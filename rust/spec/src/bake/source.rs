@@ -26,10 +26,10 @@ pub fn is_version(version: &str) -> bool {
             .all(|b| VERSION_CHARS.as_bytes().contains(&b))
 }
 
-/// Whether a kind is held a shard at a time: the pyramid's kinds are; the Earth's picture,
+/// Whether a kind is held a shard at a time: the pyramid's kinds are; the imagery,
 /// the sphere's, belongs to no shard.
 pub fn is_sharded(layer: BaseKind) -> bool {
-    layer != BaseKind::Earth
+    layer != BaseKind::Imagery
 }
 
 #[cfg(test)]

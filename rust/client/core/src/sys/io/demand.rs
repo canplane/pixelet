@@ -77,7 +77,7 @@ impl Stream {
             Stream::Place => (Source::Base(BaseKind::Place), false, Class::Place),
             Stream::Division => (Source::Base(BaseKind::Division), false, Class::Aside),
             Stream::Asset => (Source::Load, false, Class::File),
-            Stream::Earth => (Source::Base(BaseKind::Earth), true, Class::Picture),
+            Stream::Imagery => (Source::Base(BaseKind::Imagery), true, Class::Picture),
             Stream::Object => (Source::Object, false, Class::OnGround),
         };
         Row {

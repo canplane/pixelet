@@ -66,7 +66,7 @@ fn ground_bounce_in(up: vec3f, l: Light, s: Lighting) -> vec3f {
 
 // The light on a matte face of albedo one, divided by pi: Lambert, as three.js's
 // standard material at roughness 1. Every lit pass reads it, and so does the
-// Earth past the terrain. Each light is darkened by its own visibility alone.
+// imagery past the terrain. Each light is darkened by its own visibility alone.
 // `lit` is the share of the sun and of the moon that the face's shadow lets
 // reach it (shade.wgsl `shade`, from shadow.wgsl `shadow_visibility`), and it
 // darkens their direct light. `ao` is how open the face is to the sky, from the

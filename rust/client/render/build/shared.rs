@@ -105,7 +105,7 @@ fn constant() -> String {
         ("IMAGE_TOP", U32(IMAGE_TOP)),
         ("IMAGE_SIDE", U32(IMAGE_SIDE)),
         ("IMAGE_BOTTOM", U32(IMAGE_BOTTOM)),
-        ("EARTH_TILE_BITS", U32(EARTH_TILE_BITS)),
+        ("IMAGERY_TILE_BITS", U32(IMAGERY_TILE_BITS)),
         ("WORKGROUP_CAP", U32(WORKGROUP_CAP)),
         ("AIR_FROXELS", U32(AIR_FROXELS)),
         ("SQUARE_SIDE", U32(SQUARE_SIDE)),
@@ -167,12 +167,12 @@ fn constant() -> String {
     out + &consts(params())
 }
 
-/// The air's numbers (look/atmosphere.rs) and the Earth's window's size, which no setting, time
+/// The air's numbers (look/atmosphere.rs) and the imagery's window's size, which no setting, time
 /// or frame moves, for atmos_medium.wgsl, which every shader that reads the air holds. The air's
 /// uniform holds what moves (frame/shader/word.rs `atmos`).
 fn atmos_medium() -> String {
     use atmosphere::*;
-    use pxl_spec::bake::tile::earth::{EARTH_DIST, EARTH_ZOOM};
+    use pxl_spec::bake::tile::imagery::{IMAGERY_DIST, IMAGERY_ZOOM};
     use pxl_spec::space::coord::world::around;
     use pxl_spec::space::layer::demand::GROUND_DEMAND_ACROSS;
     let f = |v: f64| F32(v as f32);
@@ -204,15 +204,15 @@ fn atmos_medium() -> String {
         ("NIGHT_STOPS", f(NIGHT_STOPS)),
         ("SHOWN_FALL", f(SHOWN_FALL)),
         // The night sky's light, which lights the ground and is never drawn itself, and a lit
-        // city's radiance where the Earth's picture shows city lights at full strength.
+        // city's radiance where the imagery shows city lights at full strength.
         ("NIGHT_SKY", rgb(NIGHT_COLOR.map(|c| c * NIGHT_SKY))),
         ("CITY_LIGHT", rgb(CITY_COLOR.map(|c| c * CITY_LIGHT))),
-        // How far from the eye the Earth's tiles are drawn before the global picture takes
-        // over, in units (pxl-spec bake/tile/earth.rs), and the window's tiles across and the
-        // tiles around the world at the Earth's zoom.
-        ("EARTH_DIST", f(EARTH_DIST)),
-        ("EARTH_ACROSS", I32(GROUND_DEMAND_ACROSS as i32)),
-        ("EARTH_AROUND", I32(around(EARTH_ZOOM) as i32)),
+        // How far from the eye the imagery's tiles are drawn before the global picture takes
+        // over, in units (pxl-spec bake/tile/imagery.rs), and the window's tiles across and the
+        // tiles around the world at the imagery's zoom.
+        ("IMAGERY_DIST", f(IMAGERY_DIST)),
+        ("IMAGERY_ACROSS", I32(GROUND_DEMAND_ACROSS as i32)),
+        ("IMAGERY_AROUND", I32(around(IMAGERY_ZOOM) as i32)),
     ])
 }
 

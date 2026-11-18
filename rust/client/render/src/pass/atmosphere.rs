@@ -12,7 +12,7 @@
 
 use core::ops::Range;
 
-use pxl_spec::bake::tile::earth;
+use pxl_spec::bake::tile::imagery;
 use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
 use pxl_spec::space::coord::zoom::HEIGHT_BITS;
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
@@ -27,11 +27,11 @@ use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_link::mem;
 
 use crate::frame::shader::word::atmos::{
-    CAMERA_ALT, DRAWN, EARTH_TILES, EARTH_WINDOW, FLOOR_KM, KM_PER_U, MOON_COLOR, MOON_DIR,
+    CAMERA_ALT, DRAWN, FLOOR_KM, IMAGERY_TILES, IMAGERY_WINDOW, KM_PER_U, MOON_COLOR, MOON_DIR,
     MOON_LAYOUT, MOON_LIGHT, MOON_REACHES, SUN_DIR, SUN_LAYOUT, SUN_REACHES,
 };
 use crate::frame::shader::word::{
-    AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS, GROUND_SLOPES, IRRADIANCE_SIZE, LIGHT_SLOPES,
+    AIR_FROXELS, ATMOS_FLOATS, GROUND_SLOPES, IMAGERY_TILE_BITS, IRRADIANCE_SIZE, LIGHT_SLOPES,
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
@@ -47,20 +47,20 @@ use crate::look::environment;
 use crate::param::atmos::{ALT_SAMPLE, ALT_SAMPLE_LEAST_KM};
 use crate::spec::span::GpuSpanName;
 
-/// Hands each waiting earth tile's layer and texels to the writer, until the writer refuses
+/// Hands each waiting imagery tile's layer and texels to the writer, until the writer refuses
 /// one by returning false.
 pub type Upload<'a> = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool) + 'a;
 
 /// How many of the air's entries every painter and the sky read (record.rs `AIR`).
 pub const AIR_ENTRY_CNT: usize = AIR.len();
 
-/// One texture layer for each tile the earth layer's floor holds at once, which is one for
+/// One texture layer for each tile the imagery layer's floor holds at once, which is one for
 /// each slot of its tile cache.
-pub const EARTH_LAYER_CNT: u32 = GROUND_DEMAND_TILE_CAP;
-/// A tile's layer plus one takes `EARTH_TILE_BITS` bits, eight tiles to a word, in the four
-/// words at `EARTH_TILES`.
+pub const IMAGERY_LAYER_CNT: u32 = GROUND_DEMAND_TILE_CAP;
+/// A tile's layer plus one takes `IMAGERY_TILE_BITS` bits, eight tiles to a word, in the four
+/// words at `IMAGERY_TILES`.
 const _: () = assert!(
-    EARTH_LAYER_CNT < 1 << EARTH_TILE_BITS && EARTH_LAYER_CNT <= 32 / EARTH_TILE_BITS * 4,
+    IMAGERY_LAYER_CNT < 1 << IMAGERY_TILE_BITS && IMAGERY_LAYER_CNT <= 32 / IMAGERY_TILE_BITS * 4,
     "the window's layers fit their word"
 );
 
@@ -242,10 +242,11 @@ pub struct Atmosphere {
     moon_mu: f32,
     /// The words the exposure texel was last drawn from (`EXPOSURE_READS`).
     exposure_read: Read,
-    /// This month's picture of the Earth, zero until its image has come (`ImageMap::step`).
-    /// Until then the land past the terrain shows only the air before it.
-    pub earth: ImageMap,
-    earth_tiles: (u32, u32),
+    /// The imagery's sphere, zero until its image has come
+    /// (`ImageMap::step`). Until then the land past the terrain shows only the
+    /// air before it.
+    pub imagery_sphere: ImageMap,
+    imagery_tiles: (u32, u32),
     /// The air before each point (atmos_froxel.wgsl): the sun's half and the moon's, each
     /// drawn with its light's view from the same reads, per unit of its light and unexposed.
     /// `froxel` is the pipeline that makes it, and `froxel_groups` holds its group for each
@@ -344,17 +345,17 @@ impl Atmosphere {
             exposure_read: Read::default(),
             sun_mu: 1.0,
             moon_mu: 1.0,
-            earth: ImageMap::new(g, earth::PICTURE.0, earth::PICTURE.1),
-            earth_tiles: {
+            imagery_sphere: ImageMap::new(g, imagery::PICTURE.0, imagery::PICTURE.1),
+            imagery_tiles: {
                 let texture = g.texture(
                     TILE_CELLS,
                     TILE_CELLS,
-                    EARTH_LAYER_CNT,
+                    IMAGERY_LAYER_CNT,
                     Format::Rgba8unormSrgb,
                     1,
                     texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
                 );
-                let view = g.view(texture, true, 0, 1, 0, EARTH_LAYER_CNT);
+                let view = g.view(texture, true, 0, 1, 0, IMAGERY_LAYER_CNT);
                 (texture, view)
             },
             volume,
@@ -429,8 +430,8 @@ impl Atmosphere {
         [
             view_entry(10, self.views[SKY_VIEW]),
             view_entry(15, self.views[MOON_VIEW]),
-            view_entry(16, self.earth.view),
-            view_entry(17, self.earth_tiles.1),
+            view_entry(16, self.imagery_sphere.view),
+            view_entry(17, self.imagery_tiles.1),
         ]
     }
 
@@ -462,17 +463,17 @@ impl Atmosphere {
         g.end(pass);
     }
 
-    /// Writes each earth tile that has come into its layer while the stream has room, and
+    /// Writes each imagery tile that has come into its layer while the stream has room, and
     /// lays out in the words the window and which layer each tile reads. Returns whether a
     /// tile came this frame.
-    pub fn set_earth_tiles(
+    pub fn set_imagery_tiles(
         &mut self,
         g: &Gpu,
         window: [i32; 2],
         layers: &[u32],
         upload: &mut Upload<'_>,
     ) -> bool {
-        let (texture, mut came) = (self.earth_tiles.0, false);
+        let (texture, mut came) = (self.imagery_tiles.0, false);
         upload(&mut |layer, texels| {
             let tile = need().write_texture(TILE_CELLS, TILE_CELLS, texels);
             if !room(tile) {
@@ -484,14 +485,14 @@ impl Atmosphere {
             true
         });
         let w = &mut self.words;
-        w[EARTH_WINDOW] = f32::from_bits(window[0] as u32);
-        w[EARTH_WINDOW + 1] = f32::from_bits(window[1] as u32);
-        let per_word = (32 / EARTH_TILE_BITS) as usize;
+        w[IMAGERY_WINDOW] = f32::from_bits(window[0] as u32);
+        w[IMAGERY_WINDOW + 1] = f32::from_bits(window[1] as u32);
+        let per_word = (32 / IMAGERY_TILE_BITS) as usize;
         let mut packed = [0u32; 4];
         for (k, &layer) in layers.iter().enumerate() {
-            packed[k / per_word] |= layer << (EARTH_TILE_BITS * (k % per_word) as u32);
+            packed[k / per_word] |= layer << (IMAGERY_TILE_BITS * (k % per_word) as u32);
         }
-        for (w, p) in w[EARTH_TILES..EARTH_TILES + 4].iter_mut().zip(packed) {
+        for (w, p) in w[IMAGERY_TILES..IMAGERY_TILES + 4].iter_mut().zip(packed) {
             *w = f32::from_bits(p);
         }
         came

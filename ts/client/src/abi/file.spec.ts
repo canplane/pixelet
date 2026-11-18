@@ -29,9 +29,9 @@ export const path = {
   },
   /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
    * `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number. */
-  EARTH: {
+  IMAGERY: {
     ID: 3 as number,
-    /** The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's
+    /** The imagery's sphere, the whole Earth's picture, (IMAGERY, SPHERE), served under the imagery layer's
      * version as its `TILE_SPHERE` (spec/spec/bake/publication.json5). */
     SPHERE: {
       ID: 0 as number,

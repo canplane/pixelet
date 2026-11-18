@@ -364,11 +364,11 @@ pub(crate) fn has_object_failed(stream: Stream, id: u64) -> bool {
 
 /// The body slots that a tile asked for again may arrive in. The count
 /// leaves out one slot for each credit, because a body may still be out on
-/// each, and one for each Earth tile the Earth's bound holds, whose packet
+/// each, and one for each imagery tile the imagery's bound holds, whose packet
 /// waits for a frame.
 pub(crate) fn spare_slot_cnt() -> u32 {
-    let earth = sched().bounds[Stream::Earth as usize] as u32;
-    BODY_SLOT_CNT.saturating_sub(CREDIT_CNT + earth)
+    let imagery = sched().bounds[Stream::Imagery as usize] as u32;
+    BODY_SLOT_CNT.saturating_sub(CREDIT_CNT + imagery)
 }
 
 /// Why the reads are failing, or None once an answer has come since the last

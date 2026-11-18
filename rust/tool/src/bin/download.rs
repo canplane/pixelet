@@ -2,17 +2,17 @@
 
 //! Fetches a source of the tree's data by its name.
 //!
-//!   make download-earth | download-moon | download-pack | download-star
+//!   make download-imagery | download-moon | download-pack | download-star
 
 use std::process::ExitCode;
 
-use pxl_tool::download::{earth, moon, pack, star};
+use pxl_tool::download::{imagery, moon, pack, star};
 
 /// What fetches a source.
 type Run = fn() -> Result<(), String>;
 
 const SOURCES: [(&str, Run); 4] = [
-    ("earth", earth::run),
+    ("imagery", imagery::run),
     ("moon", moon::run),
     ("pack", pack::run),
     ("star", star::run),
@@ -21,7 +21,7 @@ const SOURCES: [(&str, Run); 4] = [
 fn main() -> ExitCode {
     let name = std::env::args().nth(1).unwrap_or_default();
     let Some((_, run)) = SOURCES.iter().find(|(n, _)| *n == name) else {
-        eprintln!("usage: download earth|moon|pack|star");
+        eprintln!("usage: download imagery|moon|pack|star");
         return ExitCode::FAILURE;
     };
     match run() {

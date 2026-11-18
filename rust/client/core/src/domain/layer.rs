@@ -14,8 +14,8 @@ use crate::sys::io::failure::Exit;
 use tile_cache::TileCache;
 
 pub(crate) mod division;
-pub(crate) mod earth;
 pub(crate) mod floor;
+pub(crate) mod imagery;
 pub(crate) mod instance;
 pub(crate) mod object;
 pub(crate) mod place;

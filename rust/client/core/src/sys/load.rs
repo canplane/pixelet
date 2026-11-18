@@ -21,7 +21,7 @@ pub(crate) enum LoadKind {
 
 /// A file to load. `File` is a file after ASSET by its id: the
 /// catalog itself (file.json5 `CATALOG`) or a file the catalog names.
-/// `Sphere` is the picture of the whole Earth, which is opened after EARTH
+/// `Sphere` is the picture of the whole Earth, which is opened after IMAGERY
 /// and so under that bake's version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Load {
@@ -43,14 +43,14 @@ impl LoadKind {
 }
 
 impl Load {
-    /// The file's path: (ASSET, id), or (EARTH, SPHERE). A file's id is an i32 as it
+    /// The file's path: (ASSET, id), or (IMAGERY, SPHERE). A file's id is an i32 as it
     /// is.
     pub(crate) fn path(self) -> Vec<Token> {
         match self {
             Load::File(n) => vec![Token::Int(path::asset::ID), Token::Int(n as i32)],
             Load::Sphere => vec![
-                Token::Int(path::earth::ID),
-                Token::Int(path::earth::sphere::ID),
+                Token::Int(path::imagery::ID),
+                Token::Int(path::imagery::sphere::ID),
             ],
         }
     }

@@ -40,7 +40,7 @@ pub const fn demand_tiles(lattice: Lattice) -> u32 {
     demand_across(lattice) * demand_across(lattice)
 }
 
-/// The ground lattice's `demand_across`, to which the floor and the Earth's window are cut.
+/// The ground lattice's `demand_across`, to which the floor and the imagery's window are cut.
 pub const GROUND_DEMAND_ACROSS: u32 = demand_across(GROUND);
 pub const GROUND_DEMAND_TILE_CAP: u32 = demand_tiles(GROUND);
 

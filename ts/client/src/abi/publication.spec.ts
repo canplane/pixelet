@@ -7,24 +7,24 @@
 // at boot and script/publish.py writes, so a publish changes nothing here.
 
 /** The base layers a version is published for, each a kind a baked page is published under. */
-export const BASE_KINDS = ["terrain", "place", "division", "earth"] as const;
+export const BASE_KINDS = ["terrain", "place", "division", "imagery"] as const;
 
 export type BaseKind =
   | typeof BASE_KIND_TERRAIN
   | typeof BASE_KIND_PLACE
   | typeof BASE_KIND_DIVISION
-  | typeof BASE_KIND_EARTH;
+  | typeof BASE_KIND_IMAGERY;
 export const BASE_KIND_TERRAIN = 0;
 export const BASE_KIND_PLACE = 1;
 export const BASE_KIND_DIVISION = 2;
-export const BASE_KIND_EARTH = 3;
+export const BASE_KIND_IMAGERY = 3;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_BaseKind(val: number): BaseKind | null {
   return val === BASE_KIND_TERRAIN ||
     val === BASE_KIND_PLACE ||
     val === BASE_KIND_DIVISION ||
-    val === BASE_KIND_EARTH
+    val === BASE_KIND_IMAGERY
     ? val
     : null;
 }
@@ -38,8 +38,8 @@ export function name_BaseKind(val: BaseKind): string {
       return "place";
     case BASE_KIND_DIVISION:
       return "division";
-    case BASE_KIND_EARTH:
-      return "earth";
+    case BASE_KIND_IMAGERY:
+      return "imagery";
   }
 }
 
@@ -63,8 +63,8 @@ export const VERSION_CHARS =
  * before its name (pxl-spec bake/source.rs `is_version`). */
 export const VERSION_SZ = 32 as number;
 
-/** The Earth's picture whole, in place of a tile's name under the earth
- * layer's version: the sphere's, no tile of the pyramid. */
+/** The imagery's sphere, the picture whole, in place of a tile's name under
+ * the imagery layer's version: no tile of the pyramid. */
 export const TILE_SPHERE = "sphere";
 
 /** A kind's object in a published set, the one place its segments are

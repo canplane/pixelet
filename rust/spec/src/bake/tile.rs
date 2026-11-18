@@ -1,6 +1,6 @@
 // pxl-spec/bake/tile.rs
 
-//! A baked tile of each layer — terrain, place, division and the Earth's
+//! A baked tile of each layer — terrain, place, division and the imagery
 //! picture — and what every kind's says alike: which of it and its children
 //! are tiles.
 
@@ -13,7 +13,7 @@ use crate::space::coord::zoom::{LEAF_ZOOM, Zoom};
 use crate::space::layer::lattice::{GROUND, Lattice, coarsest};
 
 pub mod division;
-pub mod earth;
+pub mod imagery;
 pub mod place;
 pub mod terrain;
 
@@ -67,7 +67,7 @@ pub struct Row {
     /// The zoom its tiles are made at; every coarser one is folded.
     pub leaf: Zoom,
     /// The most bytes a packet of it takes: what a client may hold one in,
-    /// and refuses one past. The Earth's follows from its lanes; every other
+    /// and refuses one past. The imagery's follows from its lanes; every other
     /// kind's is a room its bake refuses a tile past.
     pub pkt_cap: u32,
 }
@@ -78,7 +78,7 @@ impl BaseKind {
             BaseKind::Terrain => (GROUND, LEAF_ZOOM, terrain::PKT_CAP),
             BaseKind::Place => (place::PLACE_LATTICE, LEAF_ZOOM, place::PKT_CAP),
             BaseKind::Division => (GROUND, division::DIVISION_LEAF, division::PKT_CAP),
-            BaseKind::Earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_SZ),
+            BaseKind::Imagery => (GROUND, imagery::IMAGERY_ZOOM, imagery::PKT_SZ),
         };
         Row {
             lattice,

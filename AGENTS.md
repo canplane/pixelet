@@ -48,7 +48,7 @@
     until the finer one arrives. Every kind of tile goes through the same
     demand and tile cache code; a kind of tile differs in what its tile holds,
     how four fold into one and what it asks for, its ask scope and what its
-    readers pin, and in nothing else. The earth's picture alone is no pyramid.
+    readers pin, and in nothing else. The imagery alone is no pyramid.
   - The answer is an asset, kept as its id: its kind over its index. The kind
     is its shape, a cube, a decor or a marker, and there is no other; the id
     says nothing of who put the asset there.
