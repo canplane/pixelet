@@ -12,11 +12,10 @@ pub(crate) const RETRY_BASE_MS: f64 = 1_000.0;
 pub(crate) const RETRY_CAP_MS: f64 = 30_000.0;
 pub(crate) const RETRY_ATTEMPT_CNT: u32 = 6;
 
-/// The most reads out at once, however many credits are granted.
-pub(crate) const CREDIT_CAP: u32 = 16;
-
-/// How many reads a frame grants, the same on every platform: six, as a
-/// browser runs to a host over HTTP/1.1 and as `BODY_SLOT_CNT` is sized for.
+/// The credits: the most reads at the host at once, the same on every
+/// platform: six, as a browser runs to a host over HTTP/1.1 and as
+/// `BODY_SLOT_CNT` is sized for. A read holds its credit from its start until
+/// it has ended at the host, stopped or not (sys/io/request.rs `Slot`).
 /// A read a platform's fetch cannot start at once waits in its pool, which
 /// knows nothing of what the core wants first, so the count is kept near what
 /// a platform runs.
@@ -27,7 +26,7 @@ pub(crate) const CREDIT_CNT: u32 = 6;
 /// until it is decoded; an Earth body until its texels are taken. The number
 /// is sized for an eye that moves, not for the worst case.
 ///
-/// A frame grants at most six credits (`CREDIT_CNT`), and
+/// At most six reads are out (`CREDIT_CNT`), and
 /// at most four Earth bodies wait for their texels. A clip level spans one
 /// tile's cells on a side (pxl-engine `clipmap::CLIP_SIZE`), so it wants at
 /// most four tiles, and a moving eye refills a few clip levels at once: four

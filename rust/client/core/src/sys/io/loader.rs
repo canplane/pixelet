@@ -26,9 +26,9 @@ use crate::spec::manifest::mem;
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{Exit, Failure, exit_of};
 use crate::sys::io::file;
-use crate::sys::io::request::{attempt_of, settle};
+use crate::sys::io::request::{attempt_of, end_read, settle};
 use crate::sys::io::source;
-use crate::sys::load::{LOAD_FILE_CAP, Load, LoadKind, id_of, of_id};
+use crate::sys::load::{LOAD_FILE_CAP, Load, LoadKind, id_of};
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate};
 
@@ -146,13 +146,12 @@ pub(crate) fn load_wants() -> &'static [(u64, Order)] {
 }
 
 /// Reads the file of `load` for the attempt `key`, in a task of its own. A
-/// model and an image of one load are the same file, and the attempt's id
-/// says which it is read as.
-pub(crate) fn open_asset(key: u64, load: Load) {
-    let Some((_, id)) = attempt_of(key) else {
-        return;
-    };
-    let Some((kind, _)) = of_id(id) else { return };
+/// model and an image of one load are the same file, and `kind` says which
+/// it is read as. An attempt stopped before its read began makes none.
+pub(crate) fn open_asset(key: u64, kind: LoadKind, load: Load) {
+    if attempt_of(key).is_none() {
+        return end_read(key);
+    }
     // The task's pool has room for one for each file in flight
     // (sys/load.rs `LOAD_FILE_CAP`), so the spawn cannot fail.
     executor::spawner().spawn(arrival(key, kind, load).or_bug(Errno::ENOSPC));
@@ -166,9 +165,15 @@ pub(crate) fn open_asset(key: u64, load: Load) {
 /// again.
 #[embassy_executor::task(pool_size = LOAD_FILE_CAP)]
 async fn arrival(key: u64, kind: LoadKind, load: Load) {
-    let read = file::read_whole(&load.path(), mem::MIN_HEAP_SZ, Some(key), file::heap)
-        .await
-        .map(Vec::into_boxed_slice);
+    // An attempt stopped before the task ran has no file to close, so its
+    // read is not begun.
+    let read = match attempt_of(key) {
+        Some(_) => file::read_whole(&load.path(), mem::MIN_HEAP_SZ, Some(key), file::heap)
+            .await
+            .map(Vec::into_boxed_slice),
+        None => Err(Errno::ECANCELED),
+    };
+    end_read(key);
     let l = loader();
     let bytes = match read {
         Ok(bytes) => {
