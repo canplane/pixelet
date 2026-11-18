@@ -14,7 +14,7 @@ pub(crate) const NEAR: f64 = 0.1;
 
 /// The least turn of the camera the view takes, as what it moves on the
 /// screen, in CSS pixels: half the reference pixel, which is a visual angle
-/// and so stands for the spacing of the viewer's eye. A change the eye's grid
+/// and so the spacing the picture is sampled at. A change its samples
 /// cannot tell apart is no change of what is seen (Nyquist).
 pub(crate) const TURN_STEP_PX: f64 = 0.5;
 

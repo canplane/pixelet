@@ -26,11 +26,11 @@ use crate::domain::control::input;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::support;
+use crate::domain::eye;
 use crate::domain::layer::division;
 use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::observer;
 use crate::domain::query::change;
 use crate::domain::scene::character::companion::{self, Camera, companion_step};
 use crate::domain::scene::decor::asset::decor_models_step;
@@ -81,7 +81,7 @@ fn companion_camera() -> Option<Camera> {
     // The pivot the camera is easing toward, not the one its easing has
     // reached so far.
     let goal = controller::pivot_to().or_else(controller::pivot)?;
-    observer::eye()?;
+    eye::at()?;
     let at = coord::to_world(&goal);
     Some(Camera {
         pivot: [at[0], at[1]],
@@ -129,7 +129,7 @@ fn demand_tick(_: &mut TickContext) {
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = clipmap::step(
         [
-            observer::eye().map(|e| [e[0], e[1]]),
+            eye::at().map(|e| [e[0], e[1]]),
             controller::pivot().map(at),
             destination::pending().map(at),
         ],

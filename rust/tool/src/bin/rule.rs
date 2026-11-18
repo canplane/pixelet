@@ -96,7 +96,7 @@ const CORE_ORDER: [(&str, u8); 17] = [
     ("view", 4),
     ("query", 3),
     ("layer", 2),
-    ("observer", 2),
+    ("eye", 2),
     ("sys", 1),
     ("abi", 0),
     ("spec", 0),

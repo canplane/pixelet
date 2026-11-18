@@ -1,6 +1,6 @@
 // pxl-core/domain/scene.test.rs
 
-use crate::domain::observer::{self, ObserverPose};
+use crate::domain::eye::{self, EyePose};
 use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::indicator::ghost::GhostDraw;
@@ -47,12 +47,12 @@ fn an_eye_moved_changes_no_draw() {
         coverage.draw(list);
     };
     let pose = |eye| {
-        Some(ObserverPose {
+        Some(EyePose {
             eye,
             rot: mat4::new(),
         })
     };
-    let before = observer::pose();
+    let before = eye::pose();
     view_compose(pose([8_388_600.0, -1200.0, 40.0]));
     draw(&mut list);
     let was = list.take();

@@ -223,17 +223,15 @@ pub(crate) struct LocationIndicator {
     /// The last height found under the fix, or None until one is found.
     last_known_center_z: Option<f64>,
     /// Where the zone is: the center it was last grounded at, or None when no
-    /// height was found, and whether the height it read was exact. It is
-    /// kept while the fix stays in the ground's leaf cell it was grounded in,
-    /// by the cell's corner, and no change touches the ground it read
-    /// (`Memo`).
-    ground_center: Memo<[f64; 2], (Option<V3>, bool)>,
-    /// What the zone draws: its cells laid about the center this is kept
-    /// for, each on the ground under it, and whether every height they read
-    /// was exact. The cells are laid only while the zone is drawn, and kept,
-    /// drawn or not, until the center moves, a change touches the ground
-    /// they read or the fix goes.
-    ground_cells: Memo<V3, bool>,
+    /// height was found. It is kept while the fix stays in the ground's leaf
+    /// cell it was grounded in, by the cell's corner, and no change touches
+    /// the ground it read (`Memo`).
+    ground_center: Memo<[f64; 2], Option<V3>>,
+    /// That the zone's cells are laid about the center this is kept for,
+    /// each on the ground under it. The cells are laid only while the zone
+    /// is drawn, and kept, drawn or not, until the center moves, a change
+    /// touches the ground they read or the fix goes.
+    ground_cells: Memo<V3, ()>,
     /// The zone's instances as last laid, which `block` holds unless the
     /// heap refused them.
     instances: Vec<f32>,
@@ -262,11 +260,11 @@ impl LocationIndicator {
         let at = [x, y];
         // The memos are checked every frame, here both, so each sees a change
         // once and in the same frame.
-        self.ground_cells.forget_touched_at_leaf(|&exact| exact);
+        self.ground_cells.forget_touched();
         let mut memo = core::mem::take(&mut self.ground_center);
-        memo.forget_touched_at_leaf(|&(_, exact)| exact);
+        memo.forget_touched();
         let w = World::now();
-        let (center, _) = memo.of(at, || self.ground(w, at));
+        let center = memo.of(at, || self.ground(w, at));
         self.ground_center = memo;
         let Some(center) = center else {
             return;
@@ -292,21 +290,18 @@ impl LocationIndicator {
 
     /// Grounds the zone's center on the ground's leaf cell at the corner
     /// `at`, the fix's. Returns the center, or None while the fix has no
-    /// height yet, and whether the height it read was exact.
-    fn ground(&mut self, world: World, at: [f64; 2]) -> (Option<V3>, bool) {
+    /// height yet.
+    fn ground(&mut self, world: World, at: [f64; 2]) -> Option<V3> {
         let cell = units(GROUND.leaf_cell_zoom());
         // The fix names a place but not its altitude, so the elevation is the
         // ground's under its cell, which the query reads whole
         // (`surface_support`), and the last one found stands until a new one is.
         let mid = v3::center(&[at[0], at[1], 0.0], cell);
         let center = world.surface_support(&world::point(mid[0], mid[1], 0.0));
-        let exact = center.exact().is_some();
         if let Some(z) = center.val().flatten() {
             self.last_known_center_z = Some(z);
         }
-        let Some(center_z) = self.last_known_center_z else {
-            return (None, exact);
-        };
+        let center_z = self.last_known_center_z?;
         let center_pos = v3::floor(&[at[0], at[1], center_z], cell);
         // The beacon's shown place moves with the center, so a whole-cell
         // move of the zone does not play as the beacon sliding back.
@@ -318,7 +313,7 @@ impl LocationIndicator {
             z.center = center_pos;
             invalidate(InvalidationReason::Scene);
         }
-        (Some(center_pos), exact)
+        Some(center_pos)
     }
 
     /// Lays the zone's cells about `center`, each on the ground under it, and
@@ -334,17 +329,11 @@ impl LocationIndicator {
         let mut memo = core::mem::take(&mut self.ground_cells);
         let world = World::now();
         memo.of(center, || {
-            let mut exact = true;
-            let instances = lay_zone(center, |at| {
-                let support = world.surface_support(at);
-                exact &= support.exact().is_some();
-                support.val().flatten()
-            });
+            let instances = lay_zone(center, |at| world.surface_support(at).val().flatten());
             if self.instances != instances {
                 self.instances = instances;
                 self.write(draw);
             }
-            exact
         });
         self.ground_cells = memo;
     }

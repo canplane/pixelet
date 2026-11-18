@@ -57,7 +57,8 @@ pub(crate) fn support_step() {
 /// stands on the floor under it where that is answered exactly: it drops
 /// when what it stood on is taken away, and it rises out of what fills its cell
 /// (`World::floor_under`). The pivot and the figures at it then stand on
-/// one floor.
+/// one floor. The pivot is the camera's point and no body: it stands on its
+/// floor for the camera whether or not the eye draws a body there.
 fn standing(world: World, at: &Q3) -> Answer<Option<Q3>> {
     if is_unknown(at) || !settings().surface_follow {
         return stand_memo().of(*at, || world.stands(at));

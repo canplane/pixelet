@@ -1,6 +1,6 @@
 // pxl-spec/space/camera/eye.rs
 
-//! The observer: where the eye is, what it looks at and how far it sees.
+//! The eye: where it is, what it looks at and how far it sees.
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::v3::{self, V3};

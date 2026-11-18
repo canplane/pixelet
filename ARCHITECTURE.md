@@ -140,7 +140,7 @@ first person, the point under the eye where the body stands: the eye is half a
 cell under the top of the body's box. The character stands at the pivot.
 
 How finely each part of the view is drawn is set by the **camera grid**, a set
-of angular cells about the eye, each the least the observer promises to tell
+of angular cells about the eye, each the least the eye promises to tell
 apart (`pxl-spec space/camera/grid.rs`). A cell is the same angle on every
 screen, so what is observed at a distance is the same on every device; a display
 only draws it. A node is drawn at the zoom at which it spans one to two cells at
@@ -164,7 +164,7 @@ number of tiles, and a ray crosses one more zoom for each doubling of distance,
 so the tiles held and the depth of a ray's descent grow with the logarithm of
 how far the view reaches, and what a frame draws is bound to the screen's cells.
 
-The world itself stays in its own axes; what turns is the observer. A draw holds
+The world itself stays in its own axes; what turns is the eye. A draw holds
 its position as a `Q3` and a small remainder in floating point, and the shader
 takes the wrapping integer difference from the eye, so precision is always
 spent where the eye is.
@@ -472,7 +472,7 @@ noticing:
 ## Prior art
 
 What is pixelet's own is that the eye sets the detail and one query answers
-every observer. The machinery under it is earlier work:
+whatever asks. The machinery under it is earlier work:
 
 | Precedent | What is taken |
 | --- | --- |
@@ -509,7 +509,7 @@ up, and the folders are that order. The check-rules tool holds it.
     setting      the settings both heads read
     view/        the lens, demand               ┐
     query/       the only seam                  ├ the trunk
-    observer     the pose the world is seen from│
+    eye          the pose the world is seen from│
     layer/       the base and the object        ┘
   ────────────────────────────────────────────────────────────────────
   sys/                   what all of it stands on

@@ -110,7 +110,8 @@ fn report_claims((zoom, c): Node<3>) {
                 y - f64::from(CLAIM_EXTENT[1]),
             ],
             [x, y],
-            GROUND.leaf_cell_zoom(),
+            [GROUND.leaf_cell_zoom(); 2],
+            false,
         );
     }
 }

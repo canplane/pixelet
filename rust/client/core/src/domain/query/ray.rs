@@ -254,7 +254,7 @@ impl World {
     /// With no eye nothing is observed, and it answers a lack.
     fn seen(&self, ray: &Ray, decors: Option<u32>) -> Answer<Option<Hit>> {
         let o = ray.origin;
-        let Some(eye) = change::eye() else {
+        let Some(eye) = change::eye_at() else {
             return Answer::Lack(leaf_at(&origin(o[0], o[1], o[2])));
         };
         let mut path = Path::default();
@@ -322,7 +322,15 @@ impl World {
         };
         let coarsest = zoom_at(0.0).min(zoom_at(went));
         let end = ray.at(went + units(coarsest) / 2.0);
-        change::report_read([o[0], o[1]], [end[0], end[1]], coarsest);
+        // The zooms asked are the walk's own, each node at one of them. A
+        // viewer's walk reads the ground its decor stands on beside its own
+        // nodes, which its lack does not tell of, so it counts as not exact.
+        change::report_read(
+            [o[0], o[1]],
+            [end[0], end[1]],
+            [coarsest, detail.range[1]],
+            query.lack.is_none() && query.viewer.is_none(),
+        );
         let met = query.viewer.as_ref().and_then(|v| v.met);
         let is_decor = kind_of(answer::val(trace.hit.asset[0])) == Some(id::Kind::Decor);
         let hit = (trace.end == End::Hit).then(|| {
@@ -346,8 +354,8 @@ impl World {
         let mut query = self.cast_world();
         let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
-        change::report_read(middle, middle, cell_zoom);
         let f = support::surface(&mut query, cell_zoom, c);
+        change::report_read(middle, middle, [cell_zoom; 2], query.lack.is_none());
         (query.ended((f.end == End::Hit).then_some(f.top), f.end), f)
     }
 

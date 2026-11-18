@@ -142,7 +142,7 @@ pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 /// leaf's (pxl-render frame/shader/effect.wgsl `effect_share`, pass/shadow.rs `half_width`).
 pub const EFFECT_REACH: f64 = split_dist(GROUND.leaf_cell_zoom() - 1);
 
-/// How far from an observer's foot a demand at `zoom` can lie: where a
+/// How far from the eye's foot a demand at `zoom` can lie: where a
 /// clip level holds the grid's cell a zoom coarser from (`CLIP_MARGIN`), as
 /// far past `draw_dist` as it holds every finer cell past where it is
 /// drawn. Bounds the run along the ground too.

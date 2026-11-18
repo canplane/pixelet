@@ -2137,13 +2137,13 @@ fn light_groups(
 /// A run's groups 0, as layouts and entries, for either cast and any run: its walks over
 /// the node cache alone, its asks, and its last walk, each as its table says, over the frame's
 /// buffers (`buf`) and what else it binds. That is `world`, the eye and the world's buffers the
-/// asks read; `out`, the rays or the map its holes write; and `observer`, what its cast
+/// asks read; `out`, the rays or the map its holes write; and `own`, what its cast
 /// binds besides: the light's head, and nothing for the eye.
 fn queue_entries(
     pipelines: [&Pipeline; 3],
     tables: [&Group; 3],
     buf: impl Fn(u32) -> u32 + Copy,
-    (world, out, observer): ([u32; 7], u32, &[Entry]),
+    (world, out, own): ([u32; 7], u32, &[Entry]),
 ) -> [(Layout, Vec<Entry>); 3] {
     let [eye, clipmap, ground, folds, shards, objects, pool] = world;
     let rest = [
@@ -2157,7 +2157,7 @@ fn queue_entries(
             buf_entry(6, objects),
             buf_entry(7, pool),
         ][..],
-        observer,
+        own,
     ]
     .concat();
     core::array::from_fn(|k| {

@@ -15,7 +15,7 @@
 use crate::domain::param;
 use crate::domain::query::World;
 use crate::domain::query::change::Memo;
-use crate::domain::query::{floor_of, is_unknown, over};
+use crate::domain::query::{body_shown, floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
     BODY_HALF_WIDTH_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
@@ -36,6 +36,7 @@ use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::{Draw, DrawList};
 use pxl_spec::asset::character::IDLE_CLIP;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::clock;
@@ -211,7 +212,7 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     };
     // While nothing is known under the pivot, each character with a height
     // holds where it is, and the rest of its step goes on.
-    let hold = |w: &Walk| w.floor(World::now()).map(|z| (w.at, z));
+    let hold = |w: &Walk| w.floor().map(|z| (w.at, z));
     if let Some(person) = person
         && let Some((target, z)) = camera
             .floor
@@ -263,7 +264,8 @@ impl Character {
             *walk = Walk::new(target);
         }
         let half = BODY_HALF_WIDTH_SHARE * self.height_u();
-        let (at, rot, walking) = walk.step(ctx, target, arrive_floor, half, camera);
+        let ((at, stands), rot, walking) = walk.step(ctx, target, arrive_floor, half, camera);
+        self.stands = stands;
         // Scale 1 draws the model as registered, which is the character's
         // height.
         self.transform = Some(Transform {
@@ -278,7 +280,7 @@ impl Character {
 
 /// Where a walk is drawn and the floor it stands on, kept by where it stands
 /// and the floor taken where nothing is known under it.
-type FloorMemo = Memo<(Q3, f64), ([f64; 2], f64)>;
+type FloorMemo = Memo<(Q3, f64), ([f64; 2], f64, V3)>;
 
 struct Walk {
     at: [f64; 2],
@@ -323,18 +325,17 @@ impl Walk {
         }
     }
 
-    /// The floor it is drawn on: its own, or where its height is not known,
-    /// that of the finest ground known there, as the pivot's is.
-    fn floor(&self, world: World) -> Option<f64> {
-        world
-            .stands(&self.stands?)
-            .val()
-            .flatten()
+    /// The floor it stands on, None where it has no height: nothing is asked
+    /// of the world for it.
+    fn floor(&self) -> Option<f64> {
+        self.stands
+            .filter(|at| !is_unknown(at))
             .map(|at| floor_of(&at))
     }
 
     /// Steps the walk toward `target`, where it will stand at `arrive_floor`. It
-    /// returns where a body `half` wide on each side is drawn, its turn about
+    /// returns where a body `half` wide on each side is drawn with the point
+    /// it stands at (`drawn_at`), its turn about
     /// Z, and whether it walks. While the map follows a fix or the keys steer
     /// (`follows`), the target is followed as it moves rather than walked to
     /// once it settles, and a steered character faces the way it goes.
@@ -345,7 +346,7 @@ impl Walk {
         arrive_floor: f64,
         half: f64,
         camera: &Camera,
-    ) -> ([f64; 3], f32, bool) {
+    ) -> (([f64; 3], V3), f32, bool) {
         let (follows, steered) = (camera.following || camera.steered, camera.steered);
         // Wall-clock seconds. The tick's elapsed time is clamped each delta,
         // which would stretch these spans across a gap in which the world did
@@ -455,11 +456,11 @@ impl Walk {
             };
         }
         self.at = at;
-        let drawn = drawn_at(&mut self.floor_memo, *stands, arrive_floor, half);
+        let (drawn, stood) = drawn_at(&mut self.floor_memo, *stands, arrive_floor, half);
         if !is_unknown(stands) {
             *stands = center(at, drawn[2]);
         }
-        (drawn, self.heading as f32, is_walking)
+        ((drawn, stood), self.heading as f32, is_walking)
     }
 }
 
@@ -474,32 +475,43 @@ pub(super) fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
     world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), true)
 }
 
-/// Where a body `half` wide on each side standing at `stands` is drawn, and
-/// in its Z the floor it stands on: the floor under it at the size the eye
-/// sets there now (`World::floor_under`), the drawn surface where its height
-/// is not known and `floor` where nothing is known under it; and clear of
-/// the walls beside it. The answer is kept in `memo`, so the floor is asked
-/// again when the eye sets another size there or the world changes. Where
-/// that size is not held a coarser answer is taken, as a ray draws whatever
-/// ground it has.
-pub(crate) fn drawn_at(memo: &mut FloorMemo, stands: Q3, floor: f64, half: f64) -> [f64; 3] {
+/// Where a body `half` wide on each side standing at `stands` is drawn, in
+/// its Z the floor it stands on, and the point it stands at, the one point
+/// it is tested shown at (`body_shown`), here and where it is drawn
+/// (`Character::tick`). The floor is the one under it at the size the eye
+/// sets there now (`World::floor_under`), and it is drawn clear of the walls
+/// beside it. Where its height is not known it is first stood on the drawn
+/// surface, which is what tells where it is, and `floor` is taken where
+/// nothing is known under it. It is drawn on whatever answers, a coarser
+/// answer too, as a ray draws whatever ground it has; a walk goes on only
+/// from a floor answered exactly (`World::step_slide`). Where the eye draws
+/// no body at the point it stands at there is none to stand and no floor is
+/// asked: it is where it stands until a body shows there again. The answer
+/// is kept in `memo`, so a floor is asked again when the eye sets another
+/// size there or the world changes.
+pub(crate) fn drawn_at(memo: &mut FloorMemo, stands: Q3, floor: f64, half: f64) -> ([f64; 3], V3) {
     let world = World::now();
     let [x, y, _] = to_world(&stands);
-    let ([x, y], drawn) = memo.of((stands, floor), || {
+    let ([x, y], drawn, stood) = memo.of((stands, floor), || {
+        let Some(own) = world.stands(&stands).val().flatten() else {
+            return ([x, y], floor, [x, y, over(floor)]);
+        };
+        let (own_floor, stood) = (floor_of(&own), to_world(&own));
+        if !body_shown(stood) {
+            return ([x, y], own_floor, stood);
+        }
         let floor_at = |[x, y]: [f64; 2], floor: f64| {
             world.floor_under(&center([x, y], floor)).val().flatten()
         };
-        let own = world.stands(&stands).val().flatten().map(|p| floor_of(&p));
-        let drawn = own
-            .map(|own| floor_at([x, y], own).unwrap_or(own))
-            .unwrap_or(floor);
+        let drawn = floor_at([x, y], own_floor).unwrap_or(own_floor);
         let rises = |p| floor_at(p, drawn).is_some_and(|top| top > drawn);
         (
             clear_of_walls([x, y], half, units(GROUND.leaf_cell_zoom()), rises),
             drawn,
+            stood,
         )
     });
-    [x, y, drawn]
+    ([x, y, drawn], stood)
 }
 
 /// Moves `at` off each wall that a body `half` wide on each side would stand

@@ -121,7 +121,7 @@ pub(crate) struct FrameSample {
 /// whether it cast in full, how many pixels it cast, and its lane counts.
 /// For the light's map they say whether it cast, how many slots it cast,
 /// and its lane counts (pxl-engine `count`). The voxel, walk and sky
-/// lanes divide up what an observer cast again of its pixels or slots.
+/// lanes divide up the pixels or slots cast again.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct RaySample {

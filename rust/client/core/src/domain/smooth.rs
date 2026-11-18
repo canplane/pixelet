@@ -1,7 +1,7 @@
 // pxl-core/domain/smooth.rs
 
 //! The one exponential smoothing that everything easing uses. It nears its
-//! target and never arrives: whoever eases ends it, by what its observer can
+//! target and never arrives: whoever eases ends it, by what the eye can
 //! tell apart.
 
 use xpute_kit::math::scalar::wrap;

@@ -15,7 +15,7 @@
 /// The casts, the eye's and the light's, each with a run of `LANE_CNT` counters in the array.
 pub const EYE: u32 = 0;
 pub const LIGHT: u32 = 1;
-pub const OBSERVER_CNT: u32 = 2;
+pub const CAST_CNT: u32 = 2;
 
 /// A cast's counters. `BEAM`, `SAMPLE` and `HOLE_WALK` count the nodes visited by its
 /// beam rays, its samples and the walk of its holes. `ASK` counts the nodes its walks asked of
@@ -31,7 +31,7 @@ pub const HOLE: u32 = 5;
 pub const SKY: u32 = 6;
 pub const BOX: u32 = 7;
 pub const LANE_CNT: u32 = 8;
-pub const WORDS: u32 = OBSERVER_CNT * LANE_CNT;
+pub const WORDS: u32 = CAST_CNT * LANE_CNT;
 
 /// A walk that writes the node cache adds to the first `WALK_CNT` counters, `BEAM` to `ASK`,
 /// and a pixel or a slot adds to the `RAY_CNT` counters after them, `VOXEL` to `SKY`. Each of
@@ -46,6 +46,6 @@ const _: () = assert!(
         && BOX == SKY + 1
 );
 
-pub const fn at(observer: u32, lane: u32) -> u32 {
-    observer * LANE_CNT + lane
+pub const fn at(cast_idx: u32, lane: u32) -> u32 {
+    cast_idx * LANE_CNT + lane
 }

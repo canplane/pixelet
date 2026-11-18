@@ -1,55 +1,101 @@
 // pxl-core/domain/query/change.test.rs
 
 use super::*;
+use crate::domain::eye;
 use crate::domain::layer::Answer;
 use crate::domain::layer::object::store::Store;
-use crate::domain::observer;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, placed, set_eye, step_slide_by, write};
+use crate::domain::query::test::{
+    flat_at_five, placed, set_eye, step_slide_by, withhold_at, write,
+};
 use crate::domain::query::{Ray, World};
 use pxl_spec::asset::cube;
 use pxl_spec::asset::id::AssetId;
-use pxl_spec::bake::constant::OBJECT_COARSEST;
+use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::brick;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::layer::lattice::GROUND;
 
 const RECT: [[f64; 2]; 2] = [[0.5, 0.5], [1.5, 1.5]];
 
-/// A memo keeping `a` for the key 0, which read `RECT` and nothing of the
-/// eye.
-fn keeping<A>(a: A) -> Memo<u32, A> {
+/// A memo keeping an answer for the key 0, which read `RECT` at the cell
+/// zoom `zoom`, exactly or not, and nothing of the eye.
+fn keeping(zoom: Zoom, exact: bool) -> Memo<u32, ()> {
     let read = Read {
         rect: Some(RECT),
+        cell_zoom_range: Some([zoom; 2]),
+        exact,
         ..Read::default()
     };
-    Memo(Some((0, read, a)))
+    Memo(Some((0, read, ())))
 }
 
-/// Whether a kept answer, exact or not, survives a frame whose one change is
-/// the ground node at `zoom` over `RECT`.
-fn kept(exact: bool, zoom: Zoom) -> bool {
+/// Whether an answer read at `cell_zoom`, exactly or not, survives
+/// a frame whose one change is the ground node at `zoom` over `RECT`.
+fn kept(cell_zoom: Zoom, exact: bool, zoom: Zoom) -> bool {
     changes().ground = vec![Quadrant::new(zoom, [0, 0])];
     changes().damage.clear();
-    let mut memo = keeping(exact);
-    memo.forget_touched_at_leaf(|&exact| exact);
+    let mut memo = keeping(cell_zoom, exact);
+    memo.forget_touched();
     memo.0.is_some()
 }
 
+/// A kept answer goes when the world changes in what it read, and for
+/// nothing else. What it read at a cell zoom are that zoom's cells, held in
+/// that zoom's tile and brick. Their changing drops it. A node of finer
+/// cells is not read, so its change keeps it, exact or not. A node of
+/// coarser cells is read only where it stood in, so its change keeps an
+/// exact answer and drops one that is not.
 #[test]
-fn a_coarser_node_leaves_an_exact_answer_alone() {
+fn a_change_drops_an_answer_that_read_it() {
+    let tile = |cell_zoom: Zoom| cell_zoom - GROUND.tile_cell_shamt();
+    for cell_zoom in [GROUND.leaf_cell_zoom(), GROUND.leaf_cell_zoom() - 2] {
+        for exact in [true, false] {
+            assert!(
+                !kept(cell_zoom, exact, tile(cell_zoom)),
+                "its tile, {cell_zoom} {exact}"
+            );
+            assert!(
+                !kept(cell_zoom, exact, brick::bricks_zoom(cell_zoom)),
+                "its brick, {cell_zoom} {exact}"
+            );
+            assert_eq!(
+                kept(cell_zoom, exact, tile(cell_zoom) - 1),
+                exact,
+                "a coarser tile, {cell_zoom}"
+            );
+        }
+    }
+    // The leaves' brick, finer than the cells read two zooms coarser.
+    let coarse = GROUND.leaf_cell_zoom() - 2;
+    for exact in [true, false] {
+        assert!(kept(
+            coarse,
+            exact,
+            brick::bricks_zoom(GROUND.leaf_cell_zoom())
+        ));
+    }
+}
+
+/// A floor's read reports the cell zoom it read at, the size the eye sets
+/// there, and whether the ground held at that zoom answered it: exact over
+/// the leaves held and over the coarser cells held from farther off, and not
+/// exact where the leaves' brick is withheld and a coarser one stands in.
+#[test]
+fn a_read_reports_the_zooms_it_read_and_whether_exactly() {
+    let [x, y] = flat_at_five();
+    let world = placed(Store::default());
+    let at = point(x + 0.5, y + 0.5, over(5.0));
     let leaf = GROUND.leaf_cell_zoom();
-    let tile = leaf - GROUND.tile_cell_shamt();
-    assert!(!kept(true, tile), "the leaf's tile drops it");
-    assert!(
-        !kept(true, brick::bricks_zoom(leaf)),
-        "the leaf's brick drops it"
-    );
-    assert!(kept(true, tile - 1), "a coarser node leaves it");
-    assert!(
-        !kept(false, tile - 1),
-        "a coarser node drops an answer not exact"
-    );
+    let read_from = |dist: f64| {
+        set_eye([x + 0.5, y + 0.5 - dist, 6.0]);
+        let (_, read) = reads(|| world.floor_under(&at));
+        (read.cell_zoom_range, read.exact)
+    };
+    assert_eq!(read_from(30.0), (Some([leaf; 2]), true));
+    assert_eq!(read_from(120.0), (Some([leaf - 1; 2]), true));
+    withhold_at([x + 0.5, y + 0.5]);
+    assert_eq!(read_from(30.0), (Some([leaf; 2]), false));
 }
 
 #[test]
@@ -59,8 +105,8 @@ fn what_objects_wrote_drops_an_exact_answer() {
         min: [1.0, 1.0, BOUND.min[2]],
         max: [2.0, 2.0, BOUND.max[2]],
     }];
-    let mut memo = keeping(true);
-    memo.forget_touched_at_leaf(|&exact| exact);
+    let mut memo = keeping(GROUND.leaf_cell_zoom(), true);
+    memo.forget_touched();
     assert!(memo.0.is_none());
     changes().damage.clear();
 }
@@ -230,21 +276,33 @@ fn driven(pivot: V3, dist: f64, zooming: bool) -> impl Iterator<Item = V3> {
 
 /// The floor under a standing body while the camera turns about it, and
 /// while it turns and zooms: it is read once a size the eye sets for the
-/// body's cell. A turn keeps the body's distance, so one read. A sweep
-/// crosses a zoom's edge wherever the distance passes 48 units times a power
-/// of two, and the finest zoom placed leaves no edge under 12: from 16 units
-/// in to 2 and out, twice, the edge at 12 is crossed four times, five reads;
-/// from 157.8 the edges at 96, 48, 24 and 12, sixteen crossings, seventeen.
+/// body's cell that the world holds there. A turn keeps the body's
+/// distance, so one read. A sweep crosses a zoom's edge wherever the
+/// distance passes 48 units times a power of two. Over bare ground nothing
+/// is held finer than the leaves' cells, which the eye sets under 96 units:
+/// from 16 units in to 2 and out, twice, no edge is crossed, one read; from
+/// 157.8 the edge at 96 is crossed four times, five reads. With a cube of
+/// the finest zoom placed in the body's cell the edges at 48, 24 and 12 are
+/// sizes held there too: five reads from 16, seventeen from 157.8.
 #[test]
-fn a_floor_is_read_once_a_size() {
+fn a_floor_is_read_once_a_size_held_there() {
     let [x, y] = flat_at_five();
-    let world = placed(Store::default());
     let pivot = [x + 2.5, y + 2.5, over(5.0)];
     let at = point(pivot[0], pivot[1], pivot[2]);
-    for (dist, swept) in [(16.0, 5), (157.8, 17)] {
-        let asked = |zooming| led(driven(pivot, dist, zooming), || world.floor_under(&at)).0;
-        assert_eq!(asked(false), 1, "a turn at {dist}");
-        assert_eq!(asked(true), swept, "a sweep from {dist}");
+    let mut finer = Store::default();
+    write(
+        &mut finer,
+        [x + 2.0, y + 2.0, 9.0],
+        OBJECT_FINEST,
+        cube::Object::Red as AssetId,
+    );
+    for (store, read_cnts) in [(Store::default(), [1, 5]), (finer, [5, 17])] {
+        let world = placed(store);
+        for (dist, swept) in [16.0, 157.8].into_iter().zip(read_cnts) {
+            let asked = |zooming| led(driven(pivot, dist, zooming), || world.floor_under(&at)).0;
+            assert_eq!(asked(false), 1, "a turn at {dist}");
+            assert_eq!(asked(true), swept, "a sweep from {dist}");
+        }
     }
 }
 
@@ -296,7 +354,7 @@ fn a_memo_with_no_eye_keeps_what_takes_no_eye() {
     let world = placed(Store::default());
     let at = point(x + 0.5, y + 0.5, over(5.0));
     let eye = [x + 0.5, y + 0.5, 64.0];
-    observer::set_pose(None);
+    eye::set_pose(None);
     let mut floor = Memo::<u32, Answer<Option<f64>>>::NONE;
     assert!(matches!(
         floor.of(0, || world.floor_under(&at)),
@@ -316,7 +374,7 @@ fn a_memo_with_no_eye_keeps_what_takes_no_eye() {
     asset(&mut cell);
     assert_eq!(ask_cnt.get(), 1);
     // An ask that took the eye's absence goes when the eye stands.
-    observer::set_pose(None);
+    eye::set_pose(None);
     let mut both = Memo::<u32, (Option<u32>, bool)>::NONE;
     let ask = |memo: &mut Memo<u32, (Option<u32>, bool)>| {
         memo.of(0, || {

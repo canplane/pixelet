@@ -113,7 +113,7 @@ pub const WRITTEN_CAP: u32 = 32;
 /// words they count into, each cast's walk counters (`lane_at`).
 pub const CNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
 pub(crate) const CNT_AT: u32 = CNT_ON + 1;
-pub(crate) const CNT_WORDS: u32 = count::OBSERVER_CNT * count::WALK_CNT;
+pub(crate) const CNT_WORDS: u32 = count::CAST_CNT * count::WALK_CNT;
 /// The hits of the missed pixels kept for their faces (`beam::HIT_WORDS`): the dispatch over
 /// them, which the last walks raise, and their count (`HITS_ARGS`, `HITS_CNT`). They are
 /// set each frame the cast runs, with the rest of the head; the passes they dispatch read
@@ -133,10 +133,10 @@ pub const HDR_WORDS: u32 = ASKED + 1;
 /// are those of the entries it marked then (`record::drawn`). It lies past the head that the
 /// host writes each frame.
 pub const DRAWN: u32 = HDR_WORDS;
-/// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASK`) in the
+/// Where the walks of cast `cast_idx` keep counter `lane` (`count::BEAM` to `count::ASK`) in the
 /// head.
-pub const fn lane_at(observer: u32, lane: u32) -> u32 {
-    CNT_AT + observer * count::WALK_CNT + lane
+pub const fn lane_at(cast_idx: u32, lane: u32) -> u32 {
+    CNT_AT + cast_idx * count::WALK_CNT + lane
 }
 
 /// A clip level's box of moved bricks where none moved (`CHANGED_BRICKS_AT`).

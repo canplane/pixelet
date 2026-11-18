@@ -108,6 +108,10 @@ pub(crate) struct Character {
     clip_time: f64,
     /// The character's draw in the world's list.
     id: DrawId,
+    /// Where the body stands, the one point it is tested shown at
+    /// (`body_shown`), by its walk's floors and by its drawing alike
+    /// (companion.rs `drawn_at`). It is set with `transform`.
+    pub(super) stands: V3,
     /// Where the character's walk last placed it in the world. None in first
     /// person.
     transform: Option<Transform>,
@@ -171,6 +175,7 @@ impl Character {
             clock: StepClock::default(),
             clip_time: 0.0,
             id: DrawId::default(),
+            stands: [0.0; 3],
             transform: None,
         })
     }
@@ -275,7 +280,7 @@ impl Character {
             let extent = self.height_u() * f64::from(t.scale);
             dist = v3::len(&v3::sub(&about, &frame.camera));
             let cell_there = cell_there(dist);
-            let shows = body_shown(t.at);
+            let shows = body_shown(self.stands);
             seen = shows && frame.frustum.sees(about, r) && extent >= decor_model_angle() * dist;
             self.visible = shows && extent >= decor_impostor_angle() * dist;
             world_moves = seen
@@ -402,8 +407,8 @@ impl Character {
 
     /// The character's draw for a character surface, which no list holds.
     /// The character stands where its walk placed it, or at the origin while
-    /// it has no place; the surface's eye stands at that point either way.
-    /// The model is scaled to one unit tall, as the surface's eye frames it
+    /// it has no place; the surface looks at that point either way.
+    /// The model is scaled to one unit tall, as the surface frames it
     /// (pxl-render pass/character.rs), and turned by the clock so that
     /// every side shows. None while the model is not uploaded.
     pub(crate) fn surface_draw(&self, models: &ModelTable) -> Option<Draw> {

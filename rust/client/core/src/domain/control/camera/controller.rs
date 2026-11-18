@@ -19,7 +19,7 @@ use crate::domain::control::camera::state::{Intent, IntentPatch, camera_state, c
 use crate::domain::control::camera::{camera, eye_world, facing_rot};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
 use crate::domain::control::support::pan_to;
-use crate::domain::observer::ObserverPose;
+use crate::domain::eye::EyePose;
 use crate::domain::setting::{CameraMode, settings};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::screen::units_per_px_at;
@@ -152,7 +152,7 @@ pub(crate) fn active() -> Active {
     }
 }
 
-pub(crate) fn pose() -> Option<ObserverPose> {
+pub(crate) fn pose() -> Option<EyePose> {
     camera().eye?;
     let c = controller();
     match (&c.tracker, c.base) {
@@ -161,14 +161,14 @@ pub(crate) fn pose() -> Option<ObserverPose> {
                 (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_rot, &t.rot);
             mat4::transform_point(&mut moved, &t.world_rot, t.at[0], t.at[1], t.at[2]);
-            Some(ObserverPose {
+            Some(EyePose {
                 eye: v3::add(&t.world_at, &moved),
                 rot: *mat4::transpose(&mut world_to_camera, &camera_to_world),
             })
         }
         (None, _) => {
             let cam = camera();
-            Some(ObserverPose {
+            Some(EyePose {
                 eye: eye_world()?,
                 rot: facing_rot(cam.polar, cam.azimuth),
             })

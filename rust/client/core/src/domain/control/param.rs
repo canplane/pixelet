@@ -93,5 +93,5 @@ const _: () = assert!(
 );
 
 /// How far from the eye the pointer can pick, in units. It is a product
-/// decision: what can be edited is a sphere about the observer.
+/// decision: what can be edited is a sphere about the eye.
 pub(crate) const PICK_DIST_U: f64 = 32.0;
