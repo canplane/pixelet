@@ -37,7 +37,7 @@ pub(crate) fn cell_zoom_drawn(eye: V3, at: V3) -> Zoom {
 /// The leaf tile over `at`: what an answer lacks there where the leaves'
 /// cells were not read, by an eye that draws the ground coarser or, until the
 /// camera stands somewhere, by no eye at all.
-pub(super) fn leaf_over(at: &Q3) -> Quadrant {
+pub(super) fn leaf_at(at: &Q3) -> Quadrant {
     let [x, y, _] = idx_of(LEAF_ZOOM, at);
     Quadrant::new(LEAF_ZOOM, [x, y])
 }

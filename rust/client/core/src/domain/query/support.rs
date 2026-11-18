@@ -27,7 +27,7 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::detail::{cell_zoom_drawn, cell_zoom_read, leaf_over};
+use super::detail::{cell_zoom_drawn, cell_zoom_read, leaf_at};
 use super::ray::{Descent, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
@@ -157,14 +157,20 @@ struct SplitCell<'w> {
 }
 
 impl<'w> SplitCell<'w> {
-    /// The cell the observer's eye draws over `xy` (`over`). A column has one
-    /// cell for an eye, whatever height in it is asked, so a height an answer
-    /// gives is asked again in the cell that gave it.
-    fn new(world: &'w World, xy: [f64; 2], path: Path) -> SplitCell<'w> {
-        SplitCell::over(world, observer::eye(), xy, path).0
+    /// The cell the observer's eye draws at `at`, a point whose height is
+    /// known: a body takes its detail from its own distance from the eye, on
+    /// a deck as on the ground under it. With no observer it is the cell an
+    /// eye standing at `at` draws.
+    fn new(world: &'w World, at: V3, path: Path) -> SplitCell<'w> {
+        let eye = observer::eye();
+        SplitCell {
+            eye,
+            ..SplitCell::at(world, eye.unwrap_or(at), at, path)
+        }
     }
 
-    /// The cell drawn over `xy`, with the top of its ground: the cell `eye`
+    /// The cell drawn over `xy` where the height is not known, with the top
+    /// of its ground: the cell `eye`
     /// draws the ground with at the ground's own surface there. With no eye
     /// it is the cell an eye standing in the column draws, the leaves': a
     /// place the camera is sent to is read as it will be seen from there,
@@ -182,7 +188,7 @@ impl<'w> SplitCell<'w> {
             let at = [xy[0], xy[1], z];
             SplitCell {
                 eye,
-                ..SplitCell::of(world, eye.unwrap_or(at), at, path)
+                ..SplitCell::at(world, eye.unwrap_or(at), at, path)
             }
         };
         let mut c = cell(eye.map_or(0.0, |e| e[2]), path);
@@ -200,7 +206,7 @@ impl<'w> SplitCell<'w> {
 
     /// The cell `eye` draws the ground with at `at`, split as finely as the
     /// eye reads there and anything is placed in it.
-    fn of(world: &'w World, eye: V3, at: V3, path: Path) -> SplitCell<'w> {
+    fn at(world: &'w World, eye: V3, at: V3, path: Path) -> SplitCell<'w> {
         let zoom = GROUND.read_zoom(cell_zoom_drawn(eye, at));
         let xy = [at[0], at[1]];
         let cell_zoom = GROUND.cell_zoom(zoom);
@@ -388,7 +394,7 @@ impl<'w> SplitCell<'w> {
 
     /// `v` where the world held all that was asked of it, whatever cells the
     /// eye draws the ground with there: a walk goes over what is drawn.
-    fn held<T>(&self, v: T) -> Option<T> {
+    fn without_lack<T>(&self, v: T) -> Option<T> {
         self.lack.is_none().then_some(v)
     }
 
@@ -399,7 +405,7 @@ impl<'w> SplitCell<'w> {
         let [x, y] = self.corner;
         let lack = self
             .lack
-            .or_else(|| (self.zoom < LEAF_ZOOM).then(|| leaf_over(&world::point(x, y, 0.0))));
+            .or_else(|| (self.zoom < LEAF_ZOOM).then(|| leaf_at(&world::point(x, y, 0.0))));
         match lack {
             None => Answer::Exact(v),
             Some(l) => Answer::Coarser(v, l),
@@ -458,7 +464,8 @@ impl World {
     /// top. None where nothing stands under `at`.
     pub(crate) fn floor_under(&self, at: &Q3) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
-        let mut c = SplitCell::new(self, xy(at), Path::default());
+        let [x, y] = xy(at);
+        let mut c = SplitCell::new(self, [x, y, start], Path::default());
         let stands = match c.depenetrate(start) {
             (z, _) if z > start => Some(z.min(BOUND.max[2])),
             (z, cell_top) => c.below(z, cell_top),
@@ -558,10 +565,11 @@ impl World {
         // what is over that counts as a ceiling.
         let mut path = Path::default();
         floor = {
-            let mut c = SplitCell::new(self, center(at), path);
+            let [x, y] = center(at);
+            let mut c = SplitCell::new(self, [x, y, floor], path);
             let (f, _) = c.depenetrate(floor);
             path = c.path;
-            c.held(f)?
+            c.without_lack(f)?
         };
         // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
         loop {
@@ -621,20 +629,20 @@ impl World {
             return Some(None);
         }
         let height = body_height_u();
-        let mut c = SplitCell::new(self, to, *path);
+        let mut c = SplitCell::new(self, [to[0], to[1], floor], *path);
         let (z, cell_top) = c.depenetrate(floor);
         let moved = if c.above(z, z + height).is_some() {
             None
         } else if z > floor {
-            let mut from_cell = SplitCell::new(self, from, c.path);
+            let mut from_cell = SplitCell::new(self, [from[0], from[1], floor], c.path);
             let stopped = from_cell.above(floor, z + height).is_some();
             (*path, c.path) = (from_cell.path, from_cell.path);
-            from_cell.held(())?;
+            from_cell.without_lack(())?;
             (!stopped).then_some(z)
         } else {
             Some(c.below(z, cell_top).unwrap_or(z))
         };
         *path = c.path;
-        c.held(moved)
+        c.without_lack(moved)
     }
 }
