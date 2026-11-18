@@ -120,6 +120,12 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | what a player places in the world | an `object` | overwrite |
   | where a ray ends | its `hit` | stop |
   | decor drawn as a model, an impostor or not at all by its distance | its `lod` | tier |
+  | what walks and collides, a character's as an engine has it | a `body` (`body_shown`, `BODY_BOX`) | walker |
+  | what stands over a body's head or over the camera's pivot | a `ceiling` | roof |
+  | a point moved out of what it overlaps | `depenetrate` | lift |
+  | the camera brought before what stands in a zoom's way | `pull_forward` | dive |
+  | a decor or a body being there at a zoom | it `shows_at` it (`box_shows_at`) | stands |
+  | the floor under a point as the world is held, and as an eye draws it at a zoom | `floor_under`, `floor_drawn` | |
 
   `at` is where a thing is, `to` where it is going.
 - xpute's names are the mechanism's, as the component model has them: the guest,
