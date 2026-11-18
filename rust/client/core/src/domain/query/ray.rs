@@ -249,8 +249,8 @@ impl World {
     /// The first cell along `ray` that `until` stops at, at the zoom its
     /// distance from the eye asks (`detail`, pxl-engine `cast::first`). The ray starts at
     /// its origin, which may stand off the world, as an eye over it does
-    /// (pxl-spec `world::origin`). Until the camera stands somewhere nothing
-    /// is observed, and the answer is a lack. With `decors` it is a viewer's (`Viewer`), and
+    /// (pxl-spec `world::origin`). With no observer it is read
+    /// from where it starts (`along_by`). With `decors` it is a viewer's (`Viewer`), and
     /// without them a body's. The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
     /// cache, and are left there for the next ray. A walk from the origin

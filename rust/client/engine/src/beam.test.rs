@@ -345,7 +345,6 @@ fn cast_view(view: &View) -> Vec<Cast> {
         let side = 2 + 2 * w;
         let mut from = idx([x, y]);
         let mut least = corners[from as usize].1;
-        let mut alike = true;
         for j in 0..side {
             for i in 0..side {
                 let k = idx([x + i, y + j]);
@@ -353,31 +352,26 @@ fn cast_view(view: &View) -> Vec<Cast> {
                 if t < least {
                     (least, from) = (t, k);
                 }
-                // The eye's corners and cells ask its one detail (pxl-render
-                // cell.wgsl).
-                alike = alike && detail.alike(detail);
             }
         }
-        (least, from, alike)
+        (least, from)
     });
     let [n, m] = g.sample_lattice;
     each((n * m) as usize, |k| {
         let s = [k as u32 % n, k as u32 / n];
         let ray = view.ray(g.sample(s));
         let cell = g.sample_cell(s);
-        let (t, from, resumes) = cells[(cell[1] * g.span[0] + cell[0]) as usize];
+        let (t, from) = cells[(cell[1] * g.span[0] + cell[0]) as usize];
         let line = &corners[from as usize].0;
         let root = (Node::ROOT, Stand.root(Node::ROOT.idx(o)));
-        let (start, resumed) = if !resumes {
-            ((root.0, root.1, 0.0), false)
+        // The eye's corners and cells ask its one detail, so the rays of every
+        // cell resume from its corner's line (pxl-render cell.wgsl).
+        let (h, found) = line.node.over(cast::point_at(o, &ray, t));
+        let h = cast::holding(o, &ray, h, t);
+        let (start, resumed) = if found {
+            ((h, line.at[h.zoom as usize], t), true)
         } else {
-            let (h, found) = line.node.over(cast::point_at(o, &ray, t));
-            let h = cast::holding(o, &ray, h, t);
-            if found {
-                ((h, line.at[h.zoom as usize], t), true)
-            } else {
-                ((root.0, root.1, t), false)
-            }
+            ((root.0, root.1, t), false)
         };
         let trace = cast::walk(
             &mut Stand,

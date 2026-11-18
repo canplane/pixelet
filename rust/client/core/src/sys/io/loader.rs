@@ -147,11 +147,8 @@ pub(crate) fn load_wants() -> &'static [(u64, Order)] {
 
 /// Reads the file of `load` for the attempt `key`, in a task of its own. A
 /// model and an image of one load are the same file, and `kind` says which
-/// it is read as. An attempt stopped before its read began makes none.
+/// it is read as.
 pub(crate) fn open_asset(key: u64, kind: LoadKind, load: Load) {
-    if attempt_of(key).is_none() {
-        return end_read(key);
-    }
     // The task's pool has room for one for each file in flight
     // (sys/load.rs `LOAD_FILE_CAP`), so the spawn cannot fail.
     executor::spawner().spawn(arrival(key, kind, load).or_bug(Errno::ENOSPC));
