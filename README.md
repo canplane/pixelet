@@ -20,24 +20,33 @@ one of height. No disk holds that, no network sends it and no GPU draws it.
 pixelet gets away with it because a world only has to exist as far as someone is
 looking.
 
-A screen is finite. pixelet divides the view into cells of equal angle, and
-looks at every place at the size that fills one of them: 2.4-meter cubes at your
-feet, cubes twice as large twice as far away, and so on out to the horizon. What
-a frame asks of the world therefore depends on how many cells the screen has,
-not on how big the world is. A city costs what it covers on your screen.
+A screen is finite, so what is seen is sampled. pixelet divides the view into
+cells of equal angle, and looks at every place at the size that fills one of
+them: 2.4-meter cubes at your feet, cubes twice as large twice as far away, and
+so on out to the horizon.
+
+```text
+  the eye ●───────────┬───────────────────────┬─────────────────────── ▶
+            2.4 m cubes       4.8 m cubes             9.6 m cubes
+                       twice as far            twice as far again
+```
+
+What a frame asks of the world therefore depends on how many cells the screen
+has, not on how big the world is. A city costs what it covers on your screen.
+A change too small to tell apart is no change either, so a still view costs
+almost nothing.
 
 That turns the world from data into a question: _what fills this cube of space,
 at this size?_ The ray that draws a pixel, the feet of a walking character, the
 pointer and the hand that places a block all ask one function, so what you see
 is what you stand on. The answer is always a number that names what fills the
-cube, the same whether the ground put it there or a player did. The ground is
-baked into tiles that hold that number for each cell and the elevation it is
-worked out from; trees and caves grow from one seed wherever someone asks about
-them; only what players build is kept. What has not arrived yet is never made
-up: a coarser tile answers until the finer one lands, so the picture only ever
-gets sharper. And the screen holds the picture it last drew: it is drawn again
-only where something changed enough to tell, so a still view costs almost
-nothing.
+cube, the same whether the ground put it there or a player did. And there is an
+answer at every size: the ground is baked into tiles that hold that number for
+each cell and the elevation it is worked out from, folded four into one for
+each coarser size; trees and caves grow from one seed wherever someone asks
+about them; only what players build is stored. What is not ready yet is
+never made up: a coarser tile answers until the finer one is ready, as the last
+picture does until the next, so the picture only ever gets sharper.
 
 ```text
   a pixel's ray       a body's step       the pointer      an edit

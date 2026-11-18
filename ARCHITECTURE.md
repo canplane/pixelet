@@ -14,18 +14,22 @@ has to show any part of it, from a street corner to the whole planet, and let
 someone stand on it and build.
 
 The way out is that a world only has to exist as far as someone is looking, and
-pixelet takes that literally. The eye sets the detail: every place is looked at
-in cubes just large enough to fill one cell of the screen, so what a frame costs
-is bound to the screen and not to the size of the world. Whatever looks asks the
+pixelet takes that literally, by two rules.
+
+**What is seen is sampled.** The eye looks through a grid of cells of one angle,
+so every place is looked at in cubes just large enough to fill one cell, and a
+change too small to tell apart is no change: what a frame costs is bound to
+the screen and to what changed on it, not to the size of the world.
+
+**The world answers at every size, and falls back on the coarser answer and the
+older picture until the finer and the newer are ready.** Whatever looks asks the
 same question, what fills this cube of space at this size, and one function
 answers it, for the pixel's ray, the body's feet, the pointer and the hand that
-builds alike. Its answer is the id of what fills the cube, whoever put it there.
-What that function can compute is never stored: the ground is baked small, trees
-and caves grow from a seed wherever they are asked about, and only what people
-build is kept. What it does not know yet it never makes up; a coarser answer
-stands in until the finer one arrives, so the picture only ever gets sharper.
-And what the GPU has found once it remembers, so a frame's work follows what
-changed on the screen.
+builds alike, with the id of what fills the cube, whoever put it there. What
+that function can compute is never stored: the ground is baked small and folded
+for every size, trees and caves grow from a seed wherever they are asked about,
+and only what people build is stored. What it does not know yet it never makes
+up, so the picture only ever gets sharper.
 
 The chapters below follow that idea in the order the system is built: the
 question and its parts, the drawing that remembers the answers, the core and
@@ -34,10 +38,30 @@ the host underneath, and the data made ahead of time.
 ## The question
 
 Everything that looks at the world asks it one question, _what fills this cube
-of space at this size_. This chapter first gives the cube and the size their
-measure, and then takes the question's five parts, a rule each: what sets the
-size, who answers, how there is an answer at every size, which takes two
-sections, what an answer is, and when it is asked again.
+of space at this size_, and the two rules are what make it one a phone can
+answer. This chapter first gives the cube and the size their measure, and then
+takes each rule's parts in the sections the figure names.
+
+```text
+             what fills this cube of space, at this size?
+                                 │
+         ┌───────────────────────┴────────────────────────┐
+ what is seen is sampled                 the world answers at every size,
+         │                               and falls back on the coarser and
+         │                               the older until the finer and the
+         │                               newer are ready
+         │                                        │
+ in space, by the camera grid:           one answer, whoever asks
+   the size a place is asked at            The query, the only seam
+   The camera grid                         What fills a cell
+ in change: a difference that            an answer at every size
+   cannot be told apart is none            Baked and built
+   What is seen holds until it           the fallback, and nothing made up
+   can be told apart                       Honest answers, bounded holding
+ so an answer is keyed by its              What is seen holds until it
+   cube and its size                       can be told apart
+   The query, the only seam
+```
 
 Each part is one rule that holds for every case alike: the same in every
 direction from the eye, for what the base made and what someone placed, on the
@@ -77,19 +101,19 @@ character walks to the pivot.
 
 **The eye alone sets the size a place is asked at, by the place's distance from
 it in three dimensions, the same in every direction, and what was asked at a
-size is the world's, kept when the eye moves.** No axis of the screen, no
+size is the world's, valid wherever the eye moves.** No axis of the screen, no
 facing, no platform and no light sets a size. Two forms read the world, and
 there is no third: a ray of the eye's, which crosses many sizes and asks each
 node at its own, and a read at one size, a body's cell or a tile of the sun's
-light, which asks at the one size the eye sets for it. An answer tied to the eye's exact place
-could not be kept, so no reader is given one. The size is a zoom, one function of
-that distance (`pxl-spec space/camera/grid.rs` `cell_zoom_at`), the same bits on
-the CPU and the GPU, and it is read off the **camera grid**, a set of angular
-cells about the eye, each the least the eye promises to tell apart. A cell is
-the same angle on every screen, so what is observed at a distance is the same on
-every device; a display only draws it. A node is drawn at the zoom at which it
-spans one to two cells at its distance, so each zoom is drawn over a band of
-distance, and the bands double going out:
+light, which asks at the one size the eye sets for it. An answer tied to the
+eye's exact place could not be cached, so no reader is given one. The size is a
+zoom, one function of that distance (`pxl-spec space/camera/grid.rs`
+`cell_zoom_at`), the same bits on the CPU and the GPU, and it is read off the
+**camera grid**, a set of angular cells about the eye, each the least the eye
+promises to tell apart. A cell is the same angle on every screen, so what is
+observed at a distance is the same on every device; a display only draws it. A
+node is drawn at the zoom at which it spans one to two cells at its distance, so
+each zoom is drawn over a band of distance, and the bands double going out:
 
 ```text
   bands of distance from the eye; s is the side of a node at zoom z, and D
@@ -117,9 +141,9 @@ spent where the eye is.
 
 **One function answers the question, and the answer is the world's alone.** The
 eye's one part in it is the size: a place is asked at the size its distance from
-the eye sets, the same in every direction. So an answer belongs to its cube and
-its size, and whoever keeps one keeps it by those and asks again only when the
-world changes in what it read or the eye sets another size there.
+the eye sets, the same in every direction. So an answer is a function of its
+cube and its size, and whoever caches one keys it by those and asks again only
+when the world changes in what it read or the eye sets another size there.
 
 A ray descends the octree by the same rule on the CPU and the GPU
 (`pxl-engine cast.rs`). A node coarser than the zoom its distance asks for is
@@ -158,6 +182,10 @@ reader.
 
 ### Baked and built
 
+**The world has an answer at every size.** What is stored is folded, the base's
+tiles and the object tree below, and what is generated, a tree or a cave, is
+generated in whatever node is asked ("What fills a cell").
+
 The world is stored as **layers**, and they split on who changes them.
 
 The **base** is baked from the map sources and never changes within a version.
@@ -180,13 +208,13 @@ coarser tile. A kind differs in what its tile holds, in how four fold into one,
 and in what it asks for: its ask scope, which of demand's four reasons, told
 below, the layer asks by, and the tiles its readers pin. It differs in nothing
 else. The imagery is the one layer that is no pyramid: it is baked at its top
-zoom alone, and one global picture answers wherever no tile is held.
+zoom alone, and one global image answers wherever no tile is held.
 
 The **object layer** is what people build. It is one sparse octree that keeps
 only the leaves people filled and, in each branch, its children folded into one
 word. A write splits only the path down to its leaf and folds again up it, and
-eight equal leaves are joined back into one, so one picture has exactly one
-tree. Placing air erases what the ground would show.
+eight equal leaves are joined back into one, so the same contents make exactly
+one tree. Placing air erases what the ground would show.
 
 ```text
        the core                             the object source
@@ -315,13 +343,15 @@ still only a summary: nothing in it can be edited.
 ### What is seen holds until it can be told apart
 
 **The screen holds its last picture, and changes it only when a new one,
-different enough to tell apart, is ready.** What is seen is sampled, the world
-by the camera grid, a motion by its steps in time and the picture by the CSS
-pixel, which is a visual angle, and a difference its sampler cannot tell apart
-is no change. That one rule decides what is drawn, how often something that
-moves on its own steps, and when the screen is drawn again. A frame drawn for
-a difference no sampler can tell, or a thing gone before what replaces it is
-ready, breaks it.
+different enough to tell apart, is ready.** Its two conditions are the two
+rules. Different enough to tell apart is the first, carried from space into
+change: what is seen is sampled, the world by the camera grid, a motion by its
+steps in time and the picture by the CSS pixel, which is a visual angle, and a
+difference that cannot be told apart is no change. That decides what is drawn,
+how often something that moves on its own steps, and when the screen is drawn
+again. Ready is the second: the older picture is the fallback until the newer is
+ready. A frame drawn for a difference that cannot be told apart, or a thing gone
+before what replaces it is ready, breaks it.
 
 - The camera moves in reals: its pose is control's, eased and turned by any
   amount. The **view** is that pose as the world is seen from it, taken in one
@@ -333,8 +363,8 @@ ready, breaks it.
   beacon, steps a clock by what its motion shows at its distance and wakes the
   frame at its next step (`pxl-core domain/scene/animation.rs`); that frame
   draws again only the screen's tiles the motion marked, whatever the view did.
-- Until the new is ready the old stands: a marker stays until the ground over
-  it is read again, as a coarser tile answers until the finer one arrives.
+- A marker stays until the ground over it is read again, as a coarser tile
+  answers until the finer one is ready.
 
 ## Drawing
 
@@ -374,15 +404,15 @@ solid below its surface.
 
 What the rays asked of each node is kept between frames in the **node cache**,
 and forgotten where the data that node read changed, or given up for room once
-it has gone undrawn. The voxels in it are the **record**, and each frame
-the raster draws every one in view that is still **fresh**, still the node the
-eye's ray stops on, whatever that frame's rays reached. So a voxel found once is
-drawn until its data changes or the eye's distance asks another zoom there. A
-frame whose view moved walks the eye's whole lattice of rays again, and a walk
-asks the world only where a node's answer is not held, so what such a frame
-pays for is what it newly asks. A still camera over a still world costs almost
-nothing, and a frame where nothing it reads moved submits no work at all. The
-renderer's README tells how the cache forgets and gives up room.
+it has gone undrawn. The voxels in it are the **record**, and each frame the
+raster draws every one in view that is still **fresh**, still the node the eye's
+ray stops on, whatever that frame's rays reached. So a voxel found once is drawn
+until its data changes or the eye's distance asks another zoom there. A frame
+whose view moved walks the eye's whole lattice of rays again, and a walk asks
+the world only where a node's answer is not held, so what such a frame pays for
+is what it newly asks. A still camera over a still world costs almost nothing,
+and a frame where nothing it reads moved submits no work at all. The renderer's
+README tells how the cache forgets and gives up room.
 
 When the GPU runs out of time anyway, two knobs give it room: the **scale**
 draws fewer pixels, and the **rate** spaces the frames further apart. The `auto`

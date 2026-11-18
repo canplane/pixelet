@@ -22,38 +22,46 @@
   the cost is derived from the rule.
 - **The question.** The world is one question, what fills this cube of space
   at this size, whose answer is the world's alone (`README.md`). Every
-  structural question is judged against it, and each of its five parts is one
-  rule (`ARCHITECTURE.md`, "The question"):
-  - The eye sets the size, and what was asked at a size is the world's, kept
-    when the eye moves. The eye is the camera's and there is no other: nothing
-    else is called an eye or an observer, and nothing stands in for it. Its
-    one part in a read is to set the size a place is asked at, by the place's
-    distance from it in three dimensions, the same in every direction. Two
-    forms read the world and there is no third: the eye's own rays, which
-    cross many sizes and ask each node at its own; and a read at one size, a
-    body's cell or a tile of the light with its bundle of rays, which asks at
-    the one size the eye sets for it, the light's the finest along its
-    bundle. A read
-    that takes a size from anything else departs, and so does an answer kept
-    by anything but its cube, its size and the world's changes: one tied to
-    the eye's exact place cannot be kept. The sun is where the light comes
-    from and sets nothing. What a ray does not find within its cap of steps is
-    not there.
-  - The query answers. It is one function and the one reader of what the
-    terrain and the object layer store; everything else asks the world. An
-    answer is exact, coarser with the tile it lacked, or a lack with that
-    tile, and a query fetches and holds nothing.
-  - The pyramid has an answer at every size. A tile at one zoom is the four
-    under it folded by its layer's own rule, and a coarser answer stands in
-    until the finer one arrives. Every kind of tile goes through the same
-    demand and tile cache code; a kind of tile differs in what its tile holds,
-    how four fold into one and what it asks for, its ask scope and what its
-    readers pin, and in nothing else. The imagery alone is no pyramid.
-  - The answer is an asset, kept as its id: its kind over its index. The kind
-    is its shape, a cube, a decor or a marker, and there is no other; the id
-    says nothing of who put the asset there.
-  - The screen holds its last picture, and changes it only when a new one,
-    different enough to tell apart, is ready.
+  structural question is judged against it. It has two rules, and each part
+  under them is one rule (`ARCHITECTURE.md`, "The question"):
+  - **What is seen is sampled**, the world by the camera grid, a motion by its
+    steps in time and the picture by the CSS pixel.
+    - In space the eye sets the size. It is the camera's and there is no
+      other: nothing else is called an eye or an observer, and nothing stands
+      in for it. Its one part in a read is to set the size a place is asked
+      at, by the place's distance from it in three dimensions, the same in
+      every direction. Two forms read the world and there is no third: the
+      eye's own rays, which cross many sizes and ask each node at its own; and
+      a read at one size, a body's cell or a tile of the light with its bundle
+      of rays, which asks at the one size the eye sets for it, the light's the
+      finest along its bundle. A read that takes a size from anything else
+      departs. The sun is where the light comes from and sets nothing. What a
+      ray does not find within its cap of steps is not there.
+    - In change the screen is drawn again only for a difference that can be
+      told apart: a move of the eye, a turn, a step of what moves on its own, each
+      by its own quantum.
+    - So an answer is a function of its cube and its size, and is keyed by
+      those and the world's changes alone: one tied to the eye's exact place
+      cannot be cached.
+  - **The world answers at every size, and falls back on the coarser answer
+    and the older picture until the finer and the newer are ready.**
+    - The answer is one, whoever asks. The query is one function and the one
+      reader of what the terrain and the object layer store; everything else
+      asks the world, and a query fetches nothing and has no state. The answer
+      is an asset by its id, its kind over its index: the kind is its shape, a
+      cube, a decor or a marker, and there is no other, and the id says
+      nothing of who put the asset there.
+    - There is an answer at every size. What is stored is folded, a base
+      tile from the four under it, which makes its layer a pyramid, and the
+      object tree from the eight, each by its layer's own rule; what is
+      generated, a tree or a cave, is generated at any size. Every kind of
+      tile goes through the same demand and tile cache code; a kind of tile
+      differs in what its tile holds, how four fold into one and what it asks
+      for, its ask scope and what its readers pin, and in nothing else. The
+      imagery alone is no pyramid.
+    - An answer is exact, coarser with the tile it lacked, or a lack with that
+      tile; nothing is made up, and a place goes from coarse to as fine as it
+      is observed, never back.
 - **Symmetry is of role and contract, not of form.** Parts whose roles differ
   are not forced alike. A fix goes where the fact is owned and holds on every
   platform alike; a platform differs only in how it is reached.
