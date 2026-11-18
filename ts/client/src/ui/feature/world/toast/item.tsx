@@ -9,7 +9,6 @@ import { Spinner } from "@/ui/shared/component/icon.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { STATUS } from "@/ui/shared/component/palette.ts";
 import { Pill } from "@/ui/feature/world/pill.tsx";
-import { BackingPlace } from "@/ui/shared/component/backing.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Swap } from "@/ui/shared/component/motion/presence.tsx";
 import {
@@ -94,7 +93,6 @@ export function Toast({
       fill={COLOR.black}
       shadow={tone === ToastTone.ERROR ? SHADOW.alarm : undefined}
       solid
-      place={BackingPlace.OVER_MAP}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}

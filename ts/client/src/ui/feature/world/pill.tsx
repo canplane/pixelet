@@ -29,16 +29,12 @@ import { useDim } from "@/ui/shared/component/motion/dim.ts";
 import { touchOutset } from "@/ui/shared/component/touch.ts";
 import { PILL_STYLE } from "./pill-style.ts";
 
-export interface PillProps {
+interface BasePillProps {
   x: f64;
   width: f64;
   height: f64;
   spanPx: f64;
   fill: ColorValue;
-  tint?: ColorValue;
-  solid?: boolean;
-  place: BackingPlace;
-  interactive?: boolean;
   shadow?: string;
   fade?: f64;
   fadeFrom?: f64;
@@ -53,8 +49,22 @@ export interface PillProps {
   onContentWidth?: (width: f64) => void;
 }
 
+/** A pill of glass where an iPhone has glass, which `tint` and `place` set;
+ * elsewhere it is its fill. */
+export interface GlassPillProps extends BasePillProps {
+  solid?: false;
+  tint?: ColorValue;
+  place: BackingPlace;
+}
+
+/** A pill drawn as its fill on every platform. */
+interface SolidPillProps extends BasePillProps {
+  solid: true;
+}
+
+export type PillProps = GlassPillProps | SolidPillProps;
+
 const SHADOW_ROOM = 32;
-// `tint`, `solid`, `place` and `interactive` only apply on an iPhone.
 export function Pill({
   x,
   width,

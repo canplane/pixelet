@@ -19,7 +19,11 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing, SYSTEM_BACKING } from "@/ui/shared/component/backing.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
 import { PILL_STYLE } from "./pill-style.ts";
-import { type PillProps, Pill as Pieces } from "./pill.tsx";
+import {
+  type GlassPillProps,
+  type PillProps,
+  Pill as Pieces,
+} from "./pill.tsx";
 import { touchOutset } from "@/ui/shared/component/touch.ts";
 
 // This file exports everything pill.tsx does, with its own `Pill` in place of
@@ -47,7 +51,6 @@ function Glass({
   fill,
   tint,
   place,
-  interactive,
   fade = 1,
   fadeFrom,
   fadeTransition = SNAP,
@@ -55,7 +58,7 @@ function Glass({
   touchBelow = 0,
   children,
   onContentWidth,
-}: PillProps) {
+}: GlassPillProps) {
   // This runs during render, because a layout animation applies to the next
   // commit.
   const last = useRef<[f64, f64] | null>(null);
@@ -68,8 +71,6 @@ function Glass({
 
   const r = height / 2;
   const outset = touch ? touchOutset(height) : 0;
-  // The content stands inside the glass, because interactive glass answers
-  // only the touches that reach it through its own content.
   return (
     <View
       style={[
@@ -88,7 +89,6 @@ function Glass({
         fill={fill}
         tint={tint}
         place={place}
-        interactive={interactive}
         fade={fade}
         fadeFrom={fadeFrom}
         transition={fadeTransition}
