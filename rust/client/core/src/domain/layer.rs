@@ -33,11 +33,11 @@ pub(crate) use answer::Answer;
 pub(crate) enum AskScope {
     /// The floor alone (layer/floor.rs).
     Floor,
-    /// One line alone: the tiles over the division layer's pivot
-    /// (`division::line`).
-    Line,
-    /// The floor, a destination's line, and the view's misses with the lines
-    /// over them.
+    /// Pinned tiles alone: the leaf over the division layer's pivot
+    /// (`division::tile`), with its ancestors.
+    Pinned,
+    /// The floor, the pinned tiles, and the view's misses with their
+    /// ancestors.
     View,
 }
 
@@ -62,7 +62,7 @@ pub(crate) trait Base: Tile + Sized + 'static {
     }
 
     /// The most tiles held hard for a reader that cannot take a coarser
-    /// answer, beyond the view and a destination's line (domain/view/demand.rs
+    /// answer, beyond the view and a pinned leaf's ancestors (domain/view/demand.rs
     /// `step`).
     const PIN_CAP: u32 = 0;
 

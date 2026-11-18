@@ -68,16 +68,16 @@ fn at(eye: [f64; 3], east: Option<f64>, top: Zoom) -> Observation {
 fn frames_ask_what_a_fresh_observation_asks() {
     let top = LEAF_ZOOM - 6;
     let (x0, y0, side) = Quadrant::new(top, [3, -2]).rect();
-    let leaf = units(LEAF_ZOOM);
+    let leaf_u = units(LEAF_ZOOM);
     let mut eyes = Vec::new();
     for k in 0..40 {
         let k = f64::from(k);
         // The eye steps within a leaf, then across leaves, then across the
         // top's tiles.
         let step = if k < 10.0 {
-            leaf / 64.0
+            leaf_u / 64.0
         } else if k < 25.0 {
-            leaf / 3.0
+            leaf_u / 3.0
         } else {
             side / 5.0
         };
@@ -92,17 +92,17 @@ fn frames_ask_what_a_fresh_observation_asks() {
     }
     let mut frames = Vec::new();
     for (k, eye) in eyes.iter().enumerate() {
-        let east = (k % 3 != 0).then_some(eye[0] - k as f64 * leaf);
+        let east = (k % 3 != 0).then_some(eye[0] - k as f64 * leaf_u);
         frames.push(at(*eye, east, top));
     }
-    let dst = Quadrant::new(LEAF_ZOOM, [0, 0]);
+    let leaf = Quadrant::new(LEAF_ZOOM, [0, 0]);
     let reused = Probe::demand();
     let mut changed = Vec::new();
     for (k, o) in frames.iter().enumerate() {
-        let dst = (k >= 20).then_some(dst);
-        reused.want(Some(*o), dst, &[], top);
+        let leaf = (k >= 20).then_some(leaf);
+        reused.want(Some(*o), leaf, &[], top);
         let mut fresh = Demand::<Probe>::default();
-        fresh.want(Some(*o), dst, &[], top);
+        fresh.want(Some(*o), leaf, &[], top);
         assert_eq!(
             reused.wants, fresh.wants,
             "frame {k}: the wants and their order"
