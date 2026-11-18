@@ -1,8 +1,8 @@
 // pxl-core/sys/io/request.rs
 
 //! The request scheduler, the one authority over which reads are out. Each
-//! stream declares its wants whole every frame, and each read that is out
-//! holds a credit. `pump` stops what nobody wants any more and starts the
+//! stream declares its wants whole every frame, and each read holds a
+//! credit from its start until it has ended at the host. `pump` stops what nobody wants any more and starts the
 //! rest in the policy's order. What starts, stops and ends waits in `events`
 //! until the frame takes it.
 //!
@@ -19,7 +19,7 @@ use std::collections::VecDeque;
 
 use crate::sys::io::demand::{Order, PhaseList, Source, Stream};
 use crate::sys::io::failure::{Exit, Failure};
-use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CAP};
+use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CNT};
 use crate::sys::io::policy::{self, Fault, Rank};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILE_CAP;
@@ -31,7 +31,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 const STREAM_CNT: usize = Stream::ALL.len();
-const SLOT_CNT: usize = CREDIT_CAP as usize;
+const SLOT_CNT: usize = CREDIT_CNT as usize;
 
 #[derive(Clone, Copy)]
 struct Want {
@@ -70,12 +70,23 @@ pub(crate) struct Attempt {
     pub start_ms: f64,
 }
 
-/// A credit's slot. A key names a slot and its generation, and it is valid
-/// only while the slot's attempt is out.
+/// A credit's slot: one read at the host, from its start to its end there.
+/// A key names a slot and its generation, and it is valid only while the
+/// slot's attempt is out. `reading` is the key the slot's read started
+/// under, until its reader says the read has ended (`end_read`): a read
+/// stopped holds its credit until the host lets it go, so no more reads are
+/// at the host than there are credits.
 #[derive(Clone, Copy)]
 struct Slot {
     generation: u32,
     out: Option<Attempt>,
+    reading: Option<u64>,
+}
+
+impl Slot {
+    fn is_free(&self) -> bool {
+        self.out.is_none() && self.reading.is_none()
+    }
 }
 
 pub(crate) enum Event {
@@ -113,8 +124,6 @@ struct Sched {
     wants: [Vec<Want>; STREAM_CNT],
     bounds: [usize; STREAM_CNT],
     slots: [Slot; SLOT_CNT],
-    credit_cnt: u32,
-    credit_peak: u32,
     events: VecDeque<Event>,
     /// Scratch for `declare` and `pump`, so that a frame allocates nothing.
     fresh: Vec<Want>,
@@ -145,9 +154,8 @@ pub(crate) fn open(frames: impl Fn(Stream) -> u32) {
         slots: [Slot {
             generation: 0,
             out: None,
+            reading: None,
         }; SLOT_CNT],
-        credit_cnt: 0,
-        credit_peak: 0,
         events: VecDeque::new(),
         fresh: Vec::with_capacity(bounds.iter().copied().max().unwrap_or(0)),
         ready: Vec::with_capacity(bounds.iter().sum()),
@@ -188,12 +196,6 @@ pub(crate) fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     s.wants[i].extend_from_slice(&s.fresh);
 }
 
-pub(crate) fn set_credit_cnt(credit_cnt: u32) {
-    let s = sched();
-    s.credit_cnt = credit_cnt.min(CREDIT_CAP);
-    s.credit_peak = s.credit_peak.max(s.credit_cnt);
-}
-
 /// Runs once a frame, after every producer has declared. A pump after only
 /// the first producer would fill every slot with that producer's wants.
 pub(crate) fn pump() {
@@ -227,16 +229,12 @@ pub(crate) fn next_pump_at(at_ms: f64) -> Option<f64> {
 /// Starts the best ranked of the ready wants on the free credits. A failing
 /// server gets one probe at a time.
 fn start_ready(s: &mut Sched, at: f64) {
-    let credit_cnt = s.credit_cnt as usize;
     let out = s.slots.iter().filter(|c| c.out.is_some()).count();
-    let free = s.slots[..credit_cnt]
-        .iter()
-        .filter(|c| c.out.is_none())
-        .count();
+    let free = s.slots.iter().filter(|c| c.is_free()).count();
     let room = if s.outage.failing.is_some() {
         1
     } else {
-        credit_cnt
+        SLOT_CNT
     };
     let n = free.min(room.saturating_sub(out));
     if n == 0 {
@@ -258,10 +256,12 @@ fn start_ready(s: &mut Sched, at: f64) {
         a.0.cmp(&b.0).then(tie(a).cmp(&tie(b)))
     });
     for &(rank, stream, w) in ready.iter().take(n) {
-        let k = s.slots[..credit_cnt]
+        let k = s
+            .slots
             .iter()
-            .position(|c| c.out.is_none())
+            .position(Slot::is_free)
             .or_bug(Errno::ENOTRECOVERABLE);
+        s.slots[k].reading = Some(key(k, s.slots[k].generation));
         s.slots[k].out = Some(Attempt {
             stream,
             id: w.id,
@@ -279,6 +279,23 @@ fn start_ready(s: &mut Sched, at: f64) {
 /// borrowed between them, so the reader handling one may call back into it.
 pub(crate) fn take_event() -> Option<Event> {
     sched().events.pop_front()
+}
+
+/// The read started under `key` has ended at the host, however it ended:
+/// its reader says so once, and where no read was made for the attempt.
+/// The slot's credit is free once its attempt has ended too, and a frame's
+/// pump then starts what waited for it.
+pub(crate) fn end_read(key: u64) {
+    let s = sched();
+    let Some(slot) = s.slots.get_mut((key >> 32) as usize) else {
+        return;
+    };
+    if slot.reading == Some(key) {
+        slot.reading = None;
+        if slot.out.is_none() {
+            sched::invalidate(InvalidationReason::Completion);
+        }
+    }
 }
 
 pub(crate) fn attempt_of(key: u64) -> Option<(Stream, u64)> {
@@ -346,13 +363,12 @@ pub(crate) fn has_object_failed(stream: Stream, id: u64) -> bool {
 }
 
 /// The body slots that a tile asked for again may arrive in. The count
-/// leaves out one slot for each of the most credits ever granted, because a
-/// body may still be out on each, and one for each Earth tile the Earth's
-/// bound holds, whose packet waits for a frame.
+/// leaves out one slot for each credit, because a body may still be out on
+/// each, and one for each Earth tile the Earth's bound holds, whose packet
+/// waits for a frame.
 pub(crate) fn spare_slot_cnt() -> u32 {
-    let s = sched();
-    let earth = s.bounds[Stream::Earth as usize] as u32;
-    BODY_SLOT_CNT.saturating_sub(s.credit_peak.max(1) + earth)
+    let earth = sched().bounds[Stream::Earth as usize] as u32;
+    BODY_SLOT_CNT.saturating_sub(CREDIT_CNT + earth)
 }
 
 /// Why the reads are failing, or None once an answer has come since the last

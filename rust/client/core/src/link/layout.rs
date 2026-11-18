@@ -134,9 +134,8 @@ const fn longest_unslotted() -> u64 {
 /// fixed ranges. The sum is a budget, not the most live at once: some of the
 /// flows share the credits, and free blocks do not add up to one block. The
 /// flows:
-/// - two bodies of a kind that takes no slot (sys/io/body.rs) for every credit, one out and one stopped
-///   whose read the host has not answered (sys/io/fetch.rs), each freed
-///   once it is decoded or answered;
+/// - a body of a kind that takes no slot (sys/io/body.rs) for every credit
+///   (sys/io/fetch.rs), freed once it is decoded or its attempt is stopped;
 /// - the ways' pool at its cap, which holds each brick's kept spans
 ///   (domain/layer/terrain/pool.rs, pxl-engine clipmap.rs `WAYS_POOL_WORDS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).
@@ -145,7 +144,7 @@ const fn longest_unslotted() -> u64 {
 /// refuses it. A shard's body has no longest (`Stream::max_body`), so no sum
 /// counts it. The rest of the heap is workspace.
 const HEAP_FLOWS_SZ: u64 =
-    2 * param::CREDIT_CAP as u64 * longest_unslotted() + pool::POOL_SZ + record::PERF_SZ;
+    param::CREDIT_CNT as u64 * longest_unslotted() + pool::POOL_SZ + record::PERF_SZ;
 
 const _: () = assert!(
     HEAP_FLOWS_SZ <= manifest::mem::MIN_HEAP_SZ as u64,

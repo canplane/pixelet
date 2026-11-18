@@ -9,12 +9,23 @@ use xpute_kit::status::errno::Errno;
 use crate::sys::host::set_clock;
 use crate::sys::io::param::RETRY_ATTEMPT_CNT;
 
-/// Opens the scheduler with room for every test's wants in each stream, and
-/// two credits.
+/// Opens the scheduler with room for every test's wants in each stream.
 fn begin() {
     set_clock(0.0);
     open(|_| 64);
-    set_credit_cnt(2);
+}
+
+/// Opens the scheduler and puts a far terrain want out on every credit,
+/// ids from 100 on. Returns the wants.
+fn all_out() -> Vec<(u64, Order)> {
+    begin();
+    let far: Vec<(u64, Order)> = (0..SLOT_CNT as u64)
+        .map(|k| (100 + k, unseen(50.0 + k as f64)))
+        .collect();
+    declare(Stream::Terrain, &far);
+    pump();
+    assert_eq!(take_events().0.len(), SLOT_CNT);
+    far
 }
 
 fn seen(near: f64) -> Order {
@@ -66,7 +77,9 @@ fn until() -> f64 {
     sched().outage.until
 }
 
+/// The read under `key` ends at the host with an answer.
 fn ok(key: u64) {
+    end_read(key);
     settle(key, Exit::Ok, None);
 }
 
@@ -76,6 +89,7 @@ fn failed(key: u64, errnum: Errno) {
         detail: 0,
         at: None,
     };
+    end_read(key);
     settle(key, Exit::Failed(fail), None);
 }
 
@@ -181,9 +195,11 @@ fn failing_server_probe() {
     pump();
     assert!(
         take_events().0.is_empty(),
-        "one out already: the other attempt is the probe"
+        "others are out already: they are the probe"
     );
-    failed(out[1], Errno::EACCES);
+    for &key in &out[1..] {
+        failed(key, Errno::EACCES);
+    }
     assert_eq!(
         sched().outage.fail_cnt,
         1,
@@ -230,12 +246,12 @@ fn cur_demand_said() {
     assert_eq!(
         cnts(Stream::Terrain).0,
         1,
-        "the new want is representable with both credits spent"
+        "the new want is representable beside what is out"
     );
     set_clock(0.0);
     pump();
-    // What the camera left is stopped in the frame it leaves, and the freed
-    // credits start what is wanted now in the same frame.
+    // What the camera left is stopped in the frame it leaves, and what is
+    // wanted now starts in the same frame on a credit that is free.
     let (starts, stops) = take_events();
     assert_eq!(stops.len(), 2, "every obsolete attempt is told to stop");
     assert_eq!(starts.len(), 1, "and the current want starts at once");
@@ -243,18 +259,41 @@ fn cur_demand_said() {
     assert_eq!(
         cnts(Stream::Terrain),
         (0, 1),
-        "the late report neither frees nor ends anything"
+        "the late report ends no attempt"
     );
+}
+
+/// A read stopped holds its credit until the host lets it go: with every
+/// credit's read stopped, what is wanted now starts only as each read ends.
+#[test]
+fn a_stopped_read_holds_its_credit() {
+    all_out();
+    set_clock(0.0);
+    declare(Stream::Terrain, &[(1, seen(0.0)), (2, seen(1.0))]);
+    pump();
+    let (starts, stops) = take_events();
+    assert_eq!(stops.len(), SLOT_CNT, "every obsolete attempt is stopped");
+    assert!(starts.is_empty(), "their reads are still at the host");
+    end_read(stops[0]);
+    pump();
+    assert_eq!(take_events().0.len(), 1, "one read ended, one starts");
+    end_read(stops[0]);
+    pump();
+    assert!(take_events().0.is_empty(), "a key is spent once");
+    end_read(stops[1]);
+    pump();
+    assert_eq!(take_events().0.len(), 1);
 }
 
 #[test]
 fn running_attempt_kept() {
-    begin();
-    set_credit_cnt(1);
-    declare(Stream::Terrain, &[(1, unseen(5.0))]);
-    pump();
-    let _ = take_events();
-    declare(Stream::Terrain, &[(1, unseen(5.0)), (2, unseen(0.0))]);
+    let out = all_out();
+    let with = |more: (u64, Order)| {
+        let mut w = vec![more];
+        w.extend(&out);
+        w
+    };
+    declare(Stream::Terrain, &with((2, unseen(0.0))));
     pump();
     let (starts, stops) = take_events();
     assert!(
@@ -263,7 +302,7 @@ fn running_attempt_kept() {
     );
     assert!(starts.is_empty());
     set_clock(0.0);
-    declare(Stream::Terrain, &[(1, unseen(5.0)), (3, seen(9.0))]);
+    declare(Stream::Terrain, &with((3, seen(9.0))));
     pump();
     let (starts, stops) = take_events();
     assert!(stops.is_empty(), "a class better waits for a free credit");
@@ -282,7 +321,7 @@ fn wants_served_at_rest() {
         let (starts, stops) = take_events();
         out.retain(|k| !stops.contains(k));
         out.extend(starts);
-        assert!(out.len() <= 2, "never more out than the credits");
+        assert!(out.len() <= SLOT_CNT, "never more out than the credits");
         if let Some(key) = out.first().copied() {
             let (_, id) = attempt_of(key).expect("out");
             ok(key);
@@ -299,16 +338,16 @@ fn wants_served_at_rest() {
 #[test]
 fn asset_shares_credits() {
     begin();
-    set_credit_cnt(1);
     set_clock(0.0);
-    declare(Stream::Terrain, &[(1, seen(0.0))]);
+    let tiles: Vec<(u64, Order)> = (1..=SLOT_CNT as u64).map(|k| (k, seen(k as f64))).collect();
+    declare(Stream::Terrain, &tiles);
     set_clock(0.0);
     declare(Stream::Asset, &[(7, Order::LAST)]);
     pump();
     assert_eq!(
         take_events().0.len(),
-        1,
-        "one credit, one read — an asset does not go beside the tiles"
+        SLOT_CNT,
+        "a credit, a read: an asset does not go beside the tiles"
     );
     assert_eq!(cnts(Stream::Asset), (1, 0), "and it is what is waiting");
 }

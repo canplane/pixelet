@@ -153,7 +153,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   meaning, not by type: a column is plural, the row read from it singular, and
   one range's first and last is a `range` or singular (`GROUND`).
 - A quantity is named by its form: a count ends in `_cnt` (`LAYER_CNT`), a cap
-  in `_cap` (`CREDIT_CAP`), a size in bytes in `_sz` in both trees (`HDR_SZ`,
+  in `_cap` (`LOAD_FILE_CAP`), a size in bytes in `_sz` in both trees (`HDR_SZ`,
   `PAGE_SZ`), in camelCase a count and a cap spelled whole and a size in bytes
   by its unit (`frameCount`, `uploadBytes`), and any other size or length in
   its unit (`HDR_WORDS`, `_ms`,

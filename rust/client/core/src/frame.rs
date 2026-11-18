@@ -13,8 +13,7 @@ use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
-use crate::sys::io::param::CREDIT_CNT;
-use crate::sys::io::request::{pump, set_credit_cnt};
+use crate::sys::io::request::pump;
 use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -357,7 +356,6 @@ fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
     let last = *LAST.get(|| None);
     let gap_ms = last.map_or(0.0, |(last_at, _)| at - last_at);
     let delta = gap_ms / 1000.0;
-    set_credit_cnt(CREDIT_CNT);
     text_drop_unread();
     let (effects_ms, effects) = effects();
     // A step longer than `MAX_STEP_S` would carry a character through a

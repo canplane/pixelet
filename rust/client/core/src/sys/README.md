@@ -98,7 +98,7 @@ does not start a read. It says, every frame, everything it wants on its stream,
 each with its place in the view's order. The scheduler keeps what is still
 wanted, drops what is not, and once every layer has spoken it runs one pump: it
 stops what nobody wants any more, ranks the rest by the one policy
-(`io/policy.rs`), and starts the best of them on the frame's credits.
+(`io/policy.rs`), and starts the best of them on the credits that are free.
 
 ```text
  a layer ── declare(stream, wants) ─┐
@@ -117,9 +117,11 @@ stops what nobody wants any more, ranks the rest by the one policy
 ```
 
 Because the wants are said whole every frame, the scheduler always works from
-what the view needs now. A zoom passed through holds no credit: its reads are
-stopped in the frame the camera leaves it. A read that is out is never
-preempted for a better one; a better one waits for a free credit.
+what the view needs now. A zoom passed through keeps no read: its reads are
+stopped in the frame the camera leaves it, and each gives its credit back
+once the host has let it go, so no more reads are at the host than there are
+credits. A read that is out is never preempted for a better one; a better
+one waits for a free credit.
 
 The policy is the only place where one layer's wants are ranked against
 another's. It orders by how a view builds up: the ground first, then the

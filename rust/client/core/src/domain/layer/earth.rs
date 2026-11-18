@@ -19,7 +19,7 @@ use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
-use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CAP};
+use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CNT};
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A held Earth tile: its packet until the GPU has its texels, whose words
@@ -131,7 +131,7 @@ pub(crate) fn window(
 pub(crate) const EARTH_SLOT_CNT: u32 = TileCache::<EarthTile>::SLOT_CNT;
 
 const _: () = assert!(
-    BODY_SLOT_CNT > CREDIT_CAP + EARTH_SLOT_CNT,
+    BODY_SLOT_CNT > CREDIT_CNT + EARTH_SLOT_CNT,
     "the body slots keep a body on every credit and one more beside the Earth's frames"
 );
 
