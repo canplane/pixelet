@@ -10,7 +10,7 @@ import {
   SETTING_TEXT,
 } from "@/ui/feature/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
-import { TEXT_STYLE } from "@/ui/shared/component/theme.ts";
+import { TEXT_STYLE, WEIGHT } from "@/ui/shared/component/theme.ts";
 import { BUILD_NUMBER, BUILD_TIME, TILE_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
@@ -51,7 +51,9 @@ export function AboutSection() {
       <Prose>
         <View style={STYLE.name}>
           <BrandSymbol size={20} color={LABEL.primary} />
-          <Text style={STYLE.nameText}>pixelet</Text>
+          <Text style={STYLE.nameText}>
+            <Text style={STYLE.project}>Project </Text>pixelet
+          </Text>
         </View>
 
         <Text style={SETTING_TEXT.small}>{t("settings.about.tagline")}</Text>
@@ -82,4 +84,6 @@ export function AboutSection() {
 const STYLE = StyleSheet.create({
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
   nameText: { ...TEXT_STYLE.title, color: LABEL.primary },
+  /** What pixelet is, said under the name's own weight. */
+  project: { fontWeight: WEIGHT.regular },
 });
