@@ -19,7 +19,7 @@
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: install install-ts install-xpute install-rust install-py \
+.PHONY: licenses install install-ts install-xpute install-rust install-py \
 	check check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute test-gpu \
 	fmt fmt-ts fmt-rust fmt-xpute \
@@ -89,6 +89,11 @@ fmt-xpute:
 	pnpm --dir xpute fmt
 
 # The code generated from spec/.
+# The licenses of what the app holds, with their texts, for the settings
+# (ts/client/script/licenses.ts): again after a dependency changes, which the
+# check holds.
+licenses:
+	node ts/client/script/licenses.ts
 spec:
 	+cd rust && cargo spec --write
 	+cd xpute && cargo spec --write

@@ -1,0 +1,8 @@
+{
+  "$doc": "A package that ships no license file, by the package whose file is its license: one of the same repository, at whose root the file lies (script/licenses.ts).",
+  "@expo/ui": "expo",
+  "@react-native/asset-utils": "react-native",
+  "@react-native/js-polyfills": "react-native",
+  "@react-native/normalize-colors": "react-native",
+  "@react-native/virtualized-lists": "react-native"
+}

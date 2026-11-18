@@ -6,7 +6,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck && pnpm knip",
+    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck && pnpm knip && node client/script/licenses.ts --check",
     "typecheck": "tsc -p . && tsc -p client/tsconfig.native.json && tsc -p server/edge",
     "test": "vitest run --exclude 'tool/shader/**'",
     "test:gpu:web": "node gpu/host/script/browser.ts",

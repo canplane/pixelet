@@ -108,13 +108,20 @@
     "disclaimer": {
       "section_title": "注意事项",
       "demo_notice": "本服务为演示版本，数据可能被删除，服务也可能中止，恕不另行通知。",
-      "coverage_notice": "目前仅支持韩国，其他地区显示为海洋。",
+      "coverage_notice": "目前仅支持部分地区。尚未支持的地区以卫星图像显示。",
       "storage_notice": "你放置的物体不会保存到服务器，只保留在当前设备上。",
-      "location_notice": "我们不收集也不存储你的位置信息。",
-      "character_notice": "角色和装饰使用 CC0 许可的 Kenney 素材包。"
+      "location_notice": "我们不收集也不存储你的位置信息。"
     },
     "attribution": {
-      "section_title": "来源"
+      "section_title": "来源",
+      "map": "地图",
+      "assets": "素材",
+      "graphics": "图形",
+      "system": "系统",
+      "font": "字体",
+      "dependencies": "依赖项",
+      "show": "显示 {{count}} 项",
+      "hide": "收起"
     },
     "about": {
       "section_title": "关于",

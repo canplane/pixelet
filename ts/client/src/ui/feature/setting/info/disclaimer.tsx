@@ -1,14 +1,9 @@
 // @pxl/client/ui/feature/setting/info/disclaimer.tsx
 
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { Text } from "react-native";
 
-import {
-  Link,
-  Prose,
-  Section,
-  SETTING_TEXT,
-} from "@/ui/feature/setting/row.tsx";
+import { Prose, Section, SETTING_TEXT } from "@/ui/feature/setting/row.tsx";
 
 export function DisclaimerSection() {
   const { t } = useTranslation();
@@ -26,12 +21,6 @@ export function DisclaimerSection() {
         </Text>
         <Text style={SETTING_TEXT.small}>
           {t("settings.disclaimer.location_notice")}
-        </Text>
-        <Text style={SETTING_TEXT.small}>
-          <Trans
-            i18nKey="settings.disclaimer.character_notice"
-            components={{ kenney: <Link href="https://kenney.nl/" /> }}
-          />
         </Text>
       </Prose>
     </Section>

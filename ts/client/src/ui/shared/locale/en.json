@@ -108,13 +108,20 @@
     "disclaimer": {
       "section_title": "Notice",
       "demo_notice": "This service is a demo. Data may be lost or the service may be discontinued without notice.",
-      "coverage_notice": "Currently, only South Korea is supported. All other regions are displayed as ocean.",
+      "coverage_notice": "Only some regions are supported. Regions not yet supported are shown as satellite imagery.",
       "storage_notice": "Objects you place are stored only on this device and are not saved to the server.",
-      "location_notice": "Your location data is neither collected nor stored.",
-      "character_notice": "Characters and decor use the CC0-licensed Kenney asset pack."
+      "location_notice": "Your location data is neither collected nor stored."
     },
     "attribution": {
-      "section_title": "Attribution"
+      "section_title": "Attribution",
+      "map": "Map",
+      "assets": "Assets",
+      "graphics": "Graphics",
+      "system": "System",
+      "font": "Font",
+      "dependencies": "Dependencies",
+      "show": "Show {{count}}",
+      "hide": "Hide"
     },
     "about": {
       "section_title": "About",
