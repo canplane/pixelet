@@ -36,8 +36,9 @@ const EDGE = 4;
 
 const OPEN_AFTER_MS = 450;
 
-/** A tone's mark is white, on a faint white disc over the band, and its color
- * is the dot's (`status`). */
+/** A tone's mark is white, on a faint white disc, and its color is the dot's
+ * (`status`). A toast casts no shadow, as the Dynamic Island casts none, but an
+ * error glows red. */
 const TONE: Record<
   ToastTone,
   { mark: "checkmark" | "xmark" | null; status: string }
@@ -90,10 +91,10 @@ export function Toast({
       width={width}
       height={TOAST_SIDE}
       spanPx={windowWidth}
-      fill={COLOR.band}
+      fill={COLOR.black}
+      shadow={tone === ToastTone.ERROR ? SHADOW.alarm : undefined}
       solid
       place={BackingPlace.OVER_MAP}
-      shadow={tone === ToastTone.ERROR ? SHADOW.alarm : SHADOW.lift}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}
