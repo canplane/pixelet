@@ -46,7 +46,10 @@ make install && (cd ts/client && pnpm exec expo prebuild --platform ios --no-ins
 
 Run both again after a file is added under `modules/platform/`,
 `xpute/expo/ios/` or `ts/gpu/expo/ios/` (only `pod install` adds a new Swift file to the pod),
-after `app.config.ts` or a plugin changes, or after a dependency is added.
+or after a dependency is added. A build stops by itself, saying so, where the
+project was generated from another config than the app's now (`app.config.ts`,
+a config plugin, a file one of them names: `ts/client/plugin/generated.ts`):
+generate again.
 
 ### Build, install, launch
 
