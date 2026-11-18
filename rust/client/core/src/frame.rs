@@ -13,10 +13,10 @@ use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::sys::io::request::pump;
 use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
@@ -299,20 +299,26 @@ pub(crate) fn refused_frames() -> Refused {
 /// until a frame is asked for, then for the first vsync from when the frame
 /// is due by the target interval since the last frame's start, run or
 /// refused (rate.rs `due_at`), which answers its frame's start and the gap
-/// the display is measured by (sys/sched/display.rs). That start begins the
-/// frame's budget (sys/sched.rs `begin_frame`), and the world's frame runs;
-/// once it has run, the entry's tasks get their share (`end_frame`), the
-/// ground's fill first, timed while the profiler records.
+/// the display is measured by (sys/sched/display.rs). The budget is told the
+/// target the frame is asked on (sys/sched.rs `pace`) and its start
+/// (`begin_frame`), and the world's frame runs
+/// and ends its entry's budget (`end_frame`), so the entry ends and the
+/// frame's stream leaves for the GPU (link.rs `end`). The task then asks for
+/// the next frame's vsync where one is asked for, in that entry, so no other
+/// task's work stands before the ask. The ground's fill, which prepares later
+/// frames, is a task of its own, started where bricks are due (`fill`); its
+/// one slot is taken while a fill is out, and a frame then starts none.
 #[embassy_executor::task]
 async fn frame_task() {
     loop {
         sched::invalidated().await;
         let (display_ms, target_ms) = rate::pace_ms();
         let due_at = rate::due_at(sched::frame_at(), (display_ms, target_ms));
+        sched::pace((display_ms, target_ms));
         let frame = vsync::next(clock::mark(due_at)).await.or_bug(Errno::EPROTO);
         display::answered(clock::ms(frame.gap));
         let at = clock::ms(frame.at);
-        sched::begin_frame(at, target_ms);
+        sched::begin_frame(at);
         // A frame whose stream the host still holds, or that the GPU cannot
         // take without blocking (`pxl_gpu_guest::admit::frame`), does not
         // run, is counted by why, and asks for the next, so the renderer is
@@ -332,11 +338,26 @@ async fn frame_task() {
         }
         run(at, display_ms, target_ms);
         sched::end_frame();
-        let at = perf_recording().then(now);
-        let fill_cnt = clipmap::fill_share();
-        if let Some(at) = at {
-            perf_record_fill(now() - at, fill_cnt);
+        if clipmap::fill_due()
+            && let Ok(task) = fill()
+        {
+            executor::spawner().spawn(task);
         }
+    }
+}
+
+/// Fills the ground's due bricks by one entry's share, apart from the frame
+/// as every task is: it leaves the frame's entry, which the frame's end has
+/// spent, and fills in the entry that wakes it, on that entry's budget
+/// (clipmap.rs `fill_share`), timed while the profiler records into the
+/// record of the frame it follows.
+#[embassy_executor::task]
+async fn fill() {
+    sched::yield_if_spent().await;
+    let at = perf_recording().then(now);
+    let fill_cnt = clipmap::fill_share();
+    if let Some(at) = at {
+        perf_record_fill(now() - at, fill_cnt);
     }
 }
 

@@ -79,6 +79,34 @@ fn formats_round_trip() {
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
+/// A brick's entries are those of the walk of the tile's ways whose bin is the brick's, in
+/// their points' order and a point's in its bins', and every brick's together are the walk's.
+#[test]
+fn brick_pairs_are_the_walk_by_brick() {
+    let across = WAYS_BIN_ACROSS;
+    for seed in 0..8 {
+        let separation = tile(seed).separation;
+        let by_brick = BrickPairs::of(&separation).unwrap();
+        let mut cnt = 0;
+        for place in (0..BRICKS_ACROSS).flat_map(|y| (0..BRICKS_ACROSS).map(move |x| [x, y])) {
+            let mut want = Vec::new();
+            separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
+                let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
+                if [x / across, y / across] == place {
+                    want.push((
+                        (y % across) * across + x % across,
+                        separation.starts[d] + s as u32,
+                    ));
+                }
+            });
+            want.sort_unstable_by_key(|&(b, p)| (p, b));
+            assert_eq!(by_brick.at(place), want, "seed {seed}, brick {place:?}");
+            cnt += want.len();
+        }
+        assert!(cnt > 0, "seed {seed}: its lines reach a brick");
+    }
+}
+
 /// An Earth tile is as long as its texels say.
 #[test]
 fn earth_pkt_size() {

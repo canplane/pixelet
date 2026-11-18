@@ -22,13 +22,13 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::floor;
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::domain::observer::eye;
 use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::height_at;
 use crate::domain::view::frame::pose::view;
 use crate::sys::io::source;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 
 /// How far from the eye, in world units, the layers are asked for and the
 /// clip levels hold. This reaches as far as the source's top zoom does, past

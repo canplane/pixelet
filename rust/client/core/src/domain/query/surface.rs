@@ -12,8 +12,8 @@
 //! never the ground's.
 
 use crate::domain::layer::Base as _;
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_engine::clipmap::Lookup;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{Zoom, units};

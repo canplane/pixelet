@@ -113,13 +113,15 @@ leaves and the zoom over them; and a place the camera travels to has one.
 A level is a few bricks of cells a side, each held in the entry its place names,
 so the level follows its center a brick at a time and no held cell moves. A
 brick at a zoom is held once, however many levels want it. A tile's folds are
-cut into its bricks as it lands, and the bricks are filled after the frame, a
-part at a time within the entry's budget (`fill_share`): their cells, a
+cut into its bricks as it lands, and the bricks are filled in the entry after a
+frame's, a part at a time within that entry's budget (`fill_share`): their cells, a
 min-max mipmap over them, and their ways as spans, a run in one pool all bricks
 share (`terrain/pool.rs`), 64 MiB and no more, what the GPU reads and nothing else.
 All of it is uploaded, so the CPU's query (`clip_read`) and the GPU's cast meet the
 same bridge. A tile's lines are vectors of its own on the heap and go with it,
-bounded as the tile is, by the slots and the bake's limit on a tile's bytes. A brick whose spans the pool cannot hold
+bounded as the tile is, by the slots and the bake's limit on a tile's bytes; they
+are divided among its bricks once, as the tile lands, held with them, and each
+brick's fill reads its own (`terrain/tile.rs`). A brick whose spans the pool cannot hold
 reads the coarser level's meanwhile, and its fill is tried again once the pool gives
 a run back; a heap that refuses a tile waits on the heap.
 A brick with a column past `way::SPAN_CAP` stays refused while a level wants it.

@@ -47,6 +47,7 @@
 //! and never that nothing fills.
 
 use crate::domain::layer::Base as _;
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
 use pxl_engine::clipmap::{self, Lookup};
@@ -54,7 +55,6 @@ use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::Cut;
 use pxl_engine::world;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::hierarchy::tree::{Node, child_at};
 use pxl_spec::space::layer::area::{Area, Shard};

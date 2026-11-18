@@ -11,8 +11,8 @@ use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::domain::layer::tile_cache::Path;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 
 #[derive(Clone, Copy)]

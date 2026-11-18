@@ -144,11 +144,14 @@ const ELEMENTS_PER_PAUSE: usize = 1 << 12;
 /// Accessors or buffer views whose fields are looked up between pauses.
 const ENTRIES_PER_PAUSE: usize = 1 << 5;
 
+/// Parses the glTF file `bytes`, a GLB or its JSON, over `external_bufs`. It
+/// awaits `pause` first and between units of work.
 pub async fn parse_gltf<P: Future<Output = ()>>(
     bytes: &[u8],
     external_bufs: &[&[u8]],
     pause: impl Fn() -> P,
 ) -> Result<Gltf, XputeError> {
+    pause().await;
     let budget = external_bufs
         .iter()
         .fold(bytes.len(), |n, b| n.saturating_add(b.len()))

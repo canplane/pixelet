@@ -6,3 +6,4 @@ pub(crate) mod clipmap;
 pub(crate) mod fixed;
 pub(crate) mod pool;
 mod query;
+pub(crate) mod tile;

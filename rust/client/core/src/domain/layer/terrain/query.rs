@@ -8,9 +8,9 @@
 //! column's ways are read from the spans its brick's fill kept, a run in the
 //! ways' pool (pool.rs; pxl-engine `clipmap::way_at`).
 
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_engine::clipmap::{self as cells, Lookup};
 use pxl_engine::ground::{Cell, Extent};
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::hierarchy::tree::{Node, ancestor_of, region};
 use pxl_spec::space::layer::area::Shard;

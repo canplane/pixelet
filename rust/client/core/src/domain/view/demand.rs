@@ -11,10 +11,10 @@
 //! is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use pxl_spec::bake::tile::place::PlaceTile;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;

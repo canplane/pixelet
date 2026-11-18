@@ -3,10 +3,11 @@
 // The query's laws, checked over a leaf tile and the tiles of its line, and
 // over objects written into a store.
 
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::tile::terrain::{GROUND_COLUMN, GroundCells, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, GROUND_COLUMN, GroundCells};
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM, Zoom, units};
@@ -47,7 +48,7 @@ fn top() -> Quadrant {
 /// asset id and elevation as the clip levels hold them.
 #[derive(Clone)]
 struct Leaf {
-    tile: TerrainTile,
+    tile: terrain::TerrainTile,
     asset_ids: Vec<GroundId>,
     ele: Vec<i16>,
 }
@@ -85,13 +86,17 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
             cells.push((q, asset_ids.clone(), ele.clone(), tile.separation.clone()));
             let picture = match k {
                 0 => tile.clone(),
-                _ => TerrainTile {
+                _ => terrain::TerrainTile {
                     occupancy: Occupancy::of_slots([true; 4]),
                     ..tile.clone()
                 },
             };
             tile_cache
-                .admit(q, |_| None, |_| Ok::<_, ()>(picture))
+                .admit(
+                    q,
+                    |_| None,
+                    |_| Ok::<_, ()>(TerrainTile::of(picture).unwrap()),
+                )
                 .unwrap();
         }
     }
@@ -123,7 +128,7 @@ pub(crate) fn set_eye(eye: V3) {
 /// elevation and asset id given.
 fn drawn(ele: Vec<i16>, ground: GroundCells, separation: Separation) -> Leaf {
     Leaf {
-        tile: TerrainTile::of(Vec::new(), Vec::new().into(), separation, Occupancy::LEAF),
+        tile: terrain::TerrainTile::of(Vec::new(), Vec::new().into(), separation, Occupancy::LEAF),
         asset_ids: ground.into_owned(),
         ele,
     }

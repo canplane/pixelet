@@ -4,9 +4,9 @@
 //! distance from the eye, the one rule every reader of the world reads by.
 
 use crate::domain::layer::Base as _;
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_engine::cast::{Detail, Spacing};
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{idx_of, nearest};

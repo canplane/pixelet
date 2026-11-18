@@ -16,6 +16,7 @@ use crate::domain::control::edit::write;
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::layer::division::{each_division, naming};
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::domain::observer;
 use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
@@ -29,7 +30,6 @@ use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_render::gpu::surface::SURFACE_CAP;
 use pxl_render::renderer::renderer_progress;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::status::errno::Errno;
 

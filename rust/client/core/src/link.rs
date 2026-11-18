@@ -3,7 +3,8 @@
 //! The core's side of the link: its boot, and the start and end of every
 //! entry, which xpute's link runs (lib.rs `link!`). The boot mounts what the
 //! core implements and starts its tasks; the start begins the entry's budget;
-//! the end runs the core's tasks until none is ready and tells the UI what
+//! the end runs the core's tasks until none is ready, flushes what they
+//! recorded for the GPU, a frame's stream among it, and tells the UI what
 //! changed, and the overlay whole to a UI that has just started
 //! (`tell_all`).
 
@@ -17,7 +18,6 @@ mod param;
 use crate::abi;
 use crate::domain::layer::object::repository;
 use crate::domain::scene::character::surface::character_surface_close;
-use crate::domain::scene::rate;
 use crate::domain::setting::{on_settings_set_aside, settings_open};
 use crate::domain::view::demand;
 use crate::frame;
@@ -93,11 +93,9 @@ pub fn boot() {
     frame::boot();
 }
 
-/// Starts an entry (xpute-guest link `boot`, `recv`): its budget, on the
-/// frame's target interval (rate.rs).
+/// Starts an entry (xpute-guest link `boot`, `recv`): its budget.
 pub fn enter() {
-    let (_, target_ms) = rate::pace_ms();
-    sched::begin(target_ms);
+    sched::begin();
 }
 
 /// Ends an entry, as xpute's link runs it once the due answers have run, and
@@ -105,8 +103,9 @@ pub fn enter() {
 /// what the GPU did, polls the core's tasks, and answers that work is left
 /// while one is ready. With none ready, it hands the request scheduler's
 /// events on, arms the next pump, flushes the GPU's stream where the host
-/// admits a flush and posts to the UI what changed, and answers whether any of
-/// that readied a task.
+/// admits a flush, a frame's in the entry that drew it, which the frame's end
+/// has spent (sys/sched.rs `end_frame`), and posts to the UI what changed,
+/// and answers whether any of that readied a task.
 pub fn end() -> bool {
     // A device loss, which the host wrote into the device's block, is read
     // before the tasks run.
