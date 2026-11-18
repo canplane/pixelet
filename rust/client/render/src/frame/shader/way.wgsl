@@ -33,7 +33,7 @@ fn head_cnt(w: u32) -> u32 {
   return min(w & SPANS_CNT, WAY_SPAN_CAP);
 }
 
-fn head_face(w: u32) -> i32 {
+fn head_ele_cell(w: u32) -> i32 {
   return i32(w) >> 16u;
 }
 
@@ -83,7 +83,7 @@ fn way_near(m: u32) -> vec3<i32> {
 }
 
 /// What the ways write in cell `z` of column `c` of the run (`way::way_cell`): a deck's slab or
-/// its pier first, or else a bore's air (`VAL_VOID`); under its face cell, otherwise, the asset
+/// its pier first, or else a bore's air (`VAL_VOID`); under its top ground cell, otherwise, the asset
 /// id of a bore's air beside it, the first of `way_near`; so a cave never opens into a way.
 fn way_value(run: u32, cell: u32, c: vec2<i32>, z: i32) -> u32 {
   let own = run_column(run, c);
@@ -94,11 +94,11 @@ fn way_value(run: u32, cell: u32, c: vec2<i32>, z: i32) -> u32 {
   if (v != WAY_NOTHING) {
     return select(v, VAL_VOID, (v & WAY_AIR_OF) != 0u);
   }
-  let face = head_face(pool[run + own]);
-  if (face == FACE_NONE) {
+  let ele_cell = head_ele_cell(pool[run + own]);
+  if (ele_cell == ELE_CELL_NONE) {
     return WAY_NOTHING;
   }
-  for (var m = 1u; z < face && m < 7u; m += 1u) {
+  for (var m = 1u; z < ele_cell && m < 7u; m += 1u) {
     let d = way_near(m);
     let b = run_column(run, c + d.xy);
     if (b != 0u) {

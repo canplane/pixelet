@@ -89,12 +89,12 @@
 //!
 //! **Damage:** every write to what is placed that changes the tree or a record names the cube
 //! it wrote (pxl-core domain/layer/object/store.rs `Store::write`, `set_fold`, `clear_fold`).
-//! The GPU is handed the cube as the columns of its leaf cells; past the room for them,
-//! columns are joined, never dropped (pxl-core domain/scene/decor/gpu.rs `note_damage`;
+//! The GPU is handed the cube as the rect of its leaf cells; past the room for them,
+//! rects are joined, never dropped (pxl-core domain/scene/decor/gpu.rs `note_damage`;
 //! pxl-render gpu/generator.rs `hold`). A write that names no cube, or that rewrites more child
 //! groups than there is room for, forgets everything. A cell's answer reads the tree only along
 //! the cell's own path, and a write changes that path only within the cube and above it;
-//! `over_rect` on the cell's column catches both. `reads_written` forgets an entry that was
+//! `over_rect` on the cell's rect catches both. `reads_written` forgets an entry that was
 //! handed a slot of a rewritten child group. Drawable entries are forgotten by the same rule
 //! as the rest.
 //!
@@ -368,7 +368,7 @@ mod tests {
     }
 
     /// Two fresh entries never nest. From any origin, at most one of a node and the nodes above
-    /// it is fresh, and the node a walk would stop on along the column is the fresh one.
+    /// it is fresh, and the node a walk would stop on along the line is the fresh one.
     #[test]
     fn fresh_never_nests() {
         let range = [4, FINEST_ZOOM];
@@ -423,7 +423,7 @@ mod tests {
         assert!(fresh(o, &n, true, range));
     }
 
-    /// Along a column whose nodes the query answers whole from zoom `whole_from` on, a light ray
+    /// Along a line whose nodes the query answers whole from zoom `whole_from` on, a light ray
     /// asking a band stops on the node at the band, or at `whole_from` where that is coarser. An
     /// entry written by one band's ray is fresh at a band only where that band's ray stops on it.
     /// Once that ray's hit has found the entry, setting `WHOLE` where it stopped whole, the entry

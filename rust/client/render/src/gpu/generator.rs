@@ -104,7 +104,7 @@ pub struct Generator {
     /// shaders read one. The args pass sets each uniform's index.
     uniforms: u32,
     /// The records, laid out by entry (`generation::rec_at`). `instances` holds the decor's
-    /// instances: `drawing::COLUMN_CNT` lanes and the index list, each `cap` words long.
+    /// instances: `drawing::LANE_CNT` lanes and the index list, each `cap` words long.
     recs: u32,
     instances: u32,
     /// The draws' groups, in the layouts the decor and impostor draws share (record.rs
@@ -256,7 +256,7 @@ impl Generator {
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
-                word_sz(((drawing::COLUMN_CNT + 1) * need) as usize),
+                word_sz(((drawing::LANE_CNT + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if recs != 0 {
@@ -280,7 +280,7 @@ impl Generator {
                 release(culled.group);
                 release(culled.list);
                 culled.list = g.buf(
-                    word_sz(((drawing::COLUMN_CNT + 1) * need) as usize),
+                    word_sz(((drawing::LANE_CNT + 1) * need) as usize),
                     buffer_usage::STORAGE,
                 );
                 culled.group = g.bind_group(
@@ -421,7 +421,7 @@ impl Generator {
             u[instance::STRIDE] = self.cap;
             u[instance::OPACITY] = 1.0f32.to_bits();
             u[instance::LAYER] = if r % 2 == 1 { r / 2 } else { 0 };
-            u[instance::IDX] = drawing::COLUMN_CNT * self.cap;
+            u[instance::IDX] = drawing::LANE_CNT * self.cap;
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }

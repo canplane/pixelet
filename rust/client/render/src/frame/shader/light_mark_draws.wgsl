@@ -30,7 +30,7 @@ fn instance_at(i: u32) -> u32 {
 }
 
 fn instance_cap() -> u32 {
-  return arrayLength(&instances) / (DRAWING_COLUMN_CNT + 1u);
+  return arrayLength(&instances) / (DRAWING_LANE_CNT + 1u);
 }
 
 /// How many slots are placed: the end of the last region, held to the slots there are

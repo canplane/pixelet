@@ -93,7 +93,7 @@ world and held in a slot by its index modulo the map's side, and its ray starts
 at a fixed point, summed in integers (`light_aim.wgsl` `texel_start`).
 
 Each tile of the box asks one zoom, its band (pxl-engine `Light::band`): the
-zoom the eye's rays ask at the point of the tile's column nearest the eye,
+zoom the eye's rays ask at the point of the tile's bundle of rays nearest the eye,
 measured from the box's middle. A band depends only on where the tile lies in
 the box. When the eye moves, the box slides a tile at a time; a tile that slid
 on, or into another band, is cast anew and the rest keep what they cast

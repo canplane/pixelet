@@ -53,7 +53,7 @@ impl Lattice {
         Lattice { scale_step, ..self }
     }
 
-    // What a layer reads for a node of the view, given the node's zoom, its column and the cell
+    // What a layer reads for a node of the view, given the node's zoom, its cell and the cell
     // zoom it is drawn at: the tile whose cells fold into the node's cells (past the leaves, the
     // leaf tile), and where the node lies in that tile.
 
@@ -162,9 +162,9 @@ pub trait Grid {
 }
 
 impl Grid for Lattice {
-    fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell_zoom: Zoom) -> Quadrant {
+    fn read_tile(self, (zoom, c): (Zoom, [i32; 2]), cell_zoom: Zoom) -> Quadrant {
         let z = self.read_zoom(cell_zoom);
-        Quadrant::new(z, ancestor_of(column, zoom - z))
+        Quadrant::new(z, ancestor_of(c, zoom - z))
     }
 
     /// The tile whose records fold into the grid's cell at `r2`, a distance

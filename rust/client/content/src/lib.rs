@@ -29,8 +29,8 @@ impl Content for Pixelet {
     fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
         strata::by_depth(cell_zoom, asset_id, top, z)
     }
-    fn bedrock(face: i32) -> i32 {
-        strata::bedrock(face)
+    fn bedrock(ele: i32) -> i32 {
+        strata::bedrock(ele)
     }
     fn earth(z: i32) -> u32 {
         strata::earth(z)

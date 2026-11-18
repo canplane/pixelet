@@ -56,7 +56,7 @@ impl LocationStatus {
 pub struct Position {
     pub lon: f64,
     pub lat: f64,
-    pub alt: Option<f64>,
+    pub alt_ellipsoid: Option<f64>,
 }
 
 impl Position {
@@ -66,7 +66,7 @@ impl Position {
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
         w.f64(at, self.lon);
         w.f64(at + 8, self.lat);
-        if let Some(v) = &self.alt {
+        if let Some(v) = &self.alt_ellipsoid {
             w.u8(at + 16, 1);
             w.f64(at + 16 + 8, *v);
         }
@@ -76,7 +76,7 @@ impl Position {
         Ok(Position {
             lon: r.f64(at)?,
             lat: r.f64(at + 8)?,
-            alt: r.case(at + 16, 2).and_then(|d| {
+            alt_ellipsoid: r.case(at + 16, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
                 } else {

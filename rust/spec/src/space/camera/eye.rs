@@ -95,8 +95,8 @@ pub struct Observation {
     /// How far the layers' demand reaches: never past the top's
     /// (layer/lattice.rs `demand_dist`).
     pub demand_dist: f64,
-    /// The ground under the eye as last known; not part of what is required.
-    pub ground: f64,
+    /// The floor under the eye as last known; not part of what is required.
+    pub floor: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

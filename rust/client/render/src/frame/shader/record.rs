@@ -272,7 +272,7 @@ pub const WORLD_ASKED: &str = include_str!(concat!(
 /// (gpu/draw.rs `DRAW_PIPELINES`), then those a frame runs on its own. The tuples below are
 /// the words of each pipeline's draw record. A box draw is (0, 1, 0, uniform, pipeline): one
 /// box and no upload, all it says being in its uniform. A decor draw is (upload handle, group,
-/// instance count, uniform, pipeline), and its uniform carries the group's first column word,
+/// instance count, uniform, pipeline), and its uniform carries the group's first lane word,
 /// its stride and the start of its index list.
 pub const PIPELINE_DECOR: u32 = 0;
 /// The hover ghost's box, half transparent. It draws at the depth of the faces it lies on,

@@ -3,7 +3,7 @@
 //! Where the ground's answers moved since the frame before: the ground
 //! tiles and clipmap bricks whose answer moved, by identity, which fixes their
 //! contents, and the boxes where objects were written. A reader that keeps an answer asks again
-//! only when one of these touches the columns it read, which its queries
+//! only when one of these touches the rect it read, which its queries
 //! report (`Read`). A change so reaches only the readers of the ground
 //! it touches. An answer is of a cell at a size, and the world's alone; the
 //! eye's part is the size, so a kept answer is kept until the eye sets
@@ -54,7 +54,7 @@ pub(crate) fn damage() -> &'static [Aabb] {
     &changes().damage
 }
 
-/// Whether a change touches the columns over `xy`, whose corners are in units
+/// Whether a change touches the rect over `xy`, whose corners are in units
 /// with X on any lap. A change is a moved ground tile, a written object, or
 /// one of `layer`'s tiles that the reader also reads and whose answer moved.
 ///
@@ -77,11 +77,11 @@ fn at_leaf(t: &Quadrant) -> bool {
 
 /// `within`, of the ground nodes `counted` picks.
 fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) -> bool) -> bool {
-    let columns = Aabb {
+    let rect = Aabb {
         min: [xy[0][0], xy[0][1], BOUND.min[2]],
         max: [xy[1][0], xy[1][1], BOUND.max[2]],
     };
-    let about = (columns.min[0] + columns.max[0]) / 2.0;
+    let about = (rect.min[0] + rect.max[0]) / 2.0;
     let c = changes();
     let mut regions = c
         .ground
@@ -90,7 +90,7 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
         .chain(layer)
         .map(|t| t.region())
         .chain(c.damage.iter().copied());
-    regions.any(|r| nearest_box(&r, about).shares(columns))
+    regions.any(|r| nearest_box(&r, about).shares(rect))
 }
 
 /// A size the eye set for a read: the camera grid's zoom at a point's
@@ -113,21 +113,21 @@ enum Taken {
     Eye(Option<V3>),
 }
 
-/// What the queries read for a memo's ask (`Memo::of`): the columns read, as
-/// one box with its corners in units and X on the lap of the first column
+/// What the queries read for a memo's ask (`Memo::of`): the rect read, as
+/// one box with its corners in units and X on the lap of the first cell
 /// read, where a ray reads the cells it passes at the coarsest zoom it is
-/// answered at and a cell or a column surface its cell; and what they took
+/// answered at and a cell or a surface its cell; and what they took
 /// of the eye.
 #[derive(Clone)]
 struct Read {
-    columns: Option<[[f64; 2]; 2]>,
+    rect: Option<[[f64; 2]; 2]>,
     taken: Taken,
 }
 
 impl Default for Read {
     fn default() -> Self {
         Read {
-            columns: None,
+            rect: None,
             taken: Taken::Sizes(Vec::new()),
         }
     }
@@ -176,11 +176,11 @@ pub(super) fn report_read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
     ]);
 }
 
-/// Reports the columns `cells` as read, moved onto the lap of the first
-/// column read.
+/// Reports the rect `cells` as read, moved onto the lap of the first
+/// cell read.
 fn join(cells: [[f64; 2]; 2]) {
     let Some(r) = read() else { return };
-    r.columns = Some(match r.columns {
+    r.rect = Some(match r.rect {
         None => cells,
         Some(c) => {
             let dx = nearest(cells[0][0], c[0][0]) - cells[0][0];
@@ -223,8 +223,8 @@ pub(super) fn size(xy: [f64; 2], z: Option<f64>) -> Option<Zoom> {
 
 /// Reports to the memo asking now what a memo within its ask read.
 fn report(inner: &Read) {
-    if let Some(columns) = inner.columns {
-        join(columns);
+    if let Some(rect) = inner.rect {
+        join(rect);
     }
     match (&inner.taken, read()) {
         (Taken::Eye(_), _) => {
@@ -245,8 +245,8 @@ fn report(inner: &Read) {
 /// and what it read (`Read`). It is asked again
 /// only when the key changes, when the eye is not given what the read took
 /// of it (`Read::holds`), or when a change to the ground or the
-/// object layer touched the columns read (`forget_touched`). An answer that
-/// read no column is not kept, since no change would ever tell it to go.
+/// object layer touched the rect read (`forget_touched`). An answer that
+/// read no rect is not kept, since no change would ever tell it to go.
 #[derive(Clone)]
 pub(crate) struct Memo<K, A>(Option<Kept<K, A>>);
 
@@ -262,31 +262,31 @@ impl<K, A> Default for Memo<K, A> {
 impl<K: PartialEq, A: Copy> Memo<K, A> {
     pub(crate) const NONE: Memo<K, A> = Memo(None);
 
-    /// Drops the answer when a change touched its columns. The caller calls
+    /// Drops the answer when a change touched its rect. The caller calls
     /// this every frame, so that it sees each change once (`within`).
     pub(crate) fn forget_touched(&mut self) {
-        self.forget(|columns, _| within(columns, &[]));
+        self.forget(|rect, _| within(rect, &[]));
     }
 
     /// `forget_touched`, for an answer of the ground at its leaf. `exact` says
     /// of the kept answer whether every read of it was exact. A base tile
-    /// never changes, so a coarser tile or brick over the columns of an exact
+    /// never changes, so a coarser tile or brick over the rect of an exact
     /// answer changes only what is held, and only the leaf's own nodes and
     /// what objects wrote drop it. An answer not exact goes as in
     /// `forget_touched`, since a coarser node can be what answered it.
     pub(crate) fn forget_touched_at_leaf(&mut self, exact: impl Fn(&A) -> bool) {
-        self.forget(|columns, a| match exact(a) {
-            true => touched(columns, &[], at_leaf),
-            false => within(columns, &[]),
+        self.forget(|rect, a| match exact(a) {
+            true => touched(rect, &[], at_leaf),
+            false => within(rect, &[]),
         });
     }
 
-    /// Drops the answer where `touched` says so of its columns.
+    /// Drops the answer where `touched` says so of its rect.
     fn forget(&mut self, touched: impl Fn([[f64; 2]; 2], &A) -> bool) {
         if self
             .0
             .as_ref()
-            .is_some_and(|(_, read, a)| read.columns.is_some_and(|c| touched(c, a)))
+            .is_some_and(|(_, read, a)| read.rect.is_some_and(|c| touched(c, a)))
         {
             self.0 = None;
         }
@@ -312,7 +312,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         }
         let (a, read) = reads(ask);
         report(&read);
-        self.0 = read.columns.is_some().then_some((of, read, a));
+        self.0 = read.rect.is_some().then_some((of, read, a));
         a
     }
 }

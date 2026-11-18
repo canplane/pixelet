@@ -419,7 +419,7 @@ struct Want {
 /// carved in the ground.
 fn eyes(built: &Built) -> Vec<EyeCase> {
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let placed = built
         .placed
         .iter()
@@ -438,7 +438,7 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
     let hole = [(leaf_c[0] >> 1) + 6, (leaf_c[1] >> 1) + 6];
     let carved = ancestor_at(
         LEAF_CELL_ZOOM,
-        [hole[0], hole[1], built.top_at(hole) - 1],
+        [hole[0], hole[1], built.ele_at(hole) - 1],
         3,
     );
     vec![
@@ -483,7 +483,7 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             origin: q8([
                 bridge[0],
                 bridge[1],
-                built.top_at([bridge[0], bridge[1]]) + 12,
+                built.ele_at([bridge[0], bridge[1]]) + 12,
             ]),
             look: [0.5, -0.3, -0.8],
             tan: [0.3, 0.3],
@@ -543,7 +543,7 @@ fn worlds() -> Vec<(Built, Vec<EyeCase>)> {
         origin: q8([
             EYE_SEAM[0] + 4,
             EYE_SEAM[1] + 20,
-            seam.top_at([EYE_SEAM[0] + 4, EYE_SEAM[1] + 20]) + 25,
+            seam.ele_at([EYE_SEAM[0] + 4, EYE_SEAM[1] + 20]) + 25,
         ]),
         look: [0.1, 0.05, -1.0],
         tan: [0.4, 0.4],

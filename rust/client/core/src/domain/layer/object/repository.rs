@@ -54,7 +54,7 @@ use crate::abi::object;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{Write, apply, note_damage};
 use crate::spec;
-use crate::spec::file::{format, top, write as column};
+use crate::spec::file::{format, top, write as lane};
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
@@ -100,7 +100,7 @@ struct State {
     /// top or a shard is read, or a file is refused or set aside.
     revision: u32,
     /// The changes waiting for the store, in order, held while the host
-    /// holds the store's columns (`change`).
+    /// holds the store's lanes (`change`).
     changes: Vec<Change>,
 }
 
@@ -113,7 +113,7 @@ enum Change {
     Edit(Write),
 }
 
-/// Makes `c` at once when the host holds none of the store's columns
+/// Makes `c` at once when the host holds none of the store's lanes
 /// (store.rs `Store::is_in_flight`) and no other change waits. Otherwise it
 /// holds `c` for `step`, in order. Only writers of the store wait.
 fn change(c: Change) {
@@ -320,7 +320,7 @@ fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, XputeError> {
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
         const _: () = assert!(
-            column::KEY == 0 && column::ASSET_ID == 1 && column::TEXT_ROW == 2 && column::TEXT == 3
+            lane::KEY == 0 && lane::ASSET_ID == 1 && lane::TEXT_ROW == 2 && lane::TEXT == 3
         );
         b.strs(Some(&keys))
             .u32_array(Some(&asset_ids))
@@ -357,12 +357,12 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, XputeError> {
     let pkt = pkt(format, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
     let (keys, asset_ids) = (
-        root.at(column::KEY)?.get_strs()?,
-        root.at(column::ASSET_ID)?.get_array::<u32>()?,
+        root.at(lane::KEY)?.get_strs()?,
+        root.at(lane::ASSET_ID)?.get_array::<u32>()?,
     );
     let (text_rows, texts) = (
-        root.at(column::TEXT_ROW)?.get_array::<u32>()?,
-        root.at(column::TEXT)?.get_strs()?,
+        root.at(lane::TEXT_ROW)?.get_array::<u32>()?,
+        root.at(lane::TEXT)?.get_strs()?,
     );
     if keys.len() as usize != asset_ids.len() || text_rows.len() != texts.len() as usize {
         return Err(XputeError::new(Errno::EINVAL));
@@ -440,7 +440,7 @@ pub(crate) fn send(write: Write) {
 }
 
 pub(crate) fn step() {
-    // Make every change held while the host held the store's columns, now
+    // Make every change held while the host held the store's lanes, now
     // that it holds none. The host cannot take them back during the loop.
     if !state().changes.is_empty() && !object().is_in_flight() {
         let mut changes = core::mem::take(&mut state().changes);

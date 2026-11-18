@@ -449,7 +449,7 @@ fn climb_rises_under_eye() {
 #[test]
 fn slope_keeps_pitch_climbed() {
     let (mut store, pivot) = under_ceiling(None);
-    // From 20 to 40 cells east, each column is 60 cells high less its
+    // From 20 to 40 cells east, the fill over each cell is 60 cells high less its
     // distance.
     for dx in 20..=40 {
         for z in 0..60 - dx {

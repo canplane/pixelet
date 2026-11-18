@@ -311,14 +311,14 @@ impl EnvironmentDraw {
         // The camera's Z, in units, is its altitude over the sea.
         let km_per_u = km_per_u();
         self.alt_km = frame.camera[2] * km_per_u;
-        // The ground under the eye, as the frame observed it.
-        let ground = observation::observation().map_or(0.0, |o| o.ground);
+        // The floor under the eye, as the frame observed it.
+        let floor = observation::observation().map_or(0.0, |o| o.floor);
         let light = Light {
             sun: self.sun,
             moon: self.moon,
             stars: self.stars,
             alt_km: self.alt_km,
-            ground_km: ground * km_per_u,
+            floor_km: floor * km_per_u,
             km_per_u,
             star_frame: self.star_frame,
         };

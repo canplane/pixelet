@@ -116,7 +116,7 @@ fn hand_light_cs_answers_as_the_rust() {
     };
     let pipe = gpu.pipeline(src(SHADER_LIGHT), "light_cs");
     let built = real_world::build(EYE);
-    let over = |b: &Built, g: [i32; 2], up: i32| q8([g[0], g[1], b.top_at(g) + up]);
+    let over = |b: &Built, g: [i32; 2], up: i32| q8([g[0], g[1], b.ele_at(g) + up]);
     let mut tally = Tally::default();
     let mut kind_cnt = KindCount::default();
     let cases = [
@@ -183,7 +183,7 @@ fn hand_light_cs_answers_as_the_rust() {
             q8([
                 10,
                 EYE_ZERO[1] + 90,
-                zero.top_at([10, EYE_ZERO[1] + 90]) + 40,
+                zero.ele_at([10, EYE_ZERO[1] + 90]) + 40,
             ]),
             [0.3, 0.2, -0.93],
             1.0,
@@ -775,7 +775,7 @@ fn hand_light_marks_answer_as_the_rust() {
         gpu.pipeline(src(SHADER_REC_DRAW), "rec_draw_cs"),
     ];
     let built = real_world::build(EYE);
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let lit = |dir: [f32; 3], side: f32| lit([0; 3], dir, side, 60.0, 400.0, [1300, -900]);
     let looks = [
         Look {

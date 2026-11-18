@@ -4,7 +4,7 @@
 //! shadow map (pxl-render light.wgsl `light_cs`). Each texel's ray starts where the texel lies
 //! on the light box's near plane and runs along the light's rays to the far plane, walked
 //! through the same descent the eye's rays take. Every node is asked at its tile's band: the
-//! zoom the eye's rays ask at the point of the tile's column nearest the eye (`Light::band`).
+//! zoom the eye's rays ask at the point of the tile's bundle of rays nearest the eye (`Light::band`).
 //! The ray leaves the depth a raster caster would (pxl-render pass/shadow.rs, where the decor
 //! and the characters are drawn into the same map).
 //!
@@ -213,10 +213,10 @@ impl Light {
     }
 
     /// The zoom every walk over box tile `tile` asks, its band, for a map `size` texels a side:
-    /// the camera grid's cell zoom (`grid::cell_zoom_at`) at the point of the tile's column
-    /// nearest the eye, measured from the box's middle (`read`) in units, held to the eye's zooms
-    /// `range` (`eye::RANGE`). It depends on the tile's place in the box alone, the same wherever
-    /// the eye stands in it, and is as fine as the eye asks anywhere in the column.
+    /// the camera grid's cell zoom (`grid::cell_zoom_at`) at the point of the tile's bundle
+    /// of rays nearest the eye, measured from the box's middle (`read`) in units, held to the
+    /// eye's zooms `range` (`eye::RANGE`). It depends on the tile's place in the box alone, the same wherever
+    /// the eye stands in it, and is as fine as the eye asks anywhere along the bundle.
     ///
     /// Every pass that reads a tile's band must get the same band: a slot takes a sample walked
     /// at its own band, a cell resumes from beam rays walked at its band, and a slide keeps a tile
@@ -268,31 +268,31 @@ impl Light {
     }
 
     /// Whether the rays of box tile `tile`, of a map `size` texels a side, asking at its band
-    /// under the eye's zooms `range` (`band`), may meet a cell over `column`: the world's columns
-    /// from `[x0, y0]` to `[x1, y1]`, in units from the eye (`column_of`), at every height, where
+    /// under the eye's zooms `range` (`band`), may meet a cell over `rect`: the world's rect
+    /// from `[x0, y0]` to `[x1, y1]`, in units from the eye (`rect_of`), at every height, where
     /// what the world's query reads has changed. This is the one rule of what a change to the
     /// world keeps (pxl-render light_slide.wgsl).
     ///
     /// A ray's answer is that of its band's cells along it: a split's box and a node of air pass
     /// over cells of air alone, and a node not held is a split whose cells at the band are the
-    /// lack (`ground::node`). A cell's answer reads only the columns under it, the bricks that
+    /// lack (`ground::node`). A cell's answer reads only the ground under it, the bricks that
     /// hold them and what is placed or cut over them (pxl-render forget.wgsl). So a tile whose
-    /// rays meet no cell of its band over the column answers as before. A cell over the column
-    /// lies within the column grown by a cell's side, and by a texel more for the rounding of the
+    /// rays meet no cell of its band over the rect answers as before. A cell over the rect
+    /// lies within the rect grown by a cell's side, and by a texel more for the rounding of the
     /// rays' starts (`StartGrid`). Seen from above, the tile's rays sweep the parallelogram of its
     /// texels on the near plane along the light to their reach: a hexagon with three pairs of
-    /// parallel edges, which the grown column misses where one of five axes separates them: X, Y,
-    /// and the axis across each of the three edge directions. A band outside the column's reads
-    /// none of what moved there (`Column`).
-    pub fn reaches(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], column: Column) -> bool {
+    /// parallel edges, which the grown rect misses where one of five axes separates them: X, Y,
+    /// and the axis across each of the three edge directions. A band outside the rect's reads
+    /// none of what moved there (`Rect`).
+    pub fn reaches(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], rect: Rect) -> bool {
         let band = self.band(size, range, [tile[0] as i32, tile[1] as i32]);
-        if band < column.band_range[0] || band > column.band_range[1] {
+        if band < rect.band_range[0] || band > rect.band_range[1] {
             return false;
         }
-        let column = column.at;
+        let rect = rect.at;
         let grow = libm::ldexpf(1.0, UNIT_ZOOM as i32 - band as i32) + self.width();
-        let lo = [column[0] - grow, column[1] - grow];
-        let hi = [column[2] + grow, column[3] + grow];
+        let lo = [rect[0] - grow, rect[1] - grow];
+        let hi = [rect[2] + grow, rect[3] + grow];
         let t = TILE as f32;
         let (i, j) = (tile[0] as f32 * t - 0.5, tile[1] as f32 * t - 0.5);
         let edges = [
@@ -313,8 +313,8 @@ impl Light {
                 .iter()
                 .map(|e| libm::fabsf(e[0] * n[0] + e[1] * n[1]))
                 .sum();
-            let column = libm::fabsf(half[0] * n[0]) + libm::fabsf(half[1] * n[1]);
-            libm::fabsf(at[0] * n[0] + at[1] * n[1]) > 0.5 * swept + column
+            let rect = libm::fabsf(half[0] * n[0]) + libm::fabsf(half[1] * n[1]);
+            libm::fabsf(at[0] * n[0] + at[1] * n[1]) > 0.5 * swept + rect
         };
         !(parts([1.0, 0.0]) || parts([0.0, 1.0]) || edges.iter().any(|e| parts([-e[1], e[0]])))
     }
@@ -391,7 +391,7 @@ pub const W_DOWN2_INVERSE: usize = 25;
 pub const W_BAND_SCALE: usize = 26;
 
 /// The squared distance in texels from the middle of a box `size` a side to the nearest
-/// point of box tile `tile`'s column (`Light::band`). Each axis's gap is a whole number of
+/// point of box tile `tile`'s bundle of rays (`Light::band`). Each axis's gap is a whole number of
 /// texels, since the middle and the tiles' edges lie on texels' edges. A side of at most 4096,
 /// twice `ANCHOR`, which is the host's largest, and the beam rays' window past it keep each
 /// gap under 2^11.5, so the sum stays under 2^24 and is exact as a float.
@@ -402,11 +402,11 @@ pub fn band_texels2(size: u32, tile: [i32; 2]) -> u32 {
     x * x + y * y
 }
 
-/// The world's columns of the nodes at `zoom` from `lo` to `hi`, X then Y, `hi` past the
-/// last (`Node::idx`), as `Light::reaches` reads them: units from `origin`, the eye's steps
+/// The world's rect of the nodes at `zoom` from `lo` to `hi`, X then Y, `hi` past the
+/// last (`Node::idx`), as `Light::reaches` reads it: units from `origin`, the eye's steps
 /// (`eye::ORIGIN`), `[x0, y0, x1, y1]`; X the short way round the world, and the whole of it
-/// where they span it, as far as a float's sum stays finite.
-pub fn column_of(origin: [i32; 3], zoom: Zoom, lo: [i32; 2], hi: [i32; 2]) -> [f32; 4] {
+/// where it spans it, as far as a float's sum stays finite.
+pub fn rect_of(origin: [i32; 3], zoom: Zoom, lo: [i32; 2], hi: [i32; 2]) -> [f32; 4] {
     let s = FINEST_ZOOM - zoom;
     let unit = 1.0 / f64::from(1u32 << FRAC_W);
     let across = i64::from(hi[0] - lo[0]) << s;
@@ -420,26 +420,26 @@ pub fn column_of(origin: [i32; 3], zoom: Zoom, lo: [i32; 2], hi: [i32; 2]) -> [f
     [x0, y(lo[1]), x1, y(hi[1])].map(|v| (v * unit) as f32)
 }
 
-/// Where the world changed, as the tiles read it (`Light::reaches`): the columns it changed
-/// in (`column_of`), and the first and last bands that read them.
+/// Where the world changed, as the tiles read it (`Light::reaches`): the rect it changed
+/// in (`rect_of`), and the first and last bands that read it.
 #[derive(Clone, Copy, Debug)]
-pub struct Column {
+pub struct Rect {
     pub at: [f32; 4],
     pub band_range: [Zoom; 2],
 }
 
-impl Column {
+impl Rect {
     /// A change every band reads: what is placed or cut, which a cell of any zoom folds.
-    pub const fn every_band(at: [f32; 4]) -> Column {
-        Column {
+    pub const fn every_band(at: [f32; 4]) -> Rect {
+        Rect {
             at,
             band_range: [0, Zoom::MAX],
         }
     }
 
-    /// Takes `c` in, so that it holds both, every column and band of either, as the head's last
-    /// column holds the columns past its room (`COLUMN_CAP`).
-    pub fn hold(&mut self, c: Column) {
+    /// Takes `c` in, so that it holds both, every rect and band of either, as the head's last
+    /// rect holds the rects past its room (`RECT_CAP`).
+    pub fn hold(&mut self, c: Rect) {
         self.at = [
             self.at[0].min(c.at[0]),
             self.at[1].min(c.at[1]),
@@ -453,22 +453,22 @@ impl Column {
     }
 }
 
-/// The columns that brick `q` at `cell_zoom` changed by moving, as the tiles read them, each
+/// The rects that brick `q` at `cell_zoom` changed by moving, as the tiles read them, each
 /// handed to `put`. A band reads a cell from the finest clip level at or above it that holds
 /// the cell present (`clipmap::step`, `clip_zoom`). So the band at `cell_zoom` reads the whole
 /// brick, and a finer band reads it only where no brick at the next zoom is present
-/// (`present`): one column serves those bands, joining the bricks not present, or the whole
+/// (`present`): one rect serves those bands, joining the bricks not present, or the whole
 /// brick's where none is. A coarser band reads none of it.
-pub fn brick_columns(
+pub fn brick_rects(
     origin: [i32; 3],
     cell_zoom: Zoom,
     q: [i32; 2],
     present: impl Fn([i32; 2]) -> bool,
-    mut put: impl FnMut(Column),
+    mut put: impl FnMut(Rect),
 ) {
     let s = brick::BRICK_SHIFT;
     let at = |zoom: Zoom, lo: [i32; 2], hi: [i32; 2]| {
-        column_of(origin, zoom, lo.map(|v| v << s), hi.map(|v| v << s))
+        rect_of(origin, zoom, lo.map(|v| v << s), hi.map(|v| v << s))
     };
     let first = if cell_zoom == clipmap::FIRST_CELL_ZOOM {
         0
@@ -486,26 +486,26 @@ pub fn brick_columns(
     }
     let whole = at(cell_zoom, q, [q[0] + 1, q[1] + 1]);
     if absent == 4 {
-        return put(Column {
+        return put(Rect {
             at: whole,
             band_range: [first, Zoom::MAX],
         });
     }
-    put(Column {
+    put(Rect {
         at: whole,
         band_range: [first, cell_zoom],
     });
     if absent != 0 {
-        put(Column {
+        put(Rect {
             at: at(cell_zoom + 1, lo, hi),
             band_range: [cell_zoom + 1, Zoom::MAX],
         });
     }
 }
 
-/// How many changed columns a cast is handed (`COLUMNS_AT`); a column past them is taken into
-/// the last (`Column::hold`).
-pub const COLUMN_CAP: usize = 64;
+/// How many changed rects a cast is handed (`RECTS_AT`); a rect past them is taken into
+/// the last (`Rect::hold`).
+pub const RECT_CAP: usize = 64;
 
 /// What the light's cast is handed beside the eye's words, as a uniform: a head of
 /// `HDR_VEC4S` vec4s. It holds the cast's number, whether it is counted, its epoch and the
@@ -513,9 +513,9 @@ pub const COLUMN_CAP: usize = 64;
 /// (`HDR_LAST_CORNER`); whether its marks take each pixel's footprint
 /// (`HDR_FOOTPRINT`); then the rays' starts (`StartGrid`, from `STARTS_AT`); then what the
 /// host draws that reads the map (`RECEIVER_BOXES_AT`); then where the passes written by hand
-/// find the list's parts (`HDR_CELLS`); and last the world's columns that changed
-/// (`COLUMNS_AT`).
-pub const HDR_VEC4S: usize = COLUMNS_AT + 1 + 2 * COLUMN_CAP;
+/// find the list's parts (`HDR_CELLS`); and last the world's rects that changed
+/// (`RECTS_AT`).
+pub const HDR_VEC4S: usize = RECTS_AT + 1 + 2 * RECT_CAP;
 pub const HDR_WORDS: usize = 4 * HDR_VEC4S;
 /// The cast's number, counted up from one each cast. A tile the cast lists to cast is marked
 /// with it (`list_marks_at`), and a tile it damages is named by it (`reads_at`).
@@ -566,7 +566,7 @@ pub const HDR_SLIDE: usize = HDR_PARKED_ITEMS + 1;
 /// Past the words the map's side lays out, two words the host sets each cast: the number of
 /// the cast in which the world's receivers were last stood, which is this cast's where it
 /// stands them again (`LIST_RECEIVERS`; pxl-render light_mark.wgsl); and the number of the
-/// last cast before this one that owed a slide because the box slid or a column changed
+/// last cast before this one that owed a slide because the box slid or a rect changed
 /// (`slide_at`; light_slide.wgsl).
 pub const HDR_WORLD: usize = HDR_SLIDE + 1;
 pub const HDR_SLIDE_CAST: usize = HDR_WORLD + 1;
@@ -586,10 +586,10 @@ pub const HDR_LAST_RANGE: usize = HDR_HITS + 1;
 const HDR_LAYOUT_VEC4S: usize = 10;
 /// The words `hdr_layout` lays out.
 const HDR_LAYOUT_WORDS: usize = 16 + 2 * LIST_CNT as usize;
-/// The world's columns that changed since the cast before, where they did and the epoch goes
-/// on (`Column`, `Light::reaches`): their count in the first word of a vec4, then two vec4s
-/// each, holding its four floats and its first and last band, up to `COLUMN_CAP`.
-pub const COLUMNS_AT: usize = RECEIVER_BOXES_AT + 1 + 2 * RECEIVER_BOX_CAP + HDR_LAYOUT_VEC4S;
+/// The world's rects that changed since the cast before, where they did and the epoch goes
+/// on (`Rect`, `Light::reaches`): their count in the first word of a vec4, then two vec4s
+/// each, holding its four floats and its first and last band, up to `RECT_CAP`.
+pub const RECTS_AT: usize = RECEIVER_BOXES_AT + 1 + 2 * RECEIVER_BOX_CAP + HDR_LAYOUT_VEC4S;
 const _: () = assert!(
     HDR_LAST_RANGE + 1 < HDR_CELLS + 4 * HDR_LAYOUT_VEC4S,
     "the header holds the words it lays"
@@ -1251,14 +1251,14 @@ pub fn depth<A>(s: &Light, trace: &Trace<A>) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    /// A column taken into another holds both, every column and band of either.
+    /// A rect taken into another holds both, every rect and band of either.
     #[test]
-    fn a_column_held_holds_both() {
-        let mut a = Column {
+    fn a_rect_held_holds_both() {
+        let mut a = Rect {
             at: [0.0, 0.0, 1.0, 1.0],
             band_range: [22, 22],
         };
-        a.hold(Column {
+        a.hold(Rect {
             at: [-5.0, 2.0, -4.0, 9.0],
             band_range: [20, 21],
         });

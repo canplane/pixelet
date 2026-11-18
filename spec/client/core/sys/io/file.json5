@@ -53,22 +53,22 @@
   },
   write: {
     $type: "u32",
-    $description: "The children of the tree packet a shard's file and an edit batch hold after their\nformat byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made\nit in a shard's file, in the order made in a batch, where void erases (pxl-core\ndomain/layer/object/store.rs `Write`). A record a class's (pxl-spec object.rs),\nits row and its fields as columns.",
+    $description: "The children of the tree packet a shard's file and an edit batch hold after their\nformat byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made\nit in a shard's file, in the order made in a batch, where void erases (pxl-core\ndomain/layer/object/store.rs `Write`). A record a class's (pxl-spec object.rs),\nits row and its fields as lanes.",
     KEY: {
       $value: 0,
-      $description: "A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.",
+      $description: "A `strs` lane holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.",
     },
     ASSET_ID: {
       $value: 1,
-      $description: "A `u32[]` column holding each row's catalog value.",
+      $description: "A `u32[]` lane holding each row's catalog value.",
     },
     TEXT_ROW: {
       $value: 2,
-      $description: "A `u32[]` column holding, for each marker with a text, the row that text is for.",
+      $description: "A `u32[]` lane holding, for each marker with a text, the row that text is for.",
     },
     TEXT: {
       $value: 3,
-      $description: "A `strs` column holding those markers' texts.",
+      $description: "A `strs` lane holding those markers' texts.",
     },
   },
   top: {
@@ -76,11 +76,11 @@
     $description: "The children of the tree packet the top, (OBJECT, TOP), holds after its format byte, by index:\neach row a shard holding objects, which only its leaves are under.",
     SHARD: {
       $value: 0,
-      $description: "A `strs` column holding each row's shard by its quadkey.",
+      $description: "A `strs` lane holding each row's shard by its quadkey.",
     },
     FOLD: {
       $value: 1,
-      $description: "A `u32[]` column holding what each row's leaves fold to, its word in the object tree\n(pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.",
+      $description: "A `u32[]` lane holding what each row's leaves fold to, its word in the object tree\n(pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.",
     },
   },
   format: {

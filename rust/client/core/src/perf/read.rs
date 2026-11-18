@@ -316,7 +316,7 @@ fn view() -> ViewSection {
     let [eye_x, eye_y, eye_z] = eye.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let pivot = controller::pivot();
     let [pivot_x, pivot_y, pivot_z] = pivot.map_or([f64::NAN; 3], |p| q3::unpack(&p));
-    let [pivot_lon, pivot_lat, pivot_alt] =
+    let [pivot_lon, pivot_lat, pivot_ele] =
         pivot.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     ViewSection {
@@ -331,7 +331,7 @@ fn view() -> ViewSection {
         pivot_z,
         pivot_lon,
         pivot_lat,
-        pivot_alt,
+        pivot_ele,
         hover_x,
         hover_y,
         hover_z,

@@ -62,7 +62,7 @@ impl Form {
     }
 }
 
-/// A tile's lines, structure-of-arrays: a column a line, then a column a point.
+/// A tile's lines, structure-of-arrays: a lane a line, then a lane a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
     pub starts: Vec<u32>,      // Line d holds the points starts[d]..starts[d + 1].
@@ -567,7 +567,7 @@ pub struct Table<'a> {
 }
 
 impl<'a> Table<'a> {
-    /// Refused unless the columns are one tile's separation, consistently sized.
+    /// Refused unless the lanes are one tile's separation, consistently sized.
     pub fn of(
         (starts, points, heights, widths, asset_ids, forms, clearances, first_zooms): <Packet as Shape>::Read<
             'a,
@@ -614,25 +614,25 @@ impl<'a> Table<'a> {
         }
     }
 
-    /// A client's own columns, on the heap and refused without a panic: every column but
+    /// A client's own lanes, on the heap and refused without a panic: every lane but
     /// `first_zooms`, which only a fold reads; a client reads a brick's lines whole
     /// (bake/tile/terrain.rs `brick_lines`).
     pub(crate) fn to_client(&self) -> Result<Separation, TryReserveError> {
-        fn column<T: Copy>(src: &[T]) -> Result<Vec<T>, TryReserveError> {
-            let mut column = Vec::new();
-            column.try_reserve_exact(src.len())?;
-            column.extend_from_slice(src);
-            Ok(column)
+        fn lane<T: Copy>(src: &[T]) -> Result<Vec<T>, TryReserveError> {
+            let mut lane = Vec::new();
+            lane.try_reserve_exact(src.len())?;
+            lane.extend_from_slice(src);
+            Ok(lane)
         }
         Ok(Separation {
-            starts: column(self.starts)?,
-            points: column(self.points)?,
-            heights: column(self.heights)?,
+            starts: lane(self.starts)?,
+            points: lane(self.points)?,
+            heights: lane(self.heights)?,
             first_zooms: Vec::new(),
-            widths: column(self.widths)?,
-            asset_ids: column(self.asset_ids)?,
-            forms: column(self.forms)?,
-            clearances: column(self.clearances)?,
+            widths: lane(self.widths)?,
+            asset_ids: lane(self.asset_ids)?,
+            forms: lane(self.forms)?,
+            clearances: lane(self.clearances)?,
         })
     }
 }

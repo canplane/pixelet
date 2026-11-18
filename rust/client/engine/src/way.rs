@@ -18,7 +18,7 @@ fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
 }
 
 /// The spans of a brick's columns and of the ring around it, read in place as its fill keeps
-/// them (pxl-engine fill.rs `spans`, clipmap.rs `KeptSpans`): column `c`'s face cell and how many
+/// them (pxl-engine fill.rs `spans`, clipmap.rs `KeptSpans`): column `c`'s top ground cell and how many
 /// spans it has (`SpanList`), and its `j`-th span with its value.
 pub trait SpanTable {
     fn hdr(&self, c: [i32; 2]) -> (i32, u32);
@@ -104,14 +104,14 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 
 /// What the ways write in cell `z` of column `c` at zoom `cell_zoom`, where its spans and those
 /// beside it are kept in `k` (`at` of its own). A deck's slab or its pier comes first, or else a
-/// bore's air (`Sentinel::Void`). Under its face cell, where a cave may take it (pxl-spec
-/// `ground::face_cell`), it is otherwise the way's asset id wherever a bore's air lies beside
+/// bore's air (`Sentinel::Void`). Under its top ground cell, where a cave may take it (pxl-spec
+/// `ground::ele_cell`), it is otherwise the way's asset id wherever a bore's air lies beside
 /// it, under or over it or across one of its four faces, the first in `near`'s order; so a cave
 /// never opens into a way, whatever carves the ground. Otherwise it is `NOTHING`. It is read from
 /// the spans in place, the column's own first, and a cell the column writes reads nothing beside
 /// it.
 pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32 {
-    let (face, n) = k.hdr(c);
+    let (ele_cell, n) = k.hdr(c);
     let v = at(k, c, n, cell_zoom, z);
     if v != NOTHING {
         return if v & AIR_OF != 0 {
@@ -121,7 +121,7 @@ pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32
         };
     }
     let mut m = 1;
-    while z < face && m < 7 {
+    while z < ele_cell && m < 7 {
         let (b, zb) = beside(c, m, z);
         let v = at(k, b, k.hdr(b).1, cell_zoom, zb);
         if v != NOTHING && v & AIR_OF != 0 {
@@ -133,23 +133,23 @@ pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32
 }
 
 /// The leaf cells between which column `c`'s cells at zoom `cell_zoom` hold what the ways
-/// write there (`way_cell`), where its ground's top is `top` leaf cells: from the lowest to
+/// write there (`way_cell`), where its ground's elevation is `ele` leaf cells: from the lowest to
 /// past the highest, or `ground::EMPTY` where they write none. It covers its own spans' cells
-/// (`fill_range`), with a bore's air only as far as the top, above which a cell is air
-/// whatever writes it; and under its face cell, the cells that a bore's air beside it lines
+/// (`fill_range`), with a bore's air only as far as the elevation, above which a cell is air
+/// whatever writes it; and under its top ground cell, the cells that a bore's air beside it lines
 /// where no slab or pier of that column fills the cell read (`bare`). A lined cell is under
-/// the face's cell, so under the top. So the result is exactly the hull of the cells
+/// the top ground cell, so under the elevation. So the result is exactly the hull of the cells
 /// `way_cell` reads something in, read from the spans.
-pub fn lined_hull(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, top: i32) -> [i32; 2] {
+pub fn lined_hull(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, ele: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
-    let (face, n) = k.hdr(c);
+    let (ele_cell, n) = k.hdr(c);
     let [mut lo, mut hi] = ground::EMPTY;
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
         let [first, last] = fill_range(cell_zoom, run);
         let end = if v & AIR_OF != 0 {
-            ((last + 1) * s).min(top)
+            ((last + 1) * s).min(ele)
         } else {
             (last + 1) * s
         };
@@ -158,18 +158,18 @@ pub fn lined_hull(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, top: i32) ->
         }
         j += 1;
     }
-    // A column with no face lines nothing, and has no cell under its face to name.
-    let mut m = if face == i32::MIN { 7 } else { 1 };
+    // A column with no ground lines nothing, and has no top ground cell to name.
+    let mut m = if ele_cell == i32::MIN { 7 } else { 1 };
     while m < 7 {
         let (b, dz) = beside(c, m, 0);
         let nb = k.hdr(b).1;
         let mut j = 0;
         while j < nb {
             let (run, v) = k.span(b, j);
-            // Air read at `z + dz` lines `z`, under the face cell, where no slab or pier of its
+            // Air read at `z + dz` lines `z`, under the top ground cell, where no slab or pier of its
             // column fills it.
             let [first, last] = fill_range(cell_zoom, run);
-            let last = last.min(face - 1 + dz);
+            let last = last.min(ele_cell - 1 + dz);
             let (from, to) = (
                 bare(k, b, nb, cell_zoom, [first, last], 1),
                 bare(k, b, nb, cell_zoom, [last, first], -1),
@@ -214,13 +214,13 @@ fn bare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pxl_spec::ground::{cells, face_cell, face_ele};
+    use pxl_spec::ground::{cells, ele_cell, ele_drawn};
     use pxl_spec::way::PIER;
 
-    /// A column: its face cell, its spans and how many it holds.
+    /// A column: its top ground cell, its spans and how many it holds.
     type Column = (i32, [([i32; 2], u32); 4], u32);
 
-    /// A column and the four beside it, each a face cell and its spans.
+    /// A column and the four beside it, each a top ground cell and its spans.
     struct Five([Column; 5]);
 
     impl Five {
@@ -238,8 +238,8 @@ mod tests {
 
     impl SpanTable for Five {
         fn hdr(&self, c: [i32; 2]) -> (i32, u32) {
-            let (face, _, n) = self.of(c);
-            (*face, *n)
+            let (ele_cell, _, n) = self.of(c);
+            (*ele_cell, *n)
         }
         fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
             self.of(c).1[j as usize]
@@ -247,7 +247,7 @@ mod tests {
     }
 
     /// `lined_hull` is the hull of the cells `way_cell` writes, a cell at a time, with a bore's
-    /// air held to the top. It is tried for every way a slab, a pier or air can lie over another,
+    /// air held to the elevation. It is tried for every way a slab, a pier or air can lie over another,
     /// beside it, or over and under it, at zooms from the leaves to three coarser.
     #[test]
     fn bound_is_hull() {
@@ -261,8 +261,11 @@ mod tests {
         for _ in 0..20_000 {
             let cell_zoom = LEAF_CELL_ZOOM - next(4);
             let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
-            let top = next(120) as i32 - 60;
-            let face = face_cell(cell_zoom, face_ele(cell_zoom, cells(cell_zoom, top as f32)));
+            let ele = next(120) as i32 - 60;
+            let ele_cell = ele_cell(
+                cell_zoom,
+                ele_drawn(cell_zoom, cells(cell_zoom, ele as f32)),
+            );
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
                 let n = next(5);
@@ -279,7 +282,7 @@ mod tests {
                 col.0 = if k == 0 && next(8) == 0 {
                     i32::MIN
                 } else {
-                    face
+                    ele_cell
                 };
             }
             let k = Five(five);
@@ -290,7 +293,7 @@ mod tests {
                     continue;
                 }
                 let end = if v == Sentinel::Void as u32 {
-                    ((z + 1) * s).min(top)
+                    ((z + 1) * s).min(ele)
                 } else {
                     (z + 1) * s
                 };
@@ -299,9 +302,9 @@ mod tests {
                 }
             }
             assert_eq!(
-                lined_hull(&k, [0, 0], cell_zoom, top),
+                lined_hull(&k, [0, 0], cell_zoom, ele),
                 hull,
-                "{:?} at {cell_zoom}, top {top}",
+                "{:?} at {cell_zoom}, ele {ele}",
                 k.0
             );
         }

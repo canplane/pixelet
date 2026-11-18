@@ -2,7 +2,7 @@
 
 //! The registered models. A registration (asset.rs) builds and seals each
 //! model before it joins. A model's mesh is one heap block laid out in
-//! columns: positions, normals, UVs, joints, weights, then indices. The mesh
+//! lanes: positions, normals, UVs, joints, weights, then indices. The mesh
 //! stays in glTF's Y-up and unscaled; whatever draws the model turns it Z-up
 //! and scales it to its registered height (`Model::scale`). A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
@@ -67,7 +67,7 @@ pub(crate) struct MeshRef {
 }
 
 pub(crate) struct Model {
-    /// The model's mesh: the vertex columns, then the indices.
+    /// The model's mesh: the vertex lanes, then the indices.
     words: Box<[u32]>,
     handle: u32,
     vertex_cnt: u32,
@@ -287,7 +287,7 @@ impl Model {
         })
     }
 
-    /// The model's mesh to write: the vertex columns, then the indices.
+    /// The model's mesh to write: the vertex lanes, then the indices.
     pub(crate) fn words(&mut self) -> &mut [u32] {
         &mut self.words
     }
@@ -347,7 +347,7 @@ impl Model {
         pause: impl Fn() -> P,
     ) {
         self.scale = scale;
-        // Its positions are the mesh's first column.
+        // Its positions are the mesh's first lane.
         let positions = &self.words[..self.vertex_cnt as usize * 3];
         let mut far = 0.0f32;
         for (k, run) in positions
@@ -445,7 +445,7 @@ impl Model {
 
     /// How far any vertex lies from the origin as the pose `at` skins it,
     /// unscaled. A vertex is skinned by its joints' palettes blended by its
-    /// weights. The block's columns lie one after another, each a vertex
+    /// weights. The block's lanes lie one after another, each a vertex
     /// count long (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2,
     /// joints 4, weights 4; scene/model/asset.rs).
     async fn radius_at<P: Future<Output = ()>>(
@@ -482,15 +482,15 @@ impl Model {
         vertices: Range<usize>,
     ) -> impl Iterator<Item = [f32; 3]> + 'a {
         let cnt = self.vertex_cnt as usize;
-        let column = move |k: usize| k * cnt;
-        // The vertex columns lead the block, which is written before `seal`.
+        let lane = move |k: usize| k * cnt;
+        // The vertex lanes lead the block, which is written before `seal`.
         let w = &self.words[..cnt * MODEL_VERTEX_WORDS as usize];
         vertices.map(move |v| {
-            let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));
+            let p = [0, 1, 2].map(|k| f32::from_bits(w[lane(0) + v * 3 + k]));
             let mut q = [0.0f32; 3];
             for k in 0..4 {
-                let joint = w[column(8) + v * 4 + k] as usize;
-                let weight = f32::from_bits(w[column(12) + v * 4 + k]);
+                let joint = w[lane(8) + v * 4 + k] as usize;
+                let weight = f32::from_bits(w[lane(12) + v * 4 + k]);
                 let Some(m) = palette
                     .get(joint * 16..joint * 16 + 16)
                     .filter(|_| weight != 0.0)

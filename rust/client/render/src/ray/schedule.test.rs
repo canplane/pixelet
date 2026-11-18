@@ -11,7 +11,7 @@ fn still() -> CastRead {
         shadow: true,
         light_made: true,
         content_same: true,
-        world_columns: false,
+        world_rects: false,
         corner: [0; 2],
         range: [0; 2],
         receivers_same: true,
@@ -78,7 +78,7 @@ fn the_light_casts_where_it_moved() {
             ..still()
         },
         CastRead {
-            world_columns: true,
+            world_rects: true,
             ..still()
         },
     ] {

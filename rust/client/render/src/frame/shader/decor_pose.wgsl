@@ -3,8 +3,8 @@
 // Generates the decor of each record of a listed pair, one thread a record: its footing, then
 // its pose (pxl-content `generation::placement`). Decor stands on the world with nothing
 // placed, and nothing placed stays nothing down a descent, so no line
-// of the world is kept. A column's surface is read from the column (`surface`, which answers
-// as `support::column_surface` does), and only a column under ways is walked cell by cell. The
+// of the world is kept. The surface over a cell is read from the cell's ground (`surface`, which answers
+// as `support::surface` does), and only under ways is the way down walked cell by cell. The
 // loop asks the world from one place (`world_cell`), as a GPU inlines a call at every place it
 // is called from, and a thread then holds across the ask only what the loop reads after it. The
 // pass keeps no stack, no array and no struct in a `var`.
@@ -22,9 +22,9 @@ const SURFACE_NONE = 0u;
 const SURFACE_MET = 1u;
 const SURFACE_WALK = 2u;
 
-/// What a column holds of its surface (`support::column_surface`): none; a surface met at `z`,
+/// What a cell's words tell of the surface over it (`support::surface`): none; a surface met at `z`,
 /// whose cell keeps `eighths` of its cube; or a surface to walk for from `z` down to `end`.
-/// `end` is the ways' lowest where nothing but ways fills the column, and otherwise the
+/// `end` is the ways' lowest where nothing but ways fills over the cell, and otherwise the
 /// world's floor, as far as the ray down goes.
 struct Surface {
   kind: u32,
@@ -33,24 +33,24 @@ struct Surface {
   end: i32,
 }
 
-/// The surface of column `g` at `zoom`, as `cast::walk` down the column finds it, as far as
-/// the column's own words tell.
-fn surface(zoom: u32, g: vec2<i32>) -> Surface {
-  let shard = shard_at(SHARD_UNKNOWN, zoom, g);
+/// The surface over cell `c` at `zoom`, as `cast::walk` straight down finds it, as far as
+/// the cell's own words tell.
+fn surface(zoom: u32, c: vec2<i32>) -> Surface {
+  let shard = shard_at(SHARD_UNKNOWN, zoom, c);
   // Past the service area lies its earth, on which no decor stands.
   if (is_past(shard)) {
     return Surface(SURFACE_NONE, 0i, 0u, 0i);
   }
-  // A listed pair's brick is held, so the columns of its leaves are held too, at this zoom
+  // A listed pair's brick is held, so the ground of its leaves is held too, at this zoom
   // and at the finest.
-  let r = bound_over(LOOKUP_NONE, zoom, zoom, zoom, g);
-  let col = ground_column(shard, r.place, zoom, g);
+  let r = bound_over(LOOKUP_NONE, zoom, zoom, zoom, c);
+  let col = ground_at(shard, r.place, zoom, c);
   let s = LEAF_CELL_ZOOM - zoom;
   if (r.b.z < r.b.w) {
     let floor = -(1i << (HEIGHT_BITS - 1u - s));
-    let z = max((r.b.w - 1i) >> s, col.top - 1i);
-    // A column at `zoom` is `1 << (HEIGHT_BITS - s)` cells tall from its floor up, so a walk
-    // from a cell in it reaches the floor within that many cells. A longer walk would start
+    let z = max((r.b.w - 1i) >> s, col.ele_cells - 1i);
+    // The world at `zoom` is `1 << (HEIGHT_BITS - s)` cells tall from its floor up, so a walk
+    // down from a cell in it reaches the floor within that many cells. A longer walk would start
     // outside the world, and it is cut there, as a walk past its end is.
     let end = max(select(floor, r.b.z >> s, col.asset_id == VAL_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
     return Surface(SURFACE_WALK, z, 0u, end);
@@ -58,7 +58,7 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
   if (col.asset_id == VAL_VOID) {
     return Surface(SURFACE_NONE, 0i, 0u, 0i);
   }
-  return Surface(SURFACE_MET, col.top - 1i, eighths(col.part), 0i);
+  return Surface(SURFACE_MET, col.ele_cells - 1i, eighths(col.part), 0i);
 }
 
 /// `generation::overlaps_placed` for the box from `at`, `size` a side: whether a placed decor's
@@ -153,9 +153,9 @@ fn eye_cut(k: u32) -> vec4<i32> {
   return vec4<i32>(i32(eye_word(k)), i32(eye_word(k + 1u)), i32(eye_word(k + 2u)), i32(eye_word(k + 3u)));
 }
 
-/// Where a record's loop stands: reading a column, walking it down, having met its surface, or
+/// Where a record's loop stands: reading a surface, walking down for it, having met its surface, or
 /// posing.
-const STAGE_COLUMN = 0u;
+const STAGE_SURFACE = 0u;
 const STAGE_WALK = 1u;
 const STAGE_MET = 2u;
 const STAGE_POSE = 3u;
@@ -180,15 +180,15 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (part && !is_changed(cell_zoom, vec4<i32>(leaf, leaf + 1i))) {
     return;
   }
-  // The finest clip level that holds the record's leaf column (`DecorQuery::finest`). It is
+  // The finest clip level that holds the record's leaf cell (`DecorQuery::finest`). It is
   // the record's own clip level or finer, as a pair is listed only where its brick's row is
   // held (decor_mark.wgsl).
   let zoom = lookup_from(step_to(LOOKUP_NONE, LEAF_CELL_ZOOM, leaf).place);
   let s = LEAF_CELL_ZOOM - zoom;
-  // The column surface asked, first at the record's clip level and then at the finest. The
+  // The surface asked, first at the record's clip level and then at the finest. The
   // pose is taken about the last one asked.
-  var stage = STAGE_COLUMN;
-  var column_zoom = cell_zoom;
+  var stage = STAGE_SURFACE;
+  var surface_zoom = cell_zoom;
   var z = 0i;
   var z_end = 0i;
   var eighths = 0u;
@@ -206,8 +206,8 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   var ask = 0i;
   var edited = false;
   loop {
-    if (stage == STAGE_COLUMN) {
-      let f = surface(column_zoom, vec2<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL_ZOOM - column_zoom)), leaf.y >> (LEAF_CELL_ZOOM - column_zoom)));
+    if (stage == STAGE_SURFACE) {
+      let f = surface(surface_zoom, vec2<i32>(wrap_idx(surface_zoom, leaf.x >> (LEAF_CELL_ZOOM - surface_zoom)), leaf.y >> (LEAF_CELL_ZOOM - surface_zoom)));
       if (f.kind == SURFACE_NONE) {
         recs[r] = UNGENERATED;
         return;
@@ -218,14 +218,14 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       stage = select(STAGE_WALK, STAGE_MET, f.kind == SURFACE_MET);
     }
     if (stage == STAGE_MET) {
-      if (column_zoom == cell_zoom) {
+      if (surface_zoom == cell_zoom) {
         let q = LEAF_CELL_ZOOM - cell_zoom;
         recs[r + 3u] = u32((z + 1i) * (1i << q));
         recs[r + 4u] = u32(sink_share(eighths) * f32(1u << (q + FRAC_W)) + 0.5);
       }
-      if (column_zoom != zoom) {
-        column_zoom = zoom;
-        stage = STAGE_COLUMN;
+      if (surface_zoom != zoom) {
+        surface_zoom = zoom;
+        stage = STAGE_SURFACE;
         continue;
       }
       // The seed is the leaf cell's again, and its draws are taken in order
@@ -250,8 +250,8 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let voted = ask >= voting;
     let e = ask - voting * i32(voted);
     if (stage == STAGE_WALK) {
-      ask_zoom = column_zoom;
-      c = vec3<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL_ZOOM - column_zoom)), leaf.y >> (LEAF_CELL_ZOOM - column_zoom), z);
+      ask_zoom = surface_zoom;
+      c = vec3<i32>(wrap_idx(surface_zoom, leaf.x >> (LEAF_CELL_ZOOM - surface_zoom)), leaf.y >> (LEAF_CELL_ZOOM - surface_zoom), z);
     } else if (!voted) {
       let d = ask / 4i + 1i;
       let along = select(d, -d, (ask & 1i) == 0i);

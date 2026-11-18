@@ -2,9 +2,9 @@
 
 //! Where something stands: the support, the floor and the ceiling over a
 //! point, found by climbing as a body would. Each is asked of the point's
-//! cell, split into columns, with a ray straight up or down through each
-//! column (`SplitCell`). That ray is the one every reader casts
-//! (`World::along`). In any column it finds the first cell that fills or,
+//! cell, split into parts, with a ray straight up or down through each
+//! part (`SplitCell`). That ray is the one every reader casts
+//! (`World::along`). In any part it finds the first cell that fills or,
 //! starting inside what fills, the first cell that does not.
 //!
 //! The cell is the one the eye draws the ground with where the point is,
@@ -143,12 +143,12 @@ fn xy(at: &Q3) -> [f64; 2] {
 }
 
 /// The cell over `at` among the cells the eye draws the ground with there,
-/// split into columns as the module doc says: at the leaf, `across` columns a side at
+/// split into parts as the module doc says: at the leaf, `across` parts a side at
 /// the finest zoom anything is placed at in it; at a coarser zoom, one
-/// column. A body meets what a ray straight up or down through a column's
-/// middle meets. The columns keep the first tile an answer lacked. Each
+/// part. A body meets what a ray straight up or down through a part's
+/// middle meets. The parts keep the first tile an answer lacked. Each
 /// ray's tile lines step on from the last ray's (`path`), which were handed
-/// on from the columns these were made beside, since the rays climb the same
+/// on from the parts these were made beside, since the rays climb the same
 /// tiles over the same tile cache.
 struct SplitCell<'w> {
     world: &'w World,
@@ -162,7 +162,7 @@ struct SplitCell<'w> {
     /// wherever they go.
     asks: Zoom,
     path: Path,
-    /// Where the last column's ray ended. A ray from the same point goes on
+    /// Where the last part's ray ended. A ray from the same point goes on
     /// from there, and `lack` holds what the descent to there lacked.
     descent: Option<Descent>,
 }
@@ -171,15 +171,15 @@ impl<'w> SplitCell<'w> {
     /// The cell drawn over `xy` where the height is not known, with the top
     /// of its ground: the cell the eye draws the ground with at the ground's
     /// own surface there (`settled`). None with no eye: nothing is observed.
-    /// It starts from the cell drawn at the column's point nearest the eye,
-    /// the finest the column can be drawn with.
+    /// It starts from the cell drawn at the point over `xy` nearest the eye,
+    /// the finest the cells over `xy` can be drawn with.
     fn over(world: &'w World, xy: [f64; 2], path: Path) -> Option<(SplitCell<'w>, Option<f64>)> {
         let c = SplitCell::of(world, xy, change::size(xy, None)?, path);
-        Some(c.settled(xy, |c| c.surface()))
+        Some(c.settled(xy, |c| c.ele_u()))
     }
 
     /// The cell the eye draws where what is asked for over `xy` is found, and
-    /// what was found: `find` asks a cell for a height in its column, and while the
+    /// what was found: `find` asks a cell for a height over it, and while the
     /// cell the eye draws at the height found is coarser than the cell
     /// asked, that one is asked in turn. What is found far from where the
     /// asking started is a place of its own, at the size the eye sets there.
@@ -226,13 +226,13 @@ impl<'w> SplitCell<'w> {
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
-        let column = Aabb {
+        let over = Aabb {
             min: [corner[0], corner[1], BOUND.min[2]],
             max: [corner[0] + side, corner[1] + side, BOUND.max[2]],
         };
         let asks = size.max(cell_zoom);
         let finer = world
-            .finest_in(&column)
+            .finest_in(&over)
             .map_or(0, |z| z.min(asks).saturating_sub(cell_zoom));
         SplitCell {
             world,
@@ -247,14 +247,14 @@ impl<'w> SplitCell<'w> {
         }
     }
 
-    /// For each column, the box of the first cell that its ray from the
+    /// For each part, the box of the first cell that its ray from the
     /// height `z` to the height `to`, up or down, stops at (`until`).
     fn rays(&mut self, z: f64, to: f64, until: Until) -> impl Iterator<Item = Aabb> + use<'_, 'w> {
         (0..self.across * self.across)
             .filter_map(move |k| self.meet(k, z, to, until).val().flatten())
     }
 
-    /// What column `k`'s ray meets, with what the world held along the way,
+    /// What cell `k`'s ray meets, with what the world held along the way,
     /// read at the cell's size (`asks`). A ray that meets nothing before a
     /// lack tells nothing past it.
     fn meet(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
@@ -286,12 +286,12 @@ impl<'w> SplitCell<'w> {
         ]
     }
 
-    /// The drawn top of what column `k` holds under its open cell `open`
-    /// (pxl-engine `cast::top`): what the column's ray down from the middle
+    /// The drawn top of what cell `k` holds under its open cell `open`
+    /// (pxl-engine `cast::top`): what the part's ray down from the middle
     /// of `open` meets, the cube's top where that cell fills its cube whole,
     /// else the top of its fill box. None where it meets nothing: a cell
     /// filled short of its cube is drawn as a box inset on every side
-    /// (pxl-engine `cast::fill_bound`), and a column beside that box has
+    /// (pxl-engine `cast::fill_bound`), and a part beside that box has
     /// nothing of the cell under it.
     fn top_under(&mut self, k: u32, open: &Aabb) -> Option<f64> {
         let from = (open.min[2] + open.max[2]) / 2.0;
@@ -300,11 +300,11 @@ impl<'w> SplitCell<'w> {
     }
 
     /// The height a body at `z` rises to out of what fills there in any
-    /// column. It climbs out of each column's fill in turn, until no column
-    /// fills where the body stands. A column's fill ends where its first
+    /// part. It climbs out of each part's fill in turn, until no part
+    /// fills where the body stands. A part's fill ends where its first
     /// open cell from `z` up begins, at the drawn top of the cell under that
-    /// one (`top_under`); a column whose cell at `z` does not fill leaves `z`
-    /// as it is. A column whose ray went its reach and met no open cell is
+    /// one (`top_under`); a part whose cell at `z` does not fill leaves `z`
+    /// as it is. A part whose ray went its reach and met no open cell is
     /// filled to the top of the world's bound, over ground a coarser tile
     /// stands in for as over ground held; a ray that ended at tiles not held
     /// fills nothing, since what a zoom does not hold is absent there.
@@ -337,7 +337,7 @@ impl<'w> SplitCell<'w> {
         }
     }
 
-    /// The top of the highest solid at or under `z` in any column, above the
+    /// The top of the highest solid at or under `z` in any part, above the
     /// bottom of the world's bound: `cell_top`, the top `depenetrate` found within
     /// the cells at `z`, or what the rays down from `z` meet, which start in
     /// the cell over that solid.
@@ -353,7 +353,7 @@ impl<'w> SplitCell<'w> {
             .reduce(f64::max)
     }
 
-    /// The bottom of the lowest solid over `z` and under `to` in any column.
+    /// The bottom of the lowest solid over `z` and under `to` in any part.
     /// The rays go up from `z` and start in the cell at `z`, so they never
     /// meet a solid at `z` itself.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
@@ -363,22 +363,22 @@ impl<'w> SplitCell<'w> {
             .reduce(f64::min)
     }
 
-    /// The top of the highest solid in any column, within the world's
+    /// The top of the highest solid in any part, within the world's
     /// bound. It is
-    /// each column's surface at its zoom, the one support every reader asks
-    /// (`World::column_surface`, pxl-engine `support::column_surface`).
+    /// each cell's surface at its zoom, the one support every reader asks
+    /// (`World::surface`, pxl-engine `support::surface`).
     fn highest(&mut self) -> Option<f64> {
         let cell_zoom = GROUND.cell_zoom(self.zoom) + self.across.ilog2();
         let unit = units(cell_zoom);
         let mut most: Option<f64> = None;
         for k in 0..self.across * self.across {
             let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
-            let g = [
+            let c = [
                 middle(k % self.across, self.corner[0]),
                 middle(k / self.across, self.corner[1]),
             ]
             .map(|v| libm::floor(v / unit) as i32);
-            let (answer, _) = self.world.column_surface(cell_zoom, g);
+            let (answer, _) = self.world.surface(cell_zoom, c);
             if let Some(l) = answer.lack() {
                 self.lack.get_or_insert(l);
             }
@@ -390,11 +390,11 @@ impl<'w> SplitCell<'w> {
         most
     }
 
-    /// The top of the cell's ground, in units.
-    fn surface(&mut self) -> Option<f64> {
+    /// The elevation of the cell's ground, in units.
+    fn ele_u(&mut self) -> Option<f64> {
         let cell_zoom = GROUND.cell_zoom(self.zoom);
         let side = units(cell_zoom);
-        let answer = self.world.surface_of(
+        let answer = self.world.ground_of(
             cell_zoom,
             self.corner
                 .map(|v| libm::floor((v + side / 2.0) / side) as i32),
@@ -402,7 +402,7 @@ impl<'w> SplitCell<'w> {
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
-        answer.val().flatten().map(|s| s.top)
+        answer.val().flatten().map(|g| g.ele_u)
     }
 
     /// `v` where the world held all that was asked of it, whatever cells the
@@ -509,7 +509,7 @@ impl World {
             (t, cell_top) => c.below(t, cell_top),
         };
         let up = c.above(z, BOUND.max[2]).map(|a| c.depenetrate(a).0);
-        let nearest = [down, up, c.surface()]
+        let nearest = [down, up, c.ele_u()]
             .into_iter()
             .flatten()
             .min_by(|a, b| (a - z).abs().total_cmp(&(b - z).abs()));
@@ -635,7 +635,7 @@ impl World {
     ///
     /// Returns the floor it ends on. The inner None means a ceiling stopped
     /// it; the outer None means what the eye asks of `to` or of the cell it
-    /// leaves is not held. A ceiling is asked only as high as the box, never past it. The columns' rays step their tile lines on
+    /// leaves is not held. A ceiling is asked only as high as the box, never past it. The parts' rays step their tile lines on
     /// from `path`, the walk's last, and leave theirs there.
     fn step(
         &self,

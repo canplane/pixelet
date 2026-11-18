@@ -184,7 +184,7 @@ const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
 }
 
-/// The tree's columns as pxl-engine `object` reads them, so that the CPU
+/// The tree's lanes as pxl-engine `object` reads them, so that the CPU
 /// walks the tree exactly as the GPU does.
 pub(in crate::domain::layer) struct Table<'a>(&'a Tree);
 
@@ -223,7 +223,7 @@ pub(crate) struct Store {
     tree: Tree,
     ext: Pool,
     /// A counter that advances with every write that changes the tree, so a
-    /// reader holding a copy of the columns, such as the GPU, knows to take
+    /// reader holding a copy of the lanes, such as the GPU, knows to take
     /// them again.
     revision: u32,
 }
@@ -246,7 +246,7 @@ pub(super) type Tree = SparseTree<u32, 3>;
 type Enter<'a> = dyn FnMut(Zoom, [i32; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
-    /// Whether the host holds the tree's columns, which the renderer lends
+    /// Whether the host holds the tree's lanes, which the renderer lends
     /// it in place for the GPU to read (pxl-render gpu/api.rs `in_flight`).
     /// Nothing may write the tree until the host gives them back
     /// (repository.rs `Change`).
@@ -515,7 +515,7 @@ impl Store {
     /// down from its parent (pxl-engine `object`). It equals what a descent
     /// from the top would carry to `node`.
     pub(in crate::domain::layer) fn cursor(&self, (zoom, at): Node<3>) -> NodeSlot {
-        object::cursor(&self.columns(), object::ROOT, zoom, at)
+        object::cursor(&self.lanes(), object::ROOT, zoom, at)
     }
 
     /// A child's cursor from its parent's; `node` is the child.
@@ -524,10 +524,10 @@ impl Store {
         parent: &NodeSlot,
         (zoom, at): Node<3>,
     ) -> NodeSlot {
-        object::child(&self.columns(), *parent, zoom, path(zoom, at))
+        object::child(&self.lanes(), *parent, zoom, path(zoom, at))
     }
 
-    pub(in crate::domain::layer) fn columns(&self) -> Table<'_> {
+    pub(in crate::domain::layer) fn lanes(&self) -> Table<'_> {
         Table(&self.tree)
     }
 

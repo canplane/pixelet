@@ -9,8 +9,8 @@
 //! drift. Each cloud in it is drawn as a model, as an impostor or not at all
 //! by its size on the screen (`present_patch`), under the rule the GPU
 //! applies to decor (pxl-content generation.rs `drawing::lod`). A patch is laid
-//! out in the columns the decor and impostor shaders read
-//! (domain/scene/column.rs).
+//! out in the lanes the decor and impostor shaders read
+//! (domain/scene/lane.rs).
 
 use fnv::FnvHashMap;
 
@@ -29,12 +29,12 @@ use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
 use crate::domain::observer::eye;
-use crate::domain::scene::column::{self, GroupRange};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
 use crate::domain::scene::environment::{environment_alt_km, environment_drift};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::lane::{self, GroupRange};
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
 use crate::domain::setting::settings;
@@ -97,7 +97,7 @@ fn shows(local: [f32; 2], d2: f64) -> bool {
 }
 
 struct Patch {
-    /// Its columns, then from `idx` its list, which the renderer uploads.
+    /// Its lanes, then from `idx` its list, which the renderer uploads.
     words: Box<[u32]>,
     handle: u32,
     idx: u32,
@@ -115,7 +115,7 @@ struct CloudLayer {
     /// nothing changed allocates nothing.
     demand: Vec<[i64; 2]>,
     stale: Vec<[i64; 2]>,
-    columns: [Vec<[f32; 5]>; VARIANTS.len()],
+    lanes: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
     /// How far from the eye the nearest cloud drawn last frame stands, or
     /// infinity when none was drawn.
@@ -253,10 +253,10 @@ pub(crate) fn step(draw: &mut DrawList, frame: &Frame) {
             draw.free(b.handle);
         }
     }
-    let (patches, columns) = (&mut c.patches, &mut c.columns);
+    let (patches, lanes) = (&mut c.patches, &mut c.lanes);
     c.demand.retain(|k| !patches.contains_key(k));
     sched::run(c.demand.iter().copied(), |key| {
-        match build(key, base, columns, draw) {
+        match build(key, base, lanes, draw) {
             Some(b) => {
                 patches.insert(key, b);
                 true
@@ -422,22 +422,22 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
         })
 }
 
-/// The patch's clouds as `build` laid them out, read back from its columns:
+/// The patch's clouds as `build` laid them out, read back from its lanes:
 /// each one's middle relative to the patch's corner, with its altitude over the
 /// datum, and its half extent. Reading them back asks nothing of the field's
 /// hash, which is asked once per patch when it is built, and asks the catalog
 /// once per variant.
 fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     let words = &b.words;
-    column::groups(words)
+    lane::groups(words)
         .zip(VARIANTS.map(|file| (widest(file), model_extent(catalog(), file)[2])))
         .flat_map(move |((first, n), (wide, tall))| {
-            let column = GroupRange {
+            let range = GroupRange {
                 first: first as usize,
                 cnt: n as usize,
             };
             (0..n as usize).map(move |i| {
-                let at = |k: usize| f64::from(f32::from_bits(words[column.f32_at(k, i)]));
+                let at = |k: usize| f64::from(f32::from_bits(words[range.f32_at(k, i)]));
                 let scale = at(4);
                 let side = wide * scale / 2.0;
                 ([at(0), at(1), at(2)], [side, side, tall * scale / 2.0])
@@ -445,16 +445,16 @@ fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
         })
 }
 
-/// Builds the clouds of patch `key` into decor's columns, relative to the
+/// Builds the clouds of patch `key` into decor's lanes, relative to the
 /// patch's corner on the field's map, and uploads them. Returns None when the
 /// heap refuses the room.
 fn build(
     key: [i64; 2],
     base: f64,
-    columns: &mut [Vec<[f32; 5]>; VARIANTS.len()],
+    lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()],
     draw: &mut DrawList,
 ) -> Option<Patch> {
-    for l in columns.iter_mut() {
+    for l in lanes.iter_mut() {
         l.clear();
     }
     let mut alt_range = [f32::INFINITY, f32::NEG_INFINITY];
@@ -463,7 +463,7 @@ fn build(
             alt_range[0].min((c.z - c.width / 2.0) as f32),
             alt_range[1].max((c.z + c.width / 2.0) as f32),
         ];
-        columns[c.variant].push([
+        lanes[c.variant].push([
             c.local[0] as f32,
             c.local[1] as f32,
             c.z as f32,
@@ -471,29 +471,29 @@ fn build(
             c.scale as f32,
         ]);
     }
-    let instance_cnt: usize = columns.iter().map(Vec::len).sum();
-    let hdr = 1 + columns.len();
+    let instance_cnt: usize = lanes.iter().map(Vec::len).sum();
+    let hdr = 1 + lanes.len();
     let words = hdr
-        + columns
+        + lanes
             .iter()
             .map(|l| GroupRange::word_cnt(l.len()))
             .sum::<usize>();
     let idx = (words * 4) as u32;
     let mut out = heap::zeroed::<u32>(words + instance_cnt)?;
-    out[0] = columns.len() as u32;
+    out[0] = lanes.len() as u32;
     let mut first = hdr;
-    for (g, l) in columns.iter().enumerate() {
+    for (g, l) in lanes.iter().enumerate() {
         out[1 + g] = l.len() as u32;
-        let column = GroupRange {
+        let range = GroupRange {
             first,
             cnt: l.len(),
         };
         for (i, v) in l.iter().enumerate() {
             for (k, &w) in v.iter().enumerate() {
-                out[column.f32_at(k, i)] = w.to_bits();
+                out[range.f32_at(k, i)] = w.to_bits();
             }
         }
-        out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
+        out[range.flags()..range.flags() + l.len().div_ceil(4)].fill(0);
         first += GroupRange::word_cnt(l.len());
     }
     let Lent {
@@ -562,14 +562,14 @@ fn present_patch(
         far(zlo, zhi, eye[2]),
     ])
     .max(1e-3);
-    let (columns_of, list) = b.words.split_at_mut(b.idx as usize / 4);
+    let (lanes_of, list) = b.words.split_at_mut(b.idx as usize / 4);
     // A patch wholly within THIN_FROM shows every cloud, so no cloud's draw
     // is tested.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
-    let variants = column::groups(columns_of).zip(groups).zip(b.draws);
+    let variants = lane::groups(lanes_of).zip(groups).zip(b.draws);
     for (((off, cnt), (group, (extent, [least, most]))), [model_id, impostor_id]) in variants {
-        let column = GroupRange {
+        let range = GroupRange {
             first: off as usize,
             cnt: cnt as usize,
         };
@@ -578,10 +578,10 @@ fn present_patch(
         let culled = lod(extent * most / nearest) == drawing::CULLED;
         let modeled = lod(extent * least / farthest) == drawing::MODEL;
         for i in 0..if culled { 0 } else { cnt as usize } {
-            if (columns_of[column.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
+            if (lanes_of[range.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
-            let f = |l: usize| f32::from_bits(columns_of[column.f32_at(l, i)]) as f64;
+            let f = |l: usize| f32::from_bits(lanes_of[range.f32_at(l, i)]) as f64;
             let gap = [x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]];
             let d2 = if thin || !modeled {
                 v3::dot(&gap, &gap)

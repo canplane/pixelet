@@ -841,7 +841,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
     let w = built.world();
     let at = spots(&built);
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let cases = vec![
         EyeCase {
             name: "the eye, over the ground",
@@ -936,7 +936,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
     // West of X = 0.
     let west = real_world::build(EYE_WEST);
     let bw = world_bufs(&gpu, &west);
-    let over_w = |g: [i32; 2], up: i32| q8([g[0], g[1], west.top_at(g) + up]);
+    let over_w = |g: [i32; 2], up: i32| q8([g[0], g[1], west.ele_at(g) + up]);
     let c = EyeCase {
         name: "the eye, west of X = 0",
         origin: over_w([EYE_WEST[0] + 90, EYE_WEST[1] + 90], 60),
@@ -984,7 +984,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
     // root.
     let zero = real_world::build(EYE_ZERO);
     let bz = world_bufs(&gpu, &zero);
-    let over_z = |g: [i32; 2], up: i32| q8([g[0], g[1], zero.top_at(g) + up]);
+    let over_z = |g: [i32; 2], up: i32| q8([g[0], g[1], zero.ele_at(g) + up]);
     let c = EyeCase {
         name: "the eye, looking over X = 0",
         origin: over_z([20, EYE_ZERO[1] + 90], 40),
@@ -1033,7 +1033,7 @@ fn entry_of_two_writes_answers_nothing() {
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
     let w = built.world();
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let c = EyeCase {
         name: "the eye, its entries written twice",
         origin: over([EYE[0] + 90, EYE[1] + 90], 60),
@@ -1100,7 +1100,7 @@ fn hand_light_samples_answer_as_cast_walk() {
     let w = built.world();
     let at = spots(&built);
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let cases = vec![
         LightCase {
             name: "the light, about the eye",
@@ -1267,7 +1267,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         origin: q8([
             EYE_WEST[0] - 300,
             EYE_WEST[1] + 90,
-            west.top_at([EYE_WEST[0] + 20, EYE_WEST[1] + 90]) + 40,
+            west.ele_at([EYE_WEST[0] + 20, EYE_WEST[1] + 90]) + 40,
         ]),
         dir: [0.3, 0.2, -0.93],
         side: 1.0,
@@ -1301,7 +1301,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         origin: q8([
             10,
             EYE_ZERO[1] + 90,
-            zero.top_at([10, EYE_ZERO[1] + 90]) + 40,
+            zero.ele_at([10, EYE_ZERO[1] + 90]) + 40,
         ]),
         dir: [0.3, 0.2, -0.93],
         side: 1.0,
@@ -1430,7 +1430,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
     let w = built.world();
     let at = spots(&built);
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let eyes = [
         EyeCase {
             name: "the eye, over the ground",
@@ -1734,7 +1734,7 @@ fn hand_missed_pixels_at_an_edge_answer_as_cast_walk() {
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
     let w = built.world();
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let looking = |name, look| EyeCase {
         name,
         origin: over([EYE[0] + 90, EYE[1] + 90], 60),
@@ -1787,7 +1787,7 @@ fn eye_rays_past_a_frames_hits_answer_as_cast_walk() {
         origin: q8([
             EYE[0] + 90,
             EYE[1] + 90,
-            built.top_at([EYE[0] + 90, EYE[1] + 90]) + 30,
+            built.ele_at([EYE[0] + 90, EYE[1] + 90]) + 30,
         ]),
         look: [0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
@@ -1830,7 +1830,7 @@ fn hand_a_lack_shows_the_deepest_node_held() {
         origin: q8([
             EYE[0] + 90,
             EYE[1] + 90,
-            built.top_at([EYE[0] + 90, EYE[1] + 90]) + 30,
+            built.ele_at([EYE[0] + 90, EYE[1] + 90]) + 30,
         ]),
         look: [0.5, 0.4, -0.77],
         tan: [0.3, 0.2],
@@ -2840,7 +2840,7 @@ fn hand_eye_rec_answers_as_raster() {
     let b = world_bufs(&gpu, &built);
     let at = spots(&built);
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let case = |name, origin, look, tan, far, range| EyeCase {
         name,
         origin,
@@ -3028,7 +3028,7 @@ fn hand_eye_rec_answers_as_raster() {
         q8([
             150,
             EYE_ZERO[1] + 90,
-            zero.top_at([150, EYE_ZERO[1] + 90]) + 100,
+            zero.ele_at([150, EYE_ZERO[1] + 90]) + 100,
         ]),
         [-0.9, 0.1, -0.4],
         [0.3, 0.2],
@@ -3073,7 +3073,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let case = |name, origin| EyeCase {
         name,
         origin,
@@ -3217,7 +3217,7 @@ fn hand_light_rec_answers_as_raster() {
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let about = LightCase {
         name: "the light, about the eye",
         origin: over([EYE[0] + 90, EYE[1] + 90], 40),
@@ -3318,7 +3318,7 @@ fn hand_light_rec_answers_as_raster() {
         origin: q8([
             10,
             EYE_ZERO[1] + 90,
-            zero.top_at([10, EYE_ZERO[1] + 90]) + 40,
+            zero.ele_at([10, EYE_ZERO[1] + 90]) + 40,
         ]),
         range: [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
         ..about
@@ -3358,7 +3358,7 @@ fn hand_beam_rays_answer_as_cast_walk() {
     let w = built.world();
     let at = spots(&built);
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let cases = [
         EyeCase {
             name: "the eye, over the ground",
@@ -3491,7 +3491,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
     let b = world_bufs(&gpu, &built);
     let w = built.world();
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let cases = [
         LightCase {
             name: "the light, about the eye",
@@ -3614,7 +3614,7 @@ fn hand_samples_over_other_zooms_answer_as_cast_walk() {
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
     let w = built.world();
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let case = |range: [Zoom; 2]| EyeCase {
         name: "the eye, over the ground, asked coarse then fine",
         origin: over([EYE[0] + 90, EYE[1] + 90], 60),

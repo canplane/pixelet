@@ -59,7 +59,7 @@ fn zeroed_planes() -> &'static mut BrickMemory {
 /// Holds the eye's and the pivot's clip levels around `center`, in units, X
 /// then Y, with every brick the tiles in `tiles` cover present in its slot.
 /// The pivot's clip levels repeat the eye's finest two. Each brick holds its
-/// columns, tops and ways' spans as its fill keeps them (`fill_columns`),
+/// elevations and ways' spans as its fill keeps them (`fill_cells`),
 /// and its mip levels (pxl-engine `fill::mips`). The clip levels for a center
 /// and its tiles are built once per run (`BUILT`), and each hold gets its own
 /// copy, whatever a test does to it.
@@ -173,7 +173,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             vec![0u32; BRICK_WORDS as usize],
             vec![0u32; SPANS_WORDS as usize],
         );
-        fill_columns(&laid, |k| i32::from(ele[at(k)]), &mut back, &mut scratch);
+        fill_cells(&laid, |k| i32::from(ele[at(k)]), &mut back, &mut scratch);
         let n = clipmap::OWN_CELL_CNT;
         for k in 0..clipmap::OWN_WORDS {
             back[(clipmap::OWN_AT + k) as usize] = (0..n)
@@ -197,19 +197,19 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
     }
 }
 
-/// Writes a brick's columns as a fill does (pxl-engine `fill::columns`,
-/// `fill::spans`), but over cells whose tops `top` gives instead of
-/// computing them from samples. Each column's word, its top, goes into
+/// Writes a brick's cells as a fill does (pxl-engine `fill::elevations`,
+/// `fill::spans`), but over cells whose elevations `ele` gives instead of
+/// computing them from samples. Each cell's ele word goes into
 /// `back`, and the spans of its columns and of its ring, from its lines
 /// (`fill::keep`), go into `scratch`.
-fn fill_columns(
+fn fill_cells(
     sq: &impl brick::Brick,
-    top: impl Fn(u32) -> i32,
+    ele: impl Fn(u32) -> i32,
     back: &mut [u32],
     scratch: &mut [u32],
 ) {
     for i in 0..BRICK_CELL_CNT {
-        back[(clipmap::COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
+        back[(clipmap::ELE_AT + i) as usize] = ele(i) as u32 & 0xffff;
     }
     for i in 0..clipmap::SPANS_COLUMN_CNT {
         fill::keep(sq, scratch, i);
@@ -276,7 +276,7 @@ fn fill_room() -> &'static mut Clipmap {
     zeroed_planes();
     set_way_pool(WayPool::default());
     FILL.set(FillScratch {
-        ele: vec![0; ELE_COLUMN].leak(),
+        ele: vec![0; ELE_LANE].leak(),
         spans: vec![0; SPANS_WORDS as usize].leak(),
         lines: Vec::new(),
     });
@@ -289,7 +289,7 @@ fn fill_room() -> &'static mut Clipmap {
 /// The tile at `CENTER_TILE` and its packet: rolling ground with a bridge
 /// crossing it from west to east, high enough to stand clear of the ground.
 fn hilly_tile() -> (Quadrant, terrain::TerrainTile, Vec<u8>) {
-    let ele: Vec<i16> = (0..ELE_COLUMN as i32)
+    let ele: Vec<i16> = (0..ELE_LANE as i32)
         .map(|i| ((i * 37) % 11 + (i / 36) % 5) as i16)
         .collect();
     let mut builder = separation::Builder::default();
@@ -301,7 +301,7 @@ fn hilly_tile() -> (Quadrant, terrain::TerrainTile, Vec<u8>) {
         separation::Form::of(BRIDGE as u8),
         0,
     );
-    let cells = (0..terrain::GROUND_COLUMN)
+    let cells = (0..terrain::GROUND_LANE)
         .map(|c| 1 + (c % 7) as GroundId)
         .collect::<Vec<_>>();
     let t = Quadrant::new(LEAF_ZOOM, CENTER_TILE);

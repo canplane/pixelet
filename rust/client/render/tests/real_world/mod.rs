@@ -158,7 +158,7 @@ pub(crate) fn spire(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     most
 }
 
-/// The ground's face at a leaf column as the clip level at `cell_zoom` holds it, in leaf cells.
+/// The ground's face at a leaf cell as the clip level at `cell_zoom` holds it, in leaf cells.
 pub(crate) fn ele(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     let (fx, fy) = (x as f32, y as f32);
     let hills = 300.0 * libm::sinf(fx * 1.3e-5) + 120.0 * libm::cosf(fy * 3.1e-5);
@@ -168,7 +168,7 @@ pub(crate) fn ele(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     (hills + near + fine) as i32 + sunk + spire(eye, cell_zoom, x, y)
 }
 
-/// The leaf column at the middle of column `g` of the clip level at `cell_zoom`.
+/// The leaf cell at the middle of cell `g` of the clip level at `cell_zoom`.
 pub(crate) fn leaf_of(cell_zoom: Zoom, g: i32) -> i32 {
     let s = LEAF_CELL_ZOOM - cell_zoom;
     (g << s) + ((1 << s) >> 1)
@@ -228,8 +228,8 @@ impl BrickSource for World<'_> {
     fn fold_at(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         self.folds[(slot * BRICK_CELL_CNT + i) as usize]
     }
-    fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
-        fill::column_of(self.ground, slot * BRICK_WORDS, i)
+    fn ele_word(&self, _: Zoom, slot: u32, i: u32) -> u32 {
+        fill::ele_word_of(self.ground, slot * BRICK_WORDS, i)
     }
     fn bound_mip(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         fill::mip_of(self.ground, slot * BRICK_WORDS, j, at)
@@ -372,7 +372,7 @@ pub(crate) fn source(
             way::TUNNEL,
         ][line as usize];
         let lift = [10, -25, 2, 60, -2][line as usize];
-        let top_at = |p: [i32; 2]| {
+        let ele_at = |p: [i32; 2]| {
             let leaf = |v: i32, f: i32| (f + v / 8) << s;
             (ele(eye, cell_zoom, leaf(p[0], first[0]), leaf(p[1], first[1])) + lift) as i16
         };
@@ -389,7 +389,7 @@ pub(crate) fn source(
             let flags = way::flags(form, k == 0, k == 1, k == 1);
             segments.push(Segment::words(
                 [point(from), point(to)],
-                [top_at(from), top_at(to)],
+                [ele_at(from), ele_at(to)],
                 [width as u8, asset_id as u8, flags, clearance as u8],
             ));
         }
@@ -397,7 +397,7 @@ pub(crate) fn source(
         ways.push((
             cell_zoom,
             line,
-            [mid[0] << s, mid[1] << s, top_at(m) as i32],
+            [mid[0] << s, mid[1] << s, ele_at(m) as i32],
         ));
     }
     // Every bin holds every segment.
@@ -516,16 +516,16 @@ impl Built {
         }
     }
 
-    /// The ground's top at leaf column `g`, from whichever clip level holds it. What is placed
+    /// The ground's elevation at leaf cell `g`, from whichever clip level holds it. What is placed
     /// is not read.
-    pub(crate) fn top_at(&self, g: [i32; 2]) -> i32 {
-        let (_, column, _, _) = clip::cell(
+    pub(crate) fn ele_at(&self, g: [i32; 2]) -> i32 {
+        let (_, ele_word, _, _) = clip::cell(
             &self.world(),
             Lookup::NONE,
             LEAF_CELL_ZOOM,
             [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1]],
         );
-        clip::column_top(column)
+        clip::ele_of(ele_word)
     }
 }
 
@@ -704,8 +704,8 @@ pub(crate) fn build_with(
     let objects_none = vec![0u32; 16];
     fold(&mut clipmap, &ground_words, &folds, &shards, &pool);
 
-    // The ground's top at leaf column `g`, from whichever clip level holds it.
-    let top_at = |g: [i32; 2]| {
+    // The ground's top at leaf cell `g`, from whichever clip level holds it.
+    let ele_at = |g: [i32; 2]| {
         let w = World {
             clipmap: &clipmap,
             ground: &ground_words,
@@ -714,13 +714,13 @@ pub(crate) fn build_with(
             objects: &objects_none,
             pool: &pool,
         };
-        let (_, column, _, _) = clip::cell(
+        let (_, ele_word, _, _) = clip::cell(
             &w,
             Lookup::NONE,
             LEAF_CELL_ZOOM,
             [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1]],
         );
-        clip::column_top(column)
+        clip::ele_of(ele_word)
     };
 
     // What is placed about the eye and further off, each kind as a leaf of its own.
@@ -734,7 +734,7 @@ pub(crate) fn build_with(
             eye[0] + draw.within(-reach, reach),
             (eye[1] + draw.within(-reach, reach)).max((40 << 16) + 2),
         ];
-        let t = top_at(g);
+        let t = ele_at(g);
         let leaf = |zoom: Zoom, dz: i32| {
             let c = |v: i32| {
                 if zoom >= LEAF_CELL_ZOOM {
@@ -837,7 +837,7 @@ pub(crate) fn build_with(
     let mut lone = Vec::new();
     for k in 0..300 {
         let g = [(-127 << 16) + 16 * k, (43 << 16) + 400 + 16 * (k % 40)];
-        let p = [g[0], g[1], top_at(g) + 30];
+        let p = [g[0], g[1], ele_at(g) + 30];
         let at = [wrap_idx(FINEST, p[0] << 3), p[1] << 3, p[2] << 3];
         let val = if k % 2 == 0 {
             0x150
@@ -891,7 +891,7 @@ pub(crate) fn build_with(
         let at = [
             wrap_idx(LEAF_CELL_ZOOM, g[0]),
             g[1],
-            top_at(g) + scatter.within(0, 2),
+            ele_at(g) + scatter.within(0, 2),
         ];
         placing.put(
             LEAF_CELL_ZOOM,

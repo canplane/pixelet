@@ -2,13 +2,13 @@
 
 //! wgsl-port: the decor the ground holds, never stored, as a tree of hashes. A brick at a
 //! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
-//! column hands its count down to its four children by weights near a half that one hash a
-//! column draws (`near_half`), to the leaf cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
+//! cell hands its count down to its four children by weights near a half that one hash a
+//! cell draws (`near_half`), to the leaf cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
 //! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
 //! lower gives way to it (`retained`). At a zoom, a decor shows as itself where its box keeps
 //! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
 //! keeps none (`shows_at`), placed or generated alike. Every draw is a u32 (xpute-kit
-//! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so every reader, on
+//! `SplitMix32`), seeded by the decor's seed and the cell (`node_seed`), so every reader, on
 //! either side, draws the same.
 
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
@@ -42,14 +42,14 @@ pub fn candidate_at(k: usize, cell: [i32; 2]) -> Candidate {
     }
 }
 
-/// The tags of a column's count and of its split among its four, beside a
+/// The tags of a cell's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
 pub const CNT_TAG: u32 = 0xc047_dec0;
 pub const SPLIT_TAG: u32 = 0x5b17_dec0;
 
-/// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
-/// none. Its root's column (`ROOTS`) holds as many as a hash draws around its mean, the
-/// decor's chance for each leaf cell under it, rounded at a uniform draw. Each column's count
+/// How many of the `k`-th decor the cell `b` at `zoom` holds; a leaf cell holds one or
+/// none. Its root's cell (`ROOTS`) holds as many as a hash draws around its mean, the
+/// decor's chance for each leaf cell under it, rounded at a uniform draw. Each cell's count
 /// is then halved across and along, exactly, by weights its hash draws (`near_half`), with
 /// none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
 pub fn cnt(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
@@ -63,7 +63,7 @@ const fn near_half(w: u32) -> u32 {
     weight(0x7000 + (w >> 16 & 0x1fff), w)
 }
 
-/// The mean a column at `root` holds, in 16.16 fixed point: the chance's top half for each
+/// The mean a cell at `root` holds, in 16.16 fixed point: the chance's top half for each
 /// leaf cell under it.
 const fn mean(chance: u32, root: Zoom) -> u32 {
     (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root))
@@ -253,12 +253,12 @@ const _: () = {
         let shift = 2 * (LEAF_CELL_ZOOM - ROOTS[k]);
         assert!(
             shift < u32::BITS,
-            "a decor's root column's leaf cells, a shift, fit a u32 (`cnt`)"
+            "a decor's root cell's leaf cells, a shift, fit a u32 (`cnt`)"
         );
         let mean = ((ROWS[k].chance >> 16) as u64) << shift;
         assert!(
             mean + 0xffff <= u32::MAX as u64,
-            "a decor's mean a root column, in 16.16, fits a u32 (`cnt`)"
+            "a decor's mean a root cell, in 16.16, fits a u32 (`cnt`)"
         );
         k += 1;
     }

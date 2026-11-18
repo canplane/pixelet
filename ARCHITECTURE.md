@@ -135,8 +135,9 @@ still only a summary: nothing in it can be edited.
 ### The camera grid
 
 One **camera** looks: an **eye**, the direction it faces, and the **pivot** it
-turns about, which is a point ahead of the eye for the orbit camera and the eye
-itself in first person. The character stands at the pivot.
+turns about, which is a point ahead of the eye for the orbit camera and, in
+first person, the point under the eye where the body stands: the eye is half a
+cell under the top of the body's box. The character stands at the pivot.
 
 How finely each part of the view is drawn is set by the **camera grid**, a set
 of angular cells about the eye, each the least the observer promises to tell
@@ -208,7 +209,7 @@ control alike (`pxl-engine world.rs`), each written over the one below:
 ```text
   what is placed, air included            ┐ each is written
   the ways off the ground: decks, bores   │ over the one
-  the air of the caves, under the face    │ below it
+  the air of the caves, under the ground  │ below it
   the grid of the ground, cubes at height ┘
 ```
 
@@ -339,24 +340,29 @@ and forgotten where the data that node read changed, or given up for room once
 it has gone undrawn. The voxels in it are the **record**, and each frame
 the raster draws every one in view that is still **fresh**, still the node the
 eye's ray stops on, whatever that frame's rays reached. So a voxel found once is
-drawn until its data changes or the eye's distance asks another zoom there, and
-rays walk only where something is newly seen. A still camera over a still world
-costs almost nothing, and a frame where nothing it reads moved submits no work
-at all. The renderer's README tells how the cache forgets and gives up room.
+drawn until its data changes or the eye's distance asks another zoom there. A
+frame whose view moved walks the eye's whole lattice of rays again, and a walk
+asks the world only where a node's answer is not held, so what such a frame
+pays for is what it newly asks. A still camera over a still world costs almost
+nothing, and a frame where nothing it reads moved submits no work at all. The renderer's README tells how the cache forgets and gives up room.
 
 When the GPU runs out of time anyway, two knobs give it room: the **scale**
 draws fewer pixels, and the **rate** spaces the frames further apart. The `auto`
 setting steers both against the frame's GPU time, as congestion control steers a
 connection.
 
-### The sun casts by the eye's rule
+### The sun casts at the sizes the eye sets
 
 Shadows come from a **shadow map**, the depth of the world along the sun's rays in
-a square box about the eye. The sun's rays are walked as the eye's are, by the
-same rule and the same passes. Each tile of the box asks the world at one zoom, its
-**band**, and a band depends only on where the tile lies in the box, so when the
-eye moves, the box slides a tile at a time and every tile keeps what it cast;
-only a tile that slid on, or into another band, is cast again. And the sun casts
+a square box about the eye. The sun's rays are walked through the same passes as
+the eye's, but the sun is no eye and sets no size. The eye's rays ask each node
+at its own size; a tile of the box asks its whole bundle of rays at one zoom,
+its **band**, the finest the eye sets anywhere along the bundle. The box looks
+down the sun's rays with the eye at its middle, so a tile's place in the box is
+its bundle's distance from the eye, and a band depends only on where the tile
+lies in the box. So when the eye moves, the box slides a tile at a time and
+every tile keeps what it cast; only a tile that slid on, or into another band,
+is cast again. And the sun casts
 only what something seen will read: a tile is cast only where it lies sunward of
 one that something seen stands on, within the reach of the effects. The
 renderer's README tells how the bands and the marks are worked out.

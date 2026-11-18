@@ -33,8 +33,8 @@ pub struct Light {
     pub stars: f64,
     pub alt_km: f64,
     pub km_per_u: f64,
-    /// Where the sky draws its own ground.
-    pub ground_km: f64,
+    /// The floor under the eye, where the sky draws its own ground.
+    pub floor_km: f64,
     /// The equatorial frame to the local one, as rows.
     pub star_frame: [V3; 3],
 }
@@ -61,7 +61,7 @@ pub fn write_environment(o: &mut [f32; FLOATS], light: &Light) {
 
     o[AIR] = light.alt_km as f32;
     o[AIR + 1] = light.km_per_u as f32;
-    o[AIR + 2] = light.ground_km as f32;
+    o[AIR + 2] = light.floor_km as f32;
 
     let columns: [V3; 3] = core::array::from_fn(|k| light.star_frame.map(|row| row[k]));
     for (k, column) in columns.iter().enumerate() {

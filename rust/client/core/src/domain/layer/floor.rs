@@ -39,6 +39,6 @@ pub(crate) const fn tile_cap(lattice: Lattice) -> u32 {
 /// where the sphere of the eye's far edge cuts the ground. None where the eye
 /// is higher than its far edge.
 pub(crate) fn ring(o: &Observation) -> Option<f64> {
-    let height = (o.eye[2] - o.ground).max(0.0);
+    let height = (o.eye[2] - o.floor).max(0.0);
     (height < o.demand_dist).then(|| (o.demand_dist * o.demand_dist - height * height).sqrt())
 }

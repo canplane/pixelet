@@ -5,13 +5,13 @@
 //! of the world as its one query answers it, so a cell generates the same decor
 //! wherever it is read. Where a decor stands, which way it faces and whether it
 //! generates at all depend on the base, what the world is without what is
-//! placed: its column's surface and the cells around it
-//! (`World::column_surface`). Only an edit in its box, asked of the world as
+//! placed: its cell's surface and the cells around it
+//! (`World::surface`). Only an edit in its box, asked of the world as
 //! edited, takes it away (pxl-content `generation::placement`).
 
 use pxl_content::generation::{self, DecorQuery, Prop};
 use pxl_content::scatter::scatter_at;
-use pxl_engine::support::ColumnSurface;
+use pxl_engine::support::Surface;
 use pxl_engine::world::PlacedCursor;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::asset::decor::Decor;
@@ -39,27 +39,23 @@ impl<'a> DecorWorld<'a> {
     pub(super) fn new(world: &'a World) -> DecorWorld<'a> {
         DecorWorld {
             world,
-            lanes: world.object.columns(),
+            lanes: world.object.lanes(),
         }
     }
 }
 
-/// What the layers compose, as the CPU asks them. A column's surface comes
-/// with its line (`World::column_surface`), and each cell around the column
+/// What the layers compose, as the CPU asks them. A cell's surface comes
+/// with its line (`World::surface`), and each cell around it
 /// is asked off that line (`World::asset_about`), both of the base. A cell's
 /// edit is asked of the world as edited (`World::asset_at`).
 impl DecorQuery for DecorWorld<'_> {
-    type ColumnSurface = ColumnSurface<At>;
+    type Surface = Surface<At>;
 
-    /// The column's surface and its top, with false when the world lacked a
+    /// The cell's surface and its top, with false when the world lacked a
     /// tile on the way. Decor generates only on ground held exactly as its
     /// tiles say.
-    fn column_surface(
-        &mut self,
-        cell_zoom: Zoom,
-        g: [i32; 2],
-    ) -> (ColumnSurface<At>, (i32, f32), bool) {
-        let (answer, f) = World::base().column_surface(cell_zoom, g);
+    fn surface(&mut self, cell_zoom: Zoom, c: [i32; 2]) -> (Surface<At>, (i32, f32), bool) {
+        let (answer, f) = World::base().surface(cell_zoom, c);
         match answer {
             Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -75,7 +71,7 @@ impl DecorQuery for DecorWorld<'_> {
 
     /// The asset of the cell `c` at `zoom` in the base, a coarser clip
     /// level's where only it holds the cell, and none where no level does.
-    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
+    fn asset(&mut self, f: &Surface<At>, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
         World::base().asset_about(&f.line, zoom, c).val()
     }
 
@@ -97,7 +93,7 @@ impl DecorQuery for DecorWorld<'_> {
 /// leaf's ground around it (`World::generated_in`). This is the leaf
 /// scatter, cell by cell, which a whole region generates the same way. With
 /// `boxed`, it also says whether the
-/// decor generates there, its box asked against the same column surface
+/// decor generates there, its box asked against the same surface
 /// (pxl-content `generation::placement`); without `boxed`, whether no read
 /// of its vote lacks.
 pub(super) fn generated_at(

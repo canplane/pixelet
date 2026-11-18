@@ -1,23 +1,23 @@
 // pxl-content/strata.rs
 
-//! wgsl-port: the ground's strata by depth under a column's face, after Minecraft Beta's
+//! wgsl-port: the ground's strata by depth under the ground's top, after Minecraft Beta's
 //! `replaceBlocksForBiome`: the face's look on top, a filler of soil, sand or water,
 //! sandstone under sand, and stone under all, down to the bedrock. It also says how high a
-//! cube may reach above the face, and what the Earth's ground is past the service area.
+//! cube may reach above the ground, and what the Earth's ground is past the service area.
 //!
-//! It is where the world ends: the one place for every limit an edit and a column meet. The
+//! It is where the world ends: the one place for every limit an edit and the ground meet. The
 //! world is open from `BEDROCK_DEPTH` under the ground or sea level, whichever is lower, to
 //! `HEADROOM` over the ground or sea level, whichever is higher, in leaf cells (`bedrock`,
 //! `top`). Under the floor is bedrock, the unknown of which the world holds no more
 //! (`spec/spec/asset/cube.json5` `unknown`), and the service area is walled with it from
-//! inside: a leaf column with ground beside one past the area is bedrock up to its own face, a
+//! inside: a leaf cell with ground beside one past the area is bedrock up to its own elevation, a
 //! cell of the leaves like any other, so the wall's outer face stands on the area's edge at
-//! every zoom (pxl-spec area.rs `is_wall`). A body and an edit keep off the wall's columns
+//! every zoom (pxl-spec area.rs `is_wall`). A body and an edit keep off the wall's cells
 //! by the rule the wall is laid by (pxl-core domain/query/limit.rs `within`, `editable`).
 
 use pxl_engine::ground::rock;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::ground::{face_ele, leaf_cells};
+use pxl_spec::ground::{ele_drawn, leaf_cells};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 
@@ -33,24 +33,24 @@ const SOIL: u32 = Ground::Soil as u32;
 const SANDSTONE: u32 = Ground::Sandstone as u32;
 const STONE: u32 = Ground::Stone as u32;
 
-/// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
-/// cube may reach there, for every walk, edit and column.
-pub fn bedrock(face: i32) -> i32 {
-    face.min(SEA_LEVEL) - BEDROCK_DEPTH
+/// The top of the bedrock under ground `ele` leaf cells high, in leaf cells: the lowest a
+/// cube may reach there, for every walk, edit and cell of the ground.
+pub fn bedrock(ele: i32) -> i32 {
+    ele.min(SEA_LEVEL) - BEDROCK_DEPTH
 }
 
-/// The top of the room over a face `face` leaf cells high, in leaf cells: the highest a cube
+/// The top of the room over ground `ele` leaf cells high, in leaf cells: the highest a cube
 /// may reach there.
-pub fn top(face: i32) -> i32 {
-    face.max(SEA_LEVEL) + HEADROOM
+pub fn top(ele: i32) -> i32 {
+    ele.max(SEA_LEVEL) + HEADROOM
 }
 
-/// What the ground is in cell `z` of a column at `cell_zoom` whose asset id is
-/// `asset_id` and whose top is `top` cells: by depth under its top, and void above it. A
-/// column coarser than the leaves' summarizes the faces under it, so its ground is its face
+/// What the ground is in cell `z` over a cell of the plane at `cell_zoom` whose asset id is
+/// `asset_id` and whose elevation is `ele_cells` cells: by depth under it, and void above it. A
+/// cell coarser than the leaves' summarizes the ground under it, so its ground is its face's asset
 /// all through; the wall (`unknown`) is itself all through.
-pub fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
-    if z >= top {
+pub fn by_depth(cell_zoom: Zoom, asset_id: u32, ele_cells: i32, z: i32) -> u32 {
+    if z >= ele_cells {
         return Sentinel::Void as u32;
     }
     if cell_zoom < LEAF_CELL_ZOOM || asset_id == Sentinel::Unknown as u32 {
@@ -64,15 +64,15 @@ pub fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
         WATER => (WATER, 0),
         _ => (SOIL, 0),
     };
-    let face = top - s;
-    let filled = face - FILLER_DEPTH * s;
-    if z >= face {
+    let ele_cell = ele_cells - s;
+    let filled = ele_cell - FILLER_DEPTH * s;
+    if z >= ele_cell {
         asset_id
     } else if z >= filled {
         filler
     } else if z >= filled - sandstone * s {
         SANDSTONE
-    } else if z >= rock::<Pixelet>(cell_zoom, face_ele(cell_zoom, top)) {
+    } else if z >= rock::<Pixelet>(cell_zoom, ele_drawn(cell_zoom, ele_cells)) {
         STONE
     } else {
         Sentinel::Unknown as u32

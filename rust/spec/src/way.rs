@@ -550,7 +550,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
 
 /// The columns a brick's fill reads its ways from (`brick::Brick`): each column's segments,
 /// in its own tile's cells, with its center there and the tile's stations, and its ground,
-/// which is its asset id as read and its face's height in leaf cells. A column the brick
+/// which is its asset id as read and its elevation in leaf cells as drawn. A column the brick
 /// does not hold has no segment.
 pub trait ColumnGrid {
     /// The cells' zoom, and leaf cells a ground meter over the ground.
@@ -566,7 +566,7 @@ pub trait ColumnGrid {
     /// Whether the column is the service area's wall (`area::is_wall`), where no way writes, as
     /// none does past it.
     fn is_walled(&self, c: [i32; 2]) -> bool;
-    fn face(&self, c: [i32; 2]) -> i32;
+    fn ele_drawn(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
     fn joins(&self, c: [i32; 2], k: u32) -> bool;
@@ -711,14 +711,14 @@ impl Write {
 }
 
 /// What the visit from the `k`-th segment over column `c` writes, and where the next visit
-/// starts. A visit whose asset id grounds writes what it occupies over the column's face
-/// `face`, where `per_m` is the leaf cells a meter, and its pier where one stands.
-fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
+/// starts. A visit whose asset id grounds writes what it occupies over the column's ground,
+/// `ele` leaf cells high, where `per_m` is the leaf cells a meter, and its pier where one stands.
+fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (ele, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
     if !x.is() || !value::is_ground(x.asset_id) {
         return (Write::NONE, next);
     }
-    let o = occupies(&x, face, per_m);
+    let o = occupies(&x, ele, per_m);
     let w = match o.what {
         Occupy::Under => Write {
             run: o.span,
@@ -731,7 +731,7 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
             pier: if empty(o.pier) {
                 o.pier
             } else {
-                pier_stands(cols, c, o.pier, face, per_m)
+                pier_stands(cols, c, o.pier, ele, per_m)
             },
         },
         // An approach's asset id is laid into the cells by the bake (`bake/way.rs`
@@ -747,8 +747,8 @@ pub const SPAN_CAP: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come, `n` of them: each a deck's
 /// slab or an embankment (its way's asset id), a pier (`PIER`), or a bore's or a
-/// cutting's air (`AIR_OF` over its way's asset id). With them, its face cell
-/// (`ground::face_cell`), under which a bore's air beside the column lines it (pxl-engine
+/// cutting's air (`AIR_OF` over its way's asset id). With them, its top ground cell
+/// (`ground::ele_cell`), under which a bore's air beside the column lines it (pxl-engine
 /// `way_cell`); it is `i32::MIN` where the area's edge walls the column or the column is past
 /// the area, where nothing lines it. `past` says a visit made more spans than `SPAN_CAP`, so these
 /// are not all the column's. The column's cells are read from these, so its visits are found
@@ -759,7 +759,7 @@ pub struct SpanList {
     pub run: [[i32; 2]; SPAN_CAP],
     pub val: [u32; SPAN_CAP],
     pub n: u32,
-    pub face: i32,
+    pub ele_cell: i32,
     pub past: bool,
 }
 
@@ -768,7 +768,7 @@ impl SpanList {
         run: [[0, 0]; SPAN_CAP],
         val: [0; SPAN_CAP],
         n: 0,
-        face: i32::MIN,
+        ele_cell: i32::MIN,
         past: false,
     };
 
@@ -785,18 +785,18 @@ impl SpanList {
 }
 
 /// Column `c`'s spans: what each visit of a line writes there that fills a cell at the grid's
-/// zoom (`fills_any`), since pxl-engine's `at` reads no other, and its face cell.
+/// zoom (`fills_any`), since pxl-engine's `at` reads no other, and its top ground cell.
 /// A column of the bedrock, past the area or walled by its edge (`ColumnGrid::is_walled`), has
-/// no spans and no face, because bedrock wins over a way as it does over the ground's face.
+/// no spans and no top ground cell, because bedrock wins over a way as it does over the ground.
 pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
     let mut spans = SpanList::NONE;
     if cols.asset_id(c) == Sentinel::Unknown as u32 || cols.is_walled(c) {
         return spans;
     }
-    // The column's face and the tile's scale, read once for all its visits.
+    // The column's elevation and the tile's scale, read once for all its visits.
     let cell_zoom = cols.cell_zoom();
-    let ground = (cols.face(c), cols.per_m());
-    spans.face = ground::face_cell(cell_zoom, ground.0);
+    let ground = (cols.ele_drawn(c), cols.per_m());
+    spans.ele_cell = ground::ele_cell(cell_zoom, ground.0);
     let mut k = 0;
     while k < cols.cnt(c) {
         let (w, next) = writes(cols, c, k, ground);

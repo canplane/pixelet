@@ -8,7 +8,7 @@
 @group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
 @group(0) @binding(22) var air_volume: texture_3d<f32>;
 
-// Reads light `k`'s half of the volume, the sun's or the moon's, at column `c`
+// Reads light `k`'s half of the volume, the sun's or the moon's, at cell `c`
 // across and down and at `slice` deep, in one trilinear read. The coordinates
 // are in texels, with texel centers at whole numbers. A read past the half's
 // first or last column reads that column, as a sampler clamping a texture of

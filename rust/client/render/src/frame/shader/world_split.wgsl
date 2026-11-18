@@ -90,13 +90,13 @@ fn coarsest(zoom: u32, far: u32) -> u32 {
   return max(far, zoom + 1u);
 }
 
-/// The highest face to which the zooms from `far` to `near` round the relief's top
+/// The highest elevation at which the zooms from `far` to `near` draw the relief's highest,
 /// `relief_hi` (pxl-engine `ground::slab`).
 fn slab_over(zoom: u32, relief_hi: i32, far: u32, near: u32) -> i32 {
   let hi = select(relief_hi, max(relief_hi, SEA_LEVEL), zoom < SHARD_ZOOM);
   var over = EMPTY_HI;
   for (var z = coarsest(zoom, far); z <= near; z += 1u) {
-    over = max(over, face_ele(z, top_of(z, hi).cells));
+    over = max(over, ele_drawn(z, ele_cells(z, hi).cells));
   }
   return over;
 }

@@ -244,8 +244,8 @@ uniform! {
         /// How far the eye's rays run, in units (pxl-engine `eye::FAR`).
         /// Past it the land is drawn from the Earth's picture alone.
         DRAWN: F32 = 12,
-        /// The altitude of the land under the eye, in km.
-        LAND_ALT_KM: F32 = 13,
+        /// The floor under the eye over sea level, in km.
+        FLOOR_KM: F32 = 13,
         /// The window of Earth tiles the air reads. `EARTH_WINDOW` holds the
         /// south-west tile's column and row; the tiles across the window and
         /// around the world are the shaders' `EARTH_ACROSS` and `EARTH_AROUND`.

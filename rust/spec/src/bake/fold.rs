@@ -3,8 +3,8 @@
 //! One zoom coarser: a parent tile from the tiles under it. A cell holds the four asset
 //! ids under it, each child cell's own (`ground::own`, their majority, as
 //! Earth Engine's `MODE` pyramiding takes it, so a feature narrower than half a cell rounds
-//! away at the zoom that reads it). Elevation is the box average of the samples, which keeps a
-//! column's volume; a parent's surface is its own bicubic of its own samples. The mean is the
+//! away at the zoom that reads it). Elevation is the box average of the samples, which keeps the
+//! ground's volume over a cell; a parent's surface is its own bicubic of its own samples. The mean is the
 //! surface drawn at the parent's zoom, not a bound on the surfaces under it.
 
 use crate::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
@@ -13,7 +13,7 @@ use xpute_kit::math::scalar::round;
 
 use super::separation::fold_separation;
 use super::tile::Occupancy;
-use super::tile::terrain::{ELE_COLUMN, GroundCells, TerrainTile};
+use super::tile::terrain::{ELE_LANE, GroundCells, TerrainTile};
 use crate::ground::{ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, ele_idx, own};
 use crate::space::coord::zoom::Zoom;
 
@@ -84,7 +84,7 @@ pub(crate) fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
 pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<TerrainTile> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
-    let mut ele = vec![0i16; ELE_COLUMN];
+    let mut ele = vec![0i16; ELE_LANE];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     Some(TerrainTile::of(
         ele,

@@ -203,12 +203,12 @@ impl<Q: Brick> ColumnGrid for Q {
             self.own(i)
         }
     }
-    fn face(&self, c: [i32; 2]) -> i32 {
+    fn ele_drawn(&self, c: [i32; 2]) -> i32 {
         if !in_brick(c) {
             return 0;
         }
         let cell_zoom = Brick::cell_zoom(self);
-        ground::face_ele(cell_zoom, ground::cells(cell_zoom, self.ele_at(c) as f32))
+        ground::ele_drawn(cell_zoom, ground::cells(cell_zoom, self.ele_at(c) as f32))
     }
     /// Whether the entry is the one after the one before it, and its segment continues the one
     /// stored before it.

@@ -32,7 +32,7 @@
 //!   between the eye and the pivot is not asked.
 //! - **Climb**, under `climb`: the way is tested for the eye as it is drawn,
 //!   with its pitch raised over the floor under it (`climb_pose`). The eye
-//!   rises only where the column over it is open (`rise_clear`). The intent
+//!   rises only where it is open straight over it (`rise_clear`). The intent
 //!   keeps the pitch that was asked.
 //! - **Pull forward**, under `climb`: a zoom in whose climbed way hits something
 //!   goes through it to the pivot's side (`pull_forward`). No other control goes
@@ -319,7 +319,7 @@ fn climb_step(to: &ViewPose, from: &ViewPose, world: &World) -> ViewPose {
 /// where it ends is clear and the eye ends in nothing solid, both as the
 /// observer's eye reads the world. Otherwise the way follows the
 /// straight line in control space, as the easing does, and between samples
-/// the eye goes up its own column and across (`rise_clear`). An eye that
+/// the eye goes straight up and across (`rise_clear`). An eye that
 /// starts in something solid has hit it where it stands. The exception is
 /// an eye at the nearest below the pivot's level, which may go where it is
 /// no deeper (the rules at the top of this module).
@@ -355,9 +355,9 @@ fn way_hit(
 }
 
 /// Whether the eye gets from `from` to `to` through nothing solid when it
-/// moves up its own column, across at the higher of the two heights, and
-/// down the column of `to`. The eye can therefore rise only where the
-/// column over it is open.
+/// moves straight up, across at the higher of the two heights, and
+/// straight down to `to`. The eye can therefore rise only where it is
+/// open straight over it.
 fn rise_clear(from: &ViewPose, to: &ViewPose, world: &World) -> bool {
     let (a, b) = (eye(from).0, eye(to).0);
     let top = a[2].max(b[2]);
@@ -433,7 +433,7 @@ pub(crate) fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64
         .of(key, || climb_pose(at, &World::now()).polar)
 }
 
-/// Drops the kept pitch where a change touched the columns it read. It runs
+/// Drops the kept pitch where a change touched the rect it read. It runs
 /// on every frame, so each change is seen exactly once (`change::within`).
 pub(crate) fn forget_climb() {
     CLIMB_PITCH.get(|| Memo::NONE).forget_touched();

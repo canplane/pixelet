@@ -10,7 +10,7 @@
 
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_engine::clipmap::{BRICK_WORDS, SPANS_WORDS};
-use pxl_spec::bake::tile::terrain::ELE_COLUMN;
+use pxl_spec::bake::tile::terrain::ELE_LANE;
 use pxl_spec::brick::BRICK_CELL_CNT;
 
 use crate::domain::layer::tile_cache::TileCache;
@@ -34,11 +34,11 @@ const fn sum(bytes: &[u32]) -> u32 {
 
 /// The bytes of a tile's padded samples in a slot. The slot keeps them
 /// because a brick's fill reads them after the tile's packet is freed.
-const ELE_SZ: u32 = arr_sz(ELE_COLUMN, 2);
+const ELE_SZ: u32 = arr_sz(ELE_LANE, 2);
 const ELE_AT: u32 = 0;
 
-/// The bytes of one brick's cells: its columns, one word per cell holding
-/// the top of its ground, then its levels, its cells as laid, and the root
+/// The bytes of one brick's cells: its elevations, one word per cell holding
+/// the elevation of its ground, then its levels, its cells as laid, and the root
 /// of its run of kept spans (pxl-engine `clipmap::BRICK_WORDS`).
 const CELLS_SZ: u32 = BRICK_WORDS * 4;
 pub(super) const CELLS_ARR_SZ: u32 = arr_sz(CELLS_SZ as usize, 1);

@@ -1,7 +1,7 @@
 // pxl-engine/object.rs
 
 //! wgsl-port: what is placed, as a descent asks it. It is the object one tree (pxl-core
-//! domain/layer/object/store.rs), read where it lives: two columns of one word a slot.
+//! domain/layer/object/store.rs), read where it lives: two lanes of one word a slot.
 //! `first_child` holds a branch's child group's first slot with `BRANCH` set, or 0 for a
 //! leaf. `data` holds a leaf's value and its record's handle, or a branch's fold: the kind
 //! that makes up most of its fill, and the share filled. The root's child group holds the
@@ -32,13 +32,13 @@ pub const ROOT: u32 = 0;
 const FULL_BITS: u32 = FULL.trailing_zeros();
 
 /// The most damage rects the core hands a frame for written objects (pxl-core
-/// domain/scene/decor/gpu.rs). Each is the columns an object wrote, as a box of leaf cells
+/// domain/scene/decor/gpu.rs). Each is the rect an object wrote, a box of leaf cells
 /// `[x0, y0, x1, y1)` with X on any lap. Past this many, the core joins the rest into the last.
 pub const WRITE_DAMAGE_CAP: u32 = 8;
 /// The most damage rects a frame is asked over: the object writes' (`WRITE_DAMAGE_CAP`) and
 /// two for each of a preview's cuts, since each cut that moved gives its box as it was and as
 /// it is. Past this many, the rest is joined into the last (pxl-render gpu/generator.rs
-/// `hold`). Whatever reads those columns asks them again: decor's generation, and the node
+/// `hold`). Whatever reads over those rects asks again: decor's generation, and the node
 /// cache's forgetting.
 pub const DAMAGE_CAP: u32 = WRITE_DAMAGE_CAP + 2 * (CUTS / CUT_WORDS) as u32;
 
@@ -132,7 +132,7 @@ pub fn share(word: u32) -> u32 {
     if voxel(id) { fold_word(id, FULL) } else { 0 }
 }
 
-/// The tree's two columns, one word a slot.
+/// The tree's two lanes, one word a slot.
 pub trait Table {
     fn first_child(&self, slot: u32) -> u32;
     fn data(&self, slot: u32) -> u32;
@@ -141,7 +141,7 @@ pub trait Table {
 /// What a node holds, as a descent hands it down, in one word, because a descent keeps one
 /// for each zoom: the slot that answers it; whether that slot is a branch, which holds its
 /// children's fold (`FOLDED`), or a leaf covering the node whole; and the zoom the slot is at,
-/// which for a leaf covering finer nodes is the leaf's own. Its value is read from the columns
+/// which for a leaf covering finer nodes is the leaf's own. Its value is read from the lanes
 /// only when asked (`val`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NodeSlot(u32);
@@ -230,10 +230,10 @@ pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
 /// tree.rs) lying that many slots past the first.
 pub const CHILDREN: u32 = children(3) as u32;
 
-fn of(columns: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
-    if columns.first_child(slot) != 0 {
+fn of(lanes: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
+    if lanes.first_child(slot) != 0 {
         NodeSlot::branch(slot, zoom)
-    } else if columns.data(slot) == Sentinel::Void as u32 {
+    } else if lanes.data(slot) == Sentinel::Void as u32 {
         NodeSlot::NOTHING
     } else {
         NodeSlot::leaf(slot, zoom)
@@ -244,10 +244,10 @@ fn of(columns: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
 /// the root whose child group is `root` to the node's own slot, or to the leaf over it, one
 /// `child` step a zoom, the one step every descent of the tree takes. A descent asks this
 /// once, at its root.
-pub fn cursor(columns: &impl Table, root: u32, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+pub fn cursor(lanes: &impl Table, root: u32, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     let p = path(zoom, at);
     down(
-        columns,
+        lanes,
         root + child_idx([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]) as u32,
         0,
         zoom,
@@ -257,13 +257,13 @@ pub fn cursor(columns: &impl Table, root: u32, zoom: Zoom, at: [i32; 3]) -> Node
 
 /// What the node `at` of `zoom` holds, found by descending from the node above it at `top`,
 /// which `slot` holds, to its own slot or to the leaf over it, one `child` step a zoom.
-pub fn down(columns: &impl Table, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
-    let mut node_slot = of(columns, slot, top);
+pub fn down(lanes: &impl Table, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+    let mut node_slot = of(lanes, slot, top);
     let mut z = top;
     while z < zoom && node_slot.is_folded() {
         z += 1;
         let s = zoom - z;
-        node_slot = child(columns, node_slot, z, [at[0] >> s, at[1] >> s, at[2] >> s]);
+        node_slot = child(lanes, node_slot, z, [at[0] >> s, at[1] >> s, at[2] >> s]);
     }
     node_slot
 }
@@ -271,11 +271,11 @@ pub fn down(columns: &impl Table, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]
 /// What the child `at` of `zoom` holds, given what its parent holds (`parent`). A leaf over
 /// the parent covers the child too, and nothing stays nothing; under a fold, the child has
 /// its own slot.
-pub fn child(columns: &impl Table, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+pub fn child(lanes: &impl Table, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     if parent.is_folded() {
         of(
-            columns,
-            (columns.first_child(parent.slot()) & !BRANCH) + child_idx(at) as u32,
+            lanes,
+            (lanes.first_child(parent.slot()) & !BRANCH) + child_idx(at) as u32,
             zoom,
         )
     } else {
@@ -308,9 +308,9 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 /// the cell is kept is decided for the cell, over every layer together (`answer::cover`,
 /// `share::eighths`). `hide`, a preview's left-out leaf, is left out where it is the leaf
 /// itself.
-pub fn val(columns: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
+pub fn val(lanes: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
     let word = if slot.holds() {
-        columns.data(slot.slot())
+        lanes.data(slot.slot())
     } else {
         Sentinel::Void as u32
     };
@@ -332,9 +332,9 @@ pub fn val(columns: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32
 
 /// The share of its cube that what the node holding `slot` folds to fills, in `FULL`'s units
 /// (`val`): whole for a leaf over it, and the fold's share for a fold.
-pub fn fill_share(columns: &impl Table, slot: NodeSlot) -> u32 {
+pub fn fill_share(lanes: &impl Table, slot: NodeSlot) -> u32 {
     if slot.is_folded() {
-        high(columns.data(slot.slot()))
+        high(lanes.data(slot.slot()))
     } else {
         FULL
     }
@@ -350,7 +350,7 @@ pub fn fill_share(columns: &impl Table, slot: NodeSlot) -> u32 {
 /// Each child is read at its own index under `hide`, as `v` was, so a leaf a preview leaves
 /// out shows in no quarter.
 pub fn asset_ids(
-    columns: &impl Table,
+    lanes: &impl Table,
     slot: NodeSlot,
     hide: Cut,
     zoom: Zoom,
@@ -360,16 +360,10 @@ pub fn asset_ids(
     if !slot.is_folded() {
         return [v; 4];
     }
-    let base = columns.first_child(slot.slot()) & !BRANCH;
+    let base = lanes.first_child(slot.slot()) & !BRANCH;
     let shows = |k: u32| {
         let child = child_of(at, k as usize);
-        let c = val(
-            columns,
-            of(columns, base + k, zoom + 1),
-            hide,
-            zoom + 1,
-            child,
-        );
+        let c = val(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
         (c, fills(c))
     };
     // Each quarter's upper child, then its lower one, one child a step, so each child is asked
@@ -423,7 +417,7 @@ pub struct Over {
 /// otherwise. A preview's cut and its left-out leaf only make air, so where nothing placed
 /// fills, what lies under answers, and splits where it fills.
 pub fn over(
-    columns: &impl Table,
+    lanes: &impl Table,
     slot: NodeSlot,
     carve: Cut,
     hide: Cut,
@@ -432,7 +426,7 @@ pub fn over(
     near: Zoom,
 ) -> Over {
     if zoom < near {
-        let answer = if cells_by(columns, slot, near - zoom) {
+        let answer = if cells_by(lanes, slot, near - zoom) {
             SPLIT
         } else {
             UNDER
@@ -447,7 +441,7 @@ pub fn over(
     let v = if carved {
         Sentinel::Air as u32
     } else {
-        val(columns, slot, hide, zoom, at)
+        val(lanes, slot, hide, zoom, at)
     };
     let answer = if v == Sentinel::Void as u32 {
         UNDER
@@ -460,7 +454,7 @@ pub fn over(
         fill: if carved {
             FULL
         } else {
-            fill_share(columns, slot)
+            fill_share(lanes, slot)
         },
     }
 }
@@ -470,21 +464,21 @@ pub fn over(
 /// halves of the node in which any of its eight children holds anything, or the whole node
 /// where the children are one (not folded). It is `answer::BOX_NONE` where nothing is placed.
 /// A preview's cut only makes air, so what is placed under the cut still lies in the box.
-pub fn object_box(columns: &impl Table, slot: NodeSlot, zoom: Zoom) -> PackedBox {
+pub fn object_box(lanes: &impl Table, slot: NodeSlot, zoom: Zoom) -> PackedBox {
     if !slot.holds() {
         return BOX_NONE;
     }
     if !slot.is_folded() {
         return BOX_WHOLE;
     }
-    let base = columns.first_child(slot.slot()) & !BRANCH;
+    let base = lanes.first_child(slot.slot()) & !BRANCH;
     // On each axis, whether any child holding anything lies in the lower half, and whether any
     // lies in the upper: child `k`'s half on axis `a` is bit `a` of `k`. They are kept as one
     // bit an axis because a GPU's arrays hold no bools.
     let (mut low, mut high) = (0u32, 0u32);
     let mut k = 0;
     while k < 8 {
-        if of(columns, base + k, zoom + 1).holds() {
+        if of(lanes, base + k, zoom + 1).holds() {
             let mut a = 0;
             while a < 3 {
                 if k >> a & 1 == 0 {
@@ -516,11 +510,11 @@ pub fn object_box(columns: &impl Table, slot: NodeSlot, zoom: Zoom) -> PackedBox
 /// units, which is an eighth of a unit of its parent's, so the share left falls short of the
 /// filled volume by less than 8/7 of a unit; a margin of two units covers it. Where the ground
 /// fills the rest of such a cube, the ground's own bound splits it.
-fn cells_by(columns: &impl Table, slot: NodeSlot, d: Zoom) -> bool {
+fn cells_by(lanes: &impl Table, slot: NodeSlot, d: Zoom) -> bool {
     if !slot.holds() {
         return false;
     }
-    let word = columns.data(slot.slot());
+    let word = lanes.data(slot.slot());
     if !slot.is_folded() {
         return voxel(low(word));
     }

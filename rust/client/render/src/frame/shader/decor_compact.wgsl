@@ -31,11 +31,11 @@ fn compact_one(i: u32) {
   let size = decor_size(rec_decor(w), rec_variant(w), turn);
   instances[slot] = bitcast<u32>(from_anchor(i, 0u) + f32(size.x) / 2.0);
   instances[cap + slot] = bitcast<u32>(from_anchor(i, 1u) + f32(size.y) / 2.0);
-  // The base as drawn lies under the box's corner by the kept top of its column's surface.
+  // The base as drawn lies under the box's corner by the kept top of its cell's surface.
   instances[2u * cap + slot] = bitcast<u32>(from_anchor(i, 2u) - f32(recs[i + 4u]) * (1.0 / f32(1u << FRAC_W)));
   instances[3u * cap + slot] = turn_spin(turn);
   instances[4u * cap + slot] = bitcast<u32>(1.0f);
-  instances[DRAWING_COLUMN_CNT * cap + slot] = slot;
+  instances[DRAWING_LANE_CNT * cap + slot] = slot;
 }
 
 @compute @workgroup_size(LANE_CNT)

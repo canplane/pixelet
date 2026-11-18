@@ -213,7 +213,7 @@ fn light_cells_start_short_by_the_margin() {
         placed: gpu.buf(&built.objects, store),
         pool: gpu.buf(&built.pool, store),
     };
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let cases = [
         LightCase {
             name: "the light, about the eye",

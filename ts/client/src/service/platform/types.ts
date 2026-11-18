@@ -45,7 +45,7 @@ export interface Coordinates {
 export interface Fix {
   lon: f64;
   lat: f64;
-  alt: f64 | null;
+  altEllipsoid: f64 | null;
   altitudeAccuracy: f64 | null;
   accuracy: f64 | null;
   heading: f64 | null;
@@ -61,7 +61,7 @@ export interface SensorListener {
   pos(
     lon: f64,
     lat: f64,
-    alt: f64 | null,
+    altEllipsoid: f64 | null,
     accuracy: f64 | null,
     course: f64 | null,
   ): void;

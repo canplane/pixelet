@@ -56,8 +56,8 @@ const CLAIM_ZOOM: Zoom = {
 impl World {
     /// Hands what the ground's scatter stands on the leaf `cell`, decor by
     /// decor, to `each` until `each` returns true. Each instance stands on
-    /// its column's surface in the base (`World::column_surface`). Nothing is
-    /// handed where the world does not hold the column.
+    /// its cell's surface in the base (`World::surface`). Nothing is
+    /// handed where the world does not hold the cell.
     fn generated_in(&self, cell: [i32; 2], mut each: impl FnMut(&Decor, Instance) -> bool) {
         DECORS.iter().any(|decor| {
             generated_at(&mut DecorWorld::new(self), decor, cell, false)
@@ -66,7 +66,7 @@ impl World {
     }
 
     /// Every decor the ground's scatter generates on the leaves whose box
-    /// shares room with `space`, whether or not its column surface is there
+    /// shares room with `space`, whether or not its surface is there
     /// now. This includes what an erase took away.
     pub(crate) fn generated_over(&self, space: &Aabb) -> Vec<Instance> {
         let (r, unit) = (box_extent(), units(GROUND.leaf_cell_zoom()));
@@ -156,9 +156,9 @@ impl World {
     /// Whether a decor's box may reach into the node `(zoom, c)`, coarser
     /// than a leaf cell; X is on the asker's lap.
     ///
-    /// What the ground generates stands on the columns its box covers, each
+    /// What the ground generates stands on the cells its box covers, each
     /// filled under its base. So one that reaches into the node stands on the
-    /// node's own columns: its cells lie no higher than a cell over the
+    /// node's own cells: its cells lie no higher than a cell over the
     /// highest the ground and the ways reach under the node (`relief`, in
     /// leaf cells) and as tall again as the tallest decor. Its corner is a
     /// cell holding a candidate, at most its decor's widest less one before
@@ -177,7 +177,7 @@ impl World {
             && (0..DECORS.len()).any(|k| may_stand(k, (zoom, [c[0], c[1]])));
         let z = zoom.min(CLAIM_ZOOM);
         let a = c.map(|v| v >> (zoom - z));
-        let lanes = self.object.columns();
+        let lanes = self.object.lanes();
         grows
             || (0..8).any(|k: i32| {
                 let n = [a[0] - (k & 1), a[1] - (k >> 1 & 1), a[2] - (k >> 2 & 1)];
@@ -239,8 +239,8 @@ impl World {
     }
 }
 
-/// Whether the `k`-th decor's counts hold anything over the columns at
-/// `zoom` where a box as wide as its widest may stand and reach the column
+/// Whether the `k`-th decor's counts hold anything over the cells at
+/// `zoom` where a box as wide as its widest may stand and reach the cell
 /// `c`. A zoom coarser than its counts' root does not tell (pxl-content
 /// `scatter::cnt`, `ROOTS`).
 fn may_stand(k: usize, (zoom, c): (Zoom, [i32; 2])) -> bool {

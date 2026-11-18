@@ -41,7 +41,7 @@ fn coarse_key_prefix() {
     }
 }
 
-/// Z has no digit until its extent is reached, so to z8 a cube is its column.
+/// Z has no digit until its extent is reached, so to z8 a cube is its quadrant at every height.
 #[test]
 fn key_3d_extends_2d() {
     for p in POINTS {

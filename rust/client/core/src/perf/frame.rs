@@ -232,8 +232,8 @@ words!(FrameSample, frame::WORDS,
     heap_used_bytes => frame::HEAP_USED_BYTES,
 );
 
-// The `rays` group's columns, each at its offset in FRAME counted from the
-// group's first column.
+// The `rays` group's lanes, each at its offset in FRAME counted from the
+// group's first lane.
 words!(RaySample, frame_group::RAYS.len(),
     eye_cast => 0, eye_ray_cnt => frame::EYE_RAY_CNT - frame::EYE_CAST,
     eye_beam => frame::EYE_BEAM - frame::EYE_CAST, eye_sample => frame::EYE_SAMPLE - frame::EYE_CAST,

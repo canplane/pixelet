@@ -1,7 +1,7 @@
 // pxl-content/generation.rs
 
 //! wgsl-port: the decor the ground holds (`scatter`), generated on the world as either
-//! side holds it: where a candidate stands, which way it faces and whether its column surface
+//! side holds it: where a candidate stands, which way it faces and whether its surface
 //! holds it (`placement`, over `DecorQuery`); what placed decor claims (`overlaps_placed`);
 //! and how the GPU lays out, lists and draws what it generates in a clip level's bricks.
 
@@ -292,7 +292,7 @@ pub const GROUP_CNT: u32 = {
 /// How the GPU draws what it generates. Each record is sized for the screen as a model or an
 /// impostor, into its group's region: models at `2·group` and impostors just past it. The
 /// regions lie end to end in the decor's instances, in the layout the decor and impostor
-/// shaders read (columns x, y, z, spin and scale, `drawing::COLUMN_CNT` a slot, then the index
+/// shaders read (lanes x, y, z, spin and scale, `drawing::LANE_CNT` a slot, then the index
 /// list), and each region's draw is a set of indirect arguments.
 pub mod drawing {
     use super::GROUP_CNT;
@@ -303,7 +303,7 @@ pub mod drawing {
     /// The place, above its decor, variant, turn and zoom, at which a record's first word holds
     /// its region, once sized.
     pub const REGION_SHIFT: u32 = super::CELL_ZOOM_SHIFT + pxl_engine::ZOOM_BITS;
-    pub const COLUMN_CNT: u32 = 5;
+    pub const LANE_CNT: u32 = 5;
     /// Each region's indirect arguments, `ARGS_WORDS` a region: a model's are indexed, and an
     /// impostor's draw a strip of four corners an instance. The first instance is 0, because a
     /// device without `indirect-first-instance` holds every indirect draw to 0.
@@ -312,14 +312,14 @@ pub mod drawing {
     pub const IMPOSTOR_CORNER_CNT: u32 = 4;
     /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_SZ`, the dynamic offset
     /// alignment every device meets), holding its index list's first slot (pxl-render word.rs
-    /// `instance::IDX`): the columns' base, to which the arguments pass adds the region's first
+    /// `instance::IDX`): the lanes' base, to which the arguments pass adds the region's first
     /// slot once the regions are laid out.
     pub const UNIFORM_WORDS: u32 = OFF_SZ / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
     const OFF_SZ: u32 = 256;
     /// The drawing words, by which a frame's decor is drawn: the model's and the impostor's
-    /// floors, each an angle around the eye in radians; the anchor the columns' positions are
+    /// floors, each an angle around the eye in radians; the anchor the lanes' positions are
     /// counted from (in unit cells, X wrapping); the left-out decor's corner and whether there is
     /// one; then each group's extent.
     pub const MODEL_ANGLE: u32 = 0;
@@ -355,26 +355,22 @@ pub mod drawing {
 }
 
 /// What generating decor asks of the world, as either side holds it: of the base, the
-/// ground's alone, its columns' surfaces and the assets around them; of the world as edited,
+/// ground's alone, its cells' surfaces and the assets around them; of the world as edited,
 /// whether an edit holds a cell and what is placed in a box.
 pub trait DecorQuery {
-    /// A column surface as this side keeps it, from which its assets are asked.
-    type ColumnSurface: Copy;
-    /// The column surface down column `g` at `cell_zoom` of the base, with what is
-    /// placed left out: the query's support (`support::column_surface`) as this side asks it, and
-    /// its top (`cast::top`); false where nothing fills there or the world lacks the column.
-    fn column_surface(
-        &mut self,
-        cell_zoom: Zoom,
-        g: [i32; 2],
-    ) -> (Self::ColumnSurface, (i32, f32), bool);
-    /// The finest zoom, `cell_zoom` or finer, at which this side holds the ground's leaf column
-    /// `g`: where a candidate there is asked whether it generates and which way it faces
+    /// A surface as this side keeps it, from which its assets are asked.
+    type Surface: Copy;
+    /// The surface over cell `c` at `cell_zoom` of the base, with what is
+    /// placed left out: the query's support (`support::surface`) as this side asks it, and
+    /// its top (`cast::top`); false where nothing fills there or the world lacks the cell.
+    fn surface(&mut self, cell_zoom: Zoom, c: [i32; 2]) -> (Self::Surface, (i32, f32), bool);
+    /// The finest zoom, `cell_zoom` or finer, at which this side holds the ground's leaf cell
+    /// `c`: where a candidate there is asked whether it generates and which way it faces
     /// (`placement`), the same whatever clip level asks.
-    fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom;
-    /// What is in the cell `c` of `zoom`: the base's answer near the column surface `f`
+    fn finest(&mut self, cell_zoom: Zoom, c: [i32; 2]) -> Zoom;
+    /// What is in the cell `c` of `zoom`: the base's answer near the surface `f`
     /// (`support::asset`), void or the ground's value; none where the read lacks.
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> Option<u32>;
+    fn asset(&mut self, f: &Self::Surface, zoom: Zoom, c: [i32; 3]) -> Option<u32>;
     /// What the edited world answers of the cell `c` of `zoom`, down the cell's own line, which
     /// tells an edit there, something placed or air (`answer::is_placed`).
     fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> u32;
@@ -384,8 +380,8 @@ pub trait DecorQuery {
 }
 
 /// Decor the ground generates, where it stands: its variant; its heading in quarter turns;
-/// its box's min corner in leaf cells, the cell above its column surface's; and how far its
-/// base lies under that corner, in Q3 steps, where the column surface's top is kept short of
+/// its box's min corner in leaf cells, the cell above its surface's; and how far its
+/// base lies under that corner, in Q3 steps, where the surface's top is kept short of
 /// its cube (`cast::top`), so it stands on the top as drawn, not on its cube's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Prop {
@@ -395,19 +391,19 @@ pub struct Prop {
     pub sink: u32,
 }
 
-/// Where candidate `c` of `decor` stands at `cell_zoom`. It stands on its column's surface in
+/// Where candidate `c` of `decor` stands at `cell_zoom`. It stands on its cell's surface in
 /// the base, the ground's alone, so no edit moves it or takes the ground from under
 /// it, and it faces as the cells beside it vote (`asks`). It does not generate where a read of
 /// its vote or its box lacks. Then, where `boxed`, it says whether the candidate generates
 /// there: every cell of its box is void and every cell under its base is an asset id it
 /// generates on, as the ground holds them; no edit lies in its box, air included
 /// (`DecorQuery::edited`); and no placed decor's box overlaps its own (`overlaps_placed`). It
-/// stands at its clip level's column surface, while the vote and its box are asked at the
-/// finest zoom at which the world holds its leaf column (`DecorQuery::finest`), around that
-/// zoom's column surface, so a candidate faces and generates alike at every clip level it is
+/// stands at its clip level's surface, while the vote and its box are asked at the
+/// finest zoom at which the world holds its leaf cell (`DecorQuery::finest`), around that
+/// zoom's surface, so a candidate faces and generates alike at every clip level it is
 /// generated at. Its pose shows as itself only at a clip level its size shows at
 /// (`shows_at`). It returns where it stands and whether it generates there, which where not
-/// `boxed` is that it shows at `cell_zoom` and no read of its vote lacks; none where its column surface is
+/// `boxed` is that it shows at `cell_zoom` and no read of its vote lacks; none where its surface is
 /// not found.
 pub fn placement(
     q: &mut impl DecorQuery,
@@ -416,7 +412,7 @@ pub fn placement(
     c: &Candidate,
     boxed: bool,
 ) -> Option<(Prop, bool)> {
-    let column = |z: Zoom| {
+    let cell = |z: Zoom| {
         [
             c.cell[0] >> (LEAF_CELL_ZOOM - z),
             c.cell[1] >> (LEAF_CELL_ZOOM - z),
@@ -424,7 +420,7 @@ pub fn placement(
     };
     let s = LEAF_CELL_ZOOM - cell_zoom;
     let zoom = q.finest(cell_zoom, c.cell);
-    let (f, (floor, rise), here) = q.column_surface(cell_zoom, column(cell_zoom));
+    let (f, (floor, rise), here) = q.surface(cell_zoom, cell(cell_zoom));
     if !here {
         return None;
     }
@@ -433,7 +429,7 @@ pub fn placement(
     let (f, (base, _), found) = if zoom == cell_zoom {
         (f, (floor, rise), true)
     } else {
-        q.column_surface(zoom, column(zoom))
+        q.surface(zoom, cell(zoom))
     };
     let (variant, turn, generates) = asks(q, &f, decor, (zoom, base), c.seed, at, boxed);
     Some((
@@ -452,12 +448,12 @@ pub fn placement(
 /// way runs on, by their offset from the candidate's along each axis: a quarter turn if
 /// horizontal wins, else none (a tie or an isolated cell has no real answer), and a half turn
 /// more on a draw, as two-way traffic faces both ways. Then, where `boxed`, whether it
-/// generates there (`placement`'s rule). Every cell is asked at `zoom` around the column surface
+/// generates there (`placement`'s rule). Every cell is asked at `zoom` around the surface
 /// `about`, whose top cell is `base`, and a read that lacks keeps it from generating. It
 /// returns its variant, its heading, and whether it generates there.
 fn asks<Q: DecorQuery>(
     q: &mut Q,
-    about: &Q::ColumnSurface,
+    about: &Q::Surface,
     decor: &Row,
     (zoom, base): (Zoom, i32),
     seed: u32,
@@ -550,7 +546,7 @@ pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
 }
 
 /// The zoom asked at `at` that the clip levels hold at leaf cell `c`: `at` held to the clip
-/// levels (`clipmap::clip_zoom`), or the finest coarser clip level that holds the column
+/// levels (`clipmap::clip_zoom`), or the finest coarser clip level that holds the cell
 /// present, as a ray reads it (`clipmap::step`), or the first where none does. Where a finer
 /// clip level holds no brick, because the bake left an empty page out (open sea), a coarser
 /// clip level's ground is drawn there, and its decor with it.

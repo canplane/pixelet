@@ -7,7 +7,7 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 
 import type {
   Frame,
-  ListColumn,
+  ListLane,
   Percentile,
   RayCount,
   RecordingSection,
@@ -26,7 +26,7 @@ import {
   stageMs,
   tris,
   valueText,
-} from "./column.ts";
+} from "./lane.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
@@ -41,7 +41,7 @@ const signedBytes = (b: number) =>
 const bytes = (b: number) => valueText("_bytes", b);
 const percentile = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
+type RayLane<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
 
 /** The counts are the ones the `ray_cnt` setting collects, which the core
  * sums over the window's frames. Each observer, the eye and the light, gets one
@@ -53,7 +53,7 @@ type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
  * of all its pixels or slots (`ray_cnt`). */
 const raysText = (rays: RayCount) => {
   const observer = (name: "eye" | "light") => {
-    const at = (column: RayColumn) => rays[`${name}_${column}`];
+    const at = (lane: RayLane) => rays[`${name}_${lane}`];
     const casts = at("cast");
     if (casts === 0) return [];
     const perCast = (n: number) => n1(n / casts);
@@ -83,7 +83,7 @@ const degrees = (radians: number) => (radians * 180) / Math.PI;
 function viewText(v: ViewSection, gpuPx: f64): string {
   const pivot = Number.isNaN(v.pivot_lat)
     ? "-"
-    : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}° ${n1(v.pivot_alt)} m`;
+    : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}° ${n1(v.pivot_ele)} m`;
   return `  view    pivot ${pivot}  distance ${n1(v.dist)} u  polar ${n1(
     degrees(v.polar),
   )}°  azimuth ${n1(degrees(v.azimuth))}°   drawn ${
@@ -153,14 +153,14 @@ const worstEffectText = (f: Frame) => {
     : "";
 };
 
-/** A list column's slots that are not 0, each by its name. */
+/** A list lane's slots that are not 0, each by its name. */
 const listText = (
   f: Frame,
-  column: ListColumn,
+  lane: ListLane,
   text: (v: f64) => string = String,
 ) =>
-  f[column]
-    .map((v, k) => (v > 0 ? `${LIST_NAMES[column][k]} ${text(v)}` : ""))
+  f[lane]
+    .map((v, k) => (v > 0 ? `${LIST_NAMES[lane][k]} ${text(v)}` : ""))
     .filter(Boolean)
     .join(" ") || "-";
 

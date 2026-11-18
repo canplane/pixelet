@@ -17,11 +17,11 @@ use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::quadrant::Quadrant;
 
-/// A tile's column lengths: one a cell, four asset ids a cell, and its padded samples.
-/// A packet's columns are these sizes and no other (`read_tile`).
-pub const GROUND_COLUMN: usize = (TILE_CELLS * TILE_CELLS) as usize;
-pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
-pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+/// A tile's lane lengths: one a cell, four asset ids a cell, and its padded samples.
+/// A packet's lanes are these sizes and no other (`read_tile`).
+pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;
+pub const FOLD_LANE: usize = 4 * GROUND_LANE;
+pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::Sentinel;
 use crate::brick::{
     BRICK, Brick, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BIN_ACROSS, WAYS_BIN_CNT,
@@ -47,7 +47,7 @@ type Packet = (Vec<i16>, Vec<GroundId>, u8, separation::Packet);
 /// (`decode_into`).
 pub type GroundCells = Cow<'static, [GroundId]>;
 
-/// A tile: one column for each fact the client cannot make. What the client draws by rule,
+/// A tile: one lane for each fact the client cannot make. What the client draws by rule,
 /// such as a slab, a bore or a pier, is not here. The bake holds what goes on the wire; a
 /// client holds what it reads of a tile as a whole, its lines, and they go when the tile does.
 /// A client holds the tile's cells
@@ -178,7 +178,7 @@ pub fn brick_lines(
 /// A clip level's brick as its fill reads it (`brick::Brick`): its cells' zoom,
 /// its place in its tile and its first cell (`first_cell`), inside the area; its lines as
 /// `brick_lines` lays them; cell `i`'s own asset id from its four (`fold_at`);
-/// and column `c`'s elevation, counted from its first cell, its ring included (`ele_at`).
+/// and cell `c`'s elevation, counted from its first cell, its ring included (`ele_at`).
 pub struct TileBrick<'a, L, H> {
     pub cell_zoom: Zoom,
     pub place: [u32; 2],
@@ -320,7 +320,7 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
-    std::sync::LazyLock::new(|| vec![Sentinel::Void as GroundId; GROUND_COLUMN]);
+    std::sync::LazyLock::new(|| vec![Sentinel::Void as GroundId; GROUND_LANE]);
 
 impl Tile for TerrainTile {
     const KIND: BaseKind = BaseKind::Terrain;
@@ -353,7 +353,7 @@ impl TerrainTile {
         TerrainTile::of(ele, expand(&cells).into(), separation, Occupancy::LEAF)
     }
 
-    /// A tile as the bake holds it: these columns, nothing a client looks up.
+    /// A tile as the bake holds it: these lanes, nothing a client looks up.
     pub fn of(
         ele: Vec<i16>,
         cells: GroundCells,
@@ -370,10 +370,10 @@ impl TerrainTile {
 }
 
 /// Cell `c`'s four asset ids, however a tile holds them: four a cell
-/// (`FOLD_COLUMN`), or one a cell, each its own four.
+/// (`FOLD_LANE`), or one a cell, each its own four.
 fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
-        FOLD_COLUMN => [
+        FOLD_LANE => [
             cells[4 * c],
             cells[4 * c + 1],
             cells[4 * c + 2],
@@ -385,7 +385,7 @@ fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
 
 /// The tile's four asset ids a cell, however it holds them (`four_asset_ids`).
 fn expand(cells: &[GroundId]) -> Vec<GroundId> {
-    (0..GROUND_COLUMN)
+    (0..GROUND_LANE)
         .flat_map(|c| four_asset_ids(cells, c))
         .collect()
 }
@@ -417,12 +417,12 @@ struct Table<'a> {
     separation: separation::Table<'a>,
 }
 
-/// Refused unless every column is a tile's length.
+/// Refused unless every lane is a tile's length.
 fn read_tile(pkt: &[u8]) -> Result<Table<'_>, XputeError> {
     let (ele, cells, occupancy, separation) = shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
     let separation = separation::Table::of(separation)?;
-    if ele.len() != ELE_COLUMN || (cells.len() != GROUND_COLUMN && cells.len() != FOLD_COLUMN) {
+    if ele.len() != ELE_LANE || (cells.len() != GROUND_LANE && cells.len() != FOLD_LANE) {
         return Err(malformed());
     }
     Ok(Table {
@@ -433,7 +433,7 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, XputeError> {
     })
 }
 
-/// A packet's asset ids as it holds them, four a cell (`FOLD_COLUMN`) or one a
+/// A packet's asset ids as it holds them, four a cell (`FOLD_LANE`) or one a
 /// cell, each its own four: which a client's clip levels cut their bricks' from.
 pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], XputeError> {
     Ok(read_tile(pkt)?.cells)

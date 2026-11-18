@@ -41,7 +41,7 @@ fn write_undo_round_trip() {
                 let slot = store.cursor((OBJECT_FINEST, finest));
                 slot.holds()
                     && !slot.is_folded()
-                    && object::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
+                    && object::val(&store.lanes(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -123,8 +123,8 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let slot = store.cursor((target, [x, y, z]));
-                let v = object::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
-                let eighths = eighths(object::fill_share(&store.columns(), slot));
+                let v = object::val(&store.lanes(), slot, Cut::NONE, target, [x, y, z]);
+                let eighths = eighths(object::fill_share(&store.lanes(), slot));
                 if v != Sentinel::Void as u32 && eighths > 0 {
                     out.insert([x, y, z], (v, eighths));
                 }

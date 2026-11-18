@@ -32,7 +32,7 @@ interface DeviceLocation {
   /** Longitude and latitude, in degrees. */
   coord: [f64, f64];
   /** Meters over the ellipsoid. Null where the device gives no altitude. */
-  alt: f64 | null;
+  altEllipsoid: f64 | null;
   /** The fix's accuracy, in meters. */
   accuracy: f64;
   /** Course over ground, 0-360 degrees. */
@@ -101,14 +101,14 @@ export function defaultDeviceLocationStore(): DeviceLocationStore {
 export function setLocation(
   s: DeviceLocationStore,
   coord: [f64, f64],
-  alt: f64 | null,
+  altEllipsoid: f64 | null,
   accuracy: f64,
   course: f64 | null,
 ): void {
   s.state = ofSensorState(SENSOR_STATUS_READY);
   const prev = s.location;
   if (prev === null) {
-    s.location = { coord, alt, accuracy, course };
+    s.location = { coord, altEllipsoid, accuracy, course };
     return;
   }
 
@@ -123,7 +123,7 @@ export function setLocation(
   const isSignificantChange =
     latitudeDelta > 0.00001 ||
     longitudeDelta > 0.00001 ||
-    isDeltaOver(prev.alt, alt, 0.5, plainDelta);
+    isDeltaOver(prev.altEllipsoid, altEllipsoid, 0.5, plainDelta);
 
   if (
     !isSignificantChange &&
@@ -136,7 +136,7 @@ export function setLocation(
   // the freshest signal.
   s.location = {
     coord: isSignificantChange ? coord : prev.coord,
-    alt: isSignificantChange ? alt : prev.alt,
+    altEllipsoid: isSignificantChange ? altEllipsoid : prev.altEllipsoid,
     accuracy,
     course,
   };

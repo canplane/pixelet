@@ -90,7 +90,7 @@ struct Arrangement {
     /// (domain/query/change.rs). A brick they touch is read again.
     changed_places: Vec<Quadrant>,
     /// The bricks this frame would read, with their distance from the eye and
-    /// their columns.
+    /// the box over their rects.
     entering: Vec<(f64, Brick, Aabb)>,
     sized: Vec<Instance>,
     /// Last frame's `sized`, whose buffer is reused.
@@ -132,8 +132,8 @@ struct Input {
 static ARRANGEMENT: Global<Arrangement> = Global::new();
 
 /// The drawn bricks read since a change last touched them, and whether
-/// places were on (`found_for`). A brick is read over its whole columns, so
-/// what was read stays valid while no change touches those columns, whatever
+/// places were on (`found_for`). A brick is read over its whole rect, at every height, so
+/// what was read stays valid while no change touches that rect, whatever
 /// heights the world spans in them.
 #[derive(Default, PartialEq)]
 struct Read {
@@ -222,7 +222,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // Places are a setting, while what someone placed always shows.
     now.place = settings().place;
     let place_on = now.place;
-    // A brick still drawn whose columns no change touches
+    // A brick still drawn whose rect no change touches
     // (domain/query/change.rs), as long as the places setting did not turn,
     // needs no read. Only bricks entered or touched are read, nearest the eye
     // first, as many a frame as one pass of the tick's budget reads and at
@@ -237,14 +237,14 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
         _ => &[],
     };
     let changed_places = &p.changed_places;
-    let columns = |s: Brick| region(s, [BOUND.min[2], BOUND.max[2]]);
+    let over = |s: Brick| region(s, [BOUND.min[2], BOUND.max[2]]);
     // Whether each drawn brick's read is current, so it needs none, asked once for
     // each brick however many pins and places it holds.
     let fresh: Vec<bool> = now
         .bricks
         .iter()
         .map(|&s| {
-            let r = columns(s);
+            let r = over(s);
             last_bricks.binary_search(&s).is_ok()
                 && !change::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
@@ -262,7 +262,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
             .zip(&fresh)
             .filter(|&(_, &f)| !f)
             .map(|(&s, _)| {
-                let r = columns(s);
+                let r = over(s);
                 let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
                 (
                     libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]),
@@ -277,8 +277,8 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // come at their last read, and its landing reads them again
     // (`on_changed`).
     let mut incomplete = core::mem::take(&mut p.incomplete);
-    let read = sched::run(entering.iter(), |&(_, brick, columns)| {
-        pin::read(brick, &columns, &mut pins);
+    let read = sched::run(entering.iter(), |&(_, brick, over)| {
+        pin::read(brick, &over, &mut pins);
         let whole = !place_on || place::read(brick, &mut read_places);
         match (whole, incomplete.binary_search(&brick)) {
             (true, Ok(k)) => drop(incomplete.remove(k)),

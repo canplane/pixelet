@@ -14,7 +14,7 @@ use pxl_spec::space::layer::octant::Octant;
 
 /// What the eraser's preview changes in the world as drawn, and nowhere
 /// else. Every mechanic (the pick, a walk, the camera's clearance, an edit's
-/// own reads, decor's column surface) asks the stored world (`World::now`).
+/// own reads, decor's surface) asks the stored world (`World::now`).
 /// If the pick saw the preview, a hover would hide what it points at, the
 /// hide would lift, and the pick would hit it again, forever. A body would
 /// fall into a hole not yet dug. The preview moves no revision, so saves

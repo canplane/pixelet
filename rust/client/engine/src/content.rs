@@ -21,22 +21,22 @@ pub trait Content {
     /// leaves, so a coarse cell holds what its leaves hold, and `FULL` is a cave all through.
     fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
-    /// What the ground is in cell `z` of a column at `cell_zoom` whose asset id is
-    /// `asset_id` and whose top is `top` cells. Under the top it goes by depth; above the top
+    /// What the ground is in cell `z` over a cell of the plane at `cell_zoom` whose asset id is
+    /// `asset_id` and whose elevation is `ele_cells` cells. Under it the ground goes by depth; above
     /// it is `Sentinel::Void`; under the bedrock, and all through the wall, it is
     /// `Sentinel::Unknown`.
-    fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32;
+    fn by_depth(cell_zoom: Zoom, asset_id: u32, ele_cells: i32, z: i32) -> u32;
 
-    /// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
+    /// The top of the bedrock under ground `ele` leaf cells high, in leaf cells: the lowest a
     /// cube may reach there.
-    fn bedrock(face: i32) -> i32;
+    fn bedrock(ele: i32) -> i32;
 
-    /// Cell `z` of a column past the service area, where the Earth's ground stands.
+    /// Cell `z` past the service area, where the Earth's ground stands.
     fn earth(z: i32) -> u32;
 }
 
-/// A content for the engine's own tests. It has no caves, and a column is its face's entry
-/// all the way down. The bedrock lies 64 cells under the face or under sea level, whichever is
+/// A content for the engine's own tests. It has no caves, and the ground is its face's asset
+/// all the way down. The bedrock lies 64 cells under the elevation or under sea level, whichever is
 /// lower, and past the area everything under sea level is unknown.
 #[cfg(test)]
 pub(crate) struct Sample;
@@ -52,15 +52,15 @@ impl Content for Sample {
     fn hollow(_: (Zoom, [i32; 3])) -> u32 {
         0
     }
-    fn by_depth(_: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
-        if z >= top {
+    fn by_depth(_: Zoom, asset_id: u32, ele_cells: i32, z: i32) -> u32 {
+        if z >= ele_cells {
             Sentinel::Void as u32
         } else {
             asset_id
         }
     }
-    fn bedrock(face: i32) -> i32 {
-        face.min(SEA_LEVEL) - 64
+    fn bedrock(ele: i32) -> i32 {
+        ele.min(SEA_LEVEL) - 64
     }
     fn earth(z: i32) -> u32 {
         if z < SEA_LEVEL {

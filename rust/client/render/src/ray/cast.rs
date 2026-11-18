@@ -210,7 +210,7 @@ pub(super) struct CastBuffer {
     /// (`light_damage_cs`).
     light_damage: Pipeline,
     /// Sets back to be cast anew the tiles the box slid onto or into another band, and those
-    /// whose rays may meet a column of the world that changed, before the propagation
+    /// whose rays may meet a rect of the world that changed, before the propagation
     /// (`light_slide_cs`, pxl-engine `Light::keeps`).
     light_slide: Pipeline,
     /// The light's cast's groups, in the order `light_groups` lays them.
@@ -270,10 +270,10 @@ pub(super) struct CastBuffer {
     /// The light's head, which its passes read beside the eye's words (pxl-engine
     /// `light::HDR_WORDS`).
     light_hdr: u32,
-    /// The world's columns that changed this frame, in units from the eye (pxl-engine
-    /// `light::column_of`). Where the epoch goes on, the cast casts again only the tiles whose
+    /// The world's rects that changed this frame, in units from the eye (pxl-engine
+    /// `light::rect_of`). Where the epoch goes on, the cast casts again only the tiles whose
     /// rays may meet them (`Light::reaches`).
-    light_columns: Vec<light::Column>,
+    light_rects: Vec<light::Rect>,
     /// Decides what each frame casts (ray/schedule.rs).
     schedule: Schedule,
     /// Whether the record's draw runs this frame, which it does once at most
@@ -552,7 +552,7 @@ impl RayPass {
                 word_sz(light::HDR_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            light_columns: Vec::with_capacity(light::COLUMN_CAP),
+            light_rects: Vec::with_capacity(light::RECT_CAP),
             schedule: Schedule::new(),
             draws_rec: false,
             light_idle: [0; 3].map(|_| {
@@ -742,13 +742,13 @@ impl RayPass {
         // names its box (`DecorFrame::damage`); a write that names none, or the lanes made
         // again, forgets all.
         let damage = decor.damage;
-        // The world's columns that changed, in units from the eye, for the light's cast
-        // (`light_columns`).
+        // The world's rects that changed, in units from the eye, for the light's cast
+        // (`light_rects`).
         let origin = [0, 1, 2].map(|k| eye[eye::ORIGIN + k] as i32);
-        let columns = &mut c.light_columns;
-        columns.clear();
+        let rects = &mut c.light_rects;
+        rects.clear();
         let leaf = |b: [i32; 4]| {
-            light::Column::every_band(light::column_of(
+            light::Rect::every_band(light::rect_of(
                 origin,
                 LEAF_CELL_ZOOM,
                 [b[0], b[1]],
@@ -757,11 +757,11 @@ impl RayPass {
         };
         for &b in damage {
             hold(&mut c.damage, &mut c.damage_cnt, b);
-            put_column(columns, leaf(b));
+            put_rect(rects, leaf(b));
         }
         cut_rects(&c.cuts, &cuts, |b| {
             hold(&mut c.damage, &mut c.damage_cnt, b);
-            put_column(columns, leaf(b));
+            put_rect(rects, leaf(b));
         });
         // The whole node cache is forgotten where the service area changed or what is placed
         // moved past what the boxes name, and once its frames would outrun what a key's tag
@@ -822,8 +822,8 @@ impl RayPass {
                 let cell_zoom = clipmap::FIRST_CELL_ZOOM + (k / clipmap::ENTRY_CNT as usize) as u32;
                 let mut changed = |q: [i32; 2]| {
                     let finer = |q: [i32; 2]| present(cell_zoom + 1, q);
-                    light::brick_columns(origin, cell_zoom, q, finer, |v| {
-                        put_column(&mut c.light_columns, v);
+                    light::brick_rects(origin, cell_zoom, q, finer, |v| {
+                        put_rect(&mut c.light_rects, v);
                     });
                 };
                 if added {
@@ -877,11 +877,11 @@ impl RayPass {
         r.begin();
         r.read(&[light_map.1, u32::from(shadow)]);
         // The world under the map moved whole where the node cache forgets it whole, or where
-        // no column says what changed. Otherwise only the tiles its columns reach are cast again.
-        let world_whole = world_changed && (c.forget || c.light_columns.is_empty());
+        // no rect says what changed. Otherwise only the tiles its rects reach are cast again.
+        let world_whole = world_changed && (c.forget || c.light_rects.is_empty());
         r.mark(world_whole);
         let content_same = r.end();
-        let world_columns = world_changed && !world_whole;
+        let world_rects = world_changed && !world_whole;
         // The box moves about the eye a tile at a time. What a tile holds moves with the
         // corner, and is kept where the slide kept its band (`light_slide_cs`).
         let corner = light::CORNER.map(|k| cast.eye[eye::LIGHT + k] as i32);
@@ -926,7 +926,7 @@ impl RayPass {
             shadow,
             light_made: c.light_ready,
             content_same,
-            world_columns,
+            world_rects,
             corner,
             range: [cast.eye[eye::RANGE], cast.eye[eye::RANGE + 1]],
             receivers_same,
@@ -984,7 +984,7 @@ impl RayPass {
             }
             hdr[light::HDR_WORLD] = c.light_world_number;
             hdr[light::HDR_SLIDE_CAST] = c.light_slide_cast;
-            let owes = due.slid || due.columns_changed;
+            let owes = due.slid || due.rects_changed;
             if owes {
                 c.light_slide_cast = c.light_number;
             }
@@ -1013,12 +1013,12 @@ impl RayPass {
                 hdr[w..w + 3].copy_from_slice(&lo.map(f32::to_bits));
                 hdr[w + 4..w + 7].copy_from_slice(&hi.map(f32::to_bits));
             }
-            // The world's columns that changed, where the epoch goes on and the slide casts the
+            // The world's rects that changed, where the epoch goes on and the slide casts the
             // tiles they reach again (`light_slide_cs`).
-            let at = 4 * light::COLUMNS_AT;
-            if due.columns_changed {
-                hdr[at] = c.light_columns.len() as u32;
-                for (k, col) in c.light_columns.iter().enumerate() {
+            let at = 4 * light::RECTS_AT;
+            if due.rects_changed {
+                hdr[at] = c.light_rects.len() as u32;
+                for (k, col) in c.light_rects.iter().enumerate() {
                     let w = at + 4 * (1 + 2 * k);
                     hdr[w..w + 4].copy_from_slice(&col.at.map(f32::to_bits));
                     hdr[w + 4..w + 6].copy_from_slice(&col.band_range);
@@ -1643,7 +1643,7 @@ impl RayPass {
             // The stood tiles' count is copied where the propagation reads it. Then, where the
             // cast owes a slide and a tile is stood, the slide sets back to be cast anew the
             // tiles the box slid onto or into another band, and those whose rays may meet a
-            // column of the world that changed, a thread a tile (`light_slide_cs`). Then the
+            // rect of the world that changed, a thread a tile (`light_slide_cs`). Then the
             // propagation lists the tiles they read, a thread for each tile stood since the
             // casts before propagated theirs (`light_propagate_cs`). A cast that stands on no
             // tile runs neither.
@@ -1984,7 +1984,7 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
 /// The stood list's args as a cast starts (`light::RECEIVER_TILES_WORDS`): no stood tile, and
 /// the propagation's dispatch as `ray::LEFT_EMPTY` lays it. The slide's dispatch has no
 /// workgroup across, and as many rows as cover a side of the box's tiles where the cast `owes`
-/// a slide, as the box slid or a column changed.
+/// a slide, as the box slid or a rect changed.
 fn light_receiver_tiles(owes: bool) -> [u32; light::RECEIVER_TILES_WORDS as usize] {
     let mut w = [0; light::RECEIVER_TILES_WORDS as usize];
     let list = light::RECEIVER_TILES_LIST as usize;
@@ -2222,13 +2222,13 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
     pass
 }
 
-/// Puts column `c` among `columns`. The light's head holds `light::COLUMN_CAP` of them, and a
-/// column past them is taken into the last, as the host's draws' boxes are (gpu/draw.rs
+/// Puts rect `c` among `rects`. The light's head holds `light::RECT_CAP` of them, and a
+/// rect past them is taken into the last, as the host's draws' boxes are (gpu/draw.rs
 /// `stand`).
-fn put_column(columns: &mut Vec<light::Column>, c: light::Column) {
-    let full = columns.len() == light::COLUMN_CAP;
-    match columns.last_mut() {
+fn put_rect(rects: &mut Vec<light::Rect>, c: light::Rect) {
+    let full = rects.len() == light::RECT_CAP;
+    match rects.last_mut() {
         Some(last) if full => last.hold(c),
-        _ => columns.push(c),
+        _ => rects.push(c),
     }
 }

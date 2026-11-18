@@ -6,7 +6,7 @@
 //! box or into another band (`Light::keeps` is false), so that no cast reads a depth cast for
 //! another place. A tile set to none is only cast anew, so the slide may also set to none a
 //! tile it could keep. With the box standing, the slide must set to none every tile whose rays
-//! may meet a column of the world that changed (`Light::reaches`). Its first thread must name
+//! may meet a rect of the world that changed (`Light::reaches`). Its first thread must name
 //! the cast as the last one the slide ran in (`light::SLIDE_RAN`).
 //!
 //! The tests are skipped where no adapter answers.
@@ -198,7 +198,7 @@ fn hand_slide_forgets_what_moved() {
     tally.end("slides");
 }
 
-/// A change to the world: its name, the light's direction, the columns it changed, and the
+/// A change to the world: its name, the light's direction, the rects it changed, and the
 /// first and last bands that read them.
 type Change = (&'static str, [f32; 3], &'static [[f32; 4]], [Zoom; 2]);
 
@@ -212,7 +212,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     let mut tally = Tally::default();
     let (mut kept, mut off, mut extra) = (0u32, 0u32, 0u32);
     let corner = [1304, -896];
-    // The columns are in units from the eye: a brick's, two boxes of damage a few cells wide,
+    // The rects are in units from the eye: a brick's, two boxes of damage a few cells wide,
     // one far off the box, a strip across the world's whole width, and the same strip read by
     // the leaf's band alone.
     const EVERY: [Zoom; 2] = [0, Zoom::MAX];
@@ -248,15 +248,15 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
             [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
         ),
     ];
-    for (n, (name, dir, columns, band_range)) in changes.into_iter().enumerate() {
+    for (n, (name, dir, rects, band_range)) in changes.into_iter().enumerate() {
         let l = box_of(dir, 0.0625, 0.75, corner);
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
             .collect();
         let mut hdr = hdr_words(40, 37, corner, RANGE);
-        let at = 4 * light::COLUMNS_AT;
-        hdr[at] = columns.len() as u32;
-        for (k, c) in columns.iter().enumerate() {
+        let at = 4 * light::RECTS_AT;
+        hdr[at] = rects.len() as u32;
+        for (k, c) in rects.iter().enumerate() {
             let w = at + 4 * (1 + 2 * k);
             hdr[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
             hdr[w + 4..w + 6].copy_from_slice(&band_range);
@@ -268,10 +268,10 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         for j in 0..N {
             for i in 0..N {
                 let word = have[(reads + j * N + i) as usize];
-                let column = |&at: &[f32; 4]| light::Column { at, band_range };
-                if !columns
+                let rect = |&at: &[f32; 4]| light::Rect { at, band_range };
+                if !rects
                     .iter()
-                    .any(|c| l.reaches(SIZE, RANGE, [i, j], column(c)))
+                    .any(|c| l.reaches(SIZE, RANGE, [i, j], rect(c)))
                 {
                     case_kept += 1;
                     extra += u32::from(word == 0);
@@ -289,7 +289,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     }
     eprintln!("world changes: {kept} tiles kept, {off} set to none, {extra} kept set to none");
     assert!(kept > 0 && off > 0, "too few to say");
-    assert!(extra <= 16, "{extra} tiles no column reaches set to none");
+    assert!(extra <= 16, "{extra} tiles no rect reaches set to none");
     tally.end("world changes");
 }
 

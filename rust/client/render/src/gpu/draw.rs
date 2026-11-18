@@ -146,7 +146,7 @@ impl Position {
 }
 
 /// A model vertex's words: position 3, normal 3, UV 2, joints 4 (u32) and weights 4. The
-/// indices follow the vertex columns.
+/// indices follow the vertex lanes.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 
 /// Every pipeline a draw record may name, in the order a frame's draw stats count them
@@ -803,13 +803,13 @@ impl DrawList {
         handle: u32,
         group: u32,
         cnt: u32,
-        columns: [u32; 3],
+        lanes: [u32; 3],
         at: Position,
         opacity: f32,
         drifts: bool,
         receiver: Option<ReceiverBox>,
     ) {
-        let [off, stride, idx] = columns;
+        let [off, stride, idx] = lanes;
         let words = [
             (instance::OFF, f32::from_bits(off)),
             (instance::STRIDE, f32::from_bits(stride)),

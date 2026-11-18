@@ -188,8 +188,8 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         .collect();
     let total: u32 = cnts.iter().sum();
     assert!(total <= CAP, "the regions hold {total}, past the slots");
-    let columns = drawing::COLUMN_CNT;
-    let mut instances = vec![0u32; ((columns + 1) * CAP) as usize];
+    let lanes = drawing::LANE_CNT;
+    let mut instances = vec![0u32; ((lanes + 1) * CAP) as usize];
     let mut noise = 0x9e37_79b9u32;
     let mut next = || {
         noise ^= noise << 13;
@@ -209,7 +209,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         instances[(3 * CAP + k) as usize] = 0.0f32.to_bits();
         instances[(4 * CAP + k) as usize] = 1.0f32.to_bits();
     }
-    let list = (columns * CAP) as usize;
+    let list = (lanes * CAP) as usize;
     let mut region_words = vec![0u32; 2 * regions];
     let mut uniforms = vec![0u32; drawing::UNIFORM_WORDS as usize * regions];
     let mut args = vec![0u32; drawing::ARGS_WORDS as usize * regions];
@@ -224,7 +224,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         let u = r * drawing::UNIFORM_WORDS as usize;
         uniforms[u..u + 3].copy_from_slice(&anchor_q.map(|v| v as u32));
         uniforms[u + 4] = CAP;
-        uniforms[u + instance::IDX] = columns * CAP + first;
+        uniforms[u + instance::IDX] = lanes * CAP + first;
         let a = r * drawing::ARGS_WORDS as usize;
         args[a..a + 5].copy_from_slice(&[36, n, 7, 3, 0]);
         first += n;

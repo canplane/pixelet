@@ -1,8 +1,8 @@
 //! Decor's passes by hand (frame/shader/decor_*.wgsl) must answer as the
 //! Rust does, over the real world of tests/real_world. Each record a thread leaves must equal,
 //! word for word, the record `generation::placement` stands through the real walk
-//! (`support::column_surface`). The pass reads a column's surface off the column and walks
-//! only a column under ways, so these tests hold that read to the walk, which owns the rule.
+//! (`support::surface`). The pass reads the surface over a cell off the cell's ground and walks
+//! down only under ways, so these tests hold that read to the walk, which owns the rule.
 
 mod real_world;
 
@@ -118,18 +118,13 @@ struct Generating<'w, 't> {
     last_decor: std::cell::Cell<[i32; 3]>,
     /// The decors whose boxes took a record.
     claims: Vec<[i32; 3]>,
-    /// Whether no clip level holds the column asked last.
+    /// Whether no clip level holds the cell asked last.
     last_lacks: bool,
 }
 
 impl Generating<'_, '_> {
     /// What the base answers near `f`, or with none the world as edited, tallied.
-    fn ask(
-        &mut self,
-        f: Option<&support::ColumnSurface<Inheritance>>,
-        zoom: Zoom,
-        c: [i32; 3],
-    ) -> u32 {
+    fn ask(&mut self, f: Option<&support::Surface<Inheritance>>, zoom: Zoom, c: [i32; 3]) -> u32 {
         let edited = f.is_none();
         let root_at = ancestor_at(zoom, c, zoom);
         let (cuts, root) = if edited {
@@ -137,7 +132,7 @@ impl Generating<'_, '_> {
         } else {
             ([Cut::NONE; 2], f.unwrap().line.ancestor(0))
         };
-        // Where the ask is edited, the cell's root alone; else the column surface's line.
+        // Where the ask is edited, the cell's root alone; else the surface's line.
         let line = if edited {
             Line::of_root(root_at, root)
         } else {
@@ -149,9 +144,9 @@ impl Generating<'_, '_> {
             .0
             .here();
         self.last_lacks = lacks;
-        self.tally.add("ask: a column not held", lacks);
+        self.tally.add("ask: a cell not held", lacks);
         self.tally
-            .add("edit: asked over a column not held", edited && lacks);
+            .add("edit: asked over a cell not held", edited && lacks);
         self.tally.add("ask: of the world unplaced", !edited);
         self.tally.add("ask: as edited", edited);
         if edited && answer::is_placed(v) {
@@ -193,58 +188,54 @@ impl Generating<'_, '_> {
 }
 
 impl DecorQuery for Generating<'_, '_> {
-    type ColumnSurface = support::ColumnSurface<Inheritance>;
+    type Surface = support::Surface<Inheritance>;
 
-    fn column_surface(
-        &mut self,
-        cell_zoom: Zoom,
-        g: [i32; 2],
-    ) -> (Self::ColumnSurface, (i32, f32), bool) {
+    fn surface(&mut self, cell_zoom: Zoom, c: [i32; 2]) -> (Self::Surface, (i32, f32), bool) {
         let mut ground = Ground {
             w: self.w,
             cuts: [Cut::NONE; 2],
         };
-        let f = support::column_surface(&mut ground, cell_zoom, g);
-        self.tally.add("surface: columns walked", true);
+        let f = support::surface(&mut ground, cell_zoom, c);
+        self.tally.add("surface: cells walked down", true);
         assert!(
             f.end != End::Lack,
-            "a listed pair's brick holds its leaves' columns"
+            "a listed pair's brick holds its leaves' cells"
         );
         self.tally.add("surface: nothing fills", f.end == End::Miss);
         let met = f.end == End::Hit;
         let mut resident = self.w;
-        let wrapped = wrap_idx(cell_zoom, g[0]);
-        let shard = area::Shard::UNKNOWN.at(&self.w, (cell_zoom, [wrapped, g[1]]));
+        let wrapped = wrap_idx(cell_zoom, c[0]);
+        let shard = area::Shard::UNKNOWN.at(&self.w, (cell_zoom, [wrapped, c[1]]));
         self.tally.add("surface: past the area", shard.past());
         if met && !shard.past() {
-            let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], f.top.0]);
+            let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, c[1], f.top.0]);
             self.tally
-                .add("surface: the ground's top", f.top.0 == col.top - 1);
+                .add("surface: the ground's top", f.top.0 == col.ele_cells - 1);
             self.tally
-                .add("surface: over the ground, a way", f.top.0 >= col.top);
+                .add("surface: over the ground, a way", f.top.0 >= col.ele_cells);
             self.tally.add(
                 "surface: under the ground's top, a bore",
-                f.top.0 < col.top - 1,
+                f.top.0 < col.ele_cells - 1,
             );
             self.tally.add(
-                "surface: a way on a void column",
+                "surface: a way on a void cell",
                 col.asset_id == Sentinel::Void as u32,
             );
             self.tally.add("surface: a part of its cube", f.top.1 < 1.0);
             self.tally
                 .add("surface: a wall", col.asset_id == Sentinel::Unknown as u32);
-            // What the pass by hand asks of the world: where ways bound the column, its cells
+            // What the pass by hand asks of the world: where ways bound the cell, the cells over it
             // down to the surface, and otherwise nothing.
             let (b, _, _) = clip::bound_over(
                 &resident,
                 &mut Lookup::NONE.clone(),
                 [cell_zoom, cell_zoom],
-                (cell_zoom, [wrapped, g[1]]),
+                (cell_zoom, [wrapped, c[1]]),
             );
             let [lo, hi] = b[1];
             if lo < hi {
-                let start = ((hi - 1) >> (LEAF_CELL_ZOOM - cell_zoom)).max(col.top - 1);
-                self.tally.add("hand: columns walked", true);
+                let start = ((hi - 1) >> (LEAF_CELL_ZOOM - cell_zoom)).max(col.ele_cells - 1);
+                self.tally.add("hand: cells walked down", true);
                 *self.tally.0.entry("hand: cells walked").or_default() +=
                     (start - f.top.0 + 1) as u64;
                 // The cell the walk met, asked as the walk asked it.
@@ -252,7 +243,7 @@ impl DecorQuery for Generating<'_, '_> {
                     w: self.w,
                     cuts: [Cut::NONE; 2],
                 };
-                let top = [wrapped, g[1], f.top.0];
+                let top = [wrapped, c[1], f.top.0];
                 let eighths =
                     answer::fill_eighths(support::asset(&mut ground, &f.line, cell_zoom, top));
                 self.tally
@@ -262,23 +253,23 @@ impl DecorQuery for Generating<'_, '_> {
             }
         }
         if f.end == End::Miss && !shard.past() {
-            let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], 0]);
+            let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, c[1], 0]);
             self.tally.add(
-                "surface: void column, no way",
+                "surface: void cell, no way",
                 col.asset_id == Sentinel::Void as u32,
             );
         }
         (f, f.top, met)
     }
 
-    fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom {
-        let (f, _) = clip::step(&self.w, Lookup::NONE, LEAF_CELL_ZOOM, g);
+    fn finest(&mut self, cell_zoom: Zoom, c: [i32; 2]) -> Zoom {
+        let (f, _) = clip::step(&self.w, Lookup::NONE, LEAF_CELL_ZOOM, c);
         assert!(
             f.here() && f.from() >= cell_zoom,
-            "a listed pair's brick holds its leaf columns, at its clip level or finer"
+            "a listed pair's brick holds its leaf cells, at its clip level or finer"
         );
         self.tally.add(
-            "finest: a finer clip level holds the leaf column",
+            "finest: a finer clip level holds the leaf cell",
             f.from() > cell_zoom,
         );
         self.tally.add(
@@ -288,9 +279,9 @@ impl DecorQuery for Generating<'_, '_> {
         f.from()
     }
 
-    /// None where the read lacks: no clip level holds its column, inside the service area,
+    /// None where the read lacks: no clip level holds its cell, inside the service area,
     /// past which the world answers the earth (world.wgsl `ground_cell`).
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
+    fn asset(&mut self, f: &Self::Surface, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
         let v = self.ask(Some(f), zoom, c);
         let wrapped = wrap_idx(zoom, c[0]);
         let past = area::Shard::UNKNOWN
@@ -354,7 +345,7 @@ fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u
         q.claims.push(q.last_decor.get());
     }
     q.tally.add(
-        "read: refused, its last read of a column not held",
+        "read: refused, its last read of a cell not held",
         !generates && q.last_lacks,
     );
     q.tally.add("record: no footing", !has_footing);
@@ -934,9 +925,9 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
 }
 
 /// Clears, at every zoom, the rows of the bricks east of some leaf bricks, so that no clip
-/// level holds them and a box from the west runs onto a column not held. Returns points by
+/// level holds them and a box from the west runs onto a cell not held. Returns points by
 /// those edges for records to stand about.
-fn lack_columns(built: &mut Built) -> Vec<[i32; 2]> {
+fn lack_cells(built: &mut Built) -> Vec<[i32; 2]> {
     let mut edges = Vec::new();
     let k = |cell_zoom: Zoom| brick::BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
     for e in (5..ENTRY_CNT).step_by(13) {
@@ -1172,7 +1163,7 @@ fn world_gpu<'d>(
 /// clip level holds them, and what its pairs lay.
 fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), LeafList>) {
     let mut built = real_world::build_with(eye, 600, extra);
-    let edges = lack_columns(&mut built);
+    let edges = lack_cells(&mut built);
     let laid = pairs_about(&built, &edges);
     (built, laid)
 }
@@ -1217,8 +1208,8 @@ type StoodRecord = (u32, u32, [i32; 2], i32, u32);
 
 /// What is placed in the boxes of records that stand at the leaves, and those records. Each
 /// record of `cubed` gets a cube over its base. Each record of `folded` is a wide one, and gets
-/// a cube a sixty-fourth of a cell in its first column's top cell and a cube at its second
-/// column's base.
+/// a cube a sixty-fourth of a cell in its first cell's top cell and a cube at its second
+/// cell's base.
 fn placed_in_boxes(stood: &[StoodRecord]) -> (Vec<Leaf>, Vec<StoodRecord>, Vec<StoodRecord>) {
     let object = object::leaf_word(value::OBJECT[0], 0);
     let at_leaves: Vec<StoodRecord> = stood
@@ -1418,11 +1409,11 @@ fn hand_decor_answers_as_placement() {
         eprintln!("{v:>12} {k}");
     }
     assert_eq!(tally.0["words differing"], 0);
-    // A box's column is asked from its lowest cell up. On a column no clip level holds, that
+    // A box is asked from its lowest cell up. Over a cell no clip level holds, that
     // cell's read lacks and refuses the candidate, and no decor stands on void, so the ask
     // never reaches an edit there.
     assert!(ROWS.iter().all(|d| !d.allows(Sentinel::Void as u32)));
-    assert_eq!(tally.0["edit: asked over a column not held"], 0);
+    assert_eq!(tally.0["edit: asked over a cell not held"], 0);
     // A decor shows no coarser than two zooms over the leaves. There the ground's top, the
     // ways and the caves under a face keep an even share of a cube, so the walk meets no odd
     // share.
@@ -1437,7 +1428,7 @@ fn hand_decor_answers_as_placement() {
         .filter(|(k, v)| {
             **v == 0
                 && !k.starts_with("words differing")
-                && **k != "edit: asked over a column not held"
+                && **k != "edit: asked over a cell not held"
                 && **k != "walk: met an odd part of its cube"
         })
         .map(|(k, _)| *k)
@@ -1856,7 +1847,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
             }
             .min(cap);
             recs[generation::cnt_at(s, j as u32) as usize] = laid;
-            let z = built.top_at([b[0], b[1]]);
+            let z = built.ele_at([b[0], b[1]]);
             for i in 0..laid.min(cap) {
                 let r = word_of(s, j as u32, i);
                 let h = draw.next();
@@ -1903,7 +1894,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
         ];
         recs[r + 1] = real_world::wrap(at[0]) as u32;
         recs[r + 2] = at[1] as u32;
-        recs[r + 3] = (built.top_at(at) + draw.within(0, 3)) as u32;
+        recs[r + 3] = (built.ele_at(at) + draw.within(0, 3)) as u32;
         // The second lies beside the first on its row, a few cells along X.
         if n == 1 {
             let first = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
@@ -2046,7 +2037,7 @@ fn hand_cnt_counts_its_regions() {
         let order = each_rec(&recs, &built.clipmap, workgroups);
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let clip_buf = buf(&device, &clip_flat);
-        let origin = [at[0] << 8, at[1] << 8, (built.top_at(at) + 30) << 8];
+        let origin = [at[0] << 8, at[1] << 8, (built.ele_at(at) + 30) << 8];
         let base = Sizing {
             name: "as a frame asks",
             origin,
@@ -2219,7 +2210,7 @@ fn hand_compact_lays_as_the_rust() {
                         let regions_buf = buf(&device, &regions);
                         let instances = buf(
                             &device,
-                            &vec![0xffff_ffffu32; ((drawing::COLUMN_CNT + 1) * cap) as usize],
+                            &vec![0xffff_ffffu32; ((drawing::LANE_CNT + 1) * cap) as usize],
                         );
                         {
                             let at = [
@@ -2287,7 +2278,7 @@ fn hand_compact_lays_as_the_rust() {
 }
 
 /// Where the draws' words disagree with the regions they draw. Each region's args must draw its
-/// count of its mesh's corners or an impostor's. Its uniform's columns must start at its first
+/// count of its mesh's corners or an impostor's. Its uniform's lanes must start at its first
 /// slot, its count must be `cnts`'s, and no two regions' slots may overlap. `firsts` holds
 /// each region's first slot, and `fresh` holds the uniforms before args added to them.
 fn draws_differ(
@@ -2317,10 +2308,7 @@ fn draws_differ(
         }
         let idx = r * u + instance::IDX;
         if uniforms[idx] != fresh[idx] + firsts[r] {
-            out.push(format!(
-                "region {r}'s uniform's columns at {}",
-                uniforms[idx]
-            ));
+            out.push(format!("region {r}'s uniform's lanes at {}", uniforms[idx]));
         }
         let rest = |w: &[u32]| {
             let mut w = w[r * u..(r + 1) * u].to_vec();
@@ -2328,7 +2316,7 @@ fn draws_differ(
             w
         };
         if rest(uniforms) != rest(fresh) {
-            out.push(format!("region {r}'s uniform past its columns"));
+            out.push(format!("region {r}'s uniform past its lanes"));
         }
     }
     let mut spans: Vec<(u32, u32)> = (0..n).map(|r| (firsts[r], firsts[r] + cnts[r])).collect();
@@ -2375,11 +2363,11 @@ fn hand_args_draws_its_regions() {
                 mix(round, [r as i32, 5]) % 500
             };
         }
-        // Each region's uniform as `Generator::prepare` writes it, with the columns' base at
+        // Each region's uniform as `Generator::prepare` writes it, with the lanes' base at
         // `instance::IDX`.
         let u = drawing::UNIFORM_WORDS as usize;
         let mut uniforms = vec![0u32; u * regions_n];
-        let base = drawing::COLUMN_CNT * 2048;
+        let base = drawing::LANE_CNT * 2048;
         for r in 0..regions_n {
             uniforms[r * u] = 1.5f32.to_bits();
             uniforms[r * u + instance::IDX] = base;
@@ -2388,7 +2376,7 @@ fn hand_args_draws_its_regions() {
         let (mb, rb, ab, ub) = (make(&meshes), make(&regions), make(&args0), make(&uniforms));
         // Instances that hold every region's count, so none is cut short.
         let slots = regions[..regions_n].iter().sum::<u32>().max(1);
-        let ib = make(&vec![0u32; ((drawing::COLUMN_CNT + 1) * slots) as usize]);
+        let ib = make(&vec![0u32; ((drawing::LANE_CNT + 1) * slots) as usize]);
         let entries = [(0, &mb), (1, &rb), (2, &ab), (3, &ub), (15, &ib)].map(|(binding, b)| {
             wgpu::BindGroupEntry {
                 binding,
@@ -2487,7 +2475,7 @@ fn fresh_uniforms(cap: u32) -> Vec<u32> {
             cap,
             1.0f32.to_bits(),
             layer,
-            drawing::COLUMN_CNT * cap,
+            drawing::LANE_CNT * cap,
         ]);
     }
     uniforms
@@ -3273,7 +3261,7 @@ fn hand_frames_answer_as_the_rust() {
             init[r + 3] = p[2] as u32;
         }
         // The frames. The later frames take their boxes from what the first reported.
-        let origin = [at[0] << 8, at[1] << 8, (built.top_at(at) + 30) << 8];
+        let origin = [at[0] << 8, at[1] << 8, (built.ele_at(at) + 30) << 8];
         let mut drawing = drawing_words(0.02, 0.0002);
         drawing[drawing::ANCHOR as usize] = at[0] as u32;
         drawing[drawing::ANCHOR as usize + 1] = at[1] as u32;
@@ -3471,7 +3459,7 @@ fn hand_frames_answer_as_the_rust() {
                 ),
                 uniforms: buf(&fresh_uniforms(cap), wgpu::BufferUsages::empty()),
                 instances: buf(
-                    &vec![0; ((drawing::COLUMN_CNT + 1) * cap) as usize],
+                    &vec![0; ((drawing::LANE_CNT + 1) * cap) as usize],
                     wgpu::BufferUsages::empty(),
                 ),
                 cap,
@@ -3607,7 +3595,7 @@ fn halve_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 
 /// decor_scatter.wgsl `scatter_cnt_of` must count as `scatter::cnt_of` does. The cases take
 /// decors with seeds, chances and roots other than the catalog's, with means of many to a root
-/// column so the rooms bind, at every zoom from the root to the leaves. They add root columns
+/// cell so the rooms bind, at every zoom from the root to the leaves. They add root cells
 /// whose draw lands on a count's rounding edge.
 #[test]
 fn hand_scatter_count_as_the_rust() {
@@ -3616,7 +3604,7 @@ fn hand_scatter_count_as_the_rust() {
     };
     let mut draw = real_world::Draw(0x0dec_0c47);
     let mut asked: Vec<[u32; 6]> = Vec::new();
-    // A chance at which a root column's mean holds at most `per_root` counts, in 16.16 fixed
+    // A chance at which a root cell's mean holds at most `per_root` counts, in 16.16 fixed
     // point.
     let chance_for = |root: Zoom, per_root: u32| {
         let shift = 2 * (LEAF_CELL_ZOOM - root);
@@ -3624,7 +3612,7 @@ fn hand_scatter_count_as_the_rust() {
     };
     for _ in 0..6000 {
         let root = FIRST_CELL_ZOOM + draw.next() % (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM + 1);
-        // Zooms from three over the root, where a column holds none, down to the leaves.
+        // Zooms from three over the root, where a cell holds none, down to the leaves.
         let zoom = (root + draw.next() % (LEAF_CELL_ZOOM - root + 4)).saturating_sub(3);
         let per_root = [1 << 14, 1 << 16, 3 << 17, 1 << 20, 1 << 24][draw.next() as usize % 5];
         let chance = chance_for(root, per_root);
@@ -3696,7 +3684,7 @@ fn count_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         let want = scatter::cnt_of([a[0], a[1], a[2]], a[3], b);
         assert_eq!(got[k], want, "{a:?}");
         many += (want > 1) as u32;
-        // A leaf of a root column that holds four or more, where the rooms bound the count on
+        // A leaf of a root cell that holds four or more, where the rooms bound the count on
         // the way down.
         if a[3] == LEAF_CELL_ZOOM {
             let t = a[3] - a[2];

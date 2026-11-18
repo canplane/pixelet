@@ -28,7 +28,7 @@ pub(crate) fn swaying() -> Model {
     ];
     let cnt = vertices.len();
     let mut m = Model::new(cnt as u32, 3, 1).expect("the heap gives the model room");
-    // The mesh's columns lie a vertex count apart.
+    // The mesh's lanes lie a vertex count apart.
     let w = m.words();
     for (v, p) in vertices.iter().enumerate() {
         for k in 0..3 {

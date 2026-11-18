@@ -32,7 +32,7 @@ fn a_refused_argument_answers_its_errno() {
         sensor::pos(Some(Position {
             lon: 0.0,
             lat: off_earth,
-            alt: None,
+            alt_ellipsoid: None,
         })),
         sensor::heading(Some(-1.0)),
         sensor::heading(Some(361.0)),

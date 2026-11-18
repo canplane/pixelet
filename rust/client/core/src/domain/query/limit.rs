@@ -26,10 +26,10 @@ use pxl_engine::clipmap::Lookup;
 use pxl_spec::space::coord::q3::{self, Q3};
 
 impl World {
-    /// Whether the leaf column under `at` lies in the service area and is
+    /// Whether the leaf cell under `at` lies in the service area and is
     /// not the wall at its edge (pxl-spec `area::is_wall`). The answer is
-    /// known before any of the column's ground arrives: it comes from the
-    /// nine shards around the column's own, with the area's index asked once
+    /// known before any of the cell's ground arrives: it comes from the
+    /// nine shards around the cell's own, with the area's index asked once
     /// (`Shard::at`). A body comes up to the wall's face and never stands
     /// on the wall.
     pub(crate) fn within(&self, at: &Q3) -> bool {
@@ -50,17 +50,17 @@ impl World {
     ///
     /// - every shard under it is read, so a write stands over what its file
     ///   held (domain/layer/object/repository.rs `holds`);
-    /// - none of its leaf columns is the wall (pxl-spec `area::walls_in`),
+    /// - none of its leaf cells is the wall (pxl-spec `area::walls_in`),
     ///   as `within` requires of a body;
     /// - `space` lies over the bedrock and under the top of ground the
     ///   world knows exactly, with no tile still missing (pxl-content strata.rs).
     ///
-    /// The bedrock and the top rise with the ground's face, so every
-    /// column's limits hold where the lowest top and the highest bedrock
+    /// The bedrock and the top rise with the ground's elevation, so every
+    /// cell's limits hold where the lowest top and the highest bedrock
     /// do. Those come from the ground's bound over the nodes that hold
     /// `space` at its leaf cells: the fewest nodes at the zoom of its widest
     /// side, at most two a side (`TileCache::relief`). An aligned cube is one
-    /// node, its own columns. A box that is not aligned is bounded by the
+    /// node, its own cells. A box that is not aligned is bounded by the
     /// nodes around it, which can only refuse more.
     pub(crate) fn editable(&self, space: &Aabb) -> bool {
         repository::holds(space) && self.editable_in(&source::ServiceArea, space)
@@ -88,7 +88,7 @@ impl World {
                     IndexedTerrainTile::tile_cache().cursor(node, cell_zoom),
                     Lookup::NONE,
                 );
-                // `lo` and `hi` are the ground's lowest and highest faces in
+                // `lo` and `hi` are the ground's lowest and highest elevations in
                 // the node, in leaf cells.
                 IndexedTerrainTile::tile_cache()
                     .relief(&line, &mut place, node, [cell_zoom, cell_zoom])

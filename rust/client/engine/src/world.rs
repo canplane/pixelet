@@ -52,20 +52,20 @@ impl Inheritance {
     }
 
     /// The inheritance of the node `c` at `zoom` with nothing handed down, as for a descent's
-    /// root: each source is found down its line from the top, what is placed from `columns`.
-    pub fn of(columns: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
+    /// root: each source is found down its line from the top, what is placed from `lanes`.
+    pub fn of(lanes: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
         Inheritance {
-            object: object::cursor(columns, ROOT, zoom, c),
+            object: object::cursor(lanes, ROOT, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Lookup::NONE,
         }
     }
 
     /// What its child `c` at `zoom` is handed: each source stepped one zoom down, what is placed
-    /// in `columns`.
-    pub fn child(&self, columns: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
+    /// in `lanes`.
+    pub fn child(&self, lanes: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
         Inheritance {
-            object: object::child(columns, self.object, zoom, object::path(zoom, c)),
+            object: object::child(lanes, self.object, zoom, object::path(zoom, c)),
             shard: self.shard,
             ground: self.ground,
         }
@@ -107,7 +107,7 @@ impl Inheritance {
 pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Pool + ?Sized>(
     resident: &mut H,
     bricks: &W,
-    columns: &L,
+    lanes: &L,
     pool: &P,
     at: &mut Inheritance,
     (zoom, c): (Zoom, [i32; 3]),
@@ -119,7 +119,7 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
     let place = &mut at.ground;
     let is_cell = zoom >= near || zoom >= LEAF_CELL_ZOOM && object::whole(put, carve, zoom, c);
     let over = object::over(
-        columns,
+        lanes,
         put,
         carve,
         hide,
@@ -133,7 +133,7 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
     // and is drawn by itself. It is read once, here, for both uses below.
     let laid = if over.answer == CELL {
         let four = if fills(over.asset) {
-            object::asset_ids(columns, put, hide, zoom, c, over.asset)
+            object::asset_ids(lanes, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };
@@ -154,12 +154,12 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
     }
     // Where what is placed splits the node, the box it may fill.
     let (placed, splits) = if over.answer == SPLIT {
-        (object::object_box(columns, put, zoom), true)
+        (object::object_box(lanes, put, zoom), true)
     } else {
         (BOX_NONE, false)
     };
     let (i, cell, bound) = ground::node(resident, shard, place, (zoom, c), [far, near], is_cell);
-    // The ways' cell over the ground's, where the cell's column was read.
+    // The ways' cell over the ground's, where the cell's ground was read.
     let way = if is_cell && i.kind == Kind::Cell && place.here() {
         clipmap::way_at(bricks, pool, *place, bound, (zoom, c))
     } else {
@@ -316,7 +316,7 @@ impl PlacedCursor {
     /// The next leaf placed at a unit cell of the box, with its cell and its word
     /// (`Table::data`), or false past the last. The cursor makes one descent of the tree's
     /// branches that meet the box, stepping each child once from its parent.
-    pub fn next(&mut self, columns: &impl Table) -> ([i32; 3], u32, bool) {
+    pub fn next(&mut self, lanes: &impl Table) -> ([i32; 3], u32, bool) {
         let s = UNIT_ZOOM - PLACED_FIRST;
         loop {
             if self.depth == 0 {
@@ -333,7 +333,7 @@ impl PlacedCursor {
                         self.first[2] += 1;
                     }
                 }
-                let node = object::cursor(columns, ROOT, PLACED_FIRST, n);
+                let node = object::cursor(lanes, ROOT, PLACED_FIRST, n);
                 if node.holds() {
                     (self.nodes[0], self.idx[0], self.next[1]) = (node, n, 0);
                     self.depth = 1;
@@ -357,7 +357,7 @@ impl PlacedCursor {
                 && c[2] << t <= self.hi[2]
                 && (c[2] + 1) << t > self.lo[2];
             let h = if meets {
-                object::child(columns, self.nodes[d - 1], z, c)
+                object::child(lanes, self.nodes[d - 1], z, c)
             } else {
                 object::NodeSlot::NOTHING
             };
@@ -368,7 +368,7 @@ impl PlacedCursor {
             }
             self.next[d] += 1;
             if d == PLACED_STEP_CNT && h.holds() && !h.is_folded() && h.zoom() == UNIT_ZOOM {
-                return (c, columns.data(h.slot()), true);
+                return (c, lanes.data(h.slot()), true);
             }
         }
     }
