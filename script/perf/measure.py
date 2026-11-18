@@ -2,7 +2,7 @@
 # for measuring (`PXL_PERF_DRIVE=1`) from nothing and hands `measure` how it
 # reaches it; `measure` writes the result into <dir>: values.json, report.txt and
 # trace.json, which ui.perfetto.dev opens. Beside them, however the run ends, it
-# keeps said.txt, every other line the app said and each capture's, and shots/,
+# keeps log.txt, every other line the app wrote and each capture's, and shots/,
 # the screen every `CAPTURE_S`. The scenario, the values and the progress are
 # the app's (ts/client/src/ui/feature/debug/perf/measure.ts).
 #
@@ -216,16 +216,16 @@ def measure(start):
     os.makedirs(os.path.join(out, "shots"), exist_ok=True)
     signal.signal(signal.SIGALRM, expired)
     signal.alarm(START_S)
-    with open(os.path.join(out, "said.txt"), "w") as said:
+    with open(os.path.join(out, "log.txt"), "w") as log:
         t0 = time.monotonic()
         lock = threading.Lock()
 
         def note(line):
-            """Keeps `line` in said.txt, after the run's seconds so far."""
+            """Keeps `line` in log.txt, after the run's seconds so far."""
             with lock:
-                if not said.closed:
-                    said.write(f"{time.monotonic() - t0:.1f} {line.rstrip()}\n")
-                    said.flush()
+                if not log.closed:
+                    log.write(f"{time.monotonic() - t0:.1f} {line.rstrip()}\n")
+                    log.flush()
 
         reach = None
         try:

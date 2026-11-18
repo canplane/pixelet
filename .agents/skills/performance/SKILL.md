@@ -46,8 +46,8 @@ Make the program faster while keeping every condition the design met.
 - Every run writes the same into `<dir>`, and all of it is read: `values.json`
   (`build`, `longest`, `gpu`, `tick`) for the comparison, `report.txt` for where
   the time went, `trace.json` at ui.perfetto.dev for a frame on the timeline;
-  and, however the run ends, `said.txt` and `shots/`. `said.txt` holds, each
-  after the run's seconds, every line the app said but the result, the host's
+  and, however the run ends, `log.txt` and `shots/`. `log.txt` holds, each
+  after the run's seconds, every line the app wrote but the result, the host's
   own among them (a core's stop, a device lost, an uncaptured error), then
   why the run ended. The app's progress is a line a second from the core's start,
   whatever the core answers (`PXLRUN`: whether it is shown, the boot's state,
