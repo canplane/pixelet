@@ -5,7 +5,7 @@ makes them. A tile is a function of two things only, what its source held and
 the code that baked it, so the same inputs give the same bytes, a published
 version is cached for good and a dev tile server answers as the bucket would.
 The source is the geo database for terrain, places and divisions, and NASA's
-pictures under `infra/imagery/` for the imagery (`bin/imagery.rs`).
+images under `infra/imagery/` for the imagery (`bin/imagery.rs`).
 
 ```text
  sources ─ingest─▶ db-geo ─bake─▶ a set ─publish─▶ the bucket ─▶ the Worker

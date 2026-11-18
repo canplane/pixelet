@@ -250,7 +250,7 @@ uniform! {
         /// south-west tile's column and row; the tiles across the window and
         /// around the world are the shaders' `IMAGERY_ACROSS` and `IMAGERY_AROUND`.
         /// `IMAGERY_TILES` holds each tile's layer plus one in `IMAGERY_TILE_BITS`
-        /// bits, row by row, and zero where the global picture stands in for
+        /// bits, row by row, and zero where the global image stands in for
         /// the tile.
         IMAGERY_WINDOW: Vec2i = 14,
         IMAGERY_TILES: Vec4u = 16,

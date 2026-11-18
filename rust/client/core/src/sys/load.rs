@@ -1,7 +1,7 @@
 // pxl-core/sys/load.rs
 
 //! The files the core loads: the asset catalog, the files the catalog names
-//! by their numbers after ASSET, and the picture of the whole Earth.
+//! by their numbers after ASSET, and the imagery's global image.
 //! Each is read as a catalog, a glTF model or an image. sys/io/loader.rs
 //! loads them with one task for each file in flight, and `LOAD_FILE_CAP` bounds
 //! how many are in flight at once.
@@ -21,7 +21,7 @@ pub(crate) enum LoadKind {
 
 /// A file to load. `File` is a file after ASSET by its id: the catalog itself
 /// (file.json5 `CATALOG`) or a file the catalog names. `Global` is the
-/// imagery's global picture, which is opened after IMAGERY and so under that
+/// imagery's global image, which is opened after IMAGERY and so under that
 /// bake's version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Load {
@@ -29,12 +29,12 @@ pub(crate) enum Load {
     Global,
 }
 
-/// The global picture's id. Every file after ASSET has an id that fits in a
+/// The global image's id. Every file after ASSET has an id that fits in a
 /// u16, so this one is past them all.
 const GLOBAL: u32 = 1 << 16;
 
 /// The most files in flight at once: one for each catalog slot, since a slot
-/// is wanted as one kind only, plus the catalog and the global picture.
+/// is wanted as one kind only, plus the catalog and the global image.
 pub(crate) const LOAD_FILE_CAP: usize = SLOT_CNT + 2;
 
 impl LoadKind {

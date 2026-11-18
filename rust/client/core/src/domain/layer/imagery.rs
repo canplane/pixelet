@@ -4,7 +4,7 @@
 //! baked, and only the floor's tiles around the eye are held (`AskScope::Floor`,
 //! `MIN_ZOOM`). A tile holds its packet until the GPU has its texels, and
 //! then the device generation that does, and nothing in the core after a
-//! frame takes them. Wherever no tile is held, the global picture answers.
+//! frame takes them. Wherever no tile is held, the global image answers.
 
 use pxl_global::Global;
 use pxl_spec::bake::publication::BaseKind;
@@ -99,7 +99,7 @@ pub(crate) fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 /// The tile cache as the GPU of generation `on` reads it, computed on each
 /// call and stored nowhere. `floor` is the view's floor at the top zoom. The
 /// result is the window's south-west tile and, for each tile of the window
-/// row by row, its GPU layer plus one, or zero where the global picture
+/// row by row, its GPU layer plus one, or zero where the global image
 /// answers.
 pub(crate) fn window(
     floor: impl Iterator<Item = Quadrant> + Clone,

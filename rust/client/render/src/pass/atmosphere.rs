@@ -242,7 +242,7 @@ pub struct Atmosphere {
     moon_mu: f32,
     /// The words the exposure texel was last drawn from (`EXPOSURE_READS`).
     exposure_read: Read,
-    /// The imagery's global picture, zero until its image has come
+    /// The imagery's global image, zero until its image has come
     /// (`ImageMap::step`). Until then the land past the terrain shows only the
     /// air before it.
     pub imagery_global: ImageMap,

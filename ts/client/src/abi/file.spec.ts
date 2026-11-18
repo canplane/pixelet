@@ -31,7 +31,7 @@ export const path = {
    * `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number. */
   IMAGERY: {
     ID: 3 as number,
-    /** The imagery's global picture, (IMAGERY, GLOBAL), served under the imagery
+    /** The imagery's global image, (IMAGERY, GLOBAL), served under the imagery
      * layer's version as its `TILE_GLOBAL` (spec/spec/bake/publication.json5). */
     GLOBAL: {
       ID: 0 as number,

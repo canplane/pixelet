@@ -28,7 +28,7 @@ pub const API_ROOT: &str = "/api";
 
 /// Baked tiles by kind, version and name: under the root a kind's own, and
 /// under that its object as a published set lays it out (bake/publication.json5
-/// `OBJECT`, and `TILE_GLOBAL` for the imagery's global picture). Its own root for
+/// `OBJECT`, and `TILE_GLOBAL` for the imagery's global image). Its own root for
 /// the reason the asset root is: the bake
 /// puts them in the bucket and the edge serves them, so neither server
 /// answers them, and the edge tells them from the geo server's routes by

@@ -1,7 +1,7 @@
 // pxl-spec/bake/tile.rs
 
 //! A baked tile of each layer — terrain, place, division and the imagery
-//! picture — and what every kind's says alike: which of it and its children
+//! — and what every kind's says alike: which of it and its children
 //! are tiles.
 
 use xpute_kit::status::error::XputeError;

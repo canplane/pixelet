@@ -14,7 +14,7 @@ pub mod cumulus {
     pub const SKIN: u16 = 69;
 }
 
-/// The moon's near side, the picture the sky draws it with (NASA).
+/// The moon's near side, the image the sky draws it with (NASA).
 pub mod moon {
-    pub const PICTURE: u16 = 70;
+    pub const IMAGE: u16 = 70;
 }

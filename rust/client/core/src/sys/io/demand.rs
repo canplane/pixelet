@@ -32,11 +32,12 @@ pub enum Class {
     /// What stands on the ground. Each shell of it ranks after the ground of
     /// the same shell.
     OnGround,
-    /// Ranks with the pictures: seen then unseen, finer tiles first.
-    Picture,
+    /// The imagery's tiles, which rank with the images: seen then unseen,
+    /// finer tiles first.
+    Imagery,
     /// Ranks after the models: seen then unseen, finer tiles first.
     Place,
-    /// A file of the catalog. A picture ranks with the pictures, and a model
+    /// A file of the catalog. An image ranks with the images, and a model
     /// after them.
     File,
     /// Ranks after everything else, with no order among its wants.
@@ -77,7 +78,7 @@ impl Stream {
             Stream::Place => (Source::Base(BaseKind::Place), false, Class::Place),
             Stream::Division => (Source::Base(BaseKind::Division), false, Class::Aside),
             Stream::Asset => (Source::Load, false, Class::File),
-            Stream::Imagery => (Source::Base(BaseKind::Imagery), true, Class::Picture),
+            Stream::Imagery => (Source::Base(BaseKind::Imagery), true, Class::Imagery),
             Stream::Object => (Source::Object, false, Class::OnGround),
         };
         Row {

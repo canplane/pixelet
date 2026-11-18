@@ -13,7 +13,7 @@
     skin: { $type: "file", $value: "sky/cloud/white.png" },
   },
   moon: {
-    $description: "The moon's near side, the picture the sky draws it with (NASA).",
-    picture: { $type: "file", $value: "sky/moon.png" },
+    $description: "The moon's near side, the image the sky draws it with (NASA).",
+    image: { $type: "file", $value: "sky/moon.png" },
   },
 }

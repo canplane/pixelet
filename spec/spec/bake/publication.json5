@@ -29,7 +29,7 @@
     $value: "{version}/{name}",
   },
   TILE_GLOBAL: {
-    $description: "The imagery's global picture, in place of a tile's name under the imagery\nlayer's version: no tile of the pyramid.",
+    $description: "The imagery's global image, in place of a tile's name under the imagery\nlayer's version: no tile of the pyramid.",
     $value: "global",
   },
 }

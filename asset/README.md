@@ -82,5 +82,5 @@ the face's mean, which pxl-render frame/shader/word.rs `MOON_MAP_MEAN` has to
 equal. Run the ingest afterward.
 
 The imagery is not here: it is the imagery layer's, its source in
-`infra/imagery/` and both its forms, the tiles and the picture whole, in the
+`infra/imagery/` and both its forms, the tiles and the global image, in the
 layer's set, `out/imagery/`.

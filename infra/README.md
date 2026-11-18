@@ -169,7 +169,7 @@ the app itself:
 | `terrain/<version>/`    | packed XTP tile                                 | name, 4–15               | immutable; a re-bake is a new version                            |
 | `place/<version>/`      | XTP count tile                                  | name, 7–15               | immutable; a re-bake is a new version                            |
 | `division/<version>/`   | XTP division tile                               | name, 4–12               | immutable; a re-bake is a new version                            |
-| `imagery/<version>/`    | packed imagery tile; `global`, its picture whole | name, 4                  | immutable; a re-bake is a new version                            |
+| `imagery/<version>/`    | packed imagery tile; `global`, its global image | name, 4                  | immutable; a re-bake is a new version                            |
 | `asset/`                | glb, png, webp, not packed                      | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted at any time |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |

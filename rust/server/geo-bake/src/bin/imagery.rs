@@ -9,10 +9,10 @@
 //!  - The imagery layer's tiles (pxl-spec `bake/tile/imagery.rs`) at its top
 //!    zoom, one ground cell to a texel, are written to its set,
 //!    `./out/imagery/<name>`, flat under the tiles' names as every kind's set is.
-//!    A tile of one color says nothing the global picture does not, and has no
+//!    A tile of one color says nothing the global image does not, and has no
 //!    object. The copy an upload takes lies beside the set, in
 //!    `./out/imagery.publish/` (`script/publish.py`).
-//!  - The global picture every tile falls back to, 2048 × 1024, covers the
+//!  - The global image every tile falls back to, 2048 × 1024, covers the
 //!    whole sphere and is no tile of the pyramid. It lies beside the tiles
 //!    under its own name (`TILE_GLOBAL`), packed as they are, and is published
 //!    with them.
@@ -96,7 +96,7 @@ fn reflectance() -> [f32; 256] {
     })
 }
 
-/// The Black Marble's grays are a picture's, so they are light as shown.
+/// The Black Marble's grays are an image's, so they are light as shown.
 fn gray_light() -> [f32; 256] {
     core::array::from_fn(|b| color::linear(b as u8) as f32)
 }
@@ -222,8 +222,8 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
             });
         }
     });
-    // Lossless: a tile of one color is left out because the global picture reads
-    // the same there, which holds only if the picture keeps every byte.
+    // Lossless: a tile of one color is left out because the global image reads
+    // the same there, which holds only if the image keeps every byte.
     let mut cfg = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
     cfg.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
@@ -233,11 +233,9 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
         .map_err(|e| format!("{e:?}"))?;
     let back = webp::Decoder::new(&encoded)
         .decode()
-        .ok_or("the global picture does not decode")?;
+        .ok_or("the global image does not decode")?;
     if *back != bytes[..] {
-        return Err(
-            "the global picture does not keep its bytes, which a left-out tile reads".into(),
-        );
+        return Err("the global image does not keep its bytes, which a left-out tile reads".into());
     }
     // Packed as every object of the set is, so a version is labeled one way.
     write_atomic(
@@ -359,7 +357,7 @@ fn run() -> Result<(), String> {
         git_sha().as_deref(),
         serde_json::json!({ "objects": t.baked + 1, "z": IMAGERY_ZOOM, "format": FORMAT[BaseKind::Imagery as usize] }),
     )?;
-    // The copy an upload takes (`script/publish.py`), the global picture with the tiles.
+    // The copy an upload takes (`script/publish.py`), the global image with the tiles.
     let copy = set.publish(|_| true)?;
     std::fs::copy(out.join(TILE_GLOBAL), copy.join(TILE_GLOBAL))
         .map_err(|e| format!("{}: {e}", out.join(TILE_GLOBAL).display()))?;

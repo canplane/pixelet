@@ -63,7 +63,7 @@ fn line(p: Quadrant) -> impl Iterator<Item = Quadrant> {
 /// Makes the world's tile cache one holding `tiles` and, over each tile, its
 /// line up to the coarsest zoom the source supplies whole, as the floor holds
 /// it all around the eye (`domain/layer/floor.rs`). Here a tile's coarser
-/// pictures are the same ground, each marking its children held. Their cells
+/// tiles are the same ground, each marking its children held. Their cells
 /// are held in the clip levels around `center`, in units, and the eye stands
 /// over `center` (`set_eye`).
 fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
@@ -85,7 +85,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
             }
             admitted.push(q);
             cells.push((q, asset_ids.clone(), ele.clone(), tile.separation.clone()));
-            let picture = match k {
+            let at_q = match k {
                 0 => tile.clone(),
                 _ => terrain::TerrainTile {
                     occupancy: Occupancy::of_slots([true; 4]),
@@ -96,7 +96,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
                 .admit(
                     q,
                     |_| None,
-                    |_| Ok::<_, ()>(IndexedTerrainTile::of(picture).unwrap()),
+                    |_| Ok::<_, ()>(IndexedTerrainTile::of(at_q).unwrap()),
                 )
                 .unwrap();
         }
