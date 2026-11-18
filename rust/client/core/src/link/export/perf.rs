@@ -13,7 +13,8 @@ use crate::perf::frame::FrameSample;
 use crate::perf::read;
 use crate::perf::record;
 use crate::perf::record::{
-    STRTAB_CAP, perf_frame_seq, perf_frames, perf_strtab, perf_task_seq, perf_tasks, perf_worst,
+    STRTAB_CAP, perf_frame_end_seq, perf_frames, perf_strtab, perf_task_end_seq, perf_tasks,
+    perf_worst,
 };
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
@@ -52,12 +53,12 @@ type Table = (fn() -> &'static [u8], fn() -> u64, usize);
 const TABLES: [Table; TABLE_NAMES.len()] = [
     (
         || bytes_of(perf_frames()),
-        perf_frame_seq,
+        perf_frame_end_seq,
         size_of::<FrameSample>(),
     ),
     (
         || bytes_of(perf_tasks()),
-        perf_task_seq,
+        perf_task_end_seq,
         size_of::<TaskRecord>(),
     ),
 ];
@@ -86,7 +87,11 @@ pub(super) fn table(table: u32, from: u64, cnt: u32) -> Result<Rows, Errno> {
         .min(limit::PAGE_SZ as usize / row_sz);
     let at = rows.len() - (end - first) as usize * row_sz;
     let bytes = read_timed(|| &rows[at..at + n * row_sz]);
-    Ok(Rows { first, end, bytes })
+    Ok(Rows {
+        first_seq: first,
+        end_seq: end,
+        bytes,
+    })
 }
 
 /// Answers the worst frames, longest first.

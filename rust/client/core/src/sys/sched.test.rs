@@ -109,7 +109,7 @@ fn a_frame_is_due_from_its_ask_until_it_has_run() {
     );
     invalidate(InvalidationReason::Pending);
     assert!(take_invalid());
-    pace((DISPLAY_MS, TARGET_MS));
+    set_pace_ms((DISPLAY_MS, TARGET_MS));
     enter(1001.0);
     assert!(near(budget_ms(), SLICE_MS), "due before any frame");
 
@@ -129,7 +129,7 @@ fn a_frame_is_due_from_its_ask_until_it_has_run() {
         "asked, and not yet taken"
     );
     assert!(take_invalid());
-    pace((DISPLAY_MS, TARGET_MS));
+    set_pace_ms((DISPLAY_MS, TARGET_MS));
     assert!(near(budget_ms(), FRAME_MS - 3.0), "taken, and not yet run");
     enter(1010.0 + TARGET_MS);
     assert_eq!(budget_ms(), 0.0, "within the margin of the frame's start");

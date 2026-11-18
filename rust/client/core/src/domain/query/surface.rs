@@ -12,7 +12,7 @@
 //! never the ground's.
 
 use crate::domain::layer::Base as _;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_engine::clipmap::Lookup;
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::SEA_LEVEL;
@@ -46,8 +46,8 @@ impl World {
         let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, cell_zoom);
-        let line = TerrainTile::tile_cache().cursor((cell_zoom, c), cell_zoom);
-        TerrainTile::tile_cache()
+        let line = IndexedTerrainTile::tile_cache().cursor((cell_zoom, c), cell_zoom);
+        IndexedTerrainTile::tile_cache()
             .column(&line, Lookup::NONE, (cell_zoom, c))
             .map(|col| {
                 col.is_grounded().then(|| Surface {

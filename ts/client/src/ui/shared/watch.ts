@@ -14,7 +14,7 @@ import {
   sourceState,
   sourceVersions,
   watchSource,
-  type Source,
+  type SourceState,
 } from "@/service/sys/fs/source.ts";
 import * as overlay from "@/service/core/overlay.ts";
 import {
@@ -74,6 +74,6 @@ export function useSourceVersions(): ReturnType<typeof sourceVersions> {
   return useSyncExternalStore(watchSource, sourceVersions);
 }
 
-export function useSource(): Source {
+export function useSource(): SourceState {
   return useSyncExternalStore(watchSource, sourceState);
 }

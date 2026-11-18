@@ -166,7 +166,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
             percentile(scratch, frames.iter().map(|f| f.stage_parts[k])).p95
         }),
         fill: percentile(scratch, frames.iter().map(|f| f.fill_ms)),
-        fill_cnt: frames.iter().map(|f| f.fill_cnt).sum(),
+        fill_brick_cnt: frames.iter().map(|f| f.fill_brick_cnt).sum(),
         perf: percentile(scratch, frames.iter().map(|f| f.perf_ms)),
         effects_p95: core::array::from_fn(|k| {
             percentile(scratch, frames.iter().map(|f| f.effects[k])).p95

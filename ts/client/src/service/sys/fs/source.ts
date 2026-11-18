@@ -32,7 +32,7 @@ export const SOURCE_ASKING = 0;
 export const SOURCE_FAILING = 1;
 export const SOURCE_REFUSED = 2;
 export const SOURCE_DECLARED = 3;
-export type Source =
+export type SourceState =
   | typeof SOURCE_ASKING
   | typeof SOURCE_FAILING
   | typeof SOURCE_REFUSED
@@ -113,25 +113,24 @@ export function declarationOf(parsed: unknown): Declaration | null {
 
 /** The declaration the core took, which is the source declared, or the state
  * the source stands in without one. */
-export type DeclarationOrState =
-  Declaration | Exclude<Source, typeof SOURCE_DECLARED>;
+export type Source = Declaration | Exclude<SourceState, typeof SOURCE_DECLARED>;
 
-let current: DeclarationOrState = SOURCE_ASKING;
+let current: Source = SOURCE_ASKING;
 const listeners = new ListenerSet();
 
 /** Sets the declaration the core took or the state the source stands in
  * without one. The asking sets it (`declareSource`), and a thread that holds
  * no files is told it by the one that asks. */
-export function setSource(next: DeclarationOrState): void {
+export function setSource(next: Source): void {
   current = next;
   listeners.notify();
 }
 
-export function currentSource(): DeclarationOrState {
+export function currentSource(): Source {
   return current;
 }
 
-export function sourceState(): Source {
+export function sourceState(): SourceState {
   return typeof current === "number" ? current : SOURCE_DECLARED;
 }
 

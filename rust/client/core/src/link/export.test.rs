@@ -62,7 +62,7 @@ fn a_table_is_read_by_sequence() {
     let page = limit::PAGE_SZ as usize / row_sz;
     set_clock(0.0);
     assert!(perf_recording_start());
-    let start = perf::table(FRAMES, u64::MAX, 0).unwrap().end;
+    let start = perf::table(FRAMES, u64::MAX, 0).unwrap().end_seq;
     // A frame's record lands when the next frame closes its interval; the
     // row of sequence `start + k` holds `k` as its time.
     let land = |range: core::ops::Range<u32>| {
@@ -86,30 +86,37 @@ fn a_table_is_read_by_sequence() {
     land(0..6);
     let r = perf::table(FRAMES, start, 2).unwrap();
     assert_eq!(
-        (r.first, r.end, times(&r)),
+        (r.first_seq, r.end_seq, times(&r)),
         (start, start + 5, vec![0.0, 1.0])
     );
     let r = perf::table(FRAMES, start + 2, u32::MAX).unwrap();
-    assert_eq!((r.first, times(&r)), (start + 2, vec![2.0, 3.0, 4.0]));
+    assert_eq!((r.first_seq, times(&r)), (start + 2, vec![2.0, 3.0, 4.0]));
     let r = perf::table(FRAMES, start + 5, u32::MAX).unwrap();
-    assert_eq!((r.first, r.end, times(&r)), (start + 5, start + 5, vec![]));
+    assert_eq!(
+        (r.first_seq, r.end_seq, times(&r)),
+        (start + 5, start + 5, vec![])
+    );
     let r = perf::table(FRAMES, u64::MAX, 2).unwrap();
-    assert_eq!((r.first, times(&r)), (start + 3, vec![3.0, 4.0]));
+    assert_eq!((r.first_seq, times(&r)), (start + 3, vec![3.0, 4.0]));
     let r = perf::table(FRAMES, start + 9, u32::MAX).unwrap();
-    assert_eq!((r.first, times(&r).len()), (start, 5), "every row it has");
+    assert_eq!(
+        (r.first_seq, times(&r).len()),
+        (start, 5),
+        "every row it has"
+    );
 
     // A full table drops its oldest rows as the next lands, and a read from a
     // row dropped starts at the oldest the table has.
     let mut next = 6;
-    while perf::table(FRAMES, start, 0).unwrap().first == start {
+    while perf::table(FRAMES, start, 0).unwrap().first_seq == start {
         land(next..next + 1);
         next += 1;
     }
     let r = perf::table(FRAMES, start + 5, u32::MAX).unwrap();
-    assert!(r.first > start + 5, "the row asked from was dropped");
-    assert_eq!(r.end, start + u64::from(next) - 1);
+    assert!(r.first_seq > start + 5, "the row asked from was dropped");
+    assert_eq!(r.end_seq, start + u64::from(next) - 1);
     assert_eq!(r.bytes.len(), page * row_sz, "a page at most");
-    assert_eq!(times(&r)[0], (r.first - start) as f64);
+    assert_eq!(times(&r)[0], (r.first_seq - start) as f64);
 }
 
 fn goto(from: f64) -> Intent {

@@ -79,31 +79,51 @@ fn formats_round_trip() {
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
-/// A brick's entries are those of the walk of the tile's ways whose bin is the brick's, in
-/// their points' order and a point's in its bins', and every brick's together are the walk's.
+/// A brick's entries are the walk of the tile's ways (`Separation::reaches`) where it falls
+/// in the brick, in the walk's order: each bin of the brick a segment's footprint reaches,
+/// with the point the segment starts at. A place outside the tile has none, and the bricks'
+/// entries together are the walk, each of its steps in one brick.
+///
+/// A bin is 16 cells and a brick four bins a side. The first line, a cell wide, reaches
+/// 1.71 cells from itself: from (40, 40) to (72, 40) it reaches the bins 2 to 4 of row 2,
+/// the first two brick (0, 0)'s and the third brick (1, 0)'s; then down to (72, 24), the
+/// bins of column 4 in rows 1 and 2, brick (1, 0)'s. The second line runs off the tile's
+/// far corner and is held to its last bin, the last of brick (7, 7).
 #[test]
-fn brick_pairs_are_the_walk_by_brick() {
-    let across = WAYS_BIN_ACROSS;
-    for seed in 0..8 {
-        let separation = tile(seed).separation;
-        let by_brick = BrickPairs::of(&separation).unwrap();
-        let mut cnt = 0;
-        for place in (0..BRICKS_ACROSS).flat_map(|y| (0..BRICKS_ACROSS).map(move |x| [x, y])) {
-            let mut want = Vec::new();
-            separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
-                let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
-                if [x / across, y / across] == place {
-                    want.push((
-                        (y % across) * across + x % across,
-                        separation.starts[d] + s as u32,
-                    ));
-                }
-            });
-            want.sort_unstable_by_key(|&(b, p)| (p, b));
-            assert_eq!(by_brick.at(place), want, "seed {seed}, brick {place:?}");
-            cnt += want.len();
+fn brick_entries_are_the_walk_by_brick() {
+    let mut lines = separation::Builder::default();
+    lines.push(
+        [
+            ([40.0, 40.0], 0, 0),
+            ([72.0, 40.0], 0, 0),
+            ([72.0, 24.0], 0, 0),
+        ],
+        8,
+        0,
+        separation::Form::Bridge,
+        0,
+    );
+    lines.push(
+        [([500.0, 500.0], 0, 0), ([520.0, 500.0], 0, 0)],
+        8,
+        0,
+        separation::Form::Tunnel,
+        0,
+    );
+    let by_brick = BrickEntries::of(&lines.finish()).unwrap();
+    let want = |place: [u32; 2]| -> &[(u32, u32)] {
+        match place {
+            [0, 0] => &[(10, 0), (11, 0)],
+            [1, 0] => &[(8, 0), (4, 1), (8, 1)],
+            [7, 7] => &[(15, 3)],
+            _ => &[],
         }
-        assert!(cnt > 0, "seed {seed}: its lines reach a brick");
+    };
+    for place in (0..8).flat_map(|y| (0..8).map(move |x| [x, y])) {
+        assert_eq!(by_brick.at(place), want(place), "brick {place:?}");
+    }
+    for place in [[8, 0], [0, 8], [u32::MAX, 7]] {
+        assert_eq!(by_brick.at(place), [], "{place:?} is outside the tile");
     }
 }
 

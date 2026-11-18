@@ -11,7 +11,7 @@
 //! is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::spec::step::InvalidationReason;
 use pxl_global::Global;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -51,13 +51,13 @@ pub(crate) trait DemandedBase: Base {
     fn demand() -> &'static mut Demand<Self>;
 }
 
-static TERRAIN: Global<Demand<TerrainTile>> = Global::new();
+static TERRAIN: Global<Demand<IndexedTerrainTile>> = Global::new();
 static PLACE: Global<Demand<PlaceTile>> = Global::new();
 static EARTH: Global<Demand<EarthTile>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl DemandedBase for TerrainTile {
-    fn demand() -> &'static mut Demand<TerrainTile> {
+impl DemandedBase for IndexedTerrainTile {
+    fn demand() -> &'static mut Demand<IndexedTerrainTile> {
         TERRAIN.get(Demand::default)
     }
 }
@@ -105,7 +105,7 @@ const fn layer<L: DemandedBase>() -> Layer {
 /// names its layer. A stream whose source is fetched has exactly one layer
 /// here, and a loaded stream has none.
 const LAYERS: [Layer; 5] = [
-    layer::<TerrainTile>(),
+    layer::<IndexedTerrainTile>(),
     layer::<PlaceTile>(),
     layer::<EarthTile>(),
     layer::<DivisionTile>(),

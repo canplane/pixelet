@@ -178,7 +178,7 @@ function frameLine({ sample, delta }: Worst): string {
     sample.kind_name,
   )}  interval ${n1(sample.interval_ms)}  asked by ${listText(sample, "invalidations")}  effects ${n1(effectsMs(sample))}${worstEffectText(sample)}  tick ${n1(sample.tick_ms)}${sample.overran ? " overran" : ""}  deadline ${n1(
     sample.budget_ms,
-  )} from the entry's start${sample.settled ? " (still)" : ""}  pump ${n1(sample.pump_ms)}  stage ${n1(stageMs(sample))} (${listText(sample, "stage_parts", n1)})  fill ${n1(sample.fill_ms)} (${sample.fill_cnt} bricks)  perf ${n1(sample.perf_ms)}  gpu busy ${
+  )} from the entry's start${sample.settled ? " (still)" : ""}  pump ${n1(sample.pump_ms)}  stage ${n1(stageMs(sample))} (${listText(sample, "stage_parts", n1)})  fill ${n1(sample.fill_ms)} (${sample.fill_brick_cnt} bricks)  perf ${n1(sample.perf_ms)}  gpu busy ${
     sample.gpu_timed ? n1(sample.gpu_busy_ms) : "-"
   }  light cast by ${
     bitsOf(LIGHT_CHANGEDS, sample.light_changed).join(" ") || "-"
@@ -244,7 +244,7 @@ function windowSection(report: PerfReport): string[] {
     `  stage   ${percentile(frames.stage)} ms   p95 ${frames.stagePartsP95
       .map((s) => `${s.name} ${n1(s.p95)}`)
       .join("  ")}`,
-    `  fill    ${percentile(frames.fill)} ms   bricks ${frames.fillCount}   (the ground's, after the frame)`,
+    `  fill    ${percentile(frames.fill)} ms   bricks ${frames.fillBrickCount}   (the ground's, after the frame)`,
     `  perf ${percentile(frames.perf)} ms   (its own record and the UI's reads)`,
     frames.gpuTimed > 0
       ? `  gpu     ${percentile(

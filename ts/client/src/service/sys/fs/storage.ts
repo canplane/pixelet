@@ -36,18 +36,18 @@ export interface Storage {
   set(key: string, value: string): void;
 }
 
-let STORAGE: Storage | null = null;
+let installed: Storage | null = null;
 
 /** Makes `s` the storage the files are kept in, before the files are
  * mounted: the platform's storage as the thread that mounts them reaches
  * it. */
 export function setStorage(s: Storage): void {
-  STORAGE = s;
+  installed = s;
 }
 
 /** The storage installed. Reading it before one is installed is a bug. */
 function storage(): Storage {
-  return STORAGE ?? bug(ERRNO_ENOTRECOVERABLE);
+  return installed ?? bug(ERRNO_ENOTRECOVERABLE);
 }
 
 function bytesOf(text: string): U8Array {

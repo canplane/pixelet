@@ -13,7 +13,7 @@ use crate::spec::step::InvalidationReason;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::brick;
 
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
@@ -148,7 +148,10 @@ pub(crate) fn coverage_gizmo_draw(draw: &mut DrawList) {
 pub(crate) fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
     let draw = draw_list();
-    let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::min_zoom()) else {
+    let (Some(o), Some(top)) = (
+        observation().filter(|_| show),
+        IndexedTerrainTile::min_zoom(),
+    ) else {
         if c.drawn.take().is_some() {
             c.mesh.set(draw, [0.0; 3], &[], 0);
             invalidate(InvalidationReason::Scene);
@@ -230,7 +233,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
     // the top tile of every demand line.
     let mut lined: FnvHashSet<Quadrant> = FnvHashSet::default();
     ByEye {
-        lattice: TerrainTile::LATTICE,
+        lattice: IndexedTerrainTile::LATTICE,
         top,
     }
     .requirements(o, &mut |p| {

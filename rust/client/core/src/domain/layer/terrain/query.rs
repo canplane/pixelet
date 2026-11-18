@@ -8,7 +8,7 @@
 //! column's ways are read from the spans its brick's fill kept, a run in the
 //! ways' pool (pool.rs; pxl-engine `clipmap::way_at`).
 
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_engine::clipmap::{self as cells, Lookup};
 use pxl_engine::ground::{Cell, Extent};
 use pxl_spec::space::coord::zoom::{Zoom, units};
@@ -29,7 +29,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 /// columns, and the lines they are read on. A node names part of the hierarchy
 /// the ground shares with the object layer; it says what it asks and how fine its
 /// cells are, and the answer says what it lacked (`Answer`).
-impl TileCache<TerrainTile> {
+impl TileCache<IndexedTerrainTile> {
     /// The cursor of `node` asked alone, the line its cells at `cell_zoom` are
     /// read on. It equals what a descent from the top would carry to `node`.
     pub(in crate::domain::layer) fn cursor(&self, node: Node<2>, cell_zoom: Zoom) -> Line {

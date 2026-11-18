@@ -9,7 +9,7 @@ use crate::domain::layer::terrain::pool::{WayPool, exhaust, set_way_pool};
 use pxl_engine::fill;
 use pxl_engine::way::way_cell;
 use pxl_spec::bake::separation::{self, Separation};
-use pxl_spec::bake::tile::terrain::{self, BrickPairs};
+use pxl_spec::bake::tile::terrain::{self, BrickEntries};
 use pxl_spec::brick;
 use pxl_spec::ground::GroundId;
 use pxl_spec::ground::word;
@@ -148,11 +148,11 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             let [x, y] = brick::of_idx(k);
             ((place[1] * BRICK + y) * side + place[0] * BRICK + x) as usize
         };
-        let mut pairs = BrickPairs::of(separation).unwrap().at(place).to_vec();
-        let (cnt, segments) = (pairs.len(), segment_cnt(&pairs));
+        let mut entries = BrickEntries::of(separation).unwrap().at(place).to_vec();
+        let (cnt, segments) = (entries.len(), segment_cnt(&entries));
         let mut lines = vec![0; brick::lines_words(cnt as u32, segments) as usize];
         if cnt != 0 {
-            brick_lines(t, separation, &mut pairs, &mut lines);
+            brick_lines(t, separation, &mut entries, &mut lines);
         }
         let laid = terrain::TileBrick {
             cell_zoom,
@@ -312,10 +312,10 @@ fn hilly_tile() -> (Quadrant, terrain::TerrainTile, Vec<u8>) {
 
 /// `t` held in the tile cache as `tile`, the only tile asked for.
 fn cache_tile(t: Quadrant, tile: terrain::TerrainTile) {
-    let cache = TerrainTile::tile_cache();
+    let cache = IndexedTerrainTile::tile_cache();
     *cache = Default::default();
-    let held = TerrainTile::of(tile).unwrap();
-    cache.admit(t, |_| None, |_| Ok::<_, ()>(held)).unwrap();
+    let indexed = IndexedTerrainTile::of(tile).unwrap();
+    cache.admit(t, |_| None, |_| Ok::<_, ()>(indexed)).unwrap();
     let asks: fnv::FnvHashMap<Quadrant, ()> = [(t, ())].into_iter().collect();
     cache.ask(&asks);
 }
@@ -349,10 +349,13 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         assert!(slot.fill == Fill::Filled, "filled, not yet handed");
         assert!(!slot.present, "not present before a frame hands it");
         let (cell_zoom, place) = (slot.cell_zoom, tile_of(slot.cell_zoom, slot.brick).1);
-        let mut pairs = BrickPairs::of(&tile.separation).unwrap().at(place).to_vec();
-        let (cnt, segments) = (pairs.len(), segment_cnt(&pairs));
+        let mut entries = BrickEntries::of(&tile.separation)
+            .unwrap()
+            .at(place)
+            .to_vec();
+        let (cnt, segments) = (entries.len(), segment_cnt(&entries));
         let mut lines = vec![0; brick::lines_words(cnt as u32, segments) as usize];
-        brick_lines(t, &tile.separation, &mut pairs, &mut lines);
+        brick_lines(t, &tile.separation, &mut entries, &mut lines);
         let site = fill::Site {
             cell_zoom,
             place,
@@ -429,11 +432,11 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
 fn void_tile_bricks_filled_with_no_packet() {
     let w = fill_room();
     let t = Quadrant::new(LEAF_ZOOM, CENTER_TILE);
-    let cache = TerrainTile::tile_cache();
+    let cache = IndexedTerrainTile::tile_cache();
     *cache = Default::default();
     let asks: fnv::FnvHashMap<Quadrant, ()> = [(t, ())].into_iter().collect();
     cache.ask(&asks);
-    cache.set(t, TerrainTile::default());
+    cache.set(t, IndexedTerrainTile::default());
     due(w);
     assert!(!w.due.is_empty(), "a void tile's bricks are due");
     while !matches!(fill_stage(w), Poll::Done) {}
@@ -577,9 +580,9 @@ fn brick_filled_after_a_refusal_moves_its_row() {
     due(w);
     while !matches!(fill_stage(w), Poll::Done) {}
     let mut changed = Vec::new();
-    TerrainTile::tile_cache().take_changed(&mut changed);
+    IndexedTerrainTile::tile_cache().take_changed(&mut changed);
     upload(&mut |_| true);
-    TerrainTile::tile_cache().take_changed(&mut changed);
+    IndexedTerrainTile::tile_cache().take_changed(&mut changed);
     let now = w.table.entries[row as usize];
     assert!(
         now.present != 0 && now.present_changed_from(was),

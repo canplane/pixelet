@@ -11,7 +11,7 @@ use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::domain::layer::tile_cache::Path;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -58,7 +58,7 @@ impl World {
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
         let object = self.object.column(&mut walk.object, node);
-        TerrainTile::tile_cache()
+        IndexedTerrainTile::tile_cache()
             .bound_walked(&mut walk.ground, node, cell_zoom)
             .map(|ground| ground.into_iter().chain(object).reduce(Aabb::join))
     }

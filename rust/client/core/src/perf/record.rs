@@ -5,7 +5,7 @@
 //! nothing: it copies what it answers, a page at most (`limit::PAGE_SZ`),
 //! into its reply (link/export/perf.rs `read_timed`). The frames and the
 //! tasks are read by sequence: each table counts the rows it has landed
-//! (`frame_seq`, `task_seq`), a row's sequence is that count as the row
+//! (`frame_end_seq`, `task_end_seq`), a row's sequence is that count as the row
 //! landed, and a read answers the rows from a sequence on with the sequence
 //! of the first of them, so a reader that asks from where its last read ended
 //! learns how many rows the table dropped before it came to them. A frame's
@@ -137,8 +137,8 @@ struct Perf {
     /// its next row takes. Neither is set back, by a recording's start or by
     /// the blocks' release, so a sequence names one row for as long as the
     /// core runs.
-    task_seq: u64,
-    frame_seq: u64,
+    task_end_seq: u64,
+    frame_end_seq: u64,
     truncated: bool,
     /// Off until the UI asks, so a client without the profiler on records
     /// nothing. Stopping freezes the data so an export is stable.
@@ -173,8 +173,8 @@ fn perf() -> &'static mut Perf {
         frame_len: 0,
         task_head: 0,
         frame_head: 0,
-        task_seq: 0,
-        frame_seq: 0,
+        task_end_seq: 0,
+        frame_end_seq: 0,
         truncated: false,
         recording: false,
         started_at: now(),
@@ -300,7 +300,7 @@ pub(crate) fn perf_record(
         &mut l.task_table,
         &mut l.task_len,
         &mut l.task_head,
-        &mut l.task_seq,
+        &mut l.task_end_seq,
         row,
     );
     l.truncated |= !landed;
@@ -412,7 +412,7 @@ pub(crate) fn perf_record_fill(ms: f64, cnt: u32) {
     let l = perf();
     if let Some(f) = l.open.as_mut().filter(|_| l.recording) {
         f.fill_ms += ms;
-        f.fill_cnt += f64::from(cnt);
+        f.fill_brick_cnt += f64::from(cnt);
     }
 }
 
@@ -438,7 +438,7 @@ fn land(l: &mut Perf, s: FrameSample) {
         &mut l.frame_table,
         &mut l.frame_len,
         &mut l.frame_head,
-        &mut l.frame_seq,
+        &mut l.frame_end_seq,
         s,
     );
     l.truncated |= !landed;
@@ -486,12 +486,12 @@ pub(crate) fn perf_tasks() -> &'static [TaskRecord] {
 }
 
 /// The sequence past the newest frame's row, and past the newest task's.
-pub(crate) fn perf_frame_seq() -> u64 {
-    perf().frame_seq
+pub(crate) fn perf_frame_end_seq() -> u64 {
+    perf().frame_end_seq
 }
 
-pub(crate) fn perf_task_seq() -> u64 {
-    perf().task_seq
+pub(crate) fn perf_task_end_seq() -> u64 {
+    perf().task_end_seq
 }
 
 /// The worst frames, longest first.

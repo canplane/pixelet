@@ -33,7 +33,7 @@ fn shown_kind() -> u16 {
 fn budget(spent: bool) {
     use crate::sys::host::set_clock;
     set_clock(0.0);
-    sched::pace((1000.0, 1000.0));
+    sched::set_pace_ms((1000.0, 1000.0));
     sched::begin();
     if spent {
         set_clock(1e6);

@@ -3,7 +3,7 @@
 // The query's laws, checked over a leaf tile and the tiles of its line, and
 // over objects written into a store.
 
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
@@ -95,7 +95,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
                 .admit(
                     q,
                     |_| None,
-                    |_| Ok::<_, ()>(TerrainTile::of(picture).unwrap()),
+                    |_| Ok::<_, ()>(IndexedTerrainTile::of(picture).unwrap()),
                 )
                 .unwrap();
         }
@@ -105,7 +105,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
     let asks: fnv::FnvHashMap<Quadrant, ()> = admitted.iter().map(|&q| (q, ())).collect();
     tile_cache.ask(&asks);
     test::hold(center, &cells);
-    *TerrainTile::tile_cache() = tile_cache;
+    *IndexedTerrainTile::tile_cache() = tile_cache;
     set_eye([center[0], center[1], 64.0]);
 }
 
@@ -1186,7 +1186,7 @@ fn stored_decor_past_the_catalog_is_unknown() {
 #[test]
 fn shown_share_of_what_is_asked() {
     flat_at_five();
-    let tile_cache = TerrainTile::tile_cache();
+    let tile_cache = IndexedTerrainTile::tile_cache();
     assert!(tile_cache.is_shown());
     assert_eq!(tile_cache.shown_share(), 1.0);
 }
