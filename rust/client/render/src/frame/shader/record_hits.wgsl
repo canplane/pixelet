@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/record_hits.wgsl
 
-// Writes an observer's holes' hits into the record, the eye's and the light's alike
+// Writes a cast's holes' hits into the record, the eye's and the light's alike
 // (pxl-engine record.rs, the third of its writers). The holes' queue keeps every hit, whatever
 // it stopped on (queue_walk.wgsl and queue_last.wgsl, through queue.wgsl `keep_hit`;
 // pxl-engine `beam::HIT_WORDS`).
@@ -14,7 +14,7 @@
 // (`beam::Grid::hit_asks_at`). Once the faces' pass has answered the asks, `rec_faces_cs`
 // puts what lies around each hit's face at the hit's pixel.
 //
-// record_hits.eye.wgsl and record_hits.light.wgsl give what differs by observer: where its
+// record_hits.eye.wgsl and record_hits.light.wgsl give what differs by cast: where its
 // hits lie and how many there may be (`hits_at`, `hits_cap`), the origin a hit's node is held
 // from (`hit_origin`), whether a hit is whole (`hit_whole`), and where its faces' asks lie
 // (`hit_asks`).

@@ -12,9 +12,10 @@
 
 use core::hash::Hasher;
 
-use super::{Brick, Instance, Key, MarkerHit, surface};
+use super::{Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Draft;
+use crate::domain::query::change::Memo;
 use crate::domain::query::{World, cell_zoom_drawn};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
@@ -30,10 +31,9 @@ use pxl_spec::space::layer::octant::Octant;
 type Cell = (Zoom, [i32; 3]);
 
 /// A pin read from a drawn brick: its pill, where it stands, and its base.
-/// It also keeps what the last run showed: the camera grid's cell zoom at its
-/// base (`grid`), its pin's cell or None where it did not show (`cell`), and
-/// where its cell's count stood, with the cell and the eye that were then
-/// (`crowd`).
+/// It also keeps what the last run showed: its pin's cell or None where it
+/// did not show (`cell`), and where its cell's count stands, kept by the
+/// cell (`crowd`).
 #[derive(Clone)]
 pub(super) struct Pin {
     pub(super) brick: Brick,
@@ -41,9 +41,8 @@ pub(super) struct Pin {
     design: Design,
     pos: Q3,
     base: V3,
-    grid: Zoom,
     cell: Option<Cell>,
-    crowd: Option<(Cell, V3, Q3)>,
+    crowd: Memo<Cell, Q3>,
 }
 
 /// The longest a one-line pin's text runs and still reads as a name, a
@@ -109,27 +108,27 @@ pub(super) fn read(brick: Brick, bounds: &Aabb, pins: &mut Vec<Pin>) {
                 design: pill(world.text(e).unwrap_or_default()),
                 pos,
                 base,
-                grid: 0,
                 cell: None,
-                crowd: None,
+                crowd: Memo::NONE,
             });
         }
     });
 }
 
-/// Writes into `out` what `pins` show, seen from `eye`. The draft shows
-/// first, wherever it is. Then each pin shows where the cell at its own point
-/// shows a marker (`marker_shows`). The pins of one pin's cell, the draft
-/// left out, show together: a single pin shows as itself, and more show as
-/// their count, which a tap takes to where the count stands. A pin's cell is
-/// finer than its brick and lies inside it, so a brick's pins are counted
-/// among themselves alone.
-pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut Vec<Instance>) {
+/// Writes into `out` what `pins` show. The draft shows first, wherever it
+/// is. Then each pin shows where the cell drawn at its own point shows a
+/// marker (`marker_shows`). The pins of one pin's cell, the draft left out,
+/// show together: a single pin shows as itself, and more show as their
+/// count, which a tap takes to where the count stands. A pin's cell is finer
+/// than its brick and lies inside it, so a brick's pins are counted among
+/// themselves alone.
+pub(super) fn show(pins: &mut [Pin], draft: Option<&Draft>, out: &mut Vec<Instance>) {
     let drafted = draft.map(|d| d.at);
     out.extend(draft.map(|d| one(d.at, pill(&d.text), pin_at(d.at).0)));
     for p in pins.iter_mut() {
-        p.grid = cell_zoom_drawn(eye, p.base);
-        p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
+        p.cell = cell_zoom_drawn(p.base)
+            .filter(|&grid| marker_shows(grid))
+            .map(|grid| marker_cell_of(grid, p.at));
     }
     pins.sort_unstable_by_key(|p| (p.brick, p.cell));
     for run in pins.chunk_by_mut(|a, b| a.brick == b.brick && a.cell == b.cell) {
@@ -141,19 +140,13 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
             out.push(one(first.at, first.design.clone(), first.pos));
             continue;
         }
-        // Where the count stands is asked once for each cell it stands for
-        // under an eye, and kept with the cell's pins. It is asked here and not under the
-        // entry's budget, as a place's surface is: a count is named by its
-        // cell, so nothing shown before could stand for it meanwhile, and
-        // the ray ends within the cell.
-        let at = match run
-            .iter()
-            .find_map(|p| p.crowd.filter(|c| c.0 == cell && c.1 == eye))
-        {
-            Some((_, _, at)) => at,
-            None => crowd_at(cell, run[0].at.zoom()),
-        };
-        run.iter_mut().for_each(|p| p.crowd = Some((cell, eye, at)));
+        // Where the count stands is kept by its cell and the size the eye
+        // sets there, with each of the cell's pins. It is asked here and not
+        // under the entry's budget, as a place's surface is: a count is named
+        // by its cell, so nothing shown before could stand for it meanwhile.
+        let mut crowd = core::mem::take(&mut run[0].crowd);
+        let at = crowd.of(cell, || crowd_at(cell, run[0].at.zoom()));
+        run.iter_mut().for_each(|p| p.crowd = crowd.clone());
         out.push(Instance {
             key: Key::PinCell(cell),
             design: cnt(n),
@@ -174,12 +167,17 @@ pub(super) fn draft_key(draft: Option<&Draft>) -> Option<(Octant, u64)> {
 }
 
 /// Where the count of the pin's cell `(zoom, at)` stands: at the cell's
-/// middle, half a pin of zoom `pin` above the first thing a ray down meets
-/// within the cell, or above the cell's floor where it meets nothing.
+/// middle, half a pin of zoom `pin` above the floor under the cell's top
+/// where that lies within the cell, or above the cell's floor.
 fn crowd_at((zoom, at): Cell, pin: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
-    let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2])).unwrap_or(c.min[2]);
+    let top = World::now()
+        .floor_under(&point(x, y, c.max[2]))
+        .val()
+        .flatten()
+        .filter(|top| (c.min[2]..=c.max[2]).contains(top))
+        .unwrap_or(c.min[2]);
     point(x, y, top + units(pin) / 2.0)
 }
 

@@ -12,7 +12,7 @@
 //! which the pixels' cast takes. The pixels the raster missed, the holes, are walked apart by
 //! the holes' queue, and the walked bits mark them, a bit a pixel (pxl-engine
 //! `ray::SQUARE_WORDS`). The light's cast runs the same stages over the tiles of its box it
-//! damages. Both observers walk the world through one node cache (pxl-engine `node_cache`),
+//! damages. Both casts walk the world through one node cache (pxl-engine `node_cache`),
 //! whose nodes the cast forgets wherever the world beneath them changed.
 
 use crate::frame::shader::access::Group;
@@ -2134,10 +2134,10 @@ fn light_groups(
     ]
 }
 
-/// A run's groups 0, as layouts and entries, for either observer and any run: its walks over
+/// A run's groups 0, as layouts and entries, for either cast and any run: its walks over
 /// the node cache alone, its asks, and its last walk, each as its table says, over the frame's
 /// buffers (`buf`) and what else it binds. That is `world`, the eye and the world's buffers the
-/// asks read; `out`, the rays or the map its holes write; and `observer`, what its observer
+/// asks read; `out`, the rays or the map its holes write; and `observer`, what its cast
 /// binds besides: the light's head, and nothing for the eye.
 fn queue_entries(
     pipelines: [&Pipeline; 3],

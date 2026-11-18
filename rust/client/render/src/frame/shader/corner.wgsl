@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/corner.wgsl
 
-// The beam rays as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out for an
-// observer by beam.eye.wgsl or beam.light.wgsl. Each is a ray from the root that keeps its line
+// The beam rays as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out for a
+// cast by beam.eye.wgsl or beam.light.wgsl. Each is a ray from the root that keeps its line
 // as it goes (walk.wgsl). Between its run's walks it is parked at its state's place
 // (`corner_state_at`, parked.wgsl), and its line then ends at the parent of the node it was left
 // at, whose inherited words the line holds. When the ray ends, it writes how far the rays about
@@ -26,7 +26,7 @@ fn item_aim(item: u32) -> Aim {
   return beam_aim(corner_of(item));
 }
 
-/// A beam ray starts from the root. Its line's origin is laid first, where its observer keeps
+/// A beam ray starts from the root. Its line's origin is laid first, where its cast keeps
 /// one.
 fn item_start(item: u32, aim: Aim) -> Start {
   beam_lay_origin(aim.line, aim.origin);

@@ -9,14 +9,14 @@
 //! times, its joint palette in a heap block of its own, and the place the
 //! companion's walk gives it (`companion.rs`).
 //!
-//! Each view draws a character by its own eye. The world draws it where it
+//! The world and a character surface each draw a character. The world draws it where it
 //! shows, as a decor is drawn where it does (`query::body_shown`),
 //! and there chooses as it does for decor's lods (`view::lens`), by how many
 //! camera grid cells the character spans. Above the model's edge it is posed as it plays. Between
 //! the model's edge and the impostor's its pose is held. Below the impostor's
 //! edge it is not drawn, as decor that small is not, and it is not drawn in
-//! first person, where the person is the one looking. A character surface draws it whole, before the
-//! surface's own eye (`surface.rs`).
+//! first person, where the person is the one looking. A character surface draws it whole, from
+//! the surface's own viewpoint (`surface.rs`).
 
 pub(crate) mod companion;
 pub(crate) mod param;
@@ -245,7 +245,7 @@ impl Character {
     /// it is for the location indicator's bob.
     ///
     /// A character surface that shows the character (`on_surface`) sees it
-    /// whole, before the surface's own eye (`surface_draw`). There its clips
+    /// whole, from the surface's own viewpoint (`surface_draw`). There its clips
     /// run a frame a step, and every frame asks for a frame.
     pub(crate) fn tick(
         &mut self,
@@ -275,7 +275,7 @@ impl Character {
             let extent = self.height_u() * f64::from(t.scale);
             dist = v3::len(&v3::sub(&about, &frame.camera));
             let cell_there = cell_there(dist);
-            let shows = body_shown(dist);
+            let shows = body_shown(t.at);
             seen = shows && frame.frustum.sees(about, r) && extent >= decor_model_angle() * dist;
             self.visible = shows && extent >= decor_impostor_angle() * dist;
             world_moves = seen

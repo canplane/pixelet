@@ -15,8 +15,8 @@ use crate::gpu::api::{Gpu, buffer_usage, bytes, result, signaled, word_sz};
 
 const WORDS: usize = count::WORDS as usize;
 
-/// The counts of each observer, the eye and the light, in `RayCount::cnts`
-/// (`cnt_at`): whether it cast, 1 or 0; how many rays it has, the eye's
+/// The counts of each cast, the eye's and the light's, in `RayCount::cnts`
+/// (`cnt_at`): whether it ran, 1 or 0; how many rays it has, the eye's
 /// pixels or the light's slots; and, from `LANES_AT`, the lanes pxl-engine
 /// `count` lays out.
 pub const CAST: usize = 0;
@@ -40,7 +40,7 @@ pub struct RayCount {
 
 /// What the CPU knows of a counted frame as it encodes it, kept until its
 /// counts land: the number the renderer will give the frame (renderer.rs
-/// `FrameStat::frame`), and whether each observer cast and how many rays it
+/// `FrameStat::frame`), and whether each cast ran and how many rays it
 /// has.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
@@ -102,8 +102,8 @@ impl Counter {
         }
     }
 
-    /// Starts this frame's counting, which runs while `on` and an observer
-    /// casts. It tells the walks which observers count and clears their
+    /// Starts this frame's counting, which runs while `on` and a cast
+    /// runs. It tells the walks which casts count and clears their
     /// counts, both in the node cache's head, so it runs after the frame has
     /// written that head. Where neither this frame nor the one before
     /// counts, the head is left as it is.
@@ -114,7 +114,7 @@ impl Counter {
         if !self.on && !was {
             return;
         }
-        // A bit for each observer that counts. The eye counts only in a full cast, so the
+        // A bit for each cast that counts. The eye counts only in a full cast, so the
         // pixels a `px` frame casts again count nothing.
         let mut hdr = [0u32; 1 + (count::OBSERVER_CNT * count::WALK_CNT) as usize];
         for (o, &cast) in frame.casts.iter().enumerate() {
@@ -131,7 +131,7 @@ impl Counter {
         g.write_buf(self.cnts, 0, bytes(&[0u32; WORDS]));
     }
 
-    /// Gathers the counts of each observer that cast into the array and copies it out for
+    /// Gathers the counts of each cast that ran into the array and copies it out for
     /// the readback. It runs after the frame's dispatches, and only where this frame counts
     /// and no copy is out.
     pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &CountBuffer) {

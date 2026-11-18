@@ -348,7 +348,7 @@ pub const LINE_INHERITANCE: u32 = LINE_STEPS + 1;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
-/// What a cell hands its rays, in words, for every observer (`light::cell`): where they
+/// What a cell hands its rays, in words, for every cast (`light::cell`): where they
 /// start, as f32 bits; the corner with the least start, as an index into the corners row by
 /// row, from whose line the faces they stop on are asked; and whether they resume from that
 /// line (1) or walk from the world's root (0), the latter where a beam ray of the window asked

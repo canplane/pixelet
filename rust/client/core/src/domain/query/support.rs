@@ -11,12 +11,12 @@
 //! split as finely as the eye reads there and anything is placed in it, so a
 //! body near the eye stands on what is placed whatever its size, and far
 //! from it on what is folded into the cell. A cell coarser than the leaves'
-//! gives a coarser answer. A column's ray reads the world by
-//! its distance from the eye, as every ray does: what it meets far from the
-//! eye is the coarser cell the eye sees there. A cell filled short of its cube
-//! stands to the top of the box it is drawn as (pxl-engine `cast::top`).
+//! gives a coarser answer. The eye sets the cell's size, by the point's
+//! distance from it; what the cell's rays ask of the world they ask at that
+//! one size, wherever they go, so the answer is the world's at that size. A
+//! cell filled short of its cube stands to the top of the box it is drawn as
+//! (pxl-engine `cast::top`).
 
-use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -27,29 +27,43 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::detail::{cell_zoom_drawn, cell_zoom_read, leaf_at};
+use super::change;
+use super::detail::{drawn, leaf_at, one_zoom};
 use super::ray::{Descent, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
-use crate::domain::observer;
 use pxl_content::scatter::box_shows_at;
 use pxl_spec::asset::character::BODY_BOX;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-/// Whether a body shows `dist` units from the eye. A body claims its box
-/// (pxl-spec `BODY_BOX`) and shows as a decor of that box placed there is
-/// drawn (pxl-content `generation::drawn_at`, `scatter::box_shows_at`):
-/// where the eye's rays ask the leaves' zoom, or a coarser one whose cell a
-/// cube of its box keeps an eighth of. The zoom asked is the camera grid's at
-/// that distance, whatever zooms the source holds. A character is drawn, and
-/// a walk is walked, only where this holds.
-pub(crate) fn body_shown(dist: f64) -> bool {
-    box_shows_at(
-        BODY_BOX,
-        GROUND.leaf_cell_zoom(),
-        cell_zoom_at((dist * dist) as f32),
-    )
+/// The cell zoom a walk asks at `at`: the size the eye sets there
+/// (`change::size`). None with no eye.
+pub(crate) fn cell_zoom_read(at: V3) -> Option<Zoom> {
+    change::size([at[0], at[1]], Some(at[2]))
+}
+
+/// The cell zoom the eye's rays draw the ground with at `at`: the zoom a walk
+/// reads there (`cell_zoom_read`), as the ground is drawn (`drawn`). None
+/// with no eye.
+pub(crate) fn cell_zoom_drawn(at: V3) -> Option<Zoom> {
+    cell_zoom_read(at).map(drawn)
+}
+
+/// Whether a body shows at `at`. A body claims its box (pxl-spec `BODY_BOX`)
+/// and shows as a decor of that box placed there is drawn (pxl-content
+/// `generation::drawn_at`, `scatter::box_shows_at`): where the size the eye
+/// sets there (`change::size`) is the leaves' or a coarser one whose cell a
+/// cube of its box keeps an eighth of, whatever zooms the source holds. A
+/// character is drawn, and a walk is walked, only where this holds; with no
+/// eye nothing shows.
+pub(crate) fn body_shown(at: V3) -> bool {
+    change::size([at[0], at[1]], Some(at[2])).is_some_and(body_shown_at)
+}
+
+/// `body_shown` where the eye sets the size `cell_zoom`.
+fn body_shown_at(cell_zoom: Zoom) -> bool {
+    box_shows_at(BODY_BOX, GROUND.leaf_cell_zoom(), cell_zoom)
 }
 
 /// How high a body's box stands over its floor, in units.
@@ -57,9 +71,9 @@ pub(crate) fn body_height_u() -> f64 {
     f64::from(BODY_BOX[2]) * units(GROUND.leaf_cell_zoom())
 }
 
-/// Where a body's eye stands over a floor whose top is `top`: half a cell
-/// under the top of its box, as it stands half a cell over the bottom
-/// (`over`).
+/// Where the eye stands in first person over a floor whose top is `top`:
+/// half a cell under the top of the body's box, as the body stands half a
+/// cell over its bottom (`over`).
 pub(crate) fn eye_over(top: f64) -> f64 {
     top + body_height_u() - units(GROUND.leaf_cell_zoom()) / 2.0
 }
@@ -113,15 +127,14 @@ pub(crate) fn on_floor(at: &Q3, top: f64) -> Q3 {
     with_z(at, q3::from_real(over(top)))
 }
 
-/// How far `eye` is from the farther end of a walk from `from` to over `to`,
-/// at `from`'s height, X taken the short way round (`world::between`).
-fn farther(eye: &Q3, from: &Q3, to: &Q3) -> f64 {
-    let (f, t) = (world::between(eye, from), world::between(eye, to));
-    let far = |[x, y, _]: [i64; 3]| {
-        let [x, y, z] = [x, y, f[2]].map(q3::to_real);
-        libm::hypot(libm::hypot(x, y), z)
-    };
-    far(f).max(far(t))
+/// Whether a body shows at both ends of a walk from `from` to over `to`, at
+/// `from`'s height (`body_shown`).
+fn walk_shown(from: &Q3, to: &Q3) -> bool {
+    let z = q3::to_real(i64::from(from[2]));
+    [from, to].into_iter().all(|p| {
+        let [x, y] = xy(p);
+        body_shown([x, y, z])
+    })
 }
 
 /// A point's place on the ground, in units.
@@ -142,12 +155,12 @@ struct SplitCell<'w> {
     corner: [f64; 2],
     side: f64,
     across: u32,
-    /// The eye the cell's rays read by, none for an eye standing in the
-    /// column (`over`).
-    eye: Option<V3>,
     lack: Option<Quadrant>,
     /// The zoom of the tiles the cell is of.
     zoom: Zoom,
+    /// The zoom the eye reads the cell at, the one size its rays ask
+    /// wherever they go.
+    asks: Zoom,
     path: Path,
     /// Where the last column's ray ended. A ray from the same point goes on
     /// from there, and `lack` holds what the descent to there lacked.
@@ -155,50 +168,61 @@ struct SplitCell<'w> {
 }
 
 impl<'w> SplitCell<'w> {
-    /// The cell the observer's eye draws at `at`, a point whose height is
-    /// known: a body takes its detail from its own distance from the eye, on
-    /// a deck as on the ground under it. With no observer it is the cell an
-    /// eye standing at `at` draws.
-    fn new(world: &'w World, at: V3, path: Path) -> SplitCell<'w> {
-        SplitCell::at(world, observer::eye(), at, path)
+    /// The cell drawn over `xy` where the height is not known, with the top
+    /// of its ground: the cell the eye draws the ground with at the ground's
+    /// own surface there (`settled`). None with no eye: nothing is observed.
+    /// It starts from the cell drawn at the column's point nearest the eye,
+    /// the finest the column can be drawn with.
+    fn over(world: &'w World, xy: [f64; 2], path: Path) -> Option<(SplitCell<'w>, Option<f64>)> {
+        let c = SplitCell::of(world, xy, change::size(xy, None)?, path);
+        Some(c.settled(xy, |c| c.surface()))
     }
 
-    /// The cell drawn over `xy` where the height is not known, with the top
-    /// of its ground: the cell `eye`
-    /// draws the ground with at the ground's own surface there. With no eye
-    /// it is the cell an eye standing in the column draws, the leaves': a
-    /// place the camera is sent to is read as it will be seen from there,
-    /// and before the camera stands anywhere that is the one reading there
-    /// is. It starts from the cell drawn at the column's point nearest the
-    /// eye, the finest the column can be drawn with, and takes the cell
-    /// drawn at each cell's own surface in turn while that one is coarser.
-    fn over(
-        world: &'w World,
-        eye: Option<V3>,
+    /// The cell the eye draws where what is asked for over `xy` is found, and
+    /// what was found: `find` asks a cell for a height in its column, and while the
+    /// cell the eye draws at the height found is coarser than the cell
+    /// asked, that one is asked in turn. What is found far from where the
+    /// asking started is a place of its own, at the size the eye sets there.
+    fn settled(
+        mut self,
         xy: [f64; 2],
-        path: Path,
+        find: impl Fn(&mut SplitCell<'w>) -> Option<f64>,
     ) -> (SplitCell<'w>, Option<f64>) {
-        let cell = |z: f64, path: Path| SplitCell::at(world, eye, [xy[0], xy[1], z], path);
-        let mut c = cell(eye.map_or(0.0, |e| e[2]), path);
         loop {
-            let Some(top) = c.surface() else {
-                return (c, None);
+            let Some(found) = find(&mut self) else {
+                return (self, None);
             };
-            let at = cell(top, c.path);
-            if at.zoom >= c.zoom {
-                return (c, Some(top));
+            match SplitCell::at(self.world, [xy[0], xy[1], found], self.path) {
+                Some(there) if there.asks < self.asks => {
+                    self = SplitCell {
+                        lack: self.lack,
+                        ..there
+                    }
+                }
+                _ => return (self, Some(found)),
             }
-            c = SplitCell { lack: c.lack, ..at };
         }
     }
 
-    /// The cell the eye `by` draws the ground with at `at`, split as finely as
-    /// the eye reads there and anything is placed in it; with no eye, the cell
-    /// an eye at `at` itself draws.
-    fn at(world: &'w World, by: Option<V3>, at: V3, path: Path) -> SplitCell<'w> {
-        let eye = by.unwrap_or(at);
-        let zoom = GROUND.read_zoom(cell_zoom_drawn(eye, at));
+    /// The cell the eye draws the ground with at `at`, a point whose height
+    /// is known (`of`): a body takes its size from its own distance from the
+    /// eye, on a deck as on the ground under it. None with no eye.
+    fn at(world: &'w World, at: V3, path: Path) -> Option<SplitCell<'w>> {
         let xy = [at[0], at[1]];
+        Some(SplitCell::of(
+            world,
+            xy,
+            change::size(xy, Some(at[2]))?,
+            path,
+        ))
+    }
+
+    /// The cell over `xy` where the eye sets the size `size`: the cell the
+    /// ground is drawn with there (`drawn`), split as finely as that size
+    /// reads and anything is placed in it. What it asks of the world it asks
+    /// at that size (`asks`).
+    fn of(world: &'w World, xy: [f64; 2], size: Zoom, path: Path) -> SplitCell<'w> {
+        let zoom = GROUND.read_zoom(drawn(size));
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -206,18 +230,18 @@ impl<'w> SplitCell<'w> {
             min: [corner[0], corner[1], BOUND.min[2]],
             max: [corner[0] + side, corner[1] + side, BOUND.max[2]],
         };
-        let read = cell_zoom_read(eye, at).max(cell_zoom);
+        let asks = size.max(cell_zoom);
         let finer = world
             .finest_in(&column)
-            .map_or(0, |z| z.min(read).saturating_sub(cell_zoom));
+            .map_or(0, |z| z.min(asks).saturating_sub(cell_zoom));
         SplitCell {
             world,
             corner,
             side: side / f64::from(1u32 << finer),
             across: 1 << finer,
-            eye: by,
             lack: None,
             zoom,
+            asks,
             path,
             descent: None,
         }
@@ -231,7 +255,7 @@ impl<'w> SplitCell<'w> {
     }
 
     /// What column `k`'s ray meets, with what the world held along the way,
-    /// read by its distance from the eye. A ray that meets nothing before a
+    /// read at the cell's size (`asks`). A ray that meets nothing before a
     /// lack tells nothing past it.
     fn meet(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
         let [x, y] = self.middle(k);
@@ -240,9 +264,9 @@ impl<'w> SplitCell<'w> {
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
-        let answer = self.world.along_by(
-            self.eye,
+        let answer = self.world.along(
             &ray,
+            one_zoom(self.asks),
             until,
             None,
             &mut self.path,
@@ -426,18 +450,21 @@ impl World {
     }
 
     /// Where a body stands when it is put on the drawn surface at `at`
-    /// whatever its height, as a fix or a search result is. It climbs out of
-    /// what fills the surface, or else drops onto the first solid under it.
-    /// None where nothing stands: a cell with no surface and nothing placed.
+    /// whatever its height, as a fix or a search result is
+    /// (`surface_drawn`).
     pub(crate) fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
-        self.surface_support_by(observer::eye(), at)
+        self.surface_drawn(at).map(|s| s.map(|(top, _)| top))
     }
 
-    /// `surface_support` as `eye` draws the world there, or, with none, as an
-    /// eye standing in the column does, each ray read from where it starts
-    /// (`SplitCell::over`).
-    pub(crate) fn surface_support_by(&self, eye: Option<V3>, at: &Q3) -> Answer<Option<f64>> {
-        let (mut c, surface) = SplitCell::over(self, eye, xy(at), Path::default());
+    /// Where something stands on the drawn surface at `at`, whatever its
+    /// height, with the cell zoom the eye draws the ground with there. It
+    /// climbs out of what fills the surface, or else drops onto the first
+    /// solid under it. None where nothing stands: a cell with no surface and
+    /// nothing placed.
+    pub(crate) fn surface_drawn(&self, at: &Q3) -> Answer<Option<(f64, Zoom)>> {
+        let Some((mut c, surface)) = SplitCell::over(self, xy(at), Path::default()) else {
+            return Answer::Lack(leaf_at(at));
+        };
         let [lo, hi] = [BOUND.min[2], BOUND.max[2]];
         // With no surface, the search starts at the highest solid, or at the
         // bottom of the world's bound.
@@ -446,31 +473,37 @@ impl World {
             (z, _) if z > start => Some(z.min(hi)),
             (_, cell_top) => c.below(start, cell_top).or(surface.map(|_| start)),
         };
-        c.answer(stands)
+        let drawn = GROUND.cell_zoom(c.zoom);
+        c.answer(stands.map(|top| (top, drawn)))
     }
 
     /// The floor a center at `at` stands on, as the eye draws the world
     /// there: up out of what fills `at`, or else down to the first solid's
-    /// top. None where nothing stands under `at`.
+    /// top. None where nothing stands under `at`. A floor far under a point
+    /// high in the air is asked of the cell the eye draws where it lies
+    /// (`SplitCell::settled`).
     pub(crate) fn floor_under(&self, at: &Q3) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
         let [x, y] = xy(at);
-        let mut c = SplitCell::new(self, [x, y, start], Path::default());
-        let stands = match c.depenetrate(start) {
+        let Some(c) = SplitCell::at(self, [x, y, start], Path::default()) else {
+            return Answer::Lack(leaf_at(at));
+        };
+        let (c, stands) = c.settled([x, y], |c| match c.depenetrate(start) {
             (z, _) if z > start => Some(z.min(BOUND.max[2])),
             (z, cell_top) => c.below(z, cell_top),
-        };
+        });
         c.answer(stands)
     }
 
-    /// The floor nearest `at`'s height: the top of a solid with room over
-    /// it, under `at` or over it, or the cell's surface. None where nothing
-    /// stands. It is asked of a place the camera is sent to with a
-    /// height, and read as an eye standing in its column reads, each ray from
-    /// where it starts (`SplitCell::over`).
+    /// The floor nearest `at`'s height, as the eye draws the world there: the
+    /// top of a solid with room over it, under `at` or over it, or the cell's
+    /// surface. None where nothing stands.
     pub(crate) fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
-        let mut c = SplitCell::over(self, None, xy(at), Path::default()).0;
+        let [x, y] = xy(at);
+        let Some(mut c) = SplitCell::at(self, [x, y, z], Path::default()) else {
+            return Answer::Lack(leaf_at(at));
+        };
         let down = match c.depenetrate(z) {
             (t, _) if t > z => Some(t.min(BOUND.max[2])),
             (t, cell_top) => c.below(t, cell_top),
@@ -500,22 +533,18 @@ impl World {
     /// walled and goes anywhere a position can be, past the area over the
     /// Earth, which holds nothing above sea level.
     ///
-    /// The walk is walked only where a body shows at both its ends
-    /// (`body_shown`) for `eye`, the eye that sees the body at `from`: the
-    /// observer's for a body in the world, and for the camera's own pivot the
-    /// eye the camera keeps over it. It decides whether there is a body to
-    /// walk; what the walk reads it reads by the observer's eye, as every
-    /// reader does. So the walk is no longer than the eye draws a body
-    /// across; a `from` of unknown height is stood first, the one read such
-    /// a move makes. Otherwise, and where `from` cannot be stood or what the
-    /// eye asks on the way is not held, there is no body for the eye and no wall its
-    /// size: it ends at `to` with its height not known, and one `walled`
+    /// The walk is walked only where the eye draws a body at both its ends
+    /// (`body_shown`), so it is no longer than the eye draws a body across; a
+    /// `from` of unknown height is stood first, the one read such a move
+    /// makes. Otherwise, and where `from` cannot be stood or what the eye
+    /// asks on the way is not held, there is no body for the eye and no wall
+    /// its size: it ends at `to` with its height not known, and one `walled`
     /// stays where it is rather than leave the area.
-    pub(crate) fn step_slide(&self, from: &Q3, to: &Q3, eye: &Q3, walled: bool) -> Q3 {
+    pub(crate) fn step_slide(&self, from: &Q3, to: &Q3, walled: bool) -> Q3 {
         self.stands(from)
             .exact()
             .flatten()
-            .filter(|from| body_shown(farther(eye, from, to)))
+            .filter(|from| walk_shown(from, to))
             .and_then(|from| self.slide(&from, to, walled))
             .unwrap_or_else(|| match walled && self.leaves_area(xy(from), xy(to)) {
                 true => *from,
@@ -557,7 +586,7 @@ impl World {
         let mut path = Path::default();
         floor = {
             let [x, y] = center(at);
-            let mut c = SplitCell::new(self, [x, y, floor], path);
+            let mut c = SplitCell::at(self, [x, y, floor], path)?;
             let (f, _) = c.depenetrate(floor);
             path = c.path;
             c.without_lack(f)?
@@ -620,12 +649,12 @@ impl World {
             return Some(None);
         }
         let height = body_height_u();
-        let mut c = SplitCell::new(self, [to[0], to[1], floor], *path);
+        let mut c = SplitCell::at(self, [to[0], to[1], floor], *path)?;
         let (z, cell_top) = c.depenetrate(floor);
         let moved = if c.above(z, z + height).is_some() {
             None
         } else if z > floor {
-            let mut from_cell = SplitCell::new(self, [from[0], from[1], floor], c.path);
+            let mut from_cell = SplitCell::at(self, [from[0], from[1], floor], c.path)?;
             let stopped = from_cell.above(floor, z + height).is_some();
             (*path, c.path) = (from_cell.path, from_cell.path);
             from_cell.without_lack(())?;

@@ -1,7 +1,8 @@
 // pxl-core/domain/query/detail.rs
 
-//! The zoom a point of the world is read at: the camera grid's at its
-//! distance from the eye, the one rule every reader of the world reads by.
+//! The size a place of the world is asked at: the camera grid's zoom at its
+//! distance from the eye, the same in every direction, which is all the eye
+//! does to a read (`grid_zoom`).
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
@@ -26,11 +27,11 @@ pub(crate) fn zoom_range() -> [Zoom; 2] {
     [coarsest(), OBJECT_FINEST]
 }
 
-/// The cell zoom the eye's rays draw the ground with at `at`: the zoom a walk
-/// reads there (`cell_zoom_read`), no finer than the ground's leaf cells and,
-/// once the source declares its top, no coarser than the cells a tile draws.
-pub(crate) fn cell_zoom_drawn(eye: V3, at: V3) -> Zoom {
-    let cell_zoom = cell_zoom_read(eye, at).min(GROUND.leaf_cell_zoom());
+/// The cell zoom the ground is drawn with where a walk reads `read`: no finer
+/// than the ground's leaf cells and, once the source declares its top, no
+/// coarser than the cells a tile draws.
+pub(super) fn drawn(read: Zoom) -> Zoom {
+    let cell_zoom = read.min(GROUND.leaf_cell_zoom());
     IndexedTerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
 }
 
@@ -41,12 +42,20 @@ pub(super) fn leaf_at(at: &Q3) -> Quadrant {
     Quadrant::new(LEAF_ZOOM, [x, y])
 }
 
-/// The camera grid's level of detail (pxl-engine `cast::Detail`) for a walk
-/// from `origin`, seen from `eye`: each node is asked at the cell zoom whose
-/// cell, drawn whole, spans at least one grid cell at the node's distance
-/// from the eye (pxl-spec space/camera/grid.rs `cell_zoom_at`), wherever the
-/// walk's line starts, held within `zoom_range`. This is the rule that sizes
-/// every drawn cell. The eye is taken on the origin's lap.
+/// The size `eye` sets at a point: the camera grid's cell zoom at the
+/// point's distance from it (pxl-spec space/camera/grid.rs `cell_zoom_at`),
+/// the same in every direction, held within `zoom_range`. The point is over
+/// `xy` at the height `z`, or, with none, at the eye's own height, the
+/// column's point nearest the eye. It is the one thing a place's read takes
+/// of the eye.
+pub(super) fn grid_zoom(eye: V3, xy: [f64; 2], z: Option<f64>) -> Zoom {
+    let d = detail(eye, [xy[0], xy[1], z.unwrap_or(eye[2])]);
+    d.at(d.eye[0] * d.eye[0] + d.eye[1] * d.eye[1] + d.eye[2] * d.eye[2])
+}
+
+/// The level of detail (pxl-engine `cast::Detail`) of a ray across what the
+/// eye sees, from `origin`: each node is asked at the size `eye` sets at the
+/// node's own distance, held within `zoom_range`, as a pixel's ray asks it.
 pub(super) fn detail(eye: V3, origin: V3) -> Detail {
     let eye = [
         nearest(eye[0], origin[0]) - origin[0],
@@ -60,9 +69,12 @@ pub(super) fn detail(eye: V3, origin: V3) -> Detail {
     }
 }
 
-/// The cell zoom a walk asks at `at`: the camera grid's at its distance from
-/// `eye`, held within `zoom_range` (`detail`).
-pub(crate) fn cell_zoom_read(eye: V3, at: V3) -> Zoom {
-    let d = detail(eye, at);
-    d.at(d.eye[0] * d.eye[0] + d.eye[1] * d.eye[1] + d.eye[2] * d.eye[2])
+/// The level of detail of a walk that asks one size wherever it goes: the
+/// cells of `zoom` alone (pxl-engine `cast::Detail`).
+pub(super) fn one_zoom(zoom: Zoom) -> Detail {
+    Detail {
+        eye: [0.0; 3],
+        range: [zoom, zoom],
+        spacing: Spacing::NONE,
+    }
 }

@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/record_box.wgsl
 
 // The box of a drawable entry (pxl-engine raster.rs). The record's draw tests this box against
-// the observer's view (record_draw.wgsl), and the raster draws it from the entry's slot
+// the cast's view (record_draw.wgsl), and the raster draws it from the entry's slot
 // (raster.wgsl), so both see the same box. The module that includes this part binds the node
 // cache and reads it through `node_cache_word`.
 

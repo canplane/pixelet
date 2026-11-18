@@ -2,11 +2,11 @@
 
 // The holes as the queue's items (queue_walk.wgsl, queue_last.wgsl). The holes are the pixels
 // the eye's cast listed and the slots the light's cast listed, which took neither a visible
-// voxel nor the sky (cast.wgsl, light.wgsl). The observer's part (hole.eye.wgsl,
+// voxel nor the sky (cast.wgsl, light.wgsl). The cast's part (hole.eye.wgsl,
 // hole.light.wgsl) says where its holes, pool and hits lie, a hole's ray, and the words an
 // ended walk leaves.
 //
-// A ray parked between the run's walks lies in its observer's pool with its pixel or slot
+// A ray parked between the run's walks lies in its cast's pool with its pixel or slot
 // (`ray::PARK_WORDS`), and its item is then its place in the pool, marked by `POOLED`. A ray
 // that finds the pool full ends where it stands.
 
@@ -31,7 +31,7 @@ fn hole_px(item: u32) -> vec2<u32> {
   return hole_at(item);
 }
 
-/// The next of the observer's holes for the first walk to take, or `NONE` where it takes no
+/// The next of the cast's holes for the first walk to take, or `NONE` where it takes no
 /// more. The count is held to the list's room.
 fn next_item() -> u32 {
   let at = holes_at();
@@ -114,8 +114,8 @@ fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
 }
 
 /// Ends the walk `w` of hole `item`. Its hit, whatever it stopped on, is listed for its
-/// observer's record (`keep_hit`, record_hits.wgsl), the eye's and the light's alike, and the
-/// observer writes what the ray shows at the hole (`hole_write`): for a whole cell of the eye,
+/// cast's record (`keep_hit`, record_hits.wgsl), the eye's and the light's alike, and the
+/// cast writes what the ray shows at the hole (`hole_write`): for a whole cell of the eye,
 /// with the word the record puts there once its hit is in (record_hits.wgsl `rec_faces_cs`).
 /// A ray that ended as a lack shows the deepest node held (`shows`), and its hit stays a
 /// lack, so the next frame asks for what it lacked.

@@ -1,12 +1,12 @@
 // pxl-render/frame/shader/visible.wgsl
 
 // What a ray takes from the visible voxel the raster kept at its place, for the eye's pixels
-// (cast.wgsl) and the light's slots (light.wgsl), each from its own observer's record. The ray
+// (cast.wgsl) and the light's slots (light.wgsl), each from its own cast's record. The ray
 // takes the voxel's cell where it enters the voxel's box through a side the box draws, one some
 // ray entered it through (pxl-engine `raster::accepts`). That test is made again here, exactly,
 // because a GPU's f32 may part the raster from pxl-engine's test (`cast::entry`,
 // `fill_bound`). The ray takes the sky where the samples around it each went on to their
-// reach. Any other ray is a hole, listed for the holes' queue (queue.wgsl). Each observer
+// reach. Any other ray is a hole, listed for the holes' queue (queue.wgsl). Each cast
 // counts what its rays took.
 
 /// The holes' count and the count lanes, laid out as pxl-engine `ray::MISS_ARGS_WORDS` lays

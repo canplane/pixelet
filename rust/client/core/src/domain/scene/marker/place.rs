@@ -4,34 +4,32 @@
 //! holds is drawn as Carto draws it at the Carto zoom that matches the camera
 //! grid's cell at the place's own point: a dot or an icon in its category's
 //! fill, named from its category's label zoom on. A place stands at the
-//! center of its ground leaf cell, on the first surface a ray down meets at
-//! the detail drawn there, and a tap on it goes there.
+//! center of its ground leaf cell, on the surface drawn there at the size
+//! the eye sets, and a tap on it goes there.
 
 use fnv::FnvHashMap;
 use pxl_spec::space::layer::lattice::Cell;
 use pxl_spec::space::layer::quadrant::{Quadrant, quad_rows};
 use std::rc::Rc;
 
-use super::{Brick, Instance, Key, MarkerHit, cell_zoom, surface};
+use super::{Brick, Instance, Key, MarkerHit, cell_zoom};
 use crate::domain::layer::place::carto_zoom;
-use crate::domain::query::{World, cell_zoom_drawn};
+use crate::domain::query::World;
+use crate::domain::query::change::Memo;
 use crate::domain::scene::marker::design::Design;
 use crate::sys::sched;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{PLACE_FIRST, PLACE_LATTICE, stands, symbol_of};
-use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::world::{BOUND, idx_of, wrap_idx};
+use pxl_spec::space::coord::world::{idx_of, wrap_idx};
 use pxl_spec::space::coord::zoom::{Zoom, idx_at};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
 /// cell it stands in, and the finest camera grid cell its brick draws, which
-/// its tile was read at (`finest`). `top` is what it stands on: the surface
-/// the eye sees under it, None where nothing was found, from which the
-/// camera grid's cell it is in is told. `asked` is the eye it was asked
-/// under. While `asked` is None it is still to ask, and is that of the same
-/// place as it stood before (`hand_held`), for it to show by meanwhile.
+/// its tile was read at (`finest`). `top` is what it shows by: the surface
+/// drawn under it and the cell zoom the ground is drawn with there, None
+/// where nothing was found. It is its own answer (`surface`), or, until
+/// that is asked, that of the same place as it stood before (`hand_held`).
 pub(super) struct Place {
     pub(super) brick: Brick,
     kind: u16,
@@ -39,8 +37,8 @@ pub(super) struct Place {
     name: Option<Rc<str>>,
     ground: Cell,
     finest: Zoom,
-    top: Option<f64>,
-    asked: Option<V3>,
+    top: Option<(f64, Zoom)>,
+    surface: Memo<(), Option<(f64, Zoom)>>,
 }
 
 impl Place {
@@ -98,7 +96,7 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
             ground,
             finest,
             top: None,
-            asked: None,
+            surface: Memo::NONE,
         });
     });
     if !whole {
@@ -114,7 +112,7 @@ pub(super) fn hand_held(read: &mut [Place], held: usize) {
     if before.is_empty() || now.is_empty() {
         return;
     }
-    let was: FnvHashMap<Cell, f64> = before
+    let was: FnvHashMap<Cell, (f64, Zoom)> = before
         .iter()
         .filter_map(|p| Some((p.ground, p.top?)))
         .collect();
@@ -125,49 +123,29 @@ pub(super) fn hand_held(read: &mut [Place], held: usize) {
     }
 }
 
-/// The zoom of the camera grid's cell `p` is in, no finer than its tile was
-/// read at.
-fn cell_zoom_of(p: &Place, eye: V3) -> Zoom {
-    let [x, y, _] = q3::unpack(&p.ground.mid());
-    cell_zoom_drawn(eye, [x, y, p.top.unwrap_or(0.0)]).min(p.finest)
-}
-
-/// Asks the surface under `p`.
-fn ask(p: &mut Place) {
-    p.top = surface(&p.ground.mid(), (BOUND.max[2], BOUND.min[2]));
-}
-
-/// How far the eye `p` was asked under is from `eye`, squared: without
-/// bound for one never asked.
-fn asked_dist2(p: &Place, eye: V3) -> f64 {
-    p.asked.map_or(f64::INFINITY, |a| {
-        let v = v3::sub(&a, &eye);
-        v3::dot(&v, &v)
-    })
-}
-
-/// Writes into `out` the places `read` read, seen from `eye`. Each shows as
-/// Carto shows it at the zoom of the camera grid's cell it is in, no finer
-/// than its tile was read at, and it stands on what is drawn there: a
-/// marker is tested against the world's depth at its anchor (pxl-render
+/// Writes into `out` the places `read` read. Each shows as Carto shows it at
+/// the zoom of the cell the ground is drawn with under it, no finer than its
+/// tile was read at, and it stands on what is drawn there: a marker is
+/// tested against the world's depth at its anchor (pxl-render
 /// pass/marker.rs), so one standing on a finer ground than is drawn would be
-/// hidden wherever the drawn ground is higher. The surfaces are asked under the entry's budget (sys/sched.rs `run`), a place
-/// showing by what it holds until its own are asked. Returns whether
-/// the budget stopped the asks before the list's end.
-pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) -> bool {
-    // The places not asked under this eye are asked, the one asked under the
-    // eye farthest from it first: one never asked has nothing to show by,
-    // and while the eye moves each comes to its turn.
-    let mut due: Vec<_> = read.iter_mut().filter(|p| p.asked != Some(eye)).collect();
-    due.sort_by(|a, b| asked_dist2(b, eye).total_cmp(&asked_dist2(a, eye)));
+/// hidden wherever the drawn ground is higher. A place's surface is asked
+/// again only when the eye sets another size for it (`Memo`), under the
+/// entry's budget (sys/sched.rs `run`), a place showing by what it holds
+/// until its own is asked; one with nothing to show by is asked first.
+/// Returns whether the budget stopped the asks before the list's end.
+pub(super) fn show(read: &mut [Place], out: &mut Vec<Instance>) -> bool {
+    let mut due: Vec<_> = read.iter_mut().filter(|p| !p.surface.keeps(&())).collect();
+    due.sort_by_key(|p| p.top.is_some());
     let run = sched::run(due, |p| {
-        ask(p);
-        p.asked = Some(eye);
+        let at = p.ground.mid();
+        p.top = p
+            .surface
+            .of((), || World::now().surface_drawn(&at).val().flatten());
         true
     });
     for p in read {
-        let Some(top) = p.top else { continue };
-        let carto = carto_zoom(cell_zoom_of(p, eye));
+        let Some((top, drawn)) = p.top else { continue };
+        let carto = carto_zoom(drawn.min(p.finest));
         let Some(design) = point_of(p.kind, p.first_zoom, p.name.as_ref(), carto) else {
             continue;
         };

@@ -4,10 +4,13 @@
 //! tiles and clipmap bricks whose answer moved, by identity, which fixes their
 //! contents, and the boxes where objects were written. A reader that keeps an answer asks again
 //! only when one of these touches the columns it read, which its queries
-//! report (`ReadRect`). A change so reaches only the readers of the ground
-//! it touches. An answer is the eye's too: the world is read by its distance
-//! from the eye, so a kept answer is kept for the eye it was asked under.
+//! report (`Read`). A change so reaches only the readers of the ground
+//! it touches. An answer is of a cell at a size, and the world's alone; the
+//! eye's part is the size, so a kept answer is kept until the eye sets
+//! another size for a cell it read (`Read::holds`), as a voxel found once is
+//! drawn until the eye's distance asks another zoom there.
 
+use super::detail::grid_zoom;
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
@@ -90,18 +93,74 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 
-/// The columns the queries read, as one box with its corners in units and X
-/// on the lap of the first column read. A ray reads the cells it passes at
-/// the coarsest zoom it is answered at; a cell or a column surface reads its
-/// cell. Those queries report here, and a memo's ask takes what it
-/// read from here (`Memo::of`).
-#[derive(Clone, Copy, Default)]
-struct ReadRect(Option<[[f64; 2]; 2]>);
+/// A size the eye set for a read: the camera grid's zoom at a point's
+/// distance from it (query/detail.rs `grid_zoom`), with the point.
+#[derive(Clone, Copy, PartialEq)]
+struct Size {
+    xy: [f64; 2],
+    z: Option<f64>,
+    zoom: Zoom,
+}
 
-static READ_RECT: Global<ReadRect> = Global::new();
+/// What a read took of the eye. A place's read takes the sizes the eye set
+/// for it, and is the world's answer at those sizes wherever the eye
+/// stands. A ray across what the eye sees asks each node at its own
+/// distance from the eye, so its answer is of the eye where it stood, none
+/// where there was none.
+#[derive(Clone, PartialEq)]
+enum Taken {
+    Sizes(Vec<Size>),
+    Eye(Option<V3>),
+}
 
-fn read_rect() -> &'static mut ReadRect {
-    READ_RECT.get(ReadRect::default)
+/// What the queries read for a memo's ask (`Memo::of`): the columns read, as
+/// one box with its corners in units and X on the lap of the first column
+/// read, where a ray reads the cells it passes at the coarsest zoom it is
+/// answered at and a cell or a column surface its cell; and what they took
+/// of the eye.
+#[derive(Clone)]
+struct Read {
+    columns: Option<[[f64; 2]; 2]>,
+    taken: Taken,
+}
+
+impl Default for Read {
+    fn default() -> Self {
+        Read {
+            columns: None,
+            taken: Taken::Sizes(Vec::new()),
+        }
+    }
+}
+
+impl Read {
+    /// Whether the eye `now` is given what this read was given, the world
+    /// unchanged: it sets each size again, or, for a read of the eye where it
+    /// stood, stands there.
+    fn holds(&self, now: Option<V3>) -> bool {
+        match (&self.taken, now) {
+            (Taken::Eye(eye), _) => *eye == now,
+            (Taken::Sizes(sizes), Some(eye)) => {
+                sizes.iter().all(|s| grid_zoom(eye, s.xy, s.z) == s.zoom)
+            }
+            (Taken::Sizes(sizes), None) => sizes.is_empty(),
+        }
+    }
+}
+
+/// The read of the memo asking now, none outside a memo's ask: what is
+/// reported then is kept by no one.
+static READ: Global<Option<Read>> = Global::new();
+
+fn read() -> &'static mut Option<Read> {
+    READ.get(|| None)
+}
+
+/// What `ask` answers, with what its queries read.
+fn reads<A>(ask: impl FnOnce() -> A) -> (A, Read) {
+    let outer = read().replace(Read::default());
+    let a = ask();
+    (a, core::mem::replace(read(), outer).unwrap_or_default())
 }
 
 /// Reports the cells of `zoom` that the box from `a` to `b` lies in as read.
@@ -120,8 +179,8 @@ pub(super) fn report_read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
 /// Reports the columns `cells` as read, moved onto the lap of the first
 /// column read.
 fn join(cells: [[f64; 2]; 2]) {
-    let f = read_rect();
-    f.0 = Some(match f.0 {
+    let Some(r) = read() else { return };
+    r.columns = Some(match r.columns {
         None => cells,
         Some(c) => {
             let dx = nearest(cells[0][0], c[0][0]) - cells[0][0];
@@ -133,17 +192,66 @@ fn join(cells: [[f64; 2]; 2]) {
     });
 }
 
+/// The eye where it stands, for a ray across what the eye sees: the read is
+/// then of the eye there (`Taken::Eye`).
+pub(super) fn eye() -> Option<V3> {
+    let eye = observer::eye();
+    if let Some(r) = read() {
+        r.taken = Taken::Eye(eye);
+    }
+    eye
+}
+
+/// The size the eye sets over `xy` at the height `z`, or with none at the
+/// eye's own height (query/detail.rs `grid_zoom`). None with no eye: nothing
+/// is observed, and the read is of there being none.
+pub(super) fn size(xy: [f64; 2], z: Option<f64>) -> Option<Zoom> {
+    let Some(at) = observer::eye() else {
+        eye();
+        return None;
+    };
+    let zoom = grid_zoom(at, xy, z);
+    if let Some(Read {
+        taken: Taken::Sizes(sizes),
+        ..
+    }) = read()
+    {
+        sizes.push(Size { xy, z, zoom });
+    }
+    Some(zoom)
+}
+
+/// Reports to the memo asking now what a memo within its ask read.
+fn report(inner: &Read) {
+    if let Some(columns) = inner.columns {
+        join(columns);
+    }
+    match (&inner.taken, read()) {
+        (Taken::Eye(_), _) => {
+            eye();
+        }
+        (
+            Taken::Sizes(sizes),
+            Some(Read {
+                taken: Taken::Sizes(outer),
+                ..
+            }),
+        ) => outer.extend_from_slice(sizes),
+        _ => {}
+    }
+}
+
 /// An answer a step got from the world, kept with the key it was asked for,
-/// the eye it was asked under and the columns it read (`ReadRect`), their
-/// corners in units. It is asked again only when the key changes, when the
-/// eye has moved, or when a change to the ground or the object layer touched
-/// those columns (`forget_touched`). An answer that read nothing is not
-/// kept, since no change would ever tell it to go.
+/// and what it read (`Read`). It is asked again
+/// only when the key changes, when the eye is not given what the read took
+/// of it (`Read::holds`), or when a change to the ground or the
+/// object layer touched the columns read (`forget_touched`). An answer that
+/// read no column is not kept, since no change would ever tell it to go.
+#[derive(Clone)]
 pub(crate) struct Memo<K, A>(Option<Kept<K, A>>);
 
-/// A kept answer: its key, the eye it was asked under, the columns it read
-/// and the answer.
-type Kept<K, A> = (K, Option<V3>, [[f64; 2]; 2], A);
+/// A kept answer: its key, what it read and the answer.
+type Kept<K, A> = (K, Read, A);
 
 impl<K, A> Default for Memo<K, A> {
     fn default() -> Self {
@@ -157,13 +265,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     /// Drops the answer when a change touched its columns. The caller calls
     /// this every frame, so that it sees each change once (`within`).
     pub(crate) fn forget_touched(&mut self) {
-        if self
-            .0
-            .as_ref()
-            .is_some_and(|&(_, _, columns, _)| within(columns, &[]))
-        {
-            self.0 = None;
-        }
+        self.forget(|columns, _| within(columns, &[]));
     }
 
     /// `forget_touched`, for an answer of the ground at its leaf. `exact` says
@@ -173,38 +275,44 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     /// what objects wrote drop it. An answer not exact goes as in
     /// `forget_touched`, since a coarser node can be what answered it.
     pub(crate) fn forget_touched_at_leaf(&mut self, exact: impl Fn(&A) -> bool) {
+        self.forget(|columns, a| match exact(a) {
+            true => touched(columns, &[], at_leaf),
+            false => within(columns, &[]),
+        });
+    }
+
+    /// Drops the answer where `touched` says so of its columns.
+    fn forget(&mut self, touched: impl Fn([[f64; 2]; 2], &A) -> bool) {
         if self
             .0
             .as_ref()
-            .is_some_and(|(_, _, columns, a)| match exact(a) {
-                true => touched(*columns, &[], at_leaf),
-                false => within(*columns, &[]),
-            })
+            .is_some_and(|(_, read, a)| read.columns.is_some_and(|c| touched(c, a)))
         {
             self.0 = None;
         }
     }
 
-    /// The answer for `of`: the kept one, or else what `ask` gets, with the
-    /// columns its queries read. What it read is reported
-    /// as read here too, so a memo kept inside another memo's ask lets that
-    /// one go with it.
+    /// Whether the answer for `of` is kept as the eye now stands, so `of`
+    /// would not ask.
+    pub(crate) fn keeps(&self, of: &K) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|(k, read, _)| k == of && read.holds(observer::eye()))
+    }
+
+    /// The answer for `of`: the kept one, or else what `ask` gets, with what
+    /// its queries read. What it read is reported as read here too, so a memo
+    /// kept inside another memo's ask lets that one go with it.
     pub(crate) fn of(&mut self, of: K, ask: impl FnOnce() -> A) -> A {
-        let eye = observer::eye();
-        if let Some((k, under, columns, a)) = &self.0
-            && *k == of
-            && *under == eye
+        if self.keeps(&of)
+            && let Some((_, read, a)) = &self.0
         {
-            join(*columns);
+            report(read);
             return *a;
         }
-        let outer = core::mem::take(read_rect());
-        let a = ask();
-        let read = core::mem::replace(read_rect(), outer);
-        self.0 = read.0.map(|columns| {
-            join(columns);
-            (of, eye, columns, a)
-        });
+        let (a, read) = reads(ask);
+        report(&read);
+        self.0 = read.columns.is_some().then_some((of, read, a));
         a
     }
 }

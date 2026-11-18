@@ -447,8 +447,9 @@ struct MemoKey {
     pivot: Q3,
 }
 
-/// The pitch of the last climb. It is kept while its `MemoKey` and the eye
-/// stay the same and no change touches what it read (`change::Memo`).
+/// The pitch of the last climb. It is kept while its `MemoKey` stays the
+/// same, the eye is given what its reads took of it and no change touches
+/// what it read (`change::Memo`).
 static CLIMB_PITCH: Global<Memo<MemoKey, f64>> = Global::new();
 
 /// `at` as the climb draws it. At the nearest (`NEAREST_DIST`), it is drawn

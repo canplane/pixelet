@@ -851,7 +851,7 @@ pub const FRAME: Frame = Frame {
 /// The counts several passes of a stage add to through atomics. A copy may seed each one ahead
 /// of those passes (`SEEDS`), and every pass that adds to a count runs before any pass that
 /// reads it. They are: the eye's faces' asks, which the samples' passes lay and the holes'
-/// hits lay at a place of their own (record_put.wgsl `observe`); the hits each observer's two
+/// hits lay at a place of their own (record_put.wgsl `observe`); the hits each cast's two
 /// walks of the holes over the node cache list (queue_walk.wgsl); the stood list, which the
 /// record's draw and both receivers' passes list tiles on (light_receiver_tile.wgsl
 /// `receiver_tiles_put`); the hits' dispatch in the node cache's head, which the last walk
@@ -877,7 +877,7 @@ const APPENDS: &[Range] = &[
 ];
 
 /// The copies that open a count before the passes that add to it. `hits` and `light_hits` copy
-/// the hits each observer's holes' walks over the node cache listed into the node cache's
+/// the hits each cast's holes' walks over the node cache listed into the node cache's
 /// head, before the last walk adds its own (ray/cast.rs `walk_run`; queue.wgsl
 /// `keep_hit`). `receiver_tiles_back` and `read_cnt_back` copy back the stood list's args and
 /// the read list's count that the casts since the world's receivers were last stood afresh

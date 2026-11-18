@@ -50,57 +50,17 @@ fn the_pivot_follows_its_floor() {
     assert_eq!(height(&on(built)), over(6.0));
 }
 
-/// A pan walks the pivot only where a body shows for the eye it is handed:
-/// seen from near it ends on the floor, seen from far it goes where it is
-/// moved with its height not known.
+/// A pan walks the pivot only where the eye draws a body: seen from near it
+/// ends on the floor, seen from far it goes where it is moved with its height
+/// not known.
 #[test]
 fn a_pan_walks_only_where_a_body_shows() {
     let [x, y] = flat_at_five();
     placed(Store::default());
     let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    let near = world::point(x + 0.5, y - 3.0, 8.0);
-    let far = world::point(x + 0.5, y + 0.5, over(5.0) + 500.0);
-    set_eye(to_world(&near));
-    let walked = pan_to(&from, 2.0, 0.0, 0.0, &near);
+    set_eye([x + 0.5, y - 3.0, 8.0]);
+    let walked = pan_to(&from, 2.0, 0.0, 0.0);
     assert_eq!(height(&walked), over(5.0));
-    set_eye(to_world(&far));
-    assert!(is_unknown(&pan_to(&from, 2.0, 0.0, 0.0, &far)));
-}
-
-/// A place the camera is sent to stands on its floor as an eye standing there
-/// reads it, wherever the observer's eye is: before the camera stands
-/// anywhere, as at the app's start, and with the eye too far off to draw the
-/// leaves there.
-#[test]
-fn a_destination_stands_whatever_the_observer_sees() {
-    use crate::domain::observer;
-    let [x, y] = flat_at_five();
-    placed(Store::default());
-    let to = unknown(&world::point(x + 0.5, y + 0.5, 0.0));
-    let known = world::point(x + 0.5, y + 0.5, 7.0);
-    set_eye([x + 0.5, y + 0.5, 5000.0]);
-    assert_eq!(arriving(&to).map(|p| height(&p)), Some(over(5.0)), "far");
-    assert_eq!(arriving(&known).map(|p| height(&p)), Some(over(5.0)), "far");
-    observer::set_pose(None);
-    assert_eq!(arriving(&to).map(|p| height(&p)), Some(over(5.0)), "no eye");
-}
-
-/// The app's start: with no eye and no pivot, a camera sent to a place whose
-/// height is not known comes to stand there once the leaf is held, and has
-/// an eye from then on. Nothing on the way waits for an eye.
-#[test]
-fn a_camera_sent_somewhere_stands_with_no_eye_before() {
-    use crate::domain::control::camera::controller::{self, Motion};
-    use crate::domain::control::navigation::destination;
-    use crate::domain::observer;
-    let [x, y] = flat_at_five();
-    placed(Store::default());
-    observer::set_pose(None);
-    assert!(controller::pose().is_none(), "no eye yet");
-    destination::go_to_ground(unknown(&world::point(x + 0.5, y + 0.5, 0.0)), Motion::Snap);
-    destination::dst_step();
-    assert_eq!(destination::pending(), None, "the destination is reached");
-    let pivot = controller::pivot().expect("a pivot");
-    assert_eq!(height(&pivot), over(5.0));
-    assert!(controller::pose().is_some(), "the camera has an eye");
+    set_eye([x + 0.5, y + 0.5, over(5.0) + 500.0]);
+    assert!(is_unknown(&pan_to(&from, 2.0, 0.0, 0.0)));
 }

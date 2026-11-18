@@ -1,6 +1,6 @@
 // pxl-engine/record.rs
 
-//! wgsl-port: the record of the voxels the observers found, which the raster draws. A voxel
+//! wgsl-port: the record of the voxels the casts found, which the raster draws. A voxel
 //! is a node cache entry for a node some ray stopped on. The entry holds the World Query's
 //! answer for the node and the faces through which rays entered it, and keeps them across
 //! frames in the entry's own state word (`node_cache::STATES_AT`). The GPU passes that write
@@ -61,8 +61,8 @@
 //!    first the samples' (sample_hit.wgsl), then, after their walk, the hits of the pixels
 //!    the samples missed (record_hits.wgsl, `beam::HIT_ASSET`, `HIT_LINE`). A hit carries a
 //!    node, the face the ray entered it through, its answer, and the line its face's word is
-//!    asked from. It finds its node's entry as above and sets the face it entered. An observer
-//!    that reads faces' words, which is the eye, asks a face's word the first time it enters
+//!    asked from. It finds its node's entry as above and sets the face it entered. A cast
+//!    that reads faces' words, which is the eye's, asks a face's word the first time it enters
 //!    the face (`ASKED`). That hit settles the word, and it is read only under its bit: none
 //!    for a lack or past the asks' room, `face::BOX` for a cell short of its cube, and
 //!    otherwise what face.wgsl writes into `node_cache::R_FACES`. A hit on a node no slot
@@ -191,7 +191,7 @@ const fn ceil(v: f32) -> u32 {
     let n = v as u32;
     if (n as f32) < v { n + 1 } else { n }
 }
-/// The most boxes an observer's draw writes, one word for each drawable entry
+/// The most boxes a cast's draw writes, one word for each drawable entry
 /// (`raster::draw_word`): `CELL_NODE_CAP` for each of its cells (`EYE_CELLS_CAP`,
 /// `LIGHT_CELLS_CAP`), but for the stale ones, which the eye does not draw.
 pub const EYE_DRAW_CAP: u32 = EYE_CELLS_CAP * CELL_NODE_CAP / CELL_STALE;

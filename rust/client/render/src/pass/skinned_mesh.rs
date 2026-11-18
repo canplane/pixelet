@@ -139,7 +139,7 @@ impl SkinnedPass {
         }
     }
 
-    /// Draws the characters at `stage`: lit, or their depth seen from the light.
+    /// Draws the characters at `stage`: lit, or their depth along the light.
     /// `frame` is the group 0 the stage reads. The list's uniforms are bound
     /// once (`set_draws`). Each character is drawn as the instance its slot
     /// names, and its vertices read their draw at that slot

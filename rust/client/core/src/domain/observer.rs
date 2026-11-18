@@ -2,8 +2,9 @@
 
 //! The observer: the pose the world is seen from. The view takes it from the
 //! camera where the two can be told apart (view/frame/pose.rs
-//! `view_compose`) and composes its matrices at it; the query reads every
-//! node by how far it lies from the eye (query/detail.rs).
+//! `view_compose`) and composes its matrices at it; the query takes from it
+//! the size a place is asked at, by the place's distance from the eye
+//! (query/detail.rs `grid_zoom`).
 
 use pxl_global::Global;
 use pxl_spec::space::coord::mat4::Mat4;

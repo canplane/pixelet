@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/sample.wgsl
 
-// An observer's samples as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out as
+// A cast's samples as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out as
 // sample.eye.wgsl or sample.light.wgsl lays them. Each item is a sample's ray, which starts at
 // its cell's start. Between its run's walks the ray is parked in the sample's own words
 // (pxl-engine `beam::SAMPLE_PARKED`), and once it ends its hit is written there
