@@ -5,7 +5,7 @@ when, is open.
 
 ## What was asked
 
-The core's memory is fixed, 512 MiB on a handheld and 1 GiB on a desktop, and the user's stand
+The core's memory is fixed, 512 MiB on every platform, and the user's stand
 is that a heap that fills stops the core: nothing cleans up because it is full, and what is
 held is let go by its owner. An entrance check on the heap was built on the way to closing the
 memory and removed again. The user then asked what the check should be if one set aside the
@@ -44,5 +44,3 @@ three times its packet to about one, and no estimate per byte is needed.
 - Whether to do this at all.
 - The budgets for the places and the divisions. They take the sizes of the baked tiles, which
   were not looked at.
-- The objects, whose store has no bound while they are held whole on the device. They could
-  take the same shape once they come as a server's tiles.

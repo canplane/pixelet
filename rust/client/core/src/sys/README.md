@@ -48,15 +48,14 @@ fragmentation. What is held only at times lives on it, the largest of it
 under caps that the build checks against the heap; `heap.rs` reads its
 counters.
 
-The heap is not the same on the web and natively. Stable Rust gives a binary
-one global allocator and no allocator per allocation, and the native library
-holds the core with xpute's runtime and host and the GPU's host. So natively
-the heap takes all of their allocations, where on the web it takes the core's
-alone, the web runtime and host being the worker's JavaScript and its GPU
-the browser's. Natively their allocations come out of the core's budget and
-can be what fills the heap, the runtime's, the GPU's and the core's threads
-take the heap's one lock, and the heap's counters count theirs too. `.fixed`
-is the same on both, since no allocator reaches it.
+The memory policy is pixelet's, declared by its terminal crate. Natively that
+crate is the library that holds the core with xpute's runtime and host and
+the GPU's host, and a binary has one global allocator, so the heap is the
+whole library's there: it takes their allocations with the core's, their
+threads take its one lock, and its counters count theirs. On the web the
+runtime and host are the worker's JavaScript and the GPU the browser's, so
+the heap takes the core's alone. `.fixed` is the same on both, since no
+allocator reaches it.
 
 The largest bodies, terrain and Earth packets of about two mebibytes, take
 slots in `.fixed` instead (`io/body.rs`): a fixed number of them, each as long

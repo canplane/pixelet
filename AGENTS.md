@@ -30,7 +30,9 @@
   the fault shows.
 - `doc/` is notes, not rules: a minute or an experiment is what was said or
   measured then, and no renaming reaches it. Read what it holds on the subject
-  before proposing, to know what was tried and why it was dropped. A minute
+  before proposing, to know what was tried and why it was dropped. It is a
+  diary, no source of what is open or decided now: nothing is reported to the
+  user as open, or as their decision, because a line there says so. A minute
   holds its meeting's conclusions, written whole while the meeting lasts; once
   it is over, a deferral found settled gets a note beneath it, as
   `doc/README.md` says.
@@ -67,6 +69,12 @@
   no pixelet domain or name; a plugin repeats the link, the guest, the host and
   the UI end under its own name. It is to be published: don't propose removing
   a part of its `kit` or its C++ because nothing here calls it.
+- The core's memory is 512 MiB on every platform (`manifest.json5` `mem.sz`),
+  and a full heap stops the core; past its bounded flows the heap has no sum.
+  Natively the library has one allocator, the core's heap, which takes the
+  runtime's and the GPU host's allocations too. The object store is temporary.
+  These are the design: none is reported as open, as a fault or as an
+  asymmetry, and none is worked on unasked.
 - Every dependency points down (the code skill); how xpute's runtime injects
   into its host is `xpute/ARCHITECTURE.md`'s.
 - The core holds the world and its rules; the UI holds the devices, the
