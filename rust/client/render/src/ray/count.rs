@@ -22,12 +22,12 @@ const WORDS: usize = count::WORDS as usize;
 pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;
-const OBSERVER_CNT_CNT: usize = LANES_AT + count::LANE_CNT as usize;
-pub const RAY_CNT_CNT: usize = count::OBSERVER_CNT as usize * OBSERVER_CNT_CNT;
+const CNT_CNT: usize = LANES_AT + count::LANE_CNT as usize;
+pub const RAY_CNT_CNT: usize = count::CAST_CNT as usize * CNT_CNT;
 
-/// Where `observer`'s count `k` is.
-pub const fn cnt_at(observer: u32, k: usize) -> usize {
-    observer as usize * OBSERVER_CNT_CNT + k
+/// Where count `k` of cast `cast_idx` is.
+pub const fn cnt_at(cast_idx: u32, k: usize) -> usize {
+    cast_idx as usize * CNT_CNT + k
 }
 
 /// One frame's counts, which land a frame or two after it. `frame` is the
@@ -45,8 +45,8 @@ pub struct RayCount {
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
     pub number: f64,
-    pub casts: [bool; count::OBSERVER_CNT as usize],
-    pub rays: [u32; count::OBSERVER_CNT as usize],
+    pub casts: [bool; count::CAST_CNT as usize],
+    pub rays: [u32; count::CAST_CNT as usize],
 }
 
 /// The buffers the passes count into. Every walk counts in the node cache's
@@ -54,8 +54,8 @@ pub(super) struct Frame {
 /// (`args`); the boxes each raster draws count in its draw's args (`boxes`).
 pub(super) struct CountBuffer {
     pub node_cache: u32,
-    pub args: [u32; count::OBSERVER_CNT as usize],
-    pub boxes: [u32; count::OBSERVER_CNT as usize],
+    pub args: [u32; count::CAST_CNT as usize],
+    pub boxes: [u32; count::CAST_CNT as usize],
 }
 
 /// The counts' array on the GPU and its readback. One copy is out at a time: it is `copied`
@@ -116,9 +116,9 @@ impl Counter {
         }
         // A bit for each cast that counts. The eye counts only in a full cast, so the
         // pixels a `px` frame casts again count nothing.
-        let mut hdr = [0u32; 1 + (count::OBSERVER_CNT * count::WALK_CNT) as usize];
-        for (o, &cast) in frame.casts.iter().enumerate() {
-            hdr[0] |= u32::from(self.on && cast) << o;
+        let mut hdr = [0u32; 1 + (count::CAST_CNT * count::WALK_CNT) as usize];
+        for (cast_idx, &ran) in frame.casts.iter().enumerate() {
+            hdr[0] |= u32::from(self.on && ran) << cast_idx;
         }
         g.write_buf(
             node_cache,
@@ -139,15 +139,15 @@ impl Counter {
             return;
         }
         self.copied = true;
-        for o in 0..count::OBSERVER_CNT {
-            let k = o as usize;
+        for cast_idx in 0..count::CAST_CNT {
+            let k = cast_idx as usize;
             if !self.frame.casts[k] {
                 continue;
             }
             for (buf, word, lane, words) in [
                 (
                     from.node_cache,
-                    node_cache::lane_at(o, count::BEAM),
+                    node_cache::lane_at(cast_idx, count::BEAM),
                     count::BEAM,
                     count::WALK_CNT,
                 ),
@@ -159,7 +159,7 @@ impl Counter {
                 ),
                 (from.boxes[k], raster::ARGS_INSTANCE_CNT, count::BOX, 1),
             ] {
-                let to = word_sz(count::at(o, lane) as usize);
+                let to = word_sz(count::at(cast_idx, lane) as usize);
                 let size = word_sz(words as usize);
                 g.copy_buf(
                     encoder,
@@ -184,15 +184,15 @@ impl Counter {
             if self.mapping[1] == result::OK {
                 let (l, f) = (&self.read_cnts, self.copying);
                 let mut cnts = [0.0; RAY_CNT_CNT];
-                for o in 0..count::OBSERVER_CNT {
-                    if !f.casts[o as usize] {
+                for cast_idx in 0..count::CAST_CNT {
+                    if !f.casts[cast_idx as usize] {
                         continue;
                     }
-                    cnts[cnt_at(o, CAST)] = 1.0;
-                    cnts[cnt_at(o, RAYS)] = f64::from(f.rays[o as usize]);
+                    cnts[cnt_at(cast_idx, CAST)] = 1.0;
+                    cnts[cnt_at(cast_idx, RAYS)] = f64::from(f.rays[cast_idx as usize]);
                     for lane in 0..count::LANE_CNT {
-                        let c = f64::from(l[count::at(o, lane) as usize]);
-                        cnts[cnt_at(o, LANES_AT + lane as usize)] = c;
+                        let c = f64::from(l[count::at(cast_idx, lane) as usize]);
+                        cnts[cnt_at(cast_idx, LANES_AT + lane as usize)] = c;
                     }
                 }
                 self.ray_cnts = Some(RayCount {

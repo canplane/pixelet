@@ -15,9 +15,9 @@ use pxl_spec::space::layer::lattice::{self, GROUND, Grid, TILE_CELLS};
 
 use super::detail::one_zoom;
 use super::*;
+use crate::domain::eye::{self, EyePose};
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::{Answer, Base as _};
-use crate::domain::observer::{self, ObserverPose};
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
@@ -119,7 +119,7 @@ pub(crate) fn step_slide_by(world: &World, from: &Q3, to: &Q3, at: &Q3, walled: 
 /// Stands the eye at `eye`. From 64 units over ground near the world's
 /// floor it draws that ground's leaf cells under it.
 pub(crate) fn set_eye(eye: V3) {
-    observer::set_pose(Some(ObserverPose {
+    eye::set_pose(Some(EyePose {
         eye,
         rot: mat4::new(),
     }));
@@ -790,7 +790,7 @@ fn body_not_shown_keeps_to_the_area() {
 fn a_read_with_no_eye_answers_a_lack() {
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
-    observer::set_pose(None);
+    eye::set_pose(None);
     let at = world::point(x + 0.5, y + 0.5, over(5.0));
     assert!(matches!(world.floor_under(&at), Answer::Lack(_)));
     assert!(matches!(
@@ -1243,5 +1243,32 @@ fn the_floor_under_a_point_over_a_deck_is_the_deck() {
         set_eye(eye);
         let floor = world.floor_under(&world::point(at[0], at[1], at[2]));
         assert_eq!(floor.val().flatten(), Some(10.0), "from {eye:?}: {floor:?}");
+    }
+}
+
+/// Where nothing is placed finer than the leaves' cells over a point, the
+/// floor under it is the same at every size finer than those cells, so the
+/// size a cell asks is bounded by what is held over it and no answer
+/// changes: over bare ground, over a cube of a leaf cell, and over bare
+/// ground whose neighboring leaf cell holds something finer, which the
+/// nodes over both cells hold too and the point's own cell does not.
+#[test]
+fn a_floor_is_the_same_at_sizes_finer_than_what_is_there() {
+    let [x, y] = flat_at_five();
+    let mut store = Store::default();
+    let red = cube::Object::Red as AssetId;
+    write(&mut store, [x + 2.0, y, 5.0], OBJECT_COARSEST, red);
+    write(&mut store, [x + 5.25, y, 5.0], OBJECT_FINEST, red);
+    let world = placed(store);
+    for (at, top) in [
+        ([x + 0.5, y + 0.5], 5.0),
+        ([x + 2.5, y + 0.5], 6.0),
+        ([x + 4.5, y + 0.5], 5.0),
+    ] {
+        for dist in [60.0, 30.0, 15.0, 8.0] {
+            set_eye([at[0], at[1] - dist, 6.5]);
+            let floor = world.floor_under(&world::point(at[0], at[1], 6.5));
+            assert_eq!(floor, Answer::Exact(Some(top)), "{at:?} from {dist}");
+        }
     }
 }

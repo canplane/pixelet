@@ -35,7 +35,7 @@ pub(crate) const fn demand_across(lattice: Lattice) -> u32 {
     (2.0 * demand_dist(lattice, LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
 }
 
-/// The most of a lattice's tiles a zoom's demand names about one observer.
+/// The most of a lattice's tiles a zoom's demand names about the eye.
 pub const fn demand_tiles(lattice: Lattice) -> u32 {
     demand_across(lattice) * demand_across(lattice)
 }

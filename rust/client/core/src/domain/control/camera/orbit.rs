@@ -317,7 +317,7 @@ fn climb_step(to: &ViewPose, from: &ViewPose, world: &World) -> ViewPose {
 /// None where it hits nothing. `draw` turns a pose into the pose as it is
 /// drawn. The way is clear when the straight line from the drawn eye to
 /// where it ends is clear and the eye ends in nothing solid, both as the
-/// observer's eye reads the world. Otherwise the way follows the
+/// eye reads the world. Otherwise the way follows the
 /// straight line in control space, as the easing does, and between samples
 /// the eye goes straight up and across (`rise_clear`). An eye that
 /// starts in something solid has hit it where it stands. The exception is

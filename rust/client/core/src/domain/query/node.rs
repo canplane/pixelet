@@ -102,8 +102,14 @@ impl World {
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let side = units(zoom);
         let middle = [c[0], c[1]].map(|v| (f64::from(v) + 0.5) * side);
-        change::report_read(middle, middle, zoom);
-        ask(&mut self.start(node), [zoom, zoom], &mut Path::default()).map(|i| {
+        let answer = ask(&mut self.start(node), [zoom, zoom], &mut Path::default());
+        change::report_read(
+            middle,
+            middle,
+            [zoom; 2],
+            matches!(answer, Answer::Exact(_)),
+        );
+        answer.map(|i| {
             if i.kind == Kind::Cell {
                 i.asset[0]
             } else {

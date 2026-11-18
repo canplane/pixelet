@@ -2,7 +2,7 @@
 
 /**
  * The shapes the platform's services share. Each service is a pair of files,
- * x.ts for the web and x.native.ts for native, and what both give and take is
+ * x.web.ts for the web and x.native.ts for native, and what both give and take is
  * named here. A place, in these names, is where the client runs: the web or a
  * native app.
  */

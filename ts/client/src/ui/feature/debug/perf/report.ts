@@ -44,7 +44,7 @@ const percentile = (s: Percentile) =>
 type RayLane<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
 
 /** The counts are the ones the `ray_cnt` setting collects, which the core
- * sums over the window's frames. Each observer, the eye and the light, gets one
+ * sums over the window's frames. Each cast, the eye's and the light's, gets one
  * line when it cast in the window. `beam`, `sample` and `hole_walk` are the
  * nodes that its beam rays, its samples and its holes' walks asked per cast,
  * and `ask_cnt` is how many of the walks' nodes were asked of the world. `voxel`,
@@ -52,7 +52,7 @@ type RayLane<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
  * visible voxel, walked on their own, or took the sky, each shown as a share
  * of all its pixels or slots (`ray_cnt`). */
 const raysText = (rays: RayCount) => {
-  const observer = (name: "eye" | "light") => {
+  const castLines = (name: "eye" | "light") => {
     const at = (lane: RayLane) => rays[`${name}_${lane}`];
     const casts = at("cast");
     if (casts === 0) return [];
@@ -75,7 +75,7 @@ const raysText = (rays: RayCount) => {
       )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("box_cnt"))} a cast`,
     ];
   };
-  return [...observer("eye"), ...observer("light")];
+  return [...castLines("eye"), ...castLines("light")];
 };
 
 const degrees = (radians: number) => (radians * 180) / Math.PI;

@@ -1,7 +1,7 @@
 // pxl-core/domain/view/frame/pose.rs
 
-//! The view as drawn: the matrices made from the observer's pose
-//! (`domain/observer.rs`), all in the world's doubles
+//! The view as drawn: the matrices made from the eye's pose
+//! (`domain/eye.rs`), all in the world's doubles
 //! (`domain/view/frame/coord.rs`). A camera controller supplies the pose,
 //! which is taken here, and nothing here depends on which one.
 
@@ -13,7 +13,7 @@ use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
-use crate::domain::observer::{self, ObserverPose};
+use crate::domain::eye::{self, EyePose};
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_global::Global;
@@ -53,8 +53,8 @@ impl View {
     /// The pose the matrices are composed at. Until the camera stands
     /// somewhere, this is a rest pose one unit over the origin, and nothing
     /// is drawn from it.
-    pub(crate) fn at(&self) -> ObserverPose {
-        observer::pose().unwrap_or(ObserverPose {
+    pub(crate) fn at(&self) -> EyePose {
+        eye::pose().unwrap_or(EyePose {
             eye: [0.0, 0.0, 1.0],
             rot: mat4::new(),
         })
@@ -86,7 +86,7 @@ pub(crate) fn view_mut() -> &'static mut View {
 /// (the orbit and first person; a tracked pose may roll, and has no heading
 /// by this). None until the camera stands somewhere.
 pub(crate) fn azimuth() -> Option<f64> {
-    let rot = observer::pose()?.rot;
+    let rot = eye::pose()?.rot;
     Some(libm::atan2(-rot[4], rot[0]))
 }
 
@@ -101,7 +101,7 @@ pub(crate) fn sea_under_eye() -> V3 {
 /// would hold an eye past the north or south edge at that edge. None until
 /// the camera stands somewhere.
 pub(crate) fn globe_anchor() -> Option<G4326> {
-    let [x, y, _] = observer::eye()?;
+    let [x, y, _] = eye::at()?;
     Some(epsg4326::from_mercator(&[
         epsg3857::merc_from_u(nearest(x, 0.0)),
         epsg3857::merc_from_u(y),
@@ -139,29 +139,29 @@ pub(crate) fn view_resize(width: f64, height: f64) {
     compose();
 }
 
-/// Takes the pose the controllers hold where it differs from the observer's
+/// Takes the pose the controllers hold where it differs from the eye's
 /// by what can be told apart, and composes the matrices from it. Returns
-/// whether the view moved. The camera moves in reals; the observer's pose is
+/// whether the view moved. The camera moves in reals; the eye's pose is
 /// what the world is seen from, and everything that looks reads it.
 ///
 /// The eye is snapped to the lattice steps the cast's rays start from
 /// (pxl-spec `world::origin`). The world the rays draw and what is
 /// rasterized on its faces (the location indicator's zone, the ghosts, the
 /// markers' anchors) are then seen from the same eye. The view moves when
-/// the camera's pose, its eye snapped, can be told apart from the observer's
+/// the camera's pose, its eye snapped, can be told apart from the eye's
 /// (`distinct`); a smaller turn is not taken, so it adds up against the
-/// pose the observer keeps until it passes.
-pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
-    let pose = pose.map(|p| ObserverPose {
+/// pose the eye keeps until it passes.
+pub(crate) fn view_compose(pose: Option<EyePose>) -> bool {
+    let pose = pose.map(|p| EyePose {
         eye: p.eye.map(|v| to_real(from_real(v))),
         ..p
     });
-    let moved = match (observer::pose(), pose) {
+    let moved = match (eye::pose(), pose) {
         (Some(cur), Some(p)) => distinct(&cur, &p),
         (cur, p) => cur.is_some() != p.is_some(),
     };
     if moved {
-        observer::set_pose(pose);
+        eye::set_pose(pose);
         compose();
     }
     moved
@@ -170,7 +170,7 @@ pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
 /// Whether two poses can be told apart in the view: their eyes are a step
 /// of the lattice or more apart along an axis, or one is turned from the
 /// other by more than `turn_step`.
-pub(crate) fn distinct(a: &ObserverPose, b: &ObserverPose) -> bool {
+pub(crate) fn distinct(a: &EyePose, b: &EyePose) -> bool {
     let step = to_real(1);
     (0..3).any(|k| (a.eye[k] - b.eye[k]).abs() >= step) || turn(&a.rot, &b.rot) > turn_step(view())
 }

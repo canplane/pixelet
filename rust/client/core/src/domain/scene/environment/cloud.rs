@@ -28,7 +28,7 @@ use pxl_spec::space::coord::world::nearest;
 use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
-use crate::domain::observer::eye;
+use crate::domain::eye;
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
@@ -193,7 +193,7 @@ pub(crate) fn step(draw: &mut DrawList, frame: &Frame) {
             *slot = model_of(file, None);
         }
     }
-    let Some(eye) = eye() else { return };
+    let Some(eye) = eye::at() else { return };
     // With no clouds showing, nothing is built or drawn, and the patches
     // already built are kept for later.
     let opacity = clouds_shown() as f32;

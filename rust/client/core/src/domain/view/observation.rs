@@ -20,10 +20,10 @@ use pxl_spec::space::hierarchy::tree::{Node, child_of};
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
+use crate::domain::eye;
 use crate::domain::layer::Base as _;
 use crate::domain::layer::floor;
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
-use crate::domain::observer::eye;
 use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::height_at;
@@ -64,7 +64,7 @@ pub(crate) fn forget_touched() {
 /// the frustum or the demand distance differs from what it was made of. None
 /// until the camera stands somewhere and the source declares its top.
 pub(crate) fn observation() -> Option<Observation> {
-    let (eye, frustum, demand_dist) = (eye(), view().frustum, eye_demand_dist());
+    let (eye, frustum, demand_dist) = (eye::at(), view().frustum, eye_demand_dist());
     let cached = OBSERVATION.get(|| None);
     let stands = match *cached {
         Some(Some(o)) => {

@@ -3,8 +3,8 @@
 use super::*;
 use crate::domain::control::camera::controller::{self, Motion};
 use crate::domain::control::camera::orbit;
+use crate::domain::eye;
 use crate::domain::layer::object::store::Store;
-use crate::domain::observer;
 use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, placed};
 use crate::domain::query::unknown;
@@ -15,7 +15,7 @@ fn frames(cnt: u32) {
     for _ in 0..cnt {
         dst_step();
         orbit::step(1.0);
-        observer::set_pose(controller::pose());
+        eye::set_pose(controller::pose());
     }
 }
 
@@ -26,7 +26,7 @@ fn frames(cnt: u32) {
 fn a_camera_sent_somewhere_has_an_eye_and_stands_by_it() {
     let [x, y] = flat_at_five();
     placed(Store::default());
-    observer::set_pose(None);
+    eye::set_pose(None);
     assert!(controller::pose().is_none(), "no eye yet");
     go_to_ground(unknown(&world::point(x + 0.5, y + 0.5, 0.0)), Motion::Snap);
     dst_step();
@@ -43,7 +43,7 @@ fn a_camera_sent_somewhere_has_an_eye_and_stands_by_it() {
 fn a_height_picks_the_floor_nearest_it_once_the_eye_is_there() {
     let [x, y] = flat_at_five();
     placed(Store::default());
-    observer::set_pose(None);
+    eye::set_pose(None);
     go_to_ground(world::point(x + 0.5, y + 0.5, 7.0), Motion::Snap);
     dst_step();
     assert!(pending().is_some(), "not reached before an eye reads there");

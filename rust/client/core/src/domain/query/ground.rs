@@ -45,15 +45,19 @@ impl World {
         }
         let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
-        change::report_read(middle, middle, cell_zoom);
         let line = IndexedTerrainTile::tile_cache().cursor((cell_zoom, c), cell_zoom);
-        IndexedTerrainTile::tile_cache()
-            .ground(&line, Lookup::NONE, (cell_zoom, c))
-            .map(|cell| {
-                cell.is_grounded().then(|| Ground {
-                    ele_u: f64::from(cell.ele_cells) * units(cell_zoom),
-                    asset_id: cell.asset_id as GroundId,
-                })
+        let ground = IndexedTerrainTile::tile_cache().ground(&line, Lookup::NONE, (cell_zoom, c));
+        change::report_read(
+            middle,
+            middle,
+            [cell_zoom; 2],
+            matches!(ground, Answer::Exact(_)),
+        );
+        ground.map(|cell| {
+            cell.is_grounded().then(|| Ground {
+                ele_u: f64::from(cell.ele_cells) * units(cell_zoom),
+                asset_id: cell.asset_id as GroundId,
             })
+        })
     }
 }

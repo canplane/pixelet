@@ -40,7 +40,9 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 /// The cell zoom a walk asks at `at`: the size the eye sets there
 /// (`change::size`). None with no eye.
 pub(crate) fn cell_zoom_read(at: V3) -> Option<Zoom> {
-    change::size([at[0], at[1]], Some(at[2]))
+    let (xy, z) = ([at[0], at[1]], Some(at[2]));
+    let eye_zoom = change::eye_zoom(xy, z)?;
+    Some(change::size(xy, z, eye_zoom, eye_zoom))
 }
 
 /// The cell zoom the eye's rays draw the ground with at `at`: the zoom a walk
@@ -58,7 +60,7 @@ pub(crate) fn cell_zoom_drawn(at: V3) -> Option<Zoom> {
 /// character is drawn, and a walk is walked, only where this holds; with no
 /// eye nothing shows.
 pub(crate) fn body_shown(at: V3) -> bool {
-    change::size([at[0], at[1]], Some(at[2])).is_some_and(body_shown_at)
+    cell_zoom_read(at).is_some_and(body_shown_at)
 }
 
 /// `body_shown` where the eye sets the size `cell_zoom`.
@@ -174,7 +176,7 @@ impl<'w> SplitCell<'w> {
     /// It starts from the cell drawn at the point over `xy` nearest the eye,
     /// the finest the cells over `xy` can be drawn with.
     fn over(world: &'w World, xy: [f64; 2], path: Path) -> Option<(SplitCell<'w>, Option<f64>)> {
-        let c = SplitCell::of(world, xy, change::size(xy, None)?, path);
+        let c = SplitCell::of(world, xy, None, path)?;
         Some(c.settled(xy, |c| c.ele_u()))
     }
 
@@ -208,33 +210,32 @@ impl<'w> SplitCell<'w> {
     /// is known (`of`): a body takes its size from its own distance from the
     /// eye, on a deck as on the ground under it. None with no eye.
     fn at(world: &'w World, at: V3, path: Path) -> Option<SplitCell<'w>> {
-        let xy = [at[0], at[1]];
-        Some(SplitCell::of(
-            world,
-            xy,
-            change::size(xy, Some(at[2]))?,
-            path,
-        ))
+        SplitCell::of(world, [at[0], at[1]], Some(at[2]), path)
     }
 
-    /// The cell over `xy` where the eye sets the size `size`: the cell the
-    /// ground is drawn with there (`drawn`), split as finely as that size
-    /// reads and anything is placed in it. What it asks of the world it asks
-    /// at that size (`asks`).
-    fn of(world: &'w World, xy: [f64; 2], size: Zoom, path: Path) -> SplitCell<'w> {
-        let zoom = GROUND.read_zoom(drawn(size));
+    /// The cell over `xy` at the height `z`, or with none at the eye's own
+    /// height, the point over `xy` nearest the eye: the cell the ground is
+    /// drawn with at the size the eye sets there (`drawn`), split as finely
+    /// as that size reads and anything is placed in it. What it asks of the
+    /// world it asks at that size, no finer than the world holds over the
+    /// cell: the leaves' cells, or the finest placed there (`asks`). A size
+    /// finer than that is the same cells asked again, so it is no other
+    /// size, and what is placed there changing is the world's change. None
+    /// with no eye.
+    fn of(world: &'w World, xy: [f64; 2], z: Option<f64>, path: Path) -> Option<SplitCell<'w>> {
+        let eye_zoom = change::eye_zoom(xy, z)?;
+        let zoom = GROUND.read_zoom(drawn(eye_zoom));
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
-        let over = Aabb {
+        let finest_placed = world.finest_in(&Aabb {
             min: [corner[0], corner[1], BOUND.min[2]],
             max: [corner[0] + side, corner[1] + side, BOUND.max[2]],
-        };
-        let asks = size.max(cell_zoom);
-        let finer = world
-            .finest_in(&over)
-            .map_or(0, |z| z.min(asks).saturating_sub(cell_zoom));
-        SplitCell {
+        });
+        let finest = finest_placed.unwrap_or(GROUND.leaf_cell_zoom());
+        let asks = change::size(xy, z, eye_zoom, finest).max(cell_zoom);
+        let finer = finest_placed.map_or(0, |z| z.min(asks).saturating_sub(cell_zoom));
+        Some(SplitCell {
             world,
             corner,
             side: side / f64::from(1u32 << finer),
@@ -244,7 +245,7 @@ impl<'w> SplitCell<'w> {
             asks,
             path,
             descent: None,
-        }
+        })
     }
 
     /// For each part, the box of the first cell that its ray from the
@@ -534,9 +535,10 @@ impl World {
     /// Earth, which holds nothing above sea level.
     ///
     /// The walk is walked only where the eye draws a body at both its ends
-    /// (`body_shown`), so it is no longer than the eye draws a body across; a
-    /// `from` of unknown height is stood first, the one read such a move
-    /// makes. Otherwise, and where `from` cannot be stood or what the eye
+    /// (`body_shown`), so it is no longer than the eye draws a body across. A
+    /// `from` of unknown height is stood first: a body shows at a point, and
+    /// that read is what tells where the body is, so it comes before the
+    /// test and is the one read a move makes of a body not drawn. Otherwise, and where `from` cannot be stood or what the eye
     /// asks on the way is not held, there is no body for the eye and no wall
     /// its size: it ends at `to` with its height not known, and one `walled`
     /// stays where it is rather than leave the area.

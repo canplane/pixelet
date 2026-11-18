@@ -17,7 +17,7 @@ fn pick_ray_matches_view() {
     );
     let mut rot = look;
     rot[12..15].fill(0.0);
-    let pose = ObserverPose {
+    let pose = EyePose {
         eye: [10.0, -20.0, 30.0],
         rot,
     };
@@ -46,11 +46,11 @@ fn pick_ray_matches_view() {
 }
 
 /// A pose at `eye` turned `rad` about the world's up.
-fn pose_at(eye: V3, rad: f64) -> ObserverPose {
+fn pose_at(eye: V3, rad: f64) -> EyePose {
     let (s, c) = (libm::sin(rad), libm::cos(rad));
     let mut rot = mat4::new();
     (rot[0], rot[1], rot[4], rot[5]) = (c, s, -s, c);
-    ObserverPose { eye, rot }
+    EyePose { eye, rot }
 }
 
 /// The view takes a turn only once it can be told apart on the screen: a
@@ -64,15 +64,15 @@ fn view_takes_turn_past_step() {
     assert!(view_compose(Some(pose_at(eye, 0.0))));
     // Half a CSS pixel at this screen's corner is about 3.4e-4 rad.
     assert!(!view_compose(Some(pose_at(eye, 1e-4))));
-    assert_eq!(observer::pose(), Some(pose_at(eye, 0.0)));
+    assert_eq!(eye::pose(), Some(pose_at(eye, 0.0)));
     assert!(!view_compose(Some(pose_at(eye, 2e-4))));
     assert!(!view_compose(Some(pose_at(eye, 3e-4))));
     assert!(view_compose(Some(pose_at(eye, 4e-4))));
-    assert_eq!(observer::pose(), Some(pose_at(eye, 4e-4)));
+    assert_eq!(eye::pose(), Some(pose_at(eye, 4e-4)));
     assert!(!view_compose(Some(pose_at(eye, 5e-4))));
     let eye_to = [eye[0] + 1.0, eye[1], eye[2]];
     assert!(view_compose(Some(pose_at(eye_to, 5e-4))));
-    assert_eq!(observer::pose(), Some(pose_at(eye_to, 5e-4)));
+    assert_eq!(eye::pose(), Some(pose_at(eye_to, 5e-4)));
     assert!(view_compose(None));
     assert!(!view_compose(None));
 }

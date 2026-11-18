@@ -20,7 +20,7 @@ use pxl_spec::space::coord::v3::V3;
 use xpute_kit::math::scalar::wrap;
 
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR, ROT_DAMP};
-use crate::domain::observer::ObserverPose;
+use crate::domain::eye::EyePose;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::frame::pose;
 
@@ -112,11 +112,11 @@ pub(crate) fn ease_facing(cam: &mut Camera, polar: f64, polar_rate: f64, azimuth
 pub(crate) fn eases_toward(cam: &Camera, eye_to: V3, polar: f64, azimuth: f64) -> bool {
     cam.eye.is_some_and(|eye| {
         pose::distinct(
-            &ObserverPose {
+            &EyePose {
                 eye,
                 rot: facing_rot(cam.polar, cam.azimuth),
             },
-            &ObserverPose {
+            &EyePose {
                 eye: eye_to,
                 rot: facing_rot(polar, azimuth),
             },

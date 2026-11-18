@@ -1056,7 +1056,7 @@ fn rec_case(
             .then(|| (k - at) / n)
     };
     tally.compare_by(
-        &format!("{name}, the observer's words"),
+        &format!("{name}, the cast's words"),
         &want,
         &got,
         |k| match ask_of(k) {

@@ -15,9 +15,9 @@ use crate::domain::control::camera::controller::dist;
 use crate::domain::control::edit::write;
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
+use crate::domain::eye;
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
-use crate::domain::observer;
 use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
@@ -107,9 +107,8 @@ fn snapshot_input() -> SnapshotInput {
     // view whose tiles all show, even where some show at a coarser zoom. A
     // finer tile asked for as the eye moves is not the area loading, and
     // counting it would flash the loading toast each time.
-    let ground_shown = observer::eye().is_some()
-        && screen_shows_world()
-        && IndexedTerrainTile::tile_cache().is_shown();
+    let ground_shown =
+        eye::at().is_some() && screen_shows_world() && IndexedTerrainTile::tile_cache().is_shown();
     SnapshotInput {
         ground_shown,
         is_off_center: off_center().is_off_center,

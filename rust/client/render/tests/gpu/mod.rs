@@ -459,7 +459,7 @@ impl Gpu {
             assert_eq!(
                 self.read(node_cache)[other_asked],
                 before,
-                "the asks of queue {queue_no} were counted in the other observer's lane"
+                "the asks of queue {queue_no} were counted in the other cast's lane"
             );
             if self.asks_spent.get() || words[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
                 return;

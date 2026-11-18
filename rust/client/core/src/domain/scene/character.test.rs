@@ -129,8 +129,35 @@ fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     set_eye([at[0], at[1] - 3.0, 8.0]);
     let mut memo = Memo::NONE;
     let stands = point(at[0], at[1], over(5.0));
-    let [drawn_x, drawn_y, _] = drawn_at(&mut memo, stands, 5.0, 0.25);
+    let ([drawn_x, drawn_y, _], _) = drawn_at(&mut memo, stands, 5.0, 0.25);
     assert_eq!([drawn_x, drawn_y], [x + 0.75, y + 0.5]);
+}
+
+/// Where the eye draws no body there is none to stand: a walk's floors are
+/// not asked, and it is where it stands on the floor it holds; where a body
+/// shows again they are asked.
+#[test]
+fn a_body_not_shown_asks_no_floor() {
+    use crate::domain::layer::object::store::Store;
+    use crate::domain::query::change::Memo;
+    use crate::domain::query::over;
+    use crate::domain::query::test::{flat_at_five, placed};
+    use crate::domain::scene::character::companion::drawn_at;
+    use pxl_spec::space::coord::world::point;
+    let [x, y] = flat_at_five();
+    placed(Store::default());
+    let at = [x + 0.5, y + 0.5];
+    // The walk holds a floor the ground does not have there.
+    let stands = point(at[0], at[1], over(7.0));
+    let mut memo = Memo::NONE;
+    set_eye([at[0], at[1] - 400.0, 8.0]);
+    assert_eq!(
+        drawn_at(&mut memo, stands, 7.0, 0.25).0,
+        [at[0], at[1], 7.0]
+    );
+    assert!(!memo.keeps(&(stands, 7.0)), "nothing was asked");
+    set_eye([at[0], at[1] - 30.0, 8.0]);
+    assert_eq!(drawn_at(&mut memo, stands, 7.0, 0.25).0[2], 5.0);
 }
 
 /// Whether a character alone at `dist` from the eye is drawn after a tick,

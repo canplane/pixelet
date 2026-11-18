@@ -366,8 +366,8 @@ fn hand_end(line: u32, parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>) ->
 /// (`node_cache::CNT_ON`, `node_cache::lane_at`). Each cast's lanes lie `CNT_WALK_CNT`
 /// words after the previous cast's, starting from the eye's.
 fn counts(at: u32) -> bool {
-  let observer = (at - EYE_BEAM_CNT) / CNT_WALK_CNT;
-  return ((node_cache_word(CNT_ON) >> observer) & 1u) != 0u;
+  let cast_idx = (at - EYE_BEAM_CNT) / CNT_WALK_CNT;
+  return ((node_cache_word(CNT_ON) >> cast_idx) & 1u) != 0u;
 }
 
 fn count_visits(at: u32, visits: u32) {

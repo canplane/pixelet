@@ -1,20 +1,22 @@
 // pxl-core/domain/query/change.rs
 
 //! Where the ground's answers moved since the frame before: the ground
-//! tiles and clipmap bricks whose answer moved, by identity, which fixes their
-//! contents, and the boxes where objects were written. A reader that keeps an answer asks again
-//! only when one of these touches the rect it read, which its queries
-//! report (`Read`). A change so reaches only the readers of the ground
-//! it touches. An answer is of a cell at a size, and the world's alone; the
-//! eye's part is the size, so a kept answer is kept until the eye sets
-//! another size for a cell it read (`Read::holds`), as a voxel found once is
-//! drawn until the eye's distance asks another zoom there.
+//! tiles and clipmap bricks whose answer moved, by identity, which fixes
+//! their contents, and the boxes where objects were written. An answer is of
+//! a cell at a size, and the world's alone, so a reader that keeps one
+//! (`Memo`) asks again only when the world changes in what it read or the
+//! eye sets another size for a cell it read. Its queries report what they
+//! read (`Read`): the rect, the cell zooms and whether each read was exact.
+//! A change reaches it where it touches that rect at a zoom it read
+//! (`Read::reaches`); the eye's part is the size (`Read::holds`), as a voxel
+//! found once is drawn until the eye's distance asks another zoom there.
 
 use super::detail::grid_zoom;
+use crate::domain::eye;
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
-use crate::domain::observer;
+use pxl_engine::clipmap;
 use pxl_global::Global;
 use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -67,14 +69,6 @@ pub(crate) fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     touched(xy, layer, |_| true)
 }
 
-/// Whether the ground node `t` is at the zoom of the leaf cells' tile or of
-/// their clip level's brick. A coarser level's brick that shares the tile's
-/// zoom counts too.
-fn at_leaf(t: &Quadrant) -> bool {
-    let cell_zoom = GROUND.leaf_cell_zoom();
-    t.zoom == cell_zoom - GROUND.tile_cell_shamt() || t.zoom == brick::bricks_zoom(cell_zoom)
-}
-
 /// `within`, of the ground nodes `counted` picks.
 fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) -> bool) -> bool {
     let rect = Aabb {
@@ -94,11 +88,13 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
 }
 
 /// A size the eye set for a read: the camera grid's zoom at a point's
-/// distance from it (query/detail.rs `grid_zoom`), with the point.
+/// distance from it (query/detail.rs `grid_zoom`), no finer than `finest`, the
+/// finest the world holds where it was asked, with the point.
 #[derive(Clone, Copy, PartialEq)]
 struct Size {
     xy: [f64; 2],
     z: Option<f64>,
+    finest: Zoom,
     zoom: Zoom,
 }
 
@@ -116,11 +112,15 @@ enum Taken {
 /// What the queries read for a memo's ask (`Memo::of`): the rect read, as
 /// one box with its corners in units and X on the lap of the first cell
 /// read, where a ray reads the cells it passes at the coarsest zoom it is
-/// answered at and a cell or a surface its cell; and what they took
-/// of the eye.
+/// answered at and a cell or a surface its cell; the cell zooms read, from
+/// the coarsest to the finest, and whether every read was exact, answered by
+/// the ground held at the zoom asked with nothing standing in for it; and
+/// what they took of the eye.
 #[derive(Clone)]
 struct Read {
     rect: Option<[[f64; 2]; 2]>,
+    cell_zoom_range: Option<[Zoom; 2]>,
+    exact: bool,
     taken: Taken,
 }
 
@@ -128,21 +128,42 @@ impl Default for Read {
     fn default() -> Self {
         Read {
             rect: None,
+            cell_zoom_range: None,
+            exact: true,
             taken: Taken::Sizes(Vec::new()),
         }
     }
 }
 
 impl Read {
+    /// Whether a change of the ground node `t` may change what was read. A
+    /// read at a cell zoom reads the ground's cells of that zoom, off the
+    /// node of that zoom or, where it is not held, off a coarser one
+    /// standing in; it reads nothing finer. So a node whose cells are finer
+    /// than every zoom read changes nothing, and neither does one whose
+    /// cells are coarser than every zoom read where every read was exact: a
+    /// node's own cells never change, so a coarser one over an exact read
+    /// changes only what is held. A node's cells are its tile's or its
+    /// brick's, and it counts as either.
+    fn reaches(&self, t: &Quadrant) -> bool {
+        let Some([coarsest, finest]) = self.cell_zoom_range else {
+            return true;
+        };
+        let cells = [GROUND.tile_cell_shamt(), brick::BRICK_SHIFT].map(|shift| t.zoom + shift);
+        let finer = cells[0].min(cells[1]) > clipmap::clip_zoom(finest);
+        let coarser = cells[0].max(cells[1]) < clipmap::clip_zoom(coarsest);
+        !(finer || self.exact && coarser)
+    }
+
     /// Whether the eye `now` is given what this read was given, the world
     /// unchanged: it sets each size again, or, for a read of the eye where it
     /// stood, stands there.
     fn holds(&self, now: Option<V3>) -> bool {
         match (&self.taken, now) {
             (Taken::Eye(eye), _) => *eye == now,
-            (Taken::Sizes(sizes), Some(eye)) => {
-                sizes.iter().all(|s| grid_zoom(eye, s.xy, s.z) == s.zoom)
-            }
+            (Taken::Sizes(sizes), Some(eye)) => sizes
+                .iter()
+                .all(|s| grid_zoom(eye, s.xy, s.z).min(s.finest) == s.zoom),
             (Taken::Sizes(sizes), None) => sizes.is_empty(),
         }
     }
@@ -163,9 +184,12 @@ fn reads<A>(ask: impl FnOnce() -> A) -> (A, Read) {
     (a, core::mem::replace(read(), outer).unwrap_or_default())
 }
 
-/// Reports the cells of `zoom` that the box from `a` to `b` lies in as read.
-pub(super) fn report_read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
-    let side = units(zoom);
+/// Reports a read of the cells that the box from `a` to `b` lies in, at the
+/// cell zooms from `coarsest` to `finest`, the rect being the coarsest's
+/// cells, and whether it was `exact`: answered by the ground held at each
+/// zoom asked, nothing coarser standing in and nothing lacked.
+pub(super) fn report_read(a: [f64; 2], b: [f64; 2], [coarsest, finest]: [Zoom; 2], exact: bool) {
+    let side = units(coarsest);
     let [lo, hi] = [
         [0, 1].map(|k| a[k].min(b[k])),
         [0, 1].map(|k| a[k].max(b[k])),
@@ -174,6 +198,17 @@ pub(super) fn report_read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
         lo.map(|v| libm::floor(v / side) * side),
         hi.map(|v| (libm::floor(v / side) + 1.0) * side),
     ]);
+    join_zooms([coarsest, finest], exact);
+}
+
+/// Joins to what was read the cell zooms a read was made at and whether it
+/// was exact.
+fn join_zooms([coarsest, finest]: [Zoom; 2], exact: bool) {
+    let Some(r) = read() else { return };
+    r.cell_zoom_range = Some(r.cell_zoom_range.map_or([coarsest, finest], |[c, f]| {
+        [c.min(coarsest), f.max(finest)]
+    }));
+    r.exact &= exact;
 }
 
 /// Reports the rect `cells` as read, moved onto the lap of the first
@@ -192,33 +227,46 @@ fn join(cells: [[f64; 2]; 2]) {
     });
 }
 
-/// The eye where it stands, for a ray across what the eye sees: the read is
+/// Where the eye stands, for a ray across what the eye sees: the read is
 /// then of the eye there (`Taken::Eye`).
-pub(super) fn eye() -> Option<V3> {
-    let eye = observer::eye();
+pub(super) fn eye_at() -> Option<V3> {
+    let at = eye::at();
     if let Some(r) = read() {
-        r.taken = Taken::Eye(eye);
+        r.taken = Taken::Eye(at);
     }
-    eye
+    at
 }
 
-/// The size the eye sets over `xy` at the height `z`, or with none at the
+/// The zoom the eye sets over `xy` at the height `z`, or with none at the
 /// eye's own height (query/detail.rs `grid_zoom`). None with no eye: nothing
 /// is observed, and the read is of there being none.
-pub(super) fn size(xy: [f64; 2], z: Option<f64>) -> Option<Zoom> {
-    let Some(at) = observer::eye() else {
-        eye();
+pub(super) fn eye_zoom(xy: [f64; 2], z: Option<f64>) -> Option<Zoom> {
+    let Some(at) = eye::at() else {
+        eye_at();
         return None;
     };
-    let zoom = grid_zoom(at, xy, z);
+    Some(grid_zoom(at, xy, z))
+}
+
+/// The size a read asks over `xy` at the height `z` where the eye sets
+/// `eye_zoom` (`eye_zoom`) and the world holds nothing finer than `finest`
+/// there: the eye's, no finer than is held. It is what the read took of the
+/// eye, kept with the answer.
+pub(super) fn size(xy: [f64; 2], z: Option<f64>, eye_zoom: Zoom, finest: Zoom) -> Zoom {
+    let zoom = eye_zoom.min(finest);
     if let Some(Read {
         taken: Taken::Sizes(sizes),
         ..
     }) = read()
     {
-        sizes.push(Size { xy, z, zoom });
+        sizes.push(Size {
+            xy,
+            z,
+            finest,
+            zoom,
+        });
     }
-    Some(zoom)
+    zoom
 }
 
 /// Reports to the memo asking now what a memo within its ask read.
@@ -226,9 +274,12 @@ fn report(inner: &Read) {
     if let Some(rect) = inner.rect {
         join(rect);
     }
+    if let Some(zooms) = inner.cell_zoom_range {
+        join_zooms(zooms, inner.exact);
+    }
     match (&inner.taken, read()) {
         (Taken::Eye(_), _) => {
-            eye();
+            eye_at();
         }
         (
             Taken::Sizes(sizes),
@@ -244,9 +295,9 @@ fn report(inner: &Read) {
 /// An answer a step got from the world, kept with the key it was asked for,
 /// and what it read (`Read`). It is asked again
 /// only when the key changes, when the eye is not given what the read took
-/// of it (`Read::holds`), or when a change to the ground or the
-/// object layer touched the rect read (`forget_touched`). An answer that
-/// read no rect is not kept, since no change would ever tell it to go.
+/// of it (`Read::holds`), or when the world changed in what it read
+/// (`forget_touched`). An answer that read no rect is not kept, since no
+/// change would ever tell it to go.
 #[derive(Clone)]
 pub(crate) struct Memo<K, A>(Option<Kept<K, A>>);
 
@@ -262,32 +313,16 @@ impl<K, A> Default for Memo<K, A> {
 impl<K: PartialEq, A: Copy> Memo<K, A> {
     pub(crate) const NONE: Memo<K, A> = Memo(None);
 
-    /// Drops the answer when a change touched its rect. The caller calls
-    /// this every frame, so that it sees each change once (`within`).
+    /// Drops the answer when the world changed in what it read: an object
+    /// written over its rect, or a ground node over its rect whose change
+    /// may change what was read at the zooms it read (`Read::reaches`). The
+    /// caller calls this every frame, so that it sees each change once
+    /// (`within`).
     pub(crate) fn forget_touched(&mut self) {
-        self.forget(|rect, _| within(rect, &[]));
-    }
-
-    /// `forget_touched`, for an answer of the ground at its leaf. `exact` says
-    /// of the kept answer whether every read of it was exact. A base tile
-    /// never changes, so a coarser tile or brick over the rect of an exact
-    /// answer changes only what is held, and only the leaf's own nodes and
-    /// what objects wrote drop it. An answer not exact goes as in
-    /// `forget_touched`, since a coarser node can be what answered it.
-    pub(crate) fn forget_touched_at_leaf(&mut self, exact: impl Fn(&A) -> bool) {
-        self.forget(|rect, a| match exact(a) {
-            true => touched(rect, &[], at_leaf),
-            false => within(rect, &[]),
-        });
-    }
-
-    /// Drops the answer where `touched` says so of its rect.
-    fn forget(&mut self, touched: impl Fn([[f64; 2]; 2], &A) -> bool) {
-        if self
-            .0
-            .as_ref()
-            .is_some_and(|(_, read, a)| read.rect.is_some_and(|c| touched(c, a)))
-        {
+        if self.0.as_ref().is_some_and(|(_, read, _)| {
+            read.rect
+                .is_some_and(|rect| touched(rect, &[], |t| read.reaches(t)))
+        }) {
             self.0 = None;
         }
     }
@@ -297,7 +332,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     pub(crate) fn keeps(&self, of: &K) -> bool {
         self.0
             .as_ref()
-            .is_some_and(|(k, read, _)| k == of && read.holds(observer::eye()))
+            .is_some_and(|(k, read, _)| k == of && read.holds(eye::at()))
     }
 
     /// The answer for `of`: the kept one, or else what `ask` gets, with what
