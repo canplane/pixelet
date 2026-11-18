@@ -44,6 +44,7 @@ export function app(root: string) {
         at("plugin/android-build.ts"),
         at("plugin/ios-build.ts"),
         at("plugin/ios-scene.ts"),
+        at("plugin/generated.ts"),
       ],
     },
   };
