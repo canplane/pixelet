@@ -1,11 +1,13 @@
 ---
 name: performance
-description: How a performance problem in pixelet is analyzed and a change to it judged — the contracts a change keeps, the cause found in the code, measurement only to confirm, and a three-line report. Use for any profiling, performance analysis or optimization, in the renderer, the core, the UI or the tools. Whether a shader is correct is the shader skill's.
+description: How a performance problem in pixelet is analyzed and a change to it judged — the contracts a change keeps, the cause found in the code, measurement only to confirm, and a three-line report. Use for any performance analysis or optimization, in the renderer, the core, the UI or the tools. Taking a measurement is the measure skill's; whether a shader is correct, the shader skill's.
 ---
 
 # Performance
 
 Make the program faster while keeping every condition the design met.
+
+## What a change keeps
 
 - Name the contracts the change touches first; changing one is a design change,
   proposed on its own.
@@ -13,117 +15,16 @@ Make the program faster while keeping every condition the design met.
   measurement does not put a part in or take it out.
 - Find the cause in the code: predict from the structure what it costs and why.
   A costly function is where the time went, not proof its body is wrong.
-- One scenario on every platform, the app's alone: `perf/measure.ts` holds where
-  it stands, how long a load settles and what it reads; `perf/drive.ts` holds
-  the settings, the path and the window. A script holds none of it.
-- A measured build takes `PXL_PERF_DRIVE=1` where it is built and served, and is
-  dev or release, always said with its figures and never mixed:
-  - dev: the web's is `PXL_PERF_DRIVE=1 make dev`; the native one is the
-    device-build skill's Debug build on `PXL_PERF_DRIVE=1 make dev-native`
-    (`METRO_PORT` when that Metro is not on 8081).
-  - release: the web's is `PXL_PERF_DRIVE=1 make preview`; the native one is the
-    device-build skill's Release build with the variable set.
+- A measurement confirms what the code predicted and is taken as the measure
+  skill says ([measure](../measure/SKILL.md)).
 
-  When the measuring ends, the device takes a Release built without it.
-- One script a vendor, each one run: `script/perf/<vendor>.py <target> <dir>`.
-  `chrome`, `safari`, `android-chrome` and `ios-safari` take a URL,
-  `android-app` an APK, `ios-app` an app with `IOS_DEVICE` set to its devicectl
-  id. `android-app` installs afresh, which removes the app's data; `ios-app`
-  installs over what is there, which keeps it; `android-chrome` clears the
-  site's data and turns the cache off in its own tab.
-- A run starts its browser or app afresh and ends it, so no run shares a
-  process or a GPU's with one before; where it cannot start afresh it starts
-  none and says what runs. Close Safari before a run. `chrome` opens a fresh
-  profile's Chrome of its own, `android-chrome` stops the phone's Chrome before
-  it starts it, the apps are launched afresh, and whether the iPhone's Safari
-  runs is not read.
-- A run measures a page or an app shown from the core's start to its result
-  (`perf/measure.ts`). A window wholly over it, the window minimized or on
-  another Space, another tab in front, or the app not active hides it,
-  and the run ends with `the page is hidden`; a window beside it or over part
-  of it does not. Nothing raises a window: a run that needs the screen waits
-  until the user can leave it shown.
-- A phone that locks itself ends a run: a run takes longer than a minute, and a
-  locked iPhone drops safaridriver's session with nothing said, the progress
-  lines stopping at 45 to 70 s. Before a phone's runs, ask the user to set its
-  auto-lock to never (the iPhone) or keep the screen on while plugged in (the
-  Android phone, `adb shell svc power stayon usb`, put back after), and to
-  leave Safari's Remote Automation on and no private tab in front.
-- Every run writes the same into `<dir>`, and all of it is read: `values.json`
-  (`build`, `longest`, `gpu`, `tick`, `drawn`) for the comparison, `report.txt` for where
-  the time went, `trace.json` at ui.perfetto.dev for a frame on the timeline;
-  and, however the run ends, `log.txt` and `shots/`. `log.txt` holds, each
-  after the run's seconds, every line the app wrote but the result, the host's
-  own among them (a core's stop, a device lost, an uncaptured error), then
-  why the run ended. The app's progress is a line a second from the core's start,
-  whatever the core answers (`PXLRUN`: whether it is shown, the boot's state,
-  how long the core's read has gone unanswered, then perf.json5 NOW `draw` as
-  last answered: its frames, the granted frames that did not run by
-  why, the device's generation, STATUS, uncaptured errors and unfinished
-  frames). Each capture, every `CAPTURE_S` (script/perf/measure.py), is a
-  `shot` of the screen into `shots/` and the device's `state`: first how busy
-  the device's GPU is, whoever keeps it busy (`gpu_util`, `None` on an
-  iPhone, which reads none), then the phone's GPU clock and AP temperature;
-  the Mac Safari's GPU process's aborted command buffers, and Chrome's log of
-  its GPU process, each then with the CPU its page, its GPU process and the
-  Metal compiler took. A
-  reach that has not started within `START_S` ends the run, saying so.
-- What a run needs to explain itself (its progress, the screen, the device's
-  state) comes through the one path every platform shares; no run adds a
-  script, a log or a capture of its own. A symptom seen on the screen is read
-  off the run's captures beside its numbers.
-- What the app's files cannot see is a device's system trace, taken beside
-  a run: `adb shell perfetto --background -o /data/misc/perfetto-traces/<name> -t
-  <n>s -b 256mb sched freq idle am wm gfx view input hal binder_driver -a
-  me.plei.pixelet`, pulled and queried with Perfetto's `trace_processor`. Read
-  `QueuePresentKHR` for the present's wait and the frames a second, `postAndWait`
-  and RenderThread's `dequeueBuffer` for the main thread's stalls, and the threads'
-  run time for the CPU.
-- The drive goes through the core's input and proves nothing of a touch. A touch
-  is measured on a build without `PXL_PERF_DRIVE`, by `adb shell input swipe` under
-  a system trace, and read as `QueuePresentKHR` a second and `topTouchMove` a second.
-- A phone slows as it heats. Each figure on a device says its temperature, from
-  its run's `state` lines, and a run starts as the phone stands.
-- The iPhone's memory is `memory-physical-footprint` in `sysmon-process`, from
-  `xcrun xctrace record --device <id> --template 'Activity Monitor' --all-processes
-  --time-limit <n>s` started after the launch, and `Jetsam` records from `xcrun
-  devicectl device info files --domain-type systemCrashLogs`.
-- A measurement has one purpose of two, never both. To watch for a regression,
-  the tree before the change and the change are compared by turns, on the
-  Android phone's Chrome and on the Mac's Safari. To record where the project
-  stands, the final commit alone is measured on every platform it runs on (the
-  Android phone's Chrome and app, the iPhone's Safari and app, the Mac's Chrome
-  and Safari) and compared with nothing.
-- One run decides nothing. A difference is said only of rounds taken by turns
-  on one device, and a rise is first read in the code: the report's `steps` and
-  `spans` name where the time went. A run whose device another process kept
-  busy (its `state` lines) is void and is run again with its device to itself.
-- The Mac's Safari stalls by WebKit's own fault
-  (`doc/gpu/lesson/the-gpu-is-shared.md`, `doc/upstream.md`): the frames stop
-  at once, `gpu_util` stands at 100% with the page's and its GPU process's CPU
-  at 0%, and the core may stop in `createCommandEncoder` or a mapped range. Such
-  a run is void and is no finding against a change: Safari is quit, the WebKit
-  processes left exiting are counted (`ps`; only a reboot clears them, which is
-  the user's), nothing else uses the Mac's GPU, and the run is taken again.
-- `script/perf/gate.py <vendor> <base> <change> [rounds]` runs
-  only when the user orders a comparison, on the two builds they name, the
-  deployed build included. It only assembles: it runs the vendor's script on them
-  by turns, keeps each run under `tmp/perf/` and compares their `values.json`.
-  Runs that drew unlike counts of pixels (`drawn`) are not compared: the Mac's
-  Chrome draws 3840 × 2160 wherever its window opens, and every other window
-  draws what its screen gives it, so the Mac's Safari draws another picture on
-  another screen. A record says what each platform drew.
-- Devices are apart: a phone's runs and the Mac's go side by side, and only one
-  device's own runs go one at a time. A build that is ready is measured without
-  waiting on another device's work.
-- Of the two a regression is watched on, the Android phone's Chrome (Tint,
-  Vulkan, a weak mobile GPU) decides performance, hot, and the Mac's Safari
-  (WebKit's compiler, Metal) stands for the iPhone. The Mac's Chrome only shows
-  a page running: its figure enters a record and decides nothing. Mobile web is
-  the minimum; no polyfill or fallback for what time will fix.
+## The record
+
 - Each experiment gets a journal entry under `doc/experiment/`, or
   `doc/gpu/experiment/` for the GPU's: tried, came of it, how we know, kept or
   dropped.
+
+## The report
 
 Report in three lines: the structure kept; the cost removed and what was added;
 the effect checked and the range not checked.

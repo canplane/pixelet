@@ -55,17 +55,9 @@ the page's.
 
 ## Check
 
-- A measuring drive does not show the input path. Touch the screen, with
-  `adb shell input swipe` under a system trace, and count `QueuePresentKHR` a
-  second on `xpute-gpu`.
-- A phone slows as it heats, which lowers the GPU's clock: on the S23, three
-  runs in a row read GPU p50 69, 93 and 139 ms. A slow run follows the clock
-  (kgsl `cur_freq`) more closely than the AP's temperature
-  ([the lights' tail](../experiment/20261107-the-lights-tail/README.md)). Say the
-  clock and the temperature with the figure.
-- `stream_busy` frames count in the report's fps. Read the drawn frames from
-  `kinds`.
-- A stall on the main thread is `postAndWait` and `dequeueBuffer` in a system
-  trace, and the core's report cannot see it.
-- The iPhone's memory is `memory-physical-footprint` in Instruments' Activity
-  Monitor, recorded after the launch: launching under Instruments stalls the boot.
+How a touch, a stall on the main thread and the iPhone's memory are measured is
+the measure skill's (`.agents/skills/measure/SKILL.md`). On the S23, three runs
+in a row read GPU p50 69, 93 and 139 ms as the phone heated and its GPU's clock
+fell: a slow run follows the clock (kgsl `cur_freq`) more closely than the AP's
+temperature
+([the lights' tail](../experiment/20261107-the-lights-tail/README.md)).

@@ -11,22 +11,8 @@ Only `./script/publish.py` writes the bucket's `source` object, which the
 client reads at boot: publishing needs no commit or deploy. **A manual upload
 sets content-type and content-encoding.**
 
-## One-time setup
-
-In the Cloudflare dashboard, create the bucket with the name in
-`ts/server/edge/wrangler.jsonc` (`r2_buckets[0].bucket_name`) and keep it
-**private**; create an R2 API token (an S3-compatible key ID and secret); note
-the account ID. Then make a separate AWS profile:
-
-```bash
-aws configure --profile r2          # region: auto
-aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
-```
-
-`publish.py` reaches the bucket through `script/r2.py`: that profile, or a key in
-`AWS_ACCESS_KEY_ID`; the endpoint `$R2`, else the account's from
-`CLOUDFLARE_ACCOUNT_ID`, else the profile's. A manual `aws s3 sync` also needs
-`AWS_REQUEST_CHECKSUM_CALCULATION=when_required`.
+`publish.py` reaches the bucket through `script/r2.py`, with the key
+[infra/README.md](../../../infra/README.md) §4 sets up.
 
 ## Upload
 
@@ -67,29 +53,14 @@ A client takes `source` only where every kind is in its own format exactly
 
 ### Earth
 
-```bash
-make download-earth
-make bake-earth
-./script/publish.py earth
-```
+The earth's bake writes its own `out/earth.publish/`
+([bake-tiles](../bake-tiles/SKILL.md)); `./script/publish.py earth` uploads it.
 
 ### Assets
 
-```bash
-make ingest-asset
-# -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingest.json5 and
-#    what the spec generates from it (the host's table, the catalog, the pack's layout)
-
-for t in glb:model/gltf-binary png:image/png webp:image/webp; do
-  AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-bucket/asset \
-    --profile r2 \
-    --exclude "*" --include "*.${t%%:*}" \
-    --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
-done
-```
-
-No `Content-Encoding`. **Commit both regenerated tables with the asset change,
-and upload before deploying.**
+Models and textures are ingested and synced as
+[asset/README.md](../../../asset/README.md) says, before the deploy that reads
+them.
 
 ## Verify what is stored
 
@@ -102,24 +73,8 @@ aws s3api head-object --bucket pixelet-bucket --key asset/<sha256>.<ext> --profi
 
 ## Verify what is served
 
-After a publish, run the smoke:
-
-```bash
-./script/smoke.py
-```
-
-It fails when:
-
-- a tile is compressed twice: the Worker's `Response` lost
-  `encodeBody: "manual"` (`serve`);
-- a second request, served from the edge cache, differs from the first
-  (`CACHED_ENCODING`);
-- an unbaked page returns anything but an empty 204 (HTML means
-  `run_worker_first` is missing);
-- an asset has the wrong type or a `content-encoding`.
-
-It only warns when the second request missed the cache, which leaves that path
-unchecked.
+After a publish, run `./script/smoke.py`. What a failure means is the deploy
+skill's ([deploy](../deploy/SKILL.md), "When the smoke fails").
 
 ## Purging the edge cache
 

@@ -8,13 +8,10 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - Reduce first. A concept that is another in disguise (a reply is a frame, an
   abort is an import) is that other. Code is short because its concepts are few.
 - Orthogonal. A concept says one thing; changing it reinterprets no other.
-- One rule, isotropic and symmetric (AGENTS.md). Before a fix, find the rule
-  the rest of the system follows there and make the part follow it; a form
-  that is faster in one case than the general rule is overfitting, and what
-  the general rule costs there is its price, not a regression. The eye sets
-  the size a place is asked at by the place's distance from it alone, the
-  same in every direction (query/detail.rs); the answer at a size is the
-  world's.
+- One rule (AGENTS.md, "Hold firmly"). Before a fix, find the rule the rest
+  of the system follows there and make the part follow it. Before a part is
+  written, say in two sentences what it computes and from which inputs, and
+  find its peers: it takes their shape.
 - One owner. A fact has one definition; every other form derives from it. A
   fact held in several places is reviewed, and stays apart only where the CPU
   and the GPU each hold it or joining it would add branches. Where they each
@@ -60,8 +57,7 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - One hand. The same work in the same shape, the same names for the same
   things. Rewrite a part rather than lay a new manner beside or over the old
   (a second form, an alias, a flag, a shim).
-- Keep a symmetry by role and contract. xpute's Rust, C++ and TypeScript are
-  also laid out alike, where a part, its file and module names, what a module
+- xpute's Rust, C++ and TypeScript are laid out alike, where a part, its file and module names, what a module
   holds and the shape of generated code are concerned, and differ only where
   the language makes them (its casing, a template for inlined code, what it
   already gives). A local gain alone does not weaken one. A contract changed

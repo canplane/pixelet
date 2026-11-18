@@ -102,6 +102,19 @@ found. Run it again:
   (infra/README.md §3).
 - Passes at the origin, fails at the edge: the Worker or the bucket.
 
+Where the bucket or the Worker serves wrong, the smoke fails when:
+
+- a tile is compressed twice: the Worker's `Response` lost
+  `encodeBody: "manual"` (`serve`);
+- a second request, served from the edge cache, differs from the first
+  (`CACHED_ENCODING`);
+- an unbaked page returns anything but an empty 204 (HTML means
+  `run_worker_first` is missing);
+- an asset has the wrong type or a `content-encoding`.
+
+It only warns when the second request missed the cache, which leaves that path
+unchecked.
+
 Fix forward with a new round. To go back, push the last good commit to deploy;
 that takes a new build number and redeploys both halves.
 
