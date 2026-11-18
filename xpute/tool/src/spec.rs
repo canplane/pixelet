@@ -44,28 +44,84 @@ fn workspace_dirs() -> Result<Vec<String>, String> {
 
 /// Fails unless every TypeScript package that is published carries in its
 /// `package.json` the version of Cargo.toml's workspace, the one place the
-/// packages' version is set, and every one is named and has a src/.
+/// packages' version is set, and the root package.json's `engines`, which is
+/// the Node of .tool-versions, the one place the Node is, at its major; unless
+/// every package is named and has a src/; and unless the workspace's
+/// `rust-version` is the toolchain's (rust-toolchain.toml), the one place the
+/// Rust is, at its minor, and every crate that is published inherits it.
 fn check_versions() -> Result<(), String> {
     let read = |p: &str| std::fs::read_to_string(root().join(p)).map_err(|e| format!("{p}: {e}"));
     let toml = read("Cargo.toml")?;
-    let version = toml
-        .split("[workspace.package]")
-        .nth(1)
-        .and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix("version = ")))
+    let package = |key: &str| {
+        toml.split("[workspace.package]")
+            .nth(1)
+            .and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix(key)))
+            .map(|v| v.trim_matches('"').to_string())
+            .ok_or(format!(
+                "Cargo.toml: no workspace {}",
+                key.trim_end_matches(" = ")
+            ))
+    };
+    let version = package("version = ")?;
+    let rust = package("rust-version = ")?;
+    let channel = read("rust-toolchain.toml")?
+        .lines()
+        .find_map(|l| l.strip_prefix("channel = "))
         .map(|v| v.trim_matches('"').to_string())
-        .ok_or("Cargo.toml: no workspace version")?;
+        .ok_or("rust-toolchain.toml: no channel")?;
+    if channel.rsplit_once('.').map(|(minor, _)| minor) != Some(rust.as_str()) {
+        return Err(format!(
+            "Cargo.toml: rust-version {rust} is not rust-toolchain.toml's {channel}"
+        ));
+    }
+    let members = toml
+        .split_once("members = [")
+        .and_then(|(_, t)| t.split_once(']'))
+        .ok_or("Cargo.toml: no workspace members")?
+        .0;
+    for m in members.split(',').map(|m| m.trim().trim_matches('"')) {
+        if m.is_empty() {
+            continue;
+        }
+        let p = format!("{m}/Cargo.toml");
+        let crate_toml = read(&p)?;
+        let has = |line: &str| crate_toml.lines().any(|l| l == line);
+        if !has("publish = false") && !has("rust-version.workspace = true") {
+            return Err(format!("{p}: no rust-version.workspace = true"));
+        }
+    }
+    let manifest = |p: &str| -> Result<serde_json::Value, String> {
+        serde_json::from_str(&read(p)?).map_err(|e| format!("{p}: {e}"))
+    };
+    let node = read(".tool-versions")?
+        .lines()
+        .find_map(|l| l.strip_prefix("nodejs "))
+        .and_then(|v| v.split('.').next())
+        .map(String::from)
+        .ok_or(".tool-versions: no nodejs")?;
+    let engines = manifest("package.json")?["engines"].clone();
+    if engines["node"].as_str() != Some(format!(">={node}").as_str()) {
+        return Err(format!(
+            "package.json: engines.node is not >={node}, .tool-versions' Node"
+        ));
+    }
     for d in workspace_dirs()? {
         let p = format!("{d}/package.json");
-        let json: serde_json::Value =
-            serde_json::from_str(&read(&p)?).map_err(|e| format!("{p}: {e}"))?;
+        let json = manifest(&p)?;
         if !json["name"].is_string() {
             return Err(format!("{p}: no name"));
         }
         if !root().join(&d).join("src").is_dir() {
             return Err(format!("{d}: no src/"));
         }
-        if json["private"] != true && json["version"].as_str() != Some(version.as_str()) {
+        if json["private"] == true {
+            continue;
+        }
+        if json["version"].as_str() != Some(version.as_str()) {
             return Err(format!("{p}: version is not Cargo.toml's {version}"));
+        }
+        if json["engines"] != engines {
+            return Err(format!("{p}: engines is not the root package.json's"));
         }
     }
     Ok(())

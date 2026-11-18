@@ -11,12 +11,14 @@
     "access": "public"
   },
   "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
   "files": [
     "src",
     "!src/**/*.test.ts"
   ],
   "exports": {
-    ".": "./src/mod.ts",
     "./*": "./src/*"
   },
   "dependencies": {

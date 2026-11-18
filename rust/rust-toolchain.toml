@@ -5,7 +5,9 @@
 # The version is written in three places, which change together: here,
 # xpute/rust-toolchain.toml, and the server images' base tags
 # (rust/server/geo/Dockerfile, rust/server/api/Dockerfile), since an image's
-# tag is chosen before anything in its build context can be read.
+# tag is chosen before anything in its build context can be read. xpute's
+# crates declare it too, at the minor (xpute/Cargo.toml `rust-version`), which
+# xpute's `cargo spec` holds to its toolchain file.
 [toolchain]
 channel = "1.100.0"
 profile = "minimal"

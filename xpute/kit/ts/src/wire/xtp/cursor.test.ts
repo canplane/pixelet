@@ -9,14 +9,10 @@ import assert from "node:assert/strict";
 import { Golden } from "@xpute/golden";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import type { XputeError } from "@xpute/kit/status/error.ts";
-import {
-  ALIGN,
-  type NodeCursor,
-  type NodeValue,
-  TreeEncoder,
-  TreeReader,
-  TreeView,
-} from "@xpute/kit/wire/xtp/mod.ts";
+import { type NodeCursor, TreeReader } from "@xpute/kit/wire/xtp/cursor.ts";
+import { TreeEncoder } from "@xpute/kit/wire/xtp/encode.ts";
+import { ALIGN, type NodeValue } from "@xpute/kit/wire/xtp/spec.ts";
+import { TreeView } from "@xpute/kit/wire/xtp/view.ts";
 
 const te = new TextEncoder();
 

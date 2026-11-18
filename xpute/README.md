@@ -167,6 +167,8 @@ build.
 
 ## Where to read next
 
+- [USAGE.md](./USAGE.md) builds a program on xpute step by step, from its WIT
+  to a call that crosses.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through the
   link, its sides, how a failure ends and the languages, and ends with
   xpute's boundaries, what it took from earlier work and a map of the code.

@@ -11,7 +11,7 @@
  */
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import type { Sender } from "@xpute/link";
+import type { Sender } from "@xpute/link/link.ts";
 import { declare } from "@/abi/source.ts";
 import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, whenOnline } from "@/service/origin/online.ts";

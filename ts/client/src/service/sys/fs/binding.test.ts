@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import {
   ERROR_CODE_NO_ENTRY,
   ERROR_CODE_READ_ONLY,

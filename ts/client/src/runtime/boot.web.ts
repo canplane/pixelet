@@ -11,15 +11,15 @@
  * natively (ui.ts).
  */
 
-import type { GpuReport } from "@pxl/gpu/host";
+import type { GpuReport } from "@pxl/gpu/host/web.ts";
+import { type Log } from "@xpute/runtime-web/message.ts";
 import {
-  type Log,
   message_on,
   open_ui,
   start,
   stopped_on,
   trap_on,
-} from "@xpute/runtime-web";
+} from "@xpute/runtime-web/page.ts";
 import { BUILD_ID } from "@/build.ts";
 import { stopped } from "@/service/sys/abort.ts";
 import { GPU_STATE, setGpu } from "@/service/sys/gpu.ts";

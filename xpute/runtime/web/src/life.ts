@@ -9,7 +9,8 @@
 
 import { XputeError } from "@xpute/kit/status/error.ts";
 import * as life from "@xpute/host/abi/life/life.ts";
-import { type Sender, type Side, sender } from "@xpute/link";
+import { type Sender, type Side } from "@xpute/link/link.ts";
+import { sender } from "@xpute/link/wait.ts";
 
 /** Takes the guest's answer as its own, an error it answers too, ENOENT where
  * it implements none and EPIPE where it trapped, as the native runtime takes

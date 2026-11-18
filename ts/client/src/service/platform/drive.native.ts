@@ -5,7 +5,7 @@
  * reads from the device's log. */
 
 import { LEVEL_INFO } from "@xpute/host/abi/log/log.enum.ts";
-import { log } from "@xpute/expo";
+import { log } from "@xpute/expo/xpute.ts";
 
 export function tellDrive(line: string): void {
   log(LEVEL_INFO, "perf", line);

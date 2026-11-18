@@ -2,6 +2,7 @@
 name = "xpute-gen"
 description = "xpute's generator: data specs, and the writer every generator writes with"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 publish.workspace = true
 license.workspace = true

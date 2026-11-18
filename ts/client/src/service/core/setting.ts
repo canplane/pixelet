@@ -1,7 +1,7 @@
 // @pxl/client/service/core/setting.ts
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import * as setting from "@/abi/setting.ts";
 import { ui } from "@/service/core/core.ts";
 

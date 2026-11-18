@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 import { Golden } from "@xpute/golden";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { bytes_to_hex } from "@xpute/kit/codec/encoding.ts";
-import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
+import { TreeEncoder } from "@xpute/kit/wire/xtp/encode.ts";
+import { TreeView } from "@xpute/kit/wire/xtp/view.ts";
 
 function expected(v: Golden, name: string): string {
   for (let k = 0; ; k++) {

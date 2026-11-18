@@ -8,7 +8,8 @@ import {
   ERRNO_EINPROGRESS,
 } from "@xpute/kit/status/errno.spec.ts";
 import { HANDLE, WAIT_FOR } from "./abi/clocks/monotonic_clock.ts";
-import { Lift, type LinkObject, Lower, type Side, type Tag } from "@xpute/link";
+import { Lift, Lower } from "@xpute/link/cabi.ts";
+import { type LinkObject, type Side, type Tag } from "@xpute/link/link.ts";
 import { mount_clock } from "./clock.ts";
 
 afterEach(() => {

@@ -13,10 +13,14 @@
  * too.
  */
 
-import { type Side, sender } from "@xpute/link";
-import { mount_clock, mount_stop } from "@xpute/host";
-import { type Instantiate, instantiate, run } from "@xpute/runtime-web";
-import { mount_vsync, WebGpu } from "@pxl/gpu/host";
+import { type Side } from "@xpute/link/link.ts";
+import { sender } from "@xpute/link/wait.ts";
+import { mount_clock } from "@xpute/host/clock.ts";
+import { mount_stop } from "@xpute/host/stop.ts";
+import { type Instantiate } from "@xpute/runtime-web/message.ts";
+import { instantiate, run } from "@xpute/runtime-web/worker.ts";
+import { mount_vsync } from "@pxl/gpu/host/vsync.ts";
+import { WebGpu } from "@pxl/gpu/host/web.ts";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
 import { CALLS } from "@/abi/calls.ts";

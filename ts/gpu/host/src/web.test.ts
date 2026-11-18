@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
 import { DEVICE_READY, GET_DEVICE, HANDLE } from "./abi/gpu.ts";
 import { Lift, Lower } from "@xpute/link/cabi.ts";
-import type { LinkObject, Side, Tag } from "@xpute/link";
+import type { LinkObject, Side, Tag } from "@xpute/link/link.ts";
 import { type GpuReport, WebGpu } from "./web.ts";
 
 afterEach(() => {

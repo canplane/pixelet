@@ -12,7 +12,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { GpuState } from "../../link/src/mod.ts";
+import type { GpuState } from "../../link/src/gpu.ts";
 import { requireNativeModule, requireNativeView } from "expo";
 import type { ComponentType } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";

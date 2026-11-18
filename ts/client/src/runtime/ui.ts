@@ -8,7 +8,8 @@
  * (service/sys/boot.ts).
  */
 
-import { type End, sender } from "@xpute/link";
+import { type End } from "@xpute/link/link.ts";
+import { sender } from "@xpute/link/wait.ts";
 import { type Snapshot } from "@/abi/overlay.ts";
 import { setOnline } from "@/service/origin/online.ts";
 import {

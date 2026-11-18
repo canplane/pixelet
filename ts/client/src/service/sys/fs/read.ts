@@ -3,7 +3,7 @@
 /** A 204 is a baked page that its version leaves out, and reads as `no-entry`. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import {
   ERROR_CODE_ACCESS,
   ERROR_CODE_IO,

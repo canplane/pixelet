@@ -739,10 +739,9 @@ fn ts_aliases(read: &dyn Fn(&str) -> Option<String>) -> Vec<(String, String)> {
 
 /// The files `text`, the TypeScript file `f`, imports, exports from or
 /// starts a worker on, comments left out, each a path from the tree's root
-/// with the line it is named on: an alias (`aliases`, a prefix ending in `/`,
-/// which a name met with its own `/` after it also takes, as a package's
-/// bare name) put back as its folder, a relative name resolved from `f`'s; a
-/// package no alias gives is left out.
+/// with the line it is named on: an alias (`aliases`, a prefix ending in `/`)
+/// put back as its folder, a relative name resolved from `f`'s; a package no
+/// alias gives is left out.
 fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, String)> {
     let blank = |m: &regex::Captures| m[0].replace(|c| c != '\n', " ");
     let code = Regex::new(r"/\*[\s\S]*?\*/")
@@ -760,10 +759,8 @@ fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, St
             let path = if c[1].starts_with('.') {
                 format!("{dir}/{}", &c[1])
             } else {
-                let (alias, to) = aliases
-                    .iter()
-                    .find(|(a, _)| format!("{}/", &c[1]).starts_with(a.as_str()))?;
-                format!("{to}{}", c[1].get(alias.len()..).unwrap_or(""))
+                let (alias, to) = aliases.iter().find(|(a, _)| c[1].starts_with(a.as_str()))?;
+                format!("{to}{}", &c[1][alias.len()..])
             };
             let mut parts: Vec<&str> = Vec::new();
             for step in path.split('/') {
@@ -1452,12 +1449,7 @@ fn cycles(
             let stem = p.trim_end_matches(".tsx").trim_end_matches(".ts");
             over.iter()
                 .flat_map(|o| [format!("{stem}{o}.tsx"), format!("{stem}{o}.ts")])
-                .chain([
-                    p.to_string(),
-                    format!("{p}.ts"),
-                    format!("{p}.tsx"),
-                    format!("{p}/mod.ts"),
-                ])
+                .chain([p.to_string(), format!("{p}.ts"), format!("{p}.tsx")])
                 .find(|t| have.contains(t.as_str()))
         };
         let mut g: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();

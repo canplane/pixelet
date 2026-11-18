@@ -1,7 +1,7 @@
 // @pxl/client/service/core/scene.ts
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import * as scene from "@/abi/scene.ts";
 import {
   SCENE_CONTENT_WORLD,

@@ -3,7 +3,7 @@
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_EMSGSIZE } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError } from "@xpute/link";
+import { ComponentError } from "@xpute/link/link.ts";
 import type { Tool } from "@/abi/edit.enum.ts";
 import * as edit from "@/abi/edit.ts";
 import { ui } from "@/service/core/core.ts";

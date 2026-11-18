@@ -19,13 +19,15 @@ import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { type Callee, ComponentError, type Memory } from "@xpute/link";
+import { type Callee, ComponentError, type Memory } from "@xpute/link/link.ts";
 import {
   ERROR_CODE_BAD_MESSAGE,
   ERROR_CODE_IO,
   ERROR_CODE_NO_ENTRY,
 } from "@xpute/host/abi/fs/types.enum.ts";
-import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
+import { TreeReader } from "@xpute/kit/wire/xtp/cursor.ts";
+import { TreeEncoder } from "@xpute/kit/wire/xtp/encode.ts";
+import { TreeView } from "@xpute/kit/wire/xtp/view.ts";
 
 import { format } from "@/abi/file.spec.ts";
 import * as object from "@/abi/object.ts";

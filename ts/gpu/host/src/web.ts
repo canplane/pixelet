@@ -17,14 +17,14 @@
 import type { u32, u64 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Side } from "@xpute/link";
+import { ComponentError, type Side } from "@xpute/link/link.ts";
 import * as gpu from "./abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "./abi/gpu.enum.ts";
 import {
   type GpuAsk,
   type GpuConfig,
   type GpuState,
-} from "../../link/src/mod.ts";
+} from "../../link/src/gpu.ts";
 import { GpuHost } from "./host.ts";
 
 /** What the worker posts the page as what it has of a GPU changes: an ask's

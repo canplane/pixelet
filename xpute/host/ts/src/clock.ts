@@ -14,7 +14,7 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 
 import * as monotonic_clock from "./abi/clocks/monotonic_clock.ts";
 import * as system_clock from "./abi/clocks/system_clock.ts";
-import type { Side } from "@xpute/link";
+import type { Side } from "@xpute/link/link.ts";
 
 const NS_PER_MS = 1e6;
 
