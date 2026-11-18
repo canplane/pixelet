@@ -813,6 +813,38 @@ pub fn bound_over(
     }
 }
 
+/// Whether a coarser clip level's cells are read in place of some of the node `(zoom, c)`,
+/// asked at the zooms from `coarsest` to `finest`, so that its bound (`bound_over`) is not
+/// the asked clip levels' own: the coarsest asked does not hold the node whole, and the read
+/// went on to a coarser one, or a clip level asked wants a brick under the node that it does
+/// not hold present yet (`brick_bound`). A reader that says what its answer is read from
+/// asks the nodes under such a node. A node no wider than a brick reads one brick, and its
+/// bound's zoom says the same.
+pub fn stood_in(
+    w: &impl BrickSource,
+    [coarsest, finest]: [Zoom; 2],
+    (zoom, c): (Zoom, [i32; 2]),
+) -> bool {
+    let bottom = clip_zoom(coarsest);
+    let partly = bottom > zoom + BRICK_MIP_LAST && {
+        let g = [idx_at(zoom, c[0], bottom), idx_at(zoom, c[1], bottom)];
+        !level_bound(w, bottom, g, bottom - zoom - BRICK_MIP_LAST).1
+    };
+    partly
+        || (bottom..=clip_zoom(finest)).any(|z| {
+            let bricks = bricks_zoom(z);
+            zoom < bricks
+                && w.origin(z).1
+                && (0..ENTRY_CNT).any(|e| {
+                    let (q, present) = w.brick(z, e);
+                    let l = bricks - zoom;
+                    !present
+                        && wrap_idx(zoom, q[0] >> l) == wrap_idx(zoom, c[0])
+                        && q[1] >> l == c[1]
+                })
+        })
+}
+
 /// The lowest and highest that the cells at `cell_zoom` reach under the node `(zoom, c)`.
 /// For a node no wider than a brick, it reads the finest clip level holding them present,
 /// stepped from `place`, which becomes where they are held (`step`): one entry of its brick's

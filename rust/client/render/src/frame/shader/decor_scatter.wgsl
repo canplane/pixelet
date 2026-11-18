@@ -63,7 +63,7 @@ fn side_of(k: u32, seed: u32) -> i32 {
 }
 
 /// `scatter::shows_at` for a decor sized in unit cells: whether its box keeps an eighth of a
-/// cell at `cell_zoom` or more. At the leaves' clip level it always stands.
+/// cell at `cell_zoom` or more. At the leaves' clip level it always shows.
 fn shows_at(k: u32, variant: u32, cell_zoom: u32) -> bool {
   let size = decor_size(k, variant, 0u);
   let steps = 3u * (UNIT_ZOOM - min(UNIT_ZOOM, cell_zoom));

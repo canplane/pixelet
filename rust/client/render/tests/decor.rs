@@ -402,7 +402,7 @@ struct LeafList {
 
 /// What each pair holds. It starts with what `decor_thin_cs` lays, the candidates the hashes
 /// give. Leaves about the places that make a case are added, up to the decor's room: any leaf
-/// whose variant stands at the clip level, as a thread asks only what stands.
+/// whose variant shows at the clip level, as a thread asks only what shows.
 fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafList> {
     let mut pairs: BTreeMap<(u32, u32), LeafList> = BTreeMap::new();
     let cells = [22u32, 23, 24];
@@ -467,13 +467,13 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     if row[2] != 0 && [row[0], row[1]] == q {
                         for (j, decor) in ROWS.iter().enumerate() {
                             let c = scatter::candidate_at(j, leaf);
-                            let stands = scatter::shows_at(
+                            let shows = scatter::shows_at(
                                 decor,
                                 scatter::variant_of(decor, c.seed),
                                 cell_zoom,
                             );
                             if let Some(p) = pairs.get_mut(&(s, j as u32))
-                                && stands
+                                && shows
                                 && (p.leaves.len() as u32) < generation::cap(decor)
                                 && !p.leaves.contains(&leaf)
                             {
@@ -1423,7 +1423,7 @@ fn hand_decor_answers_as_placement() {
     // never reaches an edit there.
     assert!(ROWS.iter().all(|d| !d.allows(Sentinel::Void as u32)));
     assert_eq!(tally.0["edit: asked over a column not held"], 0);
-    // A decor stands no coarser than two zooms over the leaves. There the ground's top, the
+    // A decor shows no coarser than two zooms over the leaves. There the ground's top, the
     // ways and the caves under a face keep an even share of a cube, so the walk meets no odd
     // share.
     assert!(
@@ -1522,8 +1522,8 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
 }
 
 /// `decor_thin_cs` by hand must lay what the hashes hold, each pair's records in any order,
-/// however its threads fall. The cases cover pairs at every clip level a decor stands at and at
-/// one level past them, where none stand, in bricks either side of the seam and where X and Y
+/// however its threads fall. The cases cover pairs at every clip level a decor shows at and at
+/// one level past them, where none show, in bricks either side of the seam and where X and Y
 /// are negative.
 #[test]
 fn hand_thin_lays_as_scatter() {
@@ -1545,7 +1545,7 @@ fn hand_thin_lays_as_scatter() {
         let mut pairs = Vec::new();
         let mut init = vec![0u32; words];
         let mut want = BTreeMap::new();
-        // Every decor at the clip levels about those it stands at.
+        // Every decor at the clip levels about those it shows at.
         for cell_zoom in 21..=24u32 {
             for e in 0..ENTRY_CNT {
                 let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT + e;
@@ -1641,7 +1641,7 @@ fn hand_thin_lays_as_scatter() {
         eprintln!("{name}: {} pairs", pairs.len());
     }
     eprintln!(
-        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {stale_hdrs} headers naming another brick"
+        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they show, {stale_hdrs} headers naming another brick"
     );
     assert!(laid_total > 0 && none_past > 0 && stale_hdrs > 0);
 }
@@ -1888,8 +1888,12 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
         let j = n % ROWS.len() as u32;
         let d = &ROWS[j as usize];
         let v = draw.next() % d.variant_cnt;
-        recs[r] = generation::rec_word(j, v, draw.next() & 3, scatter::coarsest_shown(d, v))
-            | (draw.next() % (drawing::REGION_CNT + 1)) << drawing::REGION_SHIFT;
+        recs[r] = generation::rec_word(
+            j,
+            v,
+            draw.next() & 3,
+            scatter::variant_first_cell_zoom(d, v),
+        ) | (draw.next() % (drawing::REGION_CNT + 1)) << drawing::REGION_SHIFT;
         // Most lie about the eye, where they are drawn. One in seven lies farther off, where it
         // is not drawn.
         let reach = if n % 7 == 3 { 900 } else { 40 };
@@ -3222,7 +3226,7 @@ fn hand_frames_answer_as_the_rust() {
         };
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let shards_flat: Vec<u32> = built.shards.iter().flatten().copied().collect();
-        // What the core shows: for each decor, a bit for each clip level it stands at.
+        // What the core shows: for each decor, a bit for each clip level it shows at.
         let mut shown = [0u32; ROWS.len()];
         for (k, d) in ROWS.iter().enumerate() {
             for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
@@ -3261,7 +3265,7 @@ fn hand_frames_answer_as_the_rust() {
                 j,
                 variant,
                 turn,
-                scatter::coarsest_shown(&ROWS[j as usize], variant),
+                scatter::variant_first_cell_zoom(&ROWS[j as usize], variant),
             );
             init[r + 1] = p[0] as u32;
             init[r + 2] = p[1] as u32;
