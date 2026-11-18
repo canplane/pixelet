@@ -174,6 +174,8 @@ or Node's type stripping takes them with no build.
 
 ## License
 
-xpute is MIT. The buddy allocator under `alloc/`, in Rust and in C++, is a port
-of Evan Wallace's buddy-malloc, and `THIRD_PARTY_NOTICES.md` carries the notice
-its license asks for.
+xpute is MIT, and every crate and package carries the license beside its
+manifest, as the C++ amalgamation's two files carry it at their head. The buddy
+allocator under `alloc/`, in Rust and in C++, is a port of Evan Wallace's
+buddy-malloc, and `THIRD_PARTY_NOTICES.md` carries the notice its license asks
+for.

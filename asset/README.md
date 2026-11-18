@@ -9,7 +9,9 @@ from. Data, not code — nothing in the repository imports a file from here.
 - `raw/` is what came in, as it came: what a tool turns into `content/` or into
   code. What can surely be fetched again is not kept: `raw/sky/`, NASA's Moon
   and CDS's stars, fetched by `make download-moon` and `make download-star`. The
-  texture pack's originals are kept, since their URLs may not last.
+  texture pack's originals are kept, since their URLs may not last. The pack
+  is pixelet's own, made for it with mew.design, and no one else's license
+  covers it.
 
 ```
 asset/

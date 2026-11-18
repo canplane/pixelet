@@ -4,7 +4,8 @@
 //! takes: its data specs, the errno table among them (data.rs, xpute-gen),
 //! as its targets declare them (xpute-gen-targets),
 //! and its bindings, each package's as a program's are written
-//! (xpute-link-gen `wit_outputs`), with each side's root module.
+//! (xpute-link-gen `wit_outputs`), with each side's root module, and the
+//! license beside each crate and package.
 
 pub mod data;
 
@@ -42,13 +43,42 @@ fn workspace_dirs() -> Result<Vec<String>, String> {
     Ok(dirs)
 }
 
+/// The workspace's crates, as Cargo.toml's `members` lists them.
+fn crate_dirs(toml: &str) -> Result<Vec<String>, String> {
+    let members = toml
+        .split_once("members = [")
+        .and_then(|(_, t)| t.split_once(']'))
+        .ok_or("Cargo.toml: no workspace members")?
+        .0;
+    Ok(members
+        .split(',')
+        .map(|m| m.trim().trim_matches('"').to_string())
+        .filter(|m| !m.is_empty())
+        .collect())
+}
+
+/// The root's `LICENSE`, the one place its text is, beside every crate and
+/// every TypeScript package: a registry takes a unit's own directory and
+/// nothing above it.
+fn licenses() -> Result<Vec<Output>, String> {
+    let read = |p: &str| std::fs::read_to_string(root().join(p)).map_err(|e| format!("{p}: {e}"));
+    let text = read("LICENSE")?;
+    Ok(crate_dirs(&read("Cargo.toml")?)?
+        .into_iter()
+        .chain(workspace_dirs()?)
+        .map(|d| Output::new(&format!("{d}/LICENSE"), text.clone()))
+        .collect())
+}
+
 /// Fails unless every TypeScript package that is published carries in its
 /// `package.json` the version of Cargo.toml's workspace, the one place the
 /// packages' version is set, and the root package.json's `engines`, which is
 /// the Node of .tool-versions, the one place the Node is, at its major; unless
 /// every package is named and has a src/; and unless the workspace's
 /// `rust-version` is the toolchain's (rust-toolchain.toml), the one place the
-/// Rust is, at its minor, and every crate that is published inherits it.
+/// Rust is, at its minor, and every crate that is published inherits it; and
+/// unless every crate and package that is published says the workspace's
+/// `license`.
 fn check_versions() -> Result<(), String> {
     let read = |p: &str| std::fs::read_to_string(root().join(p)).map_err(|e| format!("{p}: {e}"));
     let toml = read("Cargo.toml")?;
@@ -64,6 +94,7 @@ fn check_versions() -> Result<(), String> {
     };
     let version = package("version = ")?;
     let rust = package("rust-version = ")?;
+    let license = package("license = ")?;
     let channel = read("rust-toolchain.toml")?
         .lines()
         .find_map(|l| l.strip_prefix("channel = "))
@@ -74,20 +105,18 @@ fn check_versions() -> Result<(), String> {
             "Cargo.toml: rust-version {rust} is not rust-toolchain.toml's {channel}"
         ));
     }
-    let members = toml
-        .split_once("members = [")
-        .and_then(|(_, t)| t.split_once(']'))
-        .ok_or("Cargo.toml: no workspace members")?
-        .0;
-    for m in members.split(',').map(|m| m.trim().trim_matches('"')) {
-        if m.is_empty() {
-            continue;
-        }
+    for m in crate_dirs(&toml)? {
         let p = format!("{m}/Cargo.toml");
         let crate_toml = read(&p)?;
         let has = |line: &str| crate_toml.lines().any(|l| l == line);
-        if !has("publish = false") && !has("rust-version.workspace = true") {
+        if has("publish = false") {
+            continue;
+        }
+        if !has("rust-version.workspace = true") {
             return Err(format!("{p}: no rust-version.workspace = true"));
+        }
+        if !has("license.workspace = true") {
+            return Err(format!("{p}: no license.workspace = true"));
         }
     }
     let manifest = |p: &str| -> Result<serde_json::Value, String> {
@@ -123,6 +152,9 @@ fn check_versions() -> Result<(), String> {
         if json["engines"] != engines {
             return Err(format!("{p}: engines is not the root package.json's"));
         }
+        if json["license"].as_str() != Some(license.as_str()) {
+            return Err(format!("{p}: license is not Cargo.toml's {license}"));
+        }
     }
     Ok(())
 }
@@ -130,6 +162,7 @@ fn check_versions() -> Result<(), String> {
 pub fn outputs() -> Result<Vec<Output>, String> {
     check_versions()?;
     let mut out = data::outputs()?;
+    out.extend(licenses()?);
     for t in TARGETS {
         out.extend(wit_outputs(&root(), t, &[])?);
     }

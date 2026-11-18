@@ -30,7 +30,7 @@ Pod::Spec.new do |s|
   s.version = '0.1.0'
   s.summary = "xpute's native module, and the app's native crate built and linked with it."
   s.homepage = 'https://github.com/canplane/xpute'
-  s.license = { type: 'MIT' }
+  s.license = { type: 'MIT', file: '../LICENSE' }
   s.author = 'xpute'
   s.source = { git: '' }
   s.platforms = { ios: '16.4' }
