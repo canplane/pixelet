@@ -11,6 +11,18 @@
   the structure after it are read side by side and the cost is derived from
   the rule. A fault is closed by the rule the rest already follows, never by a
   piece laid beside it.
+- What is made is a model, judged over every case it will meet and not by the
+  one at hand: by its worst case, and by how few handles a reader must hold to
+  predict it. Isotropy and symmetry keep the handles few: what is understood of
+  one direction, side or platform holds of the rest, so the system is reasoned
+  about without reading all of it. There is no free lunch. The cases improve
+  together up to a line, and past it a gain in one is paid in another, in its
+  cost or in a concept added: that is overfitting, as in learning, and the
+  fewest rules that explain the cases, Occam's razor, are what hold the
+  system's entropy down. An agent's pull is to the local optimum, the case
+  before it solved inside the structure as it is given. The structure is a
+  variable too, and the better answer is the system in which the case does not
+  arise.
 - The world is one question, what fills this cube of space at this size, and
   its answer is the world's alone (`README.md`). The eye is the camera's eye
   and there is no other: nothing else is called an eye or an observer, and
@@ -32,7 +44,7 @@
   differ are not forced alike. A fix goes where the fact is owned and holds on
   every platform alike; a platform differs only in how it is reached. No patch is
   laid over a part to make one case pass.
-- A structure that is not symmetric (one platform, case or observer handled
+- A structure that is not symmetric (one platform, case or side handled
   apart from the others, or a step one path takes and another does not), or that
   carries ad hoc pieces (a branch, a flag, a retry or a workaround for one case):
   inside the unit being worked it is the unit's work; outside it, warn the user
@@ -147,6 +159,14 @@
 - Work in the main checkout, and a worktree only for a tree that must be built
   apart. A commit holds its author's hunks alone, staged in an index of HEAD
   that is still HEAD when it commits.
+- Work that can start starts, and runs by itself. A file is no lock: another's
+  edit in the same file, done or still running, is nothing to wait on, to
+  announce or to ask about. The file is read as it stands, the smallest edit is
+  made and the work goes on; a conflict is resolved when it is met, never by
+  overwriting or reverting what another changed. Only a real dependency is
+  waited on, an interface two change at once or a result another must give,
+  and all that does not hang on it goes on meanwhile. No one's state is polled.
+  A report says what was done, not what will be.
 - `out/` holds what a build makes, and no drafts. A temporary folder, an
   experiment's data too, goes under the checkout's `tmp/`. Whoever makes a
   temporary folder, a worktree or a server removes it when done, and deletes
@@ -182,6 +202,8 @@ must hold firmly is in this file as well:
 - an agent file: a reviewer's scope and report, the rules staying in the skill;
 - `CONTRIBUTING.md`: what a person runs; a README or doc comment: how a part
   works;
+- a check: what a tool can refuse. A step that gets forgotten is made a check
+  where one can be, and no sentence repeats what a check holds;
 - memory: what the user said about working that none of these holds.
 
 A change rewrites the rule that covers it, and a correction the rule it
