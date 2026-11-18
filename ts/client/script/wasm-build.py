@@ -17,11 +17,13 @@ import tempfile
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
-# The guest, as the native build reads it too (core-build.py): its cargo
-# workspace, its crate, and cargo's arguments for a debug and a release build.
+# What the native build is told of the guest (@xpute/expo), read here so that
+# the module is built as the native library is: its cargo workspace, and
+# cargo's arguments for a debug and a release build.
 GUEST = json.loads((APP / "package.json").read_text()).get("xpute", {}).get("guest") or sys.exit(f"[wasm-build] {APP}/package.json names no xpute.guest")
 RUST = (APP / GUEST["workspace"]).resolve()
-PACKAGE = GUEST["package"]
+# The core's crate, which is the module.
+PACKAGE = "pxl-core"
 NUMBER_PATHS = APP / "script/number-paths.py"
 STRINGS = APP / "script/strings.py"
 TARGET = "wasm32-unknown-unknown"

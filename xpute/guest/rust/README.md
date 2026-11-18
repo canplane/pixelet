@@ -14,6 +14,15 @@ and `end` as it ends, answering whether it left work, in which case the entry
 runs it again. A module exports the three by name; a library exports them as C
 symbols, which catch the guest's panic and answer a trap.
 
+A module is the guest's crate built as a `cdylib`, which exports its memory
+and the three by name and imports `link_out` from `env`:
+
+```sh
+cargo rustc --crate-type cdylib --release --target wasm32-unknown-unknown
+```
+
+A native app's build makes the library (`expo/README.md`).
+
 From the first export on, the guest's own bug or panic is its stop, told to the
 host before it stops (`stop::hook`); one in `link_init` itself, before the link
 is laid, is told by the trap alone. Natively the hook is the process's, so a

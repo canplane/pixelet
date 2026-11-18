@@ -211,7 +211,7 @@ codegen-units = 256
 incremental = true
 
 # The native library as a dev build of the app rebuilds it
-# (ts/client/script/core-build.py), as `watch` is the module's: the
+# (@xpute/expo's pod and its Gradle module), as `watch` is the module's: the
 # native profile's code, without the one codegen unit and the whole-graph
 # LTO that make every build of it start over, so a change recompiles the
 # crates it reaches. A Release build of the app takes `native`.

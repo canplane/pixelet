@@ -57,7 +57,6 @@
   "xpute": {
     "guest": {
       "workspace": "../../rust",
-      "package": "pxl-core",
       "runtime": "pxl-runtime",
       "profile": {
         "debug": "native-watch",

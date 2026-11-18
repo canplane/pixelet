@@ -1,9 +1,9 @@
 // @xpute/expo/android/build.gradle
 //
 // This is xpute's module on Android (src/main/java/xpute/), and the app's
-// native crate linked with it: the guest, Rust or C++, with what the runtime
-// starts it with, as the app's package.json `xpute.guest.runtime` names it,
-// which the app builds and packs.
+// native crate built and packed with it: the guest, Rust or C++, with what
+// the runtime starts it with, as the app's package.json `xpute.guest` names
+// it.
 
 import groovy.json.JsonSlurper
 
@@ -21,6 +21,14 @@ def guest = new JsonSlurper().parse(new File(app, "package.json")).xpute?.guest
 if (guest == null) {
   throw new GradleException("${app}/package.json names no xpute.guest")
 }
+def workspace = new File(app, guest.workspace).canonicalFile
+// This is cargo's name for the crate's library.
+def lib = guest.runtime.replace('-', '_')
+
+// An Android build packs the library for this ABI, and this is its Rust
+// target.
+def ABI = "arm64-v8a"
+def TARGET = "aarch64-linux-android"
 
 android {
   namespace "xpute"
@@ -29,10 +37,61 @@ android {
     consumerProguardFiles "consumer-rules.pro"
     versionCode 1
     versionName "0.1.0"
-    // The library Runtime.kt and a plugin's module load: cargo's name for the crate's.
-    buildConfigField "String", "RUNTIME", "\"${guest.runtime.replace('-', '_')}\""
+    // The library Runtime.kt and a plugin's module load.
+    buildConfigField "String", "RUNTIME", "\"${lib}\""
   }
   buildFeatures {
     buildConfig true
   }
+}
+
+// Each variant's library lies in a directory of its own, which that variant
+// alone packs.
+["debug", "release"].each { variant ->
+  def profile = guest.profile?.get(variant) ?: (variant == "release" ? "release" : "dev")
+  def args = guest.args?.get(variant) ?: []
+  def dst = layout.buildDirectory.file("guest/${variant}/${ABI}/lib${lib}.so").get().asFile
+  android.sourceSets[variant].jniLibs.srcDirs += dst.parentFile.parentFile
+
+  def build = tasks.register("buildGuest${variant.capitalize()}", Exec) {
+    // cargo is what knows whether the crate is current, and answers in a
+    // moment when it is: the task runs every build.
+    outputs.upToDateWhen { false }
+    outputs.file dst
+    workingDir workspace
+    // rustup's installer puts its tools in the home directory, which
+    // Gradle's PATH need not name.
+    environment "PATH", "${System.getProperty("user.home")}/.cargo/bin:${System.getenv("PATH")}"
+    doFirst {
+      // This is the NDK's compiler for the API the app runs down to, which
+      // links the library and compiles what any crate builds in C. The NDK
+      // names its one toolchain by the machine it runs on.
+      def hostTag = System.getProperty("os.name").startsWith("Mac") ? "darwin-x86_64" : "linux-x86_64"
+      def bin = "${android.ndkDirectory}/toolchains/llvm/prebuilt/${hostTag}/bin"
+      def clang = "${bin}/${TARGET}${rootProject.ext.minSdkVersion}-clang"
+      environment "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", clang
+      environment "CC_aarch64_linux_android", clang
+      environment "AR_aarch64_linux_android", "${bin}/llvm-ar"
+      // A crate may declare several crate types. This asks cargo for the
+      // shared library alone, by name. The link's argument makes the library
+      // loadable on a device whose pages are 16 KB, which the NDK's own
+      // libraries already are and a Rust link is not unless told.
+      commandLine(["cargo", "rustc", "--crate-type", "cdylib", "--profile", profile,
+        "--package", guest.runtime, "--target", TARGET] + args +
+        ["--", "-C", "link-arg=-Wl,-z,max-page-size=16384"])
+    }
+    // Cargo's own rule says where the library lies: CARGO_TARGET_DIR as cargo
+    // was given it, else the workspace's target/, under the profile's
+    // directory, which cargo names `debug` for dev. The library is copied
+    // only when cargo wrote a new one.
+    doLast {
+      def dir = workspace.toPath().resolve(environment.CARGO_TARGET_DIR ?: "target")
+      def src = dir.resolve("${TARGET}/${profile == "dev" ? "debug" : profile}/lib${lib}.so").toFile()
+      if (src.lastModified() > dst.lastModified()) {
+        dst.parentFile.mkdirs()
+        java.nio.file.Files.copy(src.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+      }
+    }
+  }
+  tasks.matching { it.name == "merge${variant.capitalize()}JniLibFolders" }.configureEach { dependsOn build }
 }

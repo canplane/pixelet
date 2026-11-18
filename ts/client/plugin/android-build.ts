@@ -6,7 +6,7 @@
  * android/ is generated and not kept, so the choices are made here.
  *
  * - One ABI, arm64-v8a. The core is built for aarch64-linux-android alone
- *   (script/core-build.py), and an app that packs another ABI
+ *   (xpute's module), and an app that packs another ABI
  *   without the core dies loading its library on the phones that take that
  *   ABI.
  * - The SDK floor is set by the Vulkan that this build needs for wgpu.
@@ -36,6 +36,18 @@ tasks.matching { it.name.startsWith("createBundle") }.configureEach {
 ["\${rootDir.parentFile.parentFile.parentFile}", System.getenv("HOME")].each { dir ->
     android.defaultConfig.externalNativeBuild.cmake.cFlags("-ffile-prefix-map=\${dir}=")
     android.defaultConfig.externalNativeBuild.cmake.cppFlags("-ffile-prefix-map=\${dir}=")
+}
+
+// pxl: a release's Rust names no directory of this machine: the flags cargo
+// reads from the environment of the task that builds the core (xpute's),
+// which are the prefixes the paths are then numbered under
+// (script/number-paths.py)
+project(":xpute-expo").tasks.matching { it.name == "buildGuestRelease" }.configureEach {
+    def app = rootDir.parentFile
+    def workspace = new File(app, new groovy.json.JsonSlurper().parse(new File(app, "package.json")).xpute.guest.workspace).canonicalPath
+    def cmd = ["\${app}/script/number-paths.py", "--remaps", workspace].execute()
+    if (cmd.waitFor() != 0) throw new GradleException("number-paths.py --remaps failed")
+    environment "RUSTFLAGS", [environment.RUSTFLAGS, cmd.text.trim()].findAll().join(" ")
 }
 `;
 
