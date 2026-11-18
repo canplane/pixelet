@@ -179,9 +179,8 @@ asks for its tiles, receives them, caches them and answers a missing one by a
 coarser tile. A kind differs in what its tile holds, in how four fold into one,
 and in what it asks for: its ask scope, which of demand's four reasons, told
 below, the layer asks by, and the tiles its readers pin. It differs in nothing
-else. The imagery is the one layer that is no pyramid: it is baked at
-its top zoom alone, and one picture of the whole sphere answers wherever no tile
-is held.
+else. The imagery is the one layer that is no pyramid: it is baked at its top
+zoom alone, and one global picture answers wherever no tile is held.
 
 The **object layer** is what people build. It is one sparse octree that keeps
 only the leaves people filled and, in each branch, its children folded into one

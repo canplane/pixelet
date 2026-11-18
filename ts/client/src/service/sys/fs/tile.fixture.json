@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "Tile objects as the core named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the imagery's sphere. tile.ts must make the same (tile.test.ts)."
+    "Tile objects as the core named them when it composed them itself, under the version it then picked for each, recorded from that code: each kind's tile, the path its root's object is, under the source declared here, and the imagery's global picture. tile.ts must make the same (tile.test.ts)."
   ],
   "source": {
     "min_zoom": 4,
@@ -438,5 +438,5 @@
       "object": "v1.2026-10-05.1/000000000000000"
     }
   ],
-  "sphere": "v1.2026-10-05.1/sphere"
+  "global": "v1.2026-10-05.1/global"
 }

@@ -9,8 +9,8 @@
       $description: "A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5\n`BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.",
       $extensions: { xpute: { each: { enum: "BaseKind", number: "ID" } } },
       IMAGERY: {
-        SPHERE: {
-          $description: "The imagery's sphere, the whole Earth's picture, (IMAGERY, SPHERE), served under the imagery layer's\nversion as its `TILE_SPHERE` (spec/spec/bake/publication.json5).",
+        GLOBAL: {
+          $description: "The imagery's global picture, (IMAGERY, GLOBAL), served under the imagery\nlayer's version as its `TILE_GLOBAL` (spec/spec/bake/publication.json5).",
           ID: { $value: 0 },
         },
       },

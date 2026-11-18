@@ -6,13 +6,13 @@
 //! those seen and those unseen.
 //!
 //! 1. Layers rank in the order a view builds up. Terrain comes first. The
-//!    pictures come before the models, because a picture (the imagery's
-//!    sphere, the moon's face, the ground's pack or a skin) is drawn whole
+//!    pictures come before the models, because a picture (the imagery's global
+//!    picture, the moon's face, the ground's pack or a skin) is drawn whole
 //!    wherever it shows, while a model is one of the things decor draws. The
 //!    imagery's tiles rank with the pictures, since they are the far view's
-//!    picture. The catalog's models come next, then places. The object
-//!    shards follow the ground's order: each shell of the ground, seen and
-//!    then unseen, is followed by the object shards of the same shell, so what is
+//!    picture. The catalog's models come next, then places. The object shards
+//!    follow the ground's order: each shell of the ground, seen and then
+//!    unseen, is followed by the object shards of the same shell, so what is
 //!    placed in view comes before ground out of view.
 //! 2. Within a layer, seen comes before unseen, and nearer before farther.
 //!    Among tiles equally near, the finer comes first, so the leaf under the

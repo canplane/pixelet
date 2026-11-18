@@ -26,7 +26,7 @@ use pxl_geo_bake::oven::{
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_SPHERE, tile_object_parts};
+use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_GLOBAL, tile_object_parts};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::directory;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
@@ -123,7 +123,7 @@ fn decl(app: &App) -> Result<String, String> {
 }
 
 async fn imagery(app: &App, name: &str) -> Response {
-    if Quadrant::of_key(name).is_none() && name != TILE_SPHERE {
+    if Quadrant::of_key(name).is_none() && name != TILE_GLOBAL {
         return StatusCode::NOT_FOUND.into_response();
     }
     match fs::read(app.out.join(BaseKind::Imagery.name()).join(name)).await {

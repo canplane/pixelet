@@ -12,9 +12,10 @@
 //!    A tile of one color says nothing the global picture does not, and has no
 //!    object. The copy an upload takes lies beside the set, in
 //!    `./out/imagery.publish/` (`script/publish.py`).
-//!  - The global picture every tile falls back to, 2048 × 1024, belongs to the
-//!    sphere and is no tile of the pyramid. It lies beside the tiles under its
-//!    own name (`TILE_SPHERE`), packed as they are, and is published with them.
+//!  - The global picture every tile falls back to, 2048 × 1024, covers the
+//!    whole sphere and is no tile of the pyramid. It lies beside the tiles
+//!    under its own name (`TILE_GLOBAL`), packed as they are, and is published
+//!    with them.
 //!
 //! Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black
 //! Marble team).
@@ -31,7 +32,7 @@ use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{MANIFEST, TileSet};
 use pxl_geo_bake::tile::walk::{self, Outcome};
 use pxl_geo_bake::util::{Level, git_sha, pack, write_atomic, write_manifest};
-use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_GLOBAL};
 use pxl_spec::bake::tile::imagery::{self, IMAGERY_ZOOM};
 use pxl_spec::color;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
@@ -41,7 +42,6 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 /// What it reads, and where `make download-imagery` keeps it.
 const SRC: &str = "infra/imagery/source.json";
 const RAW: &str = "infra/imagery/raw";
-const GLOBAL: (u32, u32) = imagery::PICTURE;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -195,7 +195,10 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
 }
 
 fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), String> {
-    let (w, h) = (GLOBAL.0 as usize, GLOBAL.1 as usize);
+    let (w, h) = (
+        imagery::GLOBAL_SIZE.0 as usize,
+        imagery::GLOBAL_SIZE.1 as usize,
+    );
     let mut bytes = vec![0u8; w * h * 4];
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     std::thread::scope(|scope| {
@@ -225,7 +228,7 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     cfg.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
     cfg.exact = 1;
-    let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1)
+    let encoded = webp::Encoder::from_rgba(&bytes, imagery::GLOBAL_SIZE.0, imagery::GLOBAL_SIZE.1)
         .encode_advanced(&cfg)
         .map_err(|e| format!("{e:?}"))?;
     let back = webp::Decoder::new(&encoded)
@@ -317,7 +320,7 @@ fn run() -> Result<(), String> {
         decode: gray_light(),
     };
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-    global(&day_plate, &night_plate, &out.join(TILE_SPHERE))?;
+    global(&day_plate, &night_plate, &out.join(TILE_GLOBAL))?;
     // The set is made whole each time: a tile now one color has no object.
     let set = TileSet::new(&out);
     for p in set.by_zoom()?.into_values().flatten() {
@@ -358,8 +361,8 @@ fn run() -> Result<(), String> {
     )?;
     // The copy an upload takes (`script/publish.py`), the global picture with the tiles.
     let copy = set.publish(|_| true)?;
-    std::fs::copy(out.join(TILE_SPHERE), copy.join(TILE_SPHERE))
-        .map_err(|e| format!("{}: {e}", out.join(TILE_SPHERE).display()))?;
+    std::fs::copy(out.join(TILE_GLOBAL), copy.join(TILE_GLOBAL))
+        .map_err(|e| format!("{}: {e}", out.join(TILE_GLOBAL).display()))?;
     Ok(())
 }
 

@@ -19,7 +19,7 @@ import {
 } from "@xpute/host/abi/fs/types.enum.ts";
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
-import { BASE_KINDS, TILE_SPHERE } from "@/abi/publication.spec.ts";
+import { BASE_KINDS, TILE_GLOBAL } from "@/abi/publication.spec.ts";
 import { readAsset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS, TOP_KEY } from "@/service/sys/fs/object.ts";
 import { whenSourceDeclared } from "@/service/sys/fs/source.ts";
@@ -95,12 +95,12 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
     base(layer),
   ]),
   [
-    path.IMAGERY.SPHERE,
+    path.IMAGERY.GLOBAL,
     {
       open: (rest, signal) =>
         rest.length === 0
           ? whenSourceDeclared(signal).then((d) =>
-              readObject(d, BASE_KINDS[path.IMAGERY.ID], TILE_SPHERE, signal),
+              readObject(d, BASE_KINDS[path.IMAGERY.ID], TILE_GLOBAL, signal),
             )
           : none(),
     },

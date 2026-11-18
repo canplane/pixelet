@@ -4,7 +4,7 @@
 // the terrain, are seen through the air.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
-@group(0) @binding(16) var imagery_sphere: texture_2d_array<f32>;
+@group(0) @binding(16) var imagery_global: texture_2d_array<f32>;
 @group(0) @binding(17) var imagery_tiles: texture_2d_array<f32>;
 @group(0) @binding(22) var air_volume: texture_3d<f32>;
 
@@ -86,7 +86,7 @@ fn map_of(p: vec3f) -> vec2f {
 fn imagery_at(mercator: vec2f, octaves: f32) -> vec4f {
   let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
   let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);
-  let global = textureSampleLevel(imagery_sphere, atmos_sampler, uv, 0, 0.0);
+  let global = textureSampleLevel(imagery_global, atmos_sampler, uv, 0, 0.0);
   // A tile holds a ground cell a texel and takes over from the global
   // picture, which is eight times coarser. It fades in over the octave in
   // which a pixel goes from covering two cells, at the tiles' reach, to one.

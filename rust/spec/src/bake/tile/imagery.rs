@@ -26,7 +26,7 @@ pub const TILE_SZ: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 /// The global picture's texels, across and down, what is drawn past the
 /// tiles: the whole Earth equirectangular, as pxl-geo-bake bin/imagery.rs
 /// writes it.
-pub const PICTURE: (u32, u32) = (2048, 1024);
+pub const GLOBAL_SIZE: (u32, u32) = (2048, 1024);
 
 /// Every packet's length: its texels, as `encode` lays them.
 pub(crate) const PKT_SZ: u32 =

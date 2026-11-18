@@ -19,22 +19,22 @@ pub(crate) enum LoadKind {
     Catalog = 2,
 }
 
-/// A file to load. `File` is a file after ASSET by its id: the
-/// catalog itself (file.json5 `CATALOG`) or a file the catalog names.
-/// `Sphere` is the picture of the whole Earth, which is opened after IMAGERY
-/// and so under that bake's version.
+/// A file to load. `File` is a file after ASSET by its id: the catalog itself
+/// (file.json5 `CATALOG`) or a file the catalog names. `Global` is the
+/// imagery's global picture, which is opened after IMAGERY and so under that
+/// bake's version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Load {
     File(u32),
-    Sphere,
+    Global,
 }
 
-/// The sphere's id. Every file after ASSET has an id that fits in a u16, so
-/// this one is past them all.
-const SPHERE: u32 = 1 << 16;
+/// The global picture's id. Every file after ASSET has an id that fits in a
+/// u16, so this one is past them all.
+const GLOBAL: u32 = 1 << 16;
 
 /// The most files in flight at once: one for each catalog slot, since a slot
-/// is wanted as one kind only, plus the catalog and the sphere.
+/// is wanted as one kind only, plus the catalog and the global picture.
 pub(crate) const LOAD_FILE_CAP: usize = SLOT_CNT + 2;
 
 impl LoadKind {
@@ -43,14 +43,14 @@ impl LoadKind {
 }
 
 impl Load {
-    /// The file's path: (ASSET, id), or (IMAGERY, SPHERE). A file's id is an i32 as it
-    /// is.
+    /// The file's path: (ASSET, id), or (IMAGERY, GLOBAL). A file's id is an
+    /// i32 as it is.
     pub(crate) fn path(self) -> Vec<Token> {
         match self {
             Load::File(n) => vec![Token::Int(path::asset::ID), Token::Int(n as i32)],
-            Load::Sphere => vec![
+            Load::Global => vec![
                 Token::Int(path::imagery::ID),
-                Token::Int(path::imagery::sphere::ID),
+                Token::Int(path::imagery::global::ID),
             ],
         }
     }
@@ -58,14 +58,14 @@ impl Load {
     pub(crate) fn id(self) -> u32 {
         match self {
             Load::File(n) => n,
-            Load::Sphere => SPHERE,
+            Load::Global => GLOBAL,
         }
     }
 
     pub(crate) fn of(id: u32) -> Option<Load> {
         match id {
-            SPHERE => Some(Load::Sphere),
-            n if n < SPHERE => Some(Load::File(n)),
+            GLOBAL => Some(Load::Global),
+            n if n < GLOBAL => Some(Load::File(n)),
             _ => None,
         }
     }
