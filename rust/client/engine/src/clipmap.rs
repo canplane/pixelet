@@ -817,21 +817,27 @@ pub fn bound_over(
 /// asked at the zooms from `coarsest` to `finest`, so that its bound (`bound_over`) is not
 /// the asked clip levels' own: the coarsest asked does not hold the node whole, and the read
 /// went on to a coarser one, or a clip level asked wants a brick under the node that it does
-/// not hold present yet (`brick_bound`). A reader that says what its answer is read from
-/// asks the nodes under such a node. A node no wider than a brick reads one brick, and its
+/// not hold present yet (`brick_bound`), or, at a zoom under the finest where the node is no
+/// wider than a brick, the brick is read from a coarser clip level than that zoom's
+/// (`step`). A reader that says what its answer is read from asks the nodes under such a
+/// node. A node no wider than a brick at the finest zoom reads one brick there, and its
 /// bound's zoom says the same.
 pub fn stood_in(
     w: &impl BrickSource,
     [coarsest, finest]: [Zoom; 2],
     (zoom, c): (Zoom, [i32; 2]),
 ) -> bool {
-    let bottom = clip_zoom(coarsest);
-    let partly = bottom > zoom + BRICK_MIP_LAST && {
-        let g = [idx_at(zoom, c[0], bottom), idx_at(zoom, c[1], bottom)];
-        !level_bound(w, bottom, g, bottom - zoom - BRICK_MIP_LAST).1
-    };
+    let (top, bottom) = (clip_zoom(finest), clip_zoom(coarsest));
+    let first = |z: Zoom| [idx_at(zoom, c[0], z), idx_at(zoom, c[1], z)];
+    let partly = bottom > zoom + BRICK_MIP_LAST
+        && !level_bound(w, bottom, first(bottom), bottom - zoom - BRICK_MIP_LAST).1;
+    let under = (bottom..top).any(|z| {
+        let (f, _) = step(w, Lookup::NONE, z, first(z));
+        z <= zoom + BRICK_MIP_LAST && f.here() && f.from() != z
+    });
     partly
-        || (bottom..=clip_zoom(finest)).any(|z| {
+        || under
+        || (bottom..=top).any(|z| {
             let bricks = bricks_zoom(z);
             zoom < bricks
                 && w.origin(z).1

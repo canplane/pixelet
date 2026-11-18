@@ -213,7 +213,9 @@ control alike (`pxl-engine world.rs`), each written over the one below:
 ```
 
 A ray descends the octree by the same rule on the CPU and the GPU
-(`pxl-engine cast.rs`). A node coarser than the zoom its distance asks
+(`pxl-engine cast.rs`). The CPU's ray says what its answer is read from, as the
+GPU's does not, so where a node's bound is read through a coarser clip level
+standing in it asks the nodes under it (`pxl-engine clipmap.rs` `stood_in`). A node coarser than the zoom its distance asks
 for is not what is drawn there, so it is asked only whether anything under it
 might fill. If nothing can, the ray passes it whole; what a zoom folds away is
 not there to miss.
