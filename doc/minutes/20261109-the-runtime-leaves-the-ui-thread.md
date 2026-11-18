@@ -67,6 +67,16 @@ work takes time from React as well, which is the direction a page never has to
 think about, since a page's UI thread holds no runtime. The user's conclusion is
 that a device's UI thread holds none either.
 
+That conclusion is of the runtime. The files and the object store are the worker's
+on a page and the UI's JavaScript on a device (`ts/client/src/runtime/worker.ts`,
+`boot.native.ts`, one implementation mounted at either end), and **the user**
+decided that this is one role reached two ways, not one platform handled apart:
+each platform's I/O where that platform keeps it, a page's off its main thread in
+a worker, React Native's called from JavaScript and done by its native modules
+(`expo-file-system`, `expo-sqlite`). What follows from the two reaches is each
+platform's own: a page mirrors to its UI what its worker holds, and a device does
+again what a reload of its UI cancelled.
+
 ## Where the runtime goes
 
 It goes to a thread of its own, written in Rust. The page keeps its TypeScript. The
@@ -112,8 +122,8 @@ The core's thread already begins its turns at the display's frames (`8013c4bec7`
 While the JavaScript thread alone writes the submission ring, that turn's frame has
 to reach the core outside the rings (`xpute_core::sched::frame`). Next the text calls
 are answered in Rust on the core's thread, which removes the one place the core
-waits for JavaScript. Then the runtime's thread is made, with the rings, the
-scheduler and the file server, and the UI behind a port. It becomes the ring's one
+waits for JavaScript. Then the runtime's thread is made, with the rings and the
+scheduler, and the UI behind a port. It becomes the ring's one
 writer, so a turn's grant goes back on the ring as a frame and that outside path
 goes.
 
@@ -123,16 +133,3 @@ The choice was made from the code and from how the platforms work. No build of i
 exists, so its effect is not measured. On the S23 during drags the JavaScript thread
 ran 2.3 s of 28 s, so what it promises is that React and the runtime stop holding
 each other up, not more frames drawn.
-
-> Since 2026-11-18 (**the user**): the files and the object store are the worker's on a
-> page and the UI's JavaScript on a device (`ts/client/src/runtime/worker.ts`,
-> `boot.native.ts`, one implementation mounted at either end), and this is one role
-> reached two ways, not one platform handled apart: each platform's I/O where that
-> platform keeps it, a page's off its main thread in a worker, React Native's called
-> from JavaScript and done by its native modules (`expo-file-system`, `expo-sqlite`).
-> The conclusion above, that a device's UI thread holds no runtime, stands and is of the
-> runtime; the file server this minute planned on the runtime's thread was dropped on
-> 2026-11-14 with the platform modules
-> (`20261113-xpute-takes-wit-and-wasi-and-the-native-runtime-s-shape.md`). What follows
-> from the two reaches is each platform's own: a page mirrors to its UI what its worker
-> holds, and a device does again what a reload of its UI cancelled.

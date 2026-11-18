@@ -74,22 +74,20 @@ Nothing a shader computes is rewritten. render build.rs strips the comments
 and the indentation, appends the words it writes from pxl-engine, assembles
 each module from its parts (frame/shader/part.rs `PARTS`) and validates it
 with naga as WebGPU takes it, every capability off. The rules above are kept
-in the hand WGSL itself, and render build.rs `refuse_faults` refuses in every
-assembled module what of them naga's module shows: a struct that holds a
-struct, a struct- or array-typed local, `i32::MIN` and
-`atomicCompareExchangeWeak`. On 2026-11-05 the 86 modules as assembled were
+in the hand WGSL itself, and `refuse_faults` (render build/check.rs) refuses
+in every assembled module what of them naga's module shows: a struct that holds
+a struct, a struct- or array-typed local, `i32::MIN`,
+`atomicCompareExchangeWeak`, a function that returns what holds an array, and a
+constant, `let` or `var<private>` array of vectors read at a place found as the
+shader runs. The hand WGSL that did either of the last two works
+the value out (`face_normal`, the full-screen triangle), reads
+the raster's packed corners (box.wgsl), picks it by selects (the occlusion's
+samples) or returns a `vec4f` (`propagate_slab`); the step ramp's colors are a
+table of scalars. On 2026-11-05 the 86 modules as assembled were
 about 1.0 MB, the largest (`light_beam`) 57 KB, against 5.5 MB generated;
 part.rs `SHADERS` counts 86 now. The S23 has drawn with the shaders by hand
 since 2026-11-05
 ([the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md)).
-
-> Since 2026-11-16 (a3469dea75): `refuse_faults` (render build/check.rs) also refuses a
-> function that returns what holds an array and a constant, `let` or
-> `var<private>` array of vectors read at a place found as the shader runs.
-> The hand WGSL that did either works the value out (`face_normal`,
-> `tile_corner`, the full-screen triangle), reads the raster's packed corners
-> (box.wgsl), picks it by selects (the occlusion's samples) or returns a
-> `vec4f` (`propagate_slab`); the step ramp's colors are a table of scalars.
 
 ## What the host and a shader share
 
@@ -115,22 +113,16 @@ function of its own. Never build the whole struct back from the words: Safari
 on the Mac and the iPhone lost its GPU process on a shader that did, which a
 field read alone did not.
 
-Two tests held this then, parsing every module with naga
-(`what_a_shader_shares_with_the_host_has_no_room_inside_it`,
-`every_block_reads_each_field_from_where_it_lies`); they are not on main.
-Two hand blocks hold `mat4x4f`s in a `var<uniform>` (`Resolve` in
-screen_resolve.wgsl, `Propagate` in screen_propagate.wgsl). On 2026-11-09 a
-block of that shape, two matrices and a `vec4f`, read every word right on the
-S23 through naga and through Tint
+`refuse_faults` (render build/check.rs) refuses a `var<uniform>` or
+`var<storage>` with room inside it in every assembled module, and
+build.rs writes each block's accessors from word.rs. The resolve's and the
+propagation's blocks, which held `mat4x4f`s in a `var<uniform>`, are word.rs
+uniforms (`resolve`, `propagate`), bound as `array<vec4f, N>` and read through
+their accessors as the others are: by this rule, not for a fault seen in them.
+On 2026-11-09 a block of that shape, two matrices and a `vec4f`, read every
+word right on the S23 through naga and through Tint
 ([the app that did not move](../../experiment/20261109-the-app-that-did-not-move/README.md)).
 The fault that was seen is a matrix in a `var<storage>` array.
-
-> Since 2026-11-16 (4be0c6e96e): render build/check.rs `refuse_faults` refuses a `var<uniform>` or
-> `var<storage>` with room inside it in every assembled module, as the first
-> test did. `Resolve` and `Propagate` are word.rs uniforms (`resolve`,
-> `propagate`), bound as `array<vec4f, N>` and read through their accessors, as
-> the other word.rs uniforms are: by this rule, not for a fault seen in them.
-> The second test's accessors are written by build.rs from word.rs now.
 
 ## Check
 

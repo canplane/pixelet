@@ -4,8 +4,9 @@
 figures had fallen behind the deployed build of 2026-11-10 (#98, `ac321a51af`), and
 then corrected it. The user said this is close to the last profiling and performance
 correction: the project is being wound up and no longer has time set aside for it.
-Nothing below was measured after the change; the causes were found by reading the code
-alone, as the user asked.
+The causes were found by reading the code alone, as the user asked; what was measured
+after the change is
+[the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md).
 
 ## What was compared
 
@@ -25,15 +26,13 @@ not kept).
 | steps, mean ms: scene, demand, companion | 2.8, 1.4, 0.4 | 3.6, 1.7, 0.6 |
 | terrain tasks, n and p50 ms | 366, 697 | 128, 1139 |
 
-The GPU had not fallen behind; the core's CPU had, every step by about a fifth to a
-third alike, and the terrain's tiles came slower. The temperatures of the two runs were
-not compared: #98's run has none recorded.
-
-> Since 2026-11-16 (`deb1fbb08c`): measured by turns after the change, the S23's Chrome
-> read HEAD's GPU p50 above #98's, at a lower GPU clock for the same use: a frame's
-> cycles are 3% fewer on HEAD, the lights' passes traded between them, and the other
-> platforms read at #98
-> ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+In these two runs the GPU had not fallen behind; the core's CPU had, every step by
+about a fifth to a third alike, and the terrain's tiles came slower. The temperatures
+of the two runs were not compared: #98's run has none recorded. Measured by turns after
+the change, on the six platforms against #98 and on the S23 against the tree before it, the S23's Chrome read HEAD's GPU p50 above #98's, at a lower
+GPU clock for the same use: a frame's cycles are 3% fewer on HEAD, the lights' passes
+traded between them, and the other platforms read at #98
+([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
 
 Some of #102's fields no longer meant what #98's did, so they did not compare: `paced`
 (#98 the paced interval, #102 one frame's gap), `budget` (#98 the turn's deadline, #102
@@ -156,52 +155,24 @@ to smooth.
 
 ## Left open
 
-- Nothing here is measured. The comparison is `script/perf/gate.py` against #98 when the
-  user orders it; the deployed build carries no `PXL_PERF_DRIVE`.
-
-  > Since 2026-11-16 (`deb1fbb08c`): measured on the six platforms against #98 and on the
-  > S23 against the tree before the change
-  > ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
-- A display whose every frame outlasts one interval and is never refused reads two
-  intervals; #98 read it the same way.
-
-  > Since 2026-11-16 (`deb1fbb08c`): the misread feeds the entry's budget, which may then
-  > run past the real next vsync and keep the next one late, so it can hold itself while
-  > the entries have work; the Mac's Safari read 28 to 32 ms on both builds with the GPU
-  > at 21 ms a frame and about 30 frames a second
-  > ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
-
-  > Since 2026-11-16 (`3ac60df141`), on the user's word: the host tells the display's
-  > gaps, as it sees every frame (natively the display link, on the web the animation
-  > frame loop), and answers the first vsync from when the core's frame is due; the core
-  > no longer reads the interval from the vsyncs it was answered, so a frame that
-  > outlasts one interval no longer moves it. Not measured.
-- Effects run outside any budget, and `location_step` re-grounds its zone inside one.
-
-  > Since 2026-11-16 (`deb1fbb08c`): settled before this minute.
-  > [Closing the scheduler](./20261109-closing-the-scheduler-the-reads-and-the-memory.md)
-  > kept the location indicator outside the turn's budget, with the glTF parse and the
-  > object apply, and the user closed the rest of a recompute's cost, each height's
-  > first ray from the root, as over-improvement. The code is the same as at #98.
-
-  > Since 2026-11-16 (`c55e180b1a`): the note above reads more into that minute than
-  > it holds. It found the location indicator outside the budget; the user closed one
-  > way of cutting a recompute's cost, handing a ray's descent from one height to the
-  > next. Moving the recompute under the budget was not weighed, and is open.
-  > `place::show` re-asks a ray for each visible place when a place's detail zoom
-  > changes, also outside the budget's pass.
-
-  > Since 2026-11-17 (`cfc72c4ac5`, `ff07ca506e`): on the user's word, both are asked
-  > under the budget (`sched::run`), and a pin crowd's stand with them. The zone is
-  > laid once every cell of a table of its cells' ground has been asked, the last laid
-  > shown till then; a place stands on its last surface until its own is asked.
-  > Not measured.
-
-  > Since 2026-11-17: taken back on the user's word, the location and the markers as at
-  > `bec3061dc4`
-  > ([the location zone, and the observation quantized](./20261117-the-location-zone-by-the-codes-own-axioms.md)).
-- The C++ heap's branch for wasm without atomics has not been compiled.
-
-  > Since 2026-11-16 (`deb1fbb08c`): it is the branch `make -C xpute/cpp wasm` compiles,
-  > for `wasm32-wasip1` without `-matomics`, and it compiles; the branch no target
-  > compiles is wasm with atomics.
+- A display whose every frame outlasts one interval and is never refused read two
+  intervals, as #98 read it, and the misread fed the entry's budget, which could then
+  run past the real next vsync and keep the next one late, holding itself while the
+  entries had work: the Mac's Safari read 28 to 32 ms on both builds with the GPU at
+  21 ms a frame and about 30 frames a second
+  ([the deployed build's pace, measured](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+  On the user's word the host tells the display's gaps, as it sees every frame
+  (natively the display link, on the web the animation frame loop), and answers the
+  first vsync from when the core's frame is due; the core does not read the interval
+  from the vsyncs it was answered, so a frame that outlasts one interval does not move
+  it. Not measured.
+- What the location indicator and the markers ask outside the budget.
+  [Closing the scheduler](./20261109-closing-the-scheduler-the-reads-and-the-memory.md)
+  found the location indicator outside the turn's budget, and the user closed one way
+  of cutting a recompute's cost, handing a ray's descent from one height to the next.
+  Asking the location and the markers under the budget was tried on the user's word
+  and taken back on it; where they came to rest is
+  [the location zone, and the observation quantized](./20261117-the-location-zone-by-the-codes-own-axioms.md).
+- The C++ heap's branch for wasm with atomics is compiled by no target. The one
+  without is what `make -C xpute/cpp wasm` compiles, for `wasm32-wasip1` without
+  `-matomics`.

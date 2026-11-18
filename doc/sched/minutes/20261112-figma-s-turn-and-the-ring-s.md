@@ -346,25 +346,22 @@ the core's longer intervals would hold the UI past a frame, and the worker keeps
 the UI apart from a long call. Figma's main thread fits its product and its
 synchronous reads of state. It is no reason for pixelet to return there.
 
-## Open
+## Beside the case
 
-Worth comparing, not queued:
+None of these is a question of this case study, which asked about the structure and
+is closed above; the structure has since moved further its way, and what it concludes
+holds. They are measurements beside it:
 
 - **What wakes the app with no touch.** Builds before the link presented 13 to 46
   times a second with no touch. Count it at `HEAD`, and tell content's frames from
   a timer or an invalidation that repeats.
-- **The core's steps at `HEAD`, in the worker.** Measure tick, effects and stage
-  again, since every figure above predates the link. Measure for the first time
-  the renderer's recording alone and the object shard apply with its spread.
+- **The core's steps at `HEAD`, in the worker.** Every figure above predates the
+  link. The core's steps were measured after it on the S23 and its tick on the six
+  platforms the app runs on
+  ([taken back](../../minutes/20261116-the-deployed-builds-pace-taken-back.md),
+  [measured](../../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+  The renderer's recording alone and the object shard apply with its spread are not
+  measured.
 - **The main thread against the worker at `HEAD`**, if the worker's 3.6 to 4 ms
-  proves to matter. Read Long Animation Frames, INP and React's commits during
-  drags and loads, on a desktop and on a phone.
-
-> Since 2026-11-16 (`deb1fbb08c`, `95d62a532f`): none of these is a question of
-> this case study, which asked about the structure and is closed above; the
-> structure has since moved further its way, and what it concludes holds. They
-> were measurements beside it. With the core in a worker by design, a long step
-> holds the core's own frame and not the UI's. The core's steps were measured
-> after the link on the S23 and its tick on the six platforms the app runs on
-> ([taken back](../../minutes/20261116-the-deployed-builds-pace-taken-back.md),
-> [measured](../../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
+  proves to matter. With the core in a worker by design, a long step holds the
+  core's own frame and not the UI's.

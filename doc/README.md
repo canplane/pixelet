@@ -39,9 +39,12 @@ before the documents catch up.
 Where the code and a stated contract disagree, neither the code nor an old
 record settles it alone.
 
-Once its meeting or its measurement is over, a record is not rewritten. Where
-one defers something or leaves it open, or decides something since reversed, and
-that is found when the record is read, a note goes beneath it: `> Since <date> (<commit>): …`, saying what holds now.
+A record is revised only on the user's word, in place and whole, so that it
+reads as written right: no note goes beneath it and nothing in it says it was
+corrected. What stays is what a reader of the code now needs, what holds and the
+reason that decided it; the trail to it goes, a commit's hash, a state passed
+through, a name no longer in the tree. The `> Since <date> (<commit>): …` notes
+that records hold from before stay as they are, and none is added.
 
 A report or a request from outside the project is a GitHub issue. What is
 resolved in one is written here, and the issue links to it.
