@@ -9,17 +9,18 @@ does what.
 A package's world decides each side's role. The guest implements what its world
 exports and calls what it imports; every other side, the TypeScript too,
 implements the imports and calls the exports. So a package whose interfaces have
-functions declares one world, and an interface that stands in none of it is
-refused. A package that only gives the guest what it calls names its world
-`imports`; the generator reads no world's name.
+functions declares one world, and an interface with functions or resources
+that stands in none of it is refused. A package that only gives the guest what
+it calls names its world `imports`; the generator reads no world's name.
 
 The bindings reach what they take from the kit and the link through one module:
 in Rust and C++ a private `_rt` that re-exports only what the file uses, as
-wit-bindgen's does, and in TypeScript named imports. Their own names are fixed:
-`HANDLE`, `mount`, the trait an implementation implements, `Guest` on the guest
-and `Host` on any other side, a resource's `GuestDevice` or `HostDevice`, and
-the internal `_Object`. A WIT name that meets one of them, or a name the
-bindings import, takes `_`, as wit-bindgen's `Guest_` does.
+wit-bindgen's does, and in TypeScript named imports. The names they give
+beside WIT's are fixed, among them `HANDLE`, `mount` and the trait an
+implementation implements, `Guest` on the guest and `Host` on any other side,
+a resource's `GuestDevice` or `HostDevice`. A WIT name that meets one of them,
+or in Rust and TypeScript a name the bindings import, takes `_`, as
+wit-bindgen's `Guest_` does.
 
 ## What of WIT it takes
 
@@ -54,7 +55,7 @@ imports nothing of it.
 | --- | --- |
 | `xpute:clocks` | `wasi:clocks@0.3`'s monotonic and system clocks, cut to `now` and `wait-for` |
 | `xpute:log` | `wasi:logging`'s shape: a level, a context and a message |
-| `xpute:fs` | its own: a `file` opened by URI that reads and writes a lent buffer, with no descriptors, directories or streams; only its `error-code` names its cases as `wasi:filesystem`'s does |
+| `xpute:fs` | its own: a `file` opened by URI that reads and writes a lent buffer, with no descriptors, directories or streams; its `error-code` names its cases as `wasi:filesystem`'s or `wasi:sockets`' do, but for two of its own |
 | `xpute:stop`, `xpute:life`, `xpute:link` | xpute's own |
 
 ## A program's bindings
@@ -71,13 +72,13 @@ C++, and a host Rust and TypeScript. A host's bindings, which implement the
 world's imports, carry `IMPORTS` and `CALLS`; the guest's carry neither. The
 Rust is written for a crate of edition 2024, its prelude and its style.
 
-The command is `xpute-link-gen`, installed once from this crate, from a
-registry or from an xpute checkout, and it needs neither after. Its paths
-are from the directory it runs in, the program's root, and each Rust file and
-TypeScript directory lies in its crate or package there:
+The command is `xpute-link-gen`, installed once from this crate, and it needs
+no xpute checkout after. Its paths are from the directory it runs in, the
+program's root, and each Rust file and TypeScript directory lies in its crate
+or package there:
 
 ```sh
-cargo install xpute-link-gen        # or: cargo install --path xpute/link/gen
+cargo install --path xpute/link/gen
 
 # A Rust guest: a module per interface beside the file, and the file the
 # package's root module.

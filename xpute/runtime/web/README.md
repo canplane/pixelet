@@ -1,11 +1,10 @@
 # @xpute/runtime-web
 
 @xpute/runtime-web is xpute's runtime on the web: the guest runs as a
-WebAssembly module in a worker of its own, so that it holds up none of the
-UI's events, and the UI reaches it from the page's main thread over a
-MessagePort. It has two halves, one for each thread, which a program's own
-worker and page import: the worker's (`worker.ts`) and the page's
-(`page.ts`). How the runtime carries a UI to the guest, and why every method
+WebAssembly module in a worker of its own, and the UI reaches it from the
+page's main thread over a MessagePort. It has two halves, one for each
+thread, which a program's own worker and page import: the worker's
+(`worker.ts`) and the page's (`page.ts`). How the runtime carries a UI to the guest, and why every method
 the UI implements is an `async func`, is in
 [ARCHITECTURE.md](../../ARCHITECTURE.md), "The sides".
 

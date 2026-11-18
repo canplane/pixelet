@@ -14,7 +14,7 @@ browser tab and as an app on iOS and Android.
 
 ## How a planet fits in a phone
 
-Cut the Earth into cubes 2.4 meters wide and there are 16.7 million of them
+Cut the Earth into cubes 2.4 meters wide and there are 16.8 million of them
 around the equator, and as many again north to south, before you count a single
 one of height. No disk holds that, no network sends it and no GPU draws it.
 pixelet gets away with it because a world only has to exist as far as someone is

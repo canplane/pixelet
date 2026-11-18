@@ -12,12 +12,12 @@ spends each entry's time in an order the rest of the core can rely on.
 
 ## The memory, laid out once
 
-The core's memory is the manifest's `mem.sz`, whole before its first entry and never
-grown, so a full heap stops the core. Its sections never move. The memory and its
-layout are the core's own (`heap.rs`): on the web the module's memory, which its
-link starts at that size and holds to it (the crate's `build.rs`), and natively the
-block the core reserves of the process at that size, at its first
-allocation.
+The core's memory is the manifest's `mem.sz`, whole before its first entry and
+never grown, so a full heap stops the core. On the web it is the module's
+memory, which its link starts at that size and holds to it (the crate's
+`build.rs`). Natively it is a block the core reserves of the process at its
+first allocation (`heap.rs`), and the block's first section is `.fixed`. The
+sections never move.
 
 ```text
  0 ┌──────────────┐
@@ -40,24 +40,22 @@ a glTF model or a PNG has no bound, so the loader reads it into the heap.
 the manifest declares `.fixed`'s size and the heap the core counts on past it,
 and the compiler and the boot check that the memory holds both.
 
-The heap is the global allocator, xpute-kit's heap over the memory past
-`.fixed` (`heap.rs`), which the core's terminal crates declare (`lib.rs` on the
-web, pxl-runtime natively): a slab of size classes over a buddy allocator
-of pages, whose blocks are aligned to their own size, which bounds
-fragmentation. What is held only at times lives on it, the largest of it
-under caps that the build checks against the heap; `heap.rs` reads its
-counters.
+The heap is the global allocator: xpute-kit's heap over the memory past
+`.fixed` (`heap.rs`), a slab of size classes over a buddy allocator of pages,
+whose blocks are aligned to their own size, which bounds fragmentation. What
+is held only at times lives on it, the largest of it under caps that the build
+checks against the heap (`link/layout.rs` `HEAP_FLOWS_SZ`).
 
-The memory policy is pixelet's, declared by its terminal crate. Natively that
-crate is the library that holds the core with xpute's runtime and host and
-the GPU's host, and a binary has one global allocator, so the heap is the
-whole library's there: it takes their allocations with the core's, their
-threads take its one lock, and its counters count theirs. On the web the
-runtime and host are the worker's JavaScript and the GPU the browser's, so
-the heap takes the core's alone. `.fixed` is the same on both, since no
-allocator reaches it.
+The core's terminal crate declares the allocator: `lib.rs` on the web,
+pxl-runtime natively. Natively that crate is the library that holds the core
+with xpute's runtime and host and the GPU's host, and a binary has one global
+allocator, so the heap takes their allocations with the core's, their threads
+take its one lock, and its counters (`heap.rs` `HeapStat`) count theirs. On the
+web the runtime and host are the worker's JavaScript and the GPU the browser's,
+so the heap takes the core's alone. No allocator reaches `.fixed`, which is the
+same on both.
 
-The largest bodies, terrain and Earth packets of about two mebibytes, take
+The largest bodies, terrain and Earth packets of up to two mebibytes, take
 slots in `.fixed` instead (`io/body.rs`): a fixed number of them, each as long
 as the longest such body. A slot is held by its guard from the moment it is
 taken until the guard drops: a read lends it and its answer hands it back, and
@@ -68,48 +66,45 @@ Every other body is a heap buffer of its own, owned by whoever holds it.
 ## An entry
 
 The core runs only when xpute's link enters it: with a call from the UI, an
-answer, or the answer of a wait it armed. What it does there is its own, on
-embassy's executor (`sched.rs`). A frame is asked for (`invalidate`, or
-`invalidate_at` for a time, one clock wait armed for the earliest) and runs at
-the first vsync due by the frame's target interval since the last frame's
-start, which the frame task asks of the host, as one task, in one order: the
-effects of what the UI sent, then the tick, then the draw (`frame.rs`). A vsync
-answers its frame's start on the host's monotonic clock and its gap since the
-frame before, from which the display is measured (`sched/display.rs`).
+answer, or the answer of a wait it armed. Inside an entry its tasks run on
+embassy's executor (`sched.rs`), and the entry ends once no task is ready. A
+core with nothing to do is not entered.
 
-Each entry has an end, by one rule (`sched.rs` `Budget`): the margin,
-`MARGIN_SHARE` of the frame's target interval (`param.rs`), before the next
-frame's start where the core knows that start, and one slice, `SLICE_SHARE`,
-from the entry's own start where it does not. A frame is due from when it is
-asked for until it has run. The core knows the next frame's start only while
-one is due, and only as one target interval after the last frame's start,
-where the display ticks while frames follow one another; a frame's own entry
-so ends the margin before one target from the frame's start. A vsync comes
-within half a display interval of that start (`rate.rs` `due_at`). Past that
-with no frame started, the frame starts at
-a tick the core cannot place: after a view stood still, after a frame ran
-past its target, before any frame, and on a page whose display does not tick
-while it is hidden. The entry then has its slice, as where no frame is due.
-An entry that starts past its end has no budget, and none has one before the
-frame task first asks for a frame, the pace being unknown until then.
+A frame is asked for by `invalidate`, or by `invalidate_at` for a time, the
+earliest of which one clock wait is armed for. The frame task then asks the
+host for the first vsync from when the frame is due, one target interval
+after the last frame's start (`domain/scene/rate.rs` `due_at`), and runs the
+frame as one task, in one order: the effects of what the UI sent, the tick,
+the draw (`frame.rs`). A vsync answers its frame's start on the host's
+monotonic clock and its gap since the frame before, from which the display's
+interval is measured (`sched/display.rs`).
 
-The tick runs the phases the core declares, in their order, within the budget
-(`sched/tick.rs`), and a list of work stops once the budget is spent and one
-item has done work, so the list always moves (`run`). A spent entry still
-moves each task by one part, so a part may end past the next frame's start;
-and a frame whose start the core did not know may wait a slice and a part.
+Each entry has an end, by one rule (`sched.rs` `Budget`):
+
+- Where the core knows the next frame's start, the entry ends the margin
+  before it, `MARGIN_SHARE` of the frame's target interval
+  (`sched/param.rs`). It knows that start only while a frame is due, as one
+  target interval after the last frame's start.
+- Where it does not, the entry ends one slice from its own start,
+  `SLICE_SHARE` of what the margin leaves: where no frame is due, and where
+  the frame did not start when it was due, as after a view stood still or a
+  frame ran past its target.
+
+The budget stops work a part at a time. The tick runs the phases the core
+declares, in their order (`sched/tick.rs`). A list of work stops once the
+budget is spent and one item has done work, so the list always moves (`run`).
+Every task but the frame's yields before its first work and between its units
+where the budget is spent, and comes back in a later entry
+(`yield_if_spent`). A spent entry so still moves each task by one part, which
+may end past the next frame's start, and a frame whose start the core did not
+know may wait a slice and a part.
 
 An entry that draws a frame does nothing else. A vsync's answer wakes the
 frame task alone, and once the frame has run its entry is spent: the task asks
 for the next frame's vsync, the entry ends, and the frame's stream leaves for
-the GPU at that end. Every other task, the ground's fill and a model's parse
-among them, yields before its first work and between its units where the
-budget is spent, and comes back in a later entry (`yield_if_spent`). So a task
-the frame readied leaves the frame's entry with no work done, and works in an
-entry that draws no frame, which has its end by the same rule, however
-far the frame ran past its own.
-An entry ends once no task is ready, and a core with nothing to do is not
-entered.
+the GPU at that end. A task the frame readied, the ground's fill or a model's
+parse, so leaves the frame's entry with no work done and works in an entry
+that draws no frame, which has its end by the same rule.
 
 ## Reads
 
@@ -126,7 +121,7 @@ stops what nobody wants any more, ranks the rest by the one policy
  the loader ─ declare(asset, wants) ┘    one pump a frame
                                               │ start / stop
                                               ▼
-                               dispatch ─▶ fetch (tiles, shards) 
+                               dispatch ─▶ fetch (tiles, shards)
                                         └▶ loader (assets)
                                               │
                                               ▼
@@ -144,24 +139,22 @@ credits. A read that is out is never preempted for a better one; a better
 one waits for a free credit.
 
 The policy is the only place where one layer's wants are ranked against
-another's. It orders by how a view builds up: the ground first, then the
-pictures drawn whole, then models, then places, each nearer and seen before
-farther and unseen.
+another's. It orders by how a view builds up: the ground and what is placed
+on it first, then the pictures drawn whole, then models, then places, each
+seen before unseen and nearer before farther.
 
 ## When a read does not come back
 
-A read can fail in three ways, and each holds back something different. When
-the object itself is wrong, asking again brings the same bytes, so its want is
-held for as long as it is wanted. When the heap or the slots refused the body
-room, the want waits until what refused it gives room back, and only that
-(`io/room.rs`). When the network or the server failed, every start is held:
-one probe goes out at a time, after a wait drawn at random below its cap, so
-clients that failed together do not return together. Each failure of the server
-raises the cap, and after the last wait the server is given up, and the UI says
-so.
-
-None of this makes anything up. While a read is held, the view draws the
-coarser tile it has, or nothing.
+A read can fail in three ways, and each holds back something different. When the
+object itself is wrong, asking again brings the same bytes, so its want is held
+for as long as it is wanted. When the heap, the slots or the ways' pool refused
+it room, the want waits until what refused it gives room back, and only that
+(`io/room.rs`). When the network or the server failed, every start is held: one
+probe goes out at a time, after a wait drawn at random below its cap, so clients
+that failed together do not return together. Each failure of the server raises
+the cap, and after the last wait the server is given up, and the UI says so; a
+network that is down is waited on without end. While a read is held, the view
+draws the coarser tile it has, or nothing.
 
 ## Files the core keeps and calls it makes
 
@@ -169,9 +162,9 @@ The core keeps one file of its own, its settings, read and written whole. A
 file of another format, or one it cannot read, is refused, never written over,
 and set aside by the core, its backend keeping it elsewhere (`io/file.rs`).
 
-Text is the one thing the core asks of its platform and waits for. A layout or
-a raster is a call that the platform answers before it returns, writing the
-answer into the buffer the call lends (`io/text.rs`).
+Text is the one import the platform answers before the call returns: a width
+is its answer, and a raster is written into the image the call lends
+(`io/text.rs`). The core breaks the lines itself.
 
 ## The device's sensors
 

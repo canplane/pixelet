@@ -8,9 +8,8 @@ The camera grid's cell is an angle about the eye, not a grouping of positions
 grouping is a shift, never a division.
 
 What a unit is worth in meters is not in this module. The lattice counts units;
-what a unit means belongs to whoever projects it. That split is why no file here
-carries a distance, and it is the one thing to understand before reading
-anything here.
+what a unit means belongs to whoever projects it, so no file here carries a
+distance.
 
 ## A position
 
@@ -30,11 +29,12 @@ Z    ┌─────────────┬──────────
 ```
 
 X goes once round the world in 2^24 units, Y spans the square Mercator plane,
-and Z the ±2^15 units of height the terrain's `i16` elevations reach. X fills its `i32` exactly, so X goes round as the type wraps: the short
-way between two positions is X's difference taken wrapping (`world::between`).
-Y does not go round, and a Y difference is taken wider. A position enters the
-world only
-through `world::at` or `point`, which hold Y and Z inside it.
+and Z the ±2^15 units of height the terrain's `i16` elevations reach. X fills
+its `i32` exactly, so X goes round as the type wraps: the short way between two
+positions is X's difference taken wrapping (`world::between`). Y does not go
+round, and a Y difference is taken wider. A position enters the world through
+`world::at` or `point`, which hold Y and Z inside it; a ray's origin, which may
+stand above the world, through `origin`.
 
 All of it is integer, so a position is the same bits on every machine; doubles
 meet it only going in and out (`q3::from_real`, `unpack`).
@@ -52,9 +52,9 @@ zoom is finer, one zoom finer is half as wide, and the unit itself is z24.
 | z15  | 512u | a leaf tile, the finest the ground is fetched at                      |
 | z4   |      | the coarsest tile, where the pyramid stops (`coord/zoom.rs` `MIN_ZOOM`) |
 
-The zooms are size and nothing else — the rightmost column is this program's
-arrangement, not the number's meaning. A zoom finer than z24 is a fraction of a
-unit and lives in a position's fraction, down to z32, a 256th.
+A zoom is a size and nothing else: the rightmost column is this program's
+arrangement. A zoom finer than z24 is a fraction of a unit and lives in a
+position's fraction, down to z32, a 256th.
 
 A size answers the same questions at every zoom: its side in units
 (`coord/zoom.rs` `units`), and, in the world, which cell a point lies in and
@@ -66,19 +66,21 @@ is nearest the eye (`nearest`); which lap a cell's X is named on is
 
 A zoom's side can reach the world's extent on an axis, and then that axis
 collapses: the world is 2^16 units tall, so from z8 coarser a cell is
-horizontal, and nothing had to say so.
+horizontal.
 
 ## A unit has no size
 
-`coord/q3.rs` states the rule: doubles go in and out with 1.0 as one unit, and
-whatever a unit is in meters is the caller's scaling. Nothing in it carries a
-distance.
+Doubles go in and out of a `Q3` with 1.0 as one unit (`coord/q3.rs`), and
+whatever a unit is in meters is the caller's scaling.
 
 Meaning enters at an **adapter**, and only there:
 
-- `coord/adapter/3857.rs` — the DB's EPSG:3857 coordinates. Lengths are the
-  plane's, in u, or the ground's, in meters; `scale_factor` relates them, and
-  `merc_from_u`/`u_from_merc` are the only way to or from Mercator's meter. A
+- `coord/adapter/3857.rs` — the DB's EPSG:3857 coordinates. A length is in
+  the plane's units, in the Mercator plane's meters or in meters on the
+  ground: units and Mercator's meters are one scale apart everywhere
+  (`U_PER_MERC`), Mercator's and the ground's by the `scale_factor` at a
+  latitude, and `merc_from_u`/`u_from_merc` are the only way to or from
+  Mercator's meter. A
   height's meters are the ground's own: the scale its leaf tile was baked by,
   one value a leaf tile (`coord/adapter/3857.rs` `height_u_per_m`, from
   `per_m`, as `Frame::per_m` reads it).
@@ -90,8 +92,7 @@ Meaning enters at an **adapter**, and only there:
 
 X's round is exactly one EPSG:3857 world. So the lattice is that world cut 2^24
 ways, and a z24 cell is a z16 pixel of the standard's 256-pixel tiles and a z15
-tile its z15 tile, exactly — not by design of the number but because X's extent
-and that world are the same thing.
+tile its z15 tile, exactly.
 
 | zoom | side  | planar meters |
 | ---- | ----- | ------------- |
@@ -100,14 +101,12 @@ and that world are the same thing.
 | z15  | 512u  | 1,223.0       |
 | z12  | 4096u | 9,783.9       |
 
-That identity holds by two constants agreeing — X's round is one world, a ground
-cell is one unit — and a web map's zoom is the adapter's to name
-([`coord/adapter/3857.rs`](./coord/adapter/3857.rs) `cell_zoom_of`), for
-comparing with one; nothing in the pyramid counts in it.
+A web map's zoom is the adapter's to name (`coord/adapter/3857.rs`
+`cell_zoom_of`), for comparing with one; nothing in the pyramid counts in it.
 
 ## The pyramid
 
-A terrain tile is fetched at every zoom from the leaves (`layer/quadrant.rs`
+A terrain tile is fetched at every zoom from the leaves (`coord/zoom.rs`
 `LEAF_ZOOM`) to the coarsest its layer is read at (`layer/lattice.rs`
 `coarsest`), each a tile of the same record.
 
@@ -122,11 +121,11 @@ z15            z14
 
 A tile at z holds the same record a leaf does — 512 cells a side — so its cells
 are z + 9, a layer's cells always its tile's zoom plus the layer's own constant
-(`layer/lattice.rs` `Lattice`, and `Grid` places it in the world). Its key is a 2D Morton key, a digit a zoom (`hierarchy/morton.rs`), so a
-tile's key is a prefix of its children's: a leaf's key shifted down 15 − z, and
-a key alone does not say by how much, so a tile is named by its zoom and a key
-together (`Quadrant`, `layer/quadrant.rs`); the tile at a zoom over a leaf is
-`Quadrant::over`.
+(`layer/lattice.rs` `Lattice`, and `Grid` places it in the world). A tile is
+its zoom and its index there (`layer/quadrant.rs` `Quadrant`), and its key a
+2D Morton key: a digit a zoom from the coarsest, then a 1 that ends them
+(`hierarchy/morton.rs`), so a tile's digits are a prefix of its children's and
+a key says its own zoom. The tile at a zoom over a leaf is `Quadrant::over`.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_zoom_at`), and
 terrain's tile zoom is the one whose cells those are
@@ -147,10 +146,11 @@ tree's own, and follow from what it represents:
 | --------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | the pyramid (`layer/quadrant.rs`)                         | 2    | resident by tile: one can be missing                                                  | a layer's fold of all under it                                  | a record a tile                                                                                                                              | from a point, up to the nearest resident tile                   |
 | a clip level's bound (pxl-engine clipmap.rs `bounded`) | 2    | with its brick, while a clip level about the eye, the pivot or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the CPU as a brick is filled, a level a zoom to the brick whole, and uploaded; bricks joined to the clip level's width               | a coarse cell passed whole where a ray is above it              |
-| the object layer (pxl-core domain/layer/object/store.rs)       | 3    | by shard; where one is not read, the top's fold stands in                             | its leaf's value, or its eight folded, at every write           | the leaves and each branch's fold, one tree (pxl-core `domain/layer/object/sparse_tree.rs`)                                                  | down a cube's key range, by a box, or along a ray nearest first |
+| the object layer (pxl-core domain/layer/object/store.rs)       | 3    | by shard; where one is not read, the top's fold stands in                             | its leaf's value, or its eight folded, at every write           | the leaves and each branch's fold, one tree (pxl-core `domain/layer/object/sparse_tree.rs`)                                                  | under a cube, by a box, down a column, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the ground
-under it — terrain's cells voted and averaged, places summed — so a far view
+under it — terrain's cells voted and averaged, the places kept that show from
+its zoom — so a far view
 draws a coarse zoom as it is, the way a mipmap is read. Placed objects need a
 tree of another kind: they are mostly empty space, and three-dimensional, so
 what matters is storing them without their empty cells. They are kept in a
@@ -161,14 +161,15 @@ joined into their parent.
 The two ways of stopping are one rule. A node stops growing where it already
 says all of the ground under it, and a coarser cell of equal ones is the case
 where any summary loses nothing. The pyramid's tile says it in its occupancy
-(`bake/tile.rs` `Occupancy`), which children are tiles, written by the bake's
-fold: a tile of places marks a child none when no cell over it holds two places,
-so the tree of places is only as deep as a crowd needs, and terrain marks only a
-child that is the zero tile, its vote being lossy.
+(pxl-spec `bake/tile.rs` `Occupancy`), which children are tiles, written by
+the bake's fold: a tile of places marks a child none when it has no child tile
+and holds no place first shown finer, so the tree of places is only as deep as
+a crowd needs, and terrain marks only a child that is the zero tile, its vote
+being lossy.
 
 A ray crosses the pyramid and the object layer in one descent (pxl-engine
-`cast.rs` `first`, which pxl-core domain/query/ray.rs `first_hit` takes on the
-CPU), each node answered from the ground and what is placed together
+`cast.rs` `walk_from_root`, which pxl-core domain/query/ray.rs `first_hit` runs
+on the CPU), each node answered from the ground and what is placed together
 (pxl-engine `world.rs` `node`). Where the tile a node needs is missing, the
 answer says so: a coarser tile answers in its place, or, with none held, the ray
 stops there and tells nothing past it.

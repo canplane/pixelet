@@ -1,8 +1,8 @@
 # What the strings call things
 
 The words a user reads, in every locale. The code has its own names — `cube`,
-`layer/object`, the pyramid's pages — and they are not these; a string is
-written for someone who has never seen the code.
+`layer/object` — and they are not these; a string is written for someone who
+has never seen the code.
 
 What the world holds is named on two axes: where a thing came from, and what it
 is drawn as.
@@ -27,7 +27,8 @@ place's name is its own in every locale.
 An item — each cube, decor, marker and pet — has one name, the English one, in
 every locale, so it is no locale's string: it is written beside the item in its
 spec (`label` in `spec/spec/asset/cube.json5` and `decor.json5`, `PIN_LABEL` in
-`marker.json5`, a pet's `label` in `character.json5`) and read by the item's number.
+`marker.json5`, a pet's `label` in `character.json5`) and read by the item's
+number.
 
 A string only a development build shows, a dev setting's among them, is in
 `dev/<locale>.json`, merged over its locale in a development build alone

@@ -1,10 +1,9 @@
-# Indicators (the one-off indicator tier)
+# Indicators
 
-An indicator is one bespoke shape placed in the local world frame
-(`../../view/frame/coord.rs`), tied to input or the device's state rather than
-to anything the world keeps, and it does **not** face the camera. That last
-trait is what separates it from a world-anchored billboard: the ghost box
-(`ghost.rs`) and the location indicator's zone ring and beacon (`location.rs`)
-sit and turn in the world's own space, and neither counter-rotates toward the
-eye. Their colors are this tier's own, pxl-render `look/color.rs` `indicator`
-(`ACTION`, `ERASE`), not a general palette.
+An indicator is one shape of its own placed in the world's doubles
+(`../../view/frame/coord.rs`), tied to input or the device's state and to
+nothing the world keeps: the ghost (`ghost.rs`), and the location indicator's
+zone and beacon (`location.rs`). It sits and turns in the world's own space and
+does not face the camera, as a marker does. The zone and a ghost box with no
+cube take pxl-render `look/color.rs` `indicator`'s colors (`ACTION`, `ERASE`);
+the beacon's are its own (pxl-render `param.rs` `location::beacon`).
