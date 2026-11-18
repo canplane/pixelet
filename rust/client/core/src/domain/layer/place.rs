@@ -10,11 +10,12 @@ use pxl_spec::bake::tile::place::{self, PLACE_LATTICE, PlaceTile};
 use crate::domain::layer::Base;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::io::body::Body;
-use crate::sys::io::demand::PhaseList;
+use crate::sys::io::demand::{PhaseList, TaskPhaseName};
 use crate::sys::io::failure::Exit;
 use pxl_global::Global;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use xpute_guest::clock::now;
 
 static PLACE: Global<TileCache<PlaceTile>> = Global::new();
 
@@ -29,9 +30,12 @@ impl Base for PlaceTile {
         _tile: Quadrant,
         _slot: u32,
         pkt: Body,
-        _phases: &mut PhaseList,
+        phases: &mut PhaseList,
     ) -> Result<PlaceTile, Exit> {
-        Ok(place::decode(&pkt)?)
+        let at = now();
+        let tile = place::decode(&pkt)?;
+        phases.push(TaskPhaseName::DecodeMs, now() - at);
+        Ok(tile)
     }
 
     fn empty() -> Option<PlaceTile> {

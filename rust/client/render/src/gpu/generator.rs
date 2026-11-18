@@ -138,10 +138,8 @@ pub struct Generator {
     /// into the last.
     damage: [[i32; 4]; object::DAMAGE_CAP as usize],
     damage_cnt: usize,
-    /// How many of `damage` this frame marks by, and how many boxes it marks by in
-    /// all, counting the bricks handed (`rect_cnt`).
+    /// How many of `damage` this frame marks by.
     mark_cnt: usize,
-    rect_cnt: u32,
     /// Whether the entries' records may not hold what the entries generate, as after decor was
     /// off or the decors' zooms changed. The next frame drawn with decor then generates every
     /// entry.
@@ -230,7 +228,6 @@ impl Generator {
             damage: [[0; 4]; object::DAMAGE_CAP as usize],
             damage_cnt: 0,
             mark_cnt: 0,
-            rect_cnt: 0,
             stale: true,
         }
     }
@@ -322,7 +319,6 @@ impl Generator {
         // candidate's read.
         let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || changed || fresh || self.mark_cnt != 0;
-        self.rect_cnt = 0;
         if self.marking {
             // The boxes held come first, each reaching every zoom. Each brick handed follows,
             // reaching the candidates whose reads it may answer.
@@ -341,7 +337,6 @@ impl Generator {
                 rects[at + 4] = zoom;
                 n += 1;
             }
-            self.rect_cnt = n as u32;
             // The list's head (pxl-content `generation::THIN_ARGS`) holds each pass's
             // workgroups across and up, with the third count, the pairs listed, left 0 for
             // `decor_mark_cs` to fill. It then says whether every entry generates whole, how
@@ -528,7 +523,6 @@ impl Generator {
     /// decor generates every entry (`stale`).
     pub fn off(&mut self) {
         self.on = false;
-        self.rect_cnt = 0;
         self.stale = true;
         self.cnt_read.forget();
     }
@@ -620,12 +614,6 @@ impl Generator {
             g.set_bind_group(pass, 0, self.groups[3 + k].id(), &[]);
             g.dispatch(pass, x, 1, 1);
         }
-    }
-
-    /// How many boxes this frame marks entries by to generate again: the damage and cuts held and
-    /// the bricks handed, `generation::RECT_CAP` at most, or 0 where it marks none.
-    pub fn rect_cnt(&self) -> u32 {
-        self.rect_cnt
     }
 
     /// Whether decor is compacted again this frame, so its instances may stand elsewhere.

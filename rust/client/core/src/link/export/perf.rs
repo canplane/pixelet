@@ -2,19 +2,23 @@
 
 //! The perf interface's methods, which drive the profiler. A read answers
 //! the words it hands over as its return data, so the client never reads the
-//! core's memory.
+//! core's memory. Each read is one call that keeps nothing between calls: it
+//! copies what it answers, one page at most (`limit::PAGE_SZ`), onto the
+//! core's heap, and the copy is freed once the reply is laid.
 
+use crate::abi::perf::Rows;
 use crate::abi::types::ErrorCode;
 use crate::domain::setting::settings;
-use crate::perf::frame::{FrameSample, WorstFrame};
+use crate::perf::frame::FrameSample;
 use crate::perf::read;
 use crate::perf::record;
-use crate::perf::record::{STRTAB_CAP, perf_frames, perf_strtab, perf_tasks, perf_worst};
+use crate::perf::record::{
+    STRTAB_CAP, perf_frame_seq, perf_frames, perf_strtab, perf_task_seq, perf_tasks, perf_worst,
+};
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
 use crate::spec::perf::{TABLE_NAMES, limit, now, stat};
-use pxl_global::Global;
 
 use xpute_guest::clock::now;
 use xpute_kit::status::errno::Errno;
@@ -40,46 +44,54 @@ pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
     Ok(read_timed(|| bytes_of(read::perf_read(window_ms))))
 }
 
-/// A table's records as bytes, and the bytes a record takes.
-type Table = (fn() -> &'static [u8], usize);
+/// A table: its rows as bytes, the sequence past its newest row, and the
+/// bytes a row takes.
+type Table = (fn() -> &'static [u8], fn() -> u64, usize);
 
-/// Each table, in `TABLE_NAMES`' order: frames, tasks, worst.
+/// Each table, in `TABLE_NAMES`' order: frames, tasks.
 const TABLES: [Table; TABLE_NAMES.len()] = [
-    (|| bytes_of(perf_frames()), size_of::<FrameSample>()),
-    (|| bytes_of(perf_tasks()), size_of::<TaskRecord>()),
-    (|| bytes_of(perf_worst()), size_of::<WorstFrame>()),
+    (
+        || bytes_of(perf_frames()),
+        perf_frame_seq,
+        size_of::<FrameSample>(),
+    ),
+    (
+        || bytes_of(perf_tasks()),
+        perf_task_seq,
+        size_of::<TaskRecord>(),
+    ),
 ];
 
-// The string table and the statistics are read whole, each in one page.
+// The string table and the statistics are read whole, each in one page, as
+// the worst frames are (perf/record.rs `WORST_CAP`).
 const _: () = assert!(STRTAB_CAP <= limit::PAGE_SZ as usize);
 const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_SZ as usize);
 
-/// The table being read, by its number, as it stood at its first page, so that
-/// the records landing between pages move none of its pages. It goes with its
-/// last page, the one that comes short.
-static READING: Global<Option<(u32, Vec<u8>)>> = Global::new();
-
-/// Answers the records of table `table` from its record `from`, as many as a
-/// page holds (`limit::PAGE_SZ`), as the table stood at its first page, the
-/// one from record 0.
-pub(super) fn table(table: u32, from: u32) -> Result<Vec<u8>, Errno> {
-    let &(read, record) = TABLES.get(table as usize).ok_or(Errno::EINVAL)?;
-    if from == 0 {
-        READING.set(Some((table, read_timed(read))));
-    }
-    let reading = READING.get(|| None);
-    let Some((_, b)) = reading.as_ref().filter(|(t, _)| *t == table) else {
-        return Err(Errno::EINVAL);
+/// Answers the rows of table `table` from the sequence `from` on, `cnt` at
+/// most and as many as a page holds (`limit::PAGE_SZ`), with the sequence of
+/// the first of them and the one past the table's newest row. A `from` past
+/// the table's end names no row and asks for its newest `cnt` rows, so it
+/// counts `cnt` back from the end. The first is `from` held to the rows the
+/// table has: its oldest where `from` is a row it dropped.
+pub(super) fn table(table: u32, from: u64, cnt: u32) -> Result<Rows, Errno> {
+    let &(rows, end, row_sz) = TABLES.get(table as usize).ok_or(Errno::EINVAL)?;
+    let (rows, end) = (rows(), end());
+    let from = match from > end {
+        true => end.saturating_sub(u64::from(cnt)),
+        false => from,
     };
-    let page = limit::PAGE_SZ as usize / record;
-    let n = b.len() / record;
-    let from = (from as usize).min(n);
-    let to = from + page.min(n - from);
-    let out = b[from * record..to * record].to_vec();
-    if to - from < page {
-        *reading = None;
-    }
-    Ok(out)
+    let first = from.max(end - (rows.len() / row_sz) as u64);
+    let n = ((end - first) as usize)
+        .min(cnt as usize)
+        .min(limit::PAGE_SZ as usize / row_sz);
+    let at = rows.len() - (end - first) as usize * row_sz;
+    let bytes = read_timed(|| &rows[at..at + n * row_sz]);
+    Ok(Rows { first, end, bytes })
+}
+
+/// Answers the worst frames, longest first.
+pub(super) fn worst() -> Result<Vec<u8>, Errno> {
+    Ok(read_timed(|| bytes_of(perf_worst())))
 }
 
 /// Answers the string table the tasks' `at_file` names point into.

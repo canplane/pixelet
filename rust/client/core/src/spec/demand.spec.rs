@@ -86,6 +86,7 @@ impl OutcomeName {
     }
 }
 
+/// What a run reports of itself, each at most once.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TaskPhaseName {
@@ -121,6 +122,3 @@ impl TaskPhaseName {
         }
     }
 }
-
-/// A run's timings past this many are dropped.
-pub const TASK_PHASE_CAP: u32 = 6;

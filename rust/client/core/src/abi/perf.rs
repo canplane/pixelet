@@ -13,14 +13,43 @@ pub const STOP: _rt::Method = 1;
 pub const STATS: _rt::Method = 2;
 /// `table`
 pub const TABLE: _rt::Method = 3;
+/// `worst`
+pub const WORST: _rt::Method = 4;
 /// `strtab`
-pub const STRTAB: _rt::Method = 4;
+pub const STRTAB: _rt::Method = 5;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rows {
+    pub first: u64,
+    pub end: u64,
+    pub bytes: Vec<u8>,
+}
+
+impl Rows {
+    pub const SZ: usize = 24;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u64(at, self.first);
+        w.u64(at + 8, self.end);
+        w.arr(at + 16, &self.bytes);
+    }
+
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Rows, _rt::Errno> {
+        Ok(Rows {
+            first: r.u64(at)?,
+            end: r.u64(at + 8)?,
+            bytes: r.arr::<u8>(at + 16)?,
+        })
+    }
+}
 
 pub trait Guest {
     fn start(&self) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
     fn stop(&self) -> Result<(), _rt::Errno>;
     fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno>;
-    fn table(&self, table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno>;
+    fn table(&self, table: u32, from: u64, cnt: u32) -> Result<Rows, _rt::Errno>;
+    fn worst(&self) -> Result<Vec<u8>, _rt::Errno>;
     fn strtab(&self) -> Result<Vec<u8>, _rt::Errno>;
 }
 
@@ -67,16 +96,25 @@ impl _rt::Object for _Object {
                 }
                 TABLE => {
                     let table = args_.u32(0)?;
-                    let from = args_.u32(4)?;
-                    match self.0.table(table, from) {
+                    let from = args_.u64(8)?;
+                    let cnt = args_.u32(16)?;
+                    match self.0.table(table, from, cnt) {
                         Ok(v) => {
-                            ret_.start(8);
-                            ret_.arr(0, &v);
+                            ret_.start(Rows::SZ);
+                            v.store(ret_, 0);
                             0
                         }
                         Err(e) => e as i32,
                     }
                 }
+                WORST => match self.0.worst() {
+                    Ok(v) => {
+                        ret_.start(8);
+                        ret_.arr(0, &v);
+                        0
+                    }
+                    Err(e) => e as i32,
+                },
                 STRTAB => match self.0.strtab() {
                     Ok(v) => {
                         ret_.start(8);

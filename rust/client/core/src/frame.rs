@@ -6,7 +6,7 @@
 //! apart from the frame.
 
 use crate::domain::layer::Base as _;
-use crate::spec::step::{EffectName, InvalidationReason, StepName};
+use crate::spec::step::{EffectName, InvalidationReason, STEP_PHASE, StepName};
 use pxl_spec::space::coord::q3::{self, Q3};
 
 use crate::domain::control::input::{camera_input_step, rehover_at};
@@ -50,7 +50,7 @@ use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::perf::frame::EFFECT_CNT;
-use crate::perf::record::{perf_recording, timed};
+use crate::perf::record::{perf_record_fill, perf_recording, timed};
 use crate::perf::report::{CpuSample, perf_frame, set_renderer_frame};
 use crate::perf::window::perf_follow;
 use crate::pointer;
@@ -197,39 +197,31 @@ pub(crate) fn boot() {
 
 type Step = (StepName, fn(&mut TickContext));
 
-/// The tick's steps, phase by phase, in the order they run.
-const STEPS: [(Phase, &[Step]); 2] = [
-    (
-        Phase::Interaction,
-        &[
-            (StepName::Controller, controller::controller_step),
-            (StepName::Input, camera_input_tick),
-            (StepName::Camera, camera_tick),
-            (StepName::Edit, edit_tick),
-            (StepName::Ghost, ghost_tick),
-            (StepName::Location, location_tick),
-            // The environment runs after the camera, so it sees this tick's
-            // camera.
-            (StepName::Environment, environment_tick),
-            (StepName::Companion, companion_tick),
-        ],
-    ),
-    (
-        Phase::Visible,
-        &[
-            (StepName::Demand, demand_tick),
-            (StepName::Scene, scene_tick),
-        ],
-    ),
+/// The tick's steps, in the order they run, each in its phase (step.json5
+/// `STEP_PHASE`).
+const STEPS: [Step; StepName::ALL.len()] = [
+    (StepName::Controller, controller::controller_step),
+    (StepName::Input, camera_input_tick),
+    (StepName::Camera, camera_tick),
+    (StepName::Edit, edit_tick),
+    (StepName::Ghost, ghost_tick),
+    (StepName::Location, location_tick),
+    // The environment runs after the camera, so it sees this tick's camera.
+    (StepName::Environment, environment_tick),
+    (StepName::Companion, companion_tick),
+    (StepName::Demand, demand_tick),
+    (StepName::Scene, scene_tick),
 ];
 
 fn tick(delta: f64) -> TickReport {
     let start = now();
     let mut ctx = TickContext::new(delta);
-    for (phase, steps) in STEPS {
+    for phase in Phase::ALL {
         ctx.phase(phase, |ctx| {
-            for &(name, step) in steps {
-                timed(ctx, phase, name, step);
+            for (name, step) in STEPS {
+                if STEP_PHASE[name as usize] == phase {
+                    timed(ctx, name, step);
+                }
             }
         });
     }
@@ -258,10 +250,9 @@ macro_rules! effect {
     }};
 }
 
-/// Runs the frame's effects, and returns how long they took and how long each
-/// took, indexed by `EffectName`, in milliseconds.
-pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
-    let at = now();
+/// Runs the frame's effects, and returns how long each took, indexed by
+/// `EffectName`, in milliseconds.
+pub(crate) fn effects() -> [f64; EFFECT_CNT] {
     let mut times = perf_recording().then_some([0.0; EFFECT_CNT]);
     // Settings load first, so the frame that reads new settings is also the
     // first to act on them.
@@ -284,7 +275,7 @@ pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
     effect!(times, Decor, decor_models_step());
     effect!(times, Object, repository::step());
     effect!(times, Setting, setting::settings_keep_step());
-    (now() - at, times.unwrap_or_default())
+    times.unwrap_or_default()
 }
 
 static REFUSED: Global<Refused> = Global::new();
@@ -310,7 +301,8 @@ pub(crate) fn refused_frames() -> Refused {
 /// refused (rate.rs `due_at`), which answers its frame's start and the gap
 /// the display is measured by (sys/sched/display.rs). That start begins the
 /// frame's budget (sys/sched.rs `begin_frame`), and the world's frame runs;
-/// once it has run, the entry's tasks get their share (`end_frame`).
+/// once it has run, the entry's tasks get their share (`end_frame`), the
+/// ground's fill first, timed while the profiler records.
 #[embassy_executor::task]
 async fn frame_task() {
     loop {
@@ -340,7 +332,11 @@ async fn frame_task() {
         }
         run(at, display_ms, target_ms);
         sched::end_frame();
-        clipmap::fill_share();
+        let at = perf_recording().then(now);
+        let fill_cnt = clipmap::fill_share();
+        if let Some(at) = at {
+            perf_record_fill(now() - at, fill_cnt);
+        }
     }
 }
 
@@ -357,17 +353,21 @@ fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
     let gap_ms = last.map_or(0.0, |(last_at, _)| at - last_at);
     let delta = gap_ms / 1000.0;
     text_drop_unread();
-    let (effects_ms, effects) = effects();
+    let effects = effects();
     // A step longer than `MAX_STEP_S` would carry a character through a
     // wall or make a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
     let report = tick(step);
-    let after_tick = now();
+    // The pump and the stage's parts are timed only while the profiler
+    // records, as an effect is.
+    let recording = perf_recording();
+    let after_tick = recording.then(now);
     // Requests are pumped once a frame, after every producer has declared its
     // wants: the effects, the tick's tile streams (`demand_tick`), and the
     // assets either of them asked for.
     request::declare(Stream::Asset, loader::load_wants());
     pump();
+    let pump_ms = after_tick.map_or(0.0, |at| now() - at);
     let moving = sched::is_invalid();
     let pace = Pace {
         gap_ms,
@@ -378,7 +378,7 @@ fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
             (true, true) => Motion::Moving,
         },
     };
-    let frame = stage::stage_render(pace, &write::render_edit());
+    let frame = stage::stage_render(pace, &write::render_edit(), recording);
     let end = now();
     let gpu_ms = frame
         .stat
@@ -393,9 +393,9 @@ fn run(at: f64, display_ms: f64, target_ms: f64) -> TickReport {
         refresh_ms: display_ms,
         paced_ms: target_ms,
         settled: !moving,
-        effects_ms,
         effects,
-        stage_ms: end - after_tick,
+        pump_ms,
+        stage_parts: frame.parts,
         invalidations: sched::take_invalidations(),
     });
     LAST.set(Some((at, moving)));

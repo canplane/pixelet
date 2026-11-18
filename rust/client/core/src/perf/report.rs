@@ -2,19 +2,24 @@
 
 //! Builds a frame's record once its frame is drawn, so every figure in
 //! it belongs to that one frame: what the frame measured of itself, what the
-//! renderer made of its frame, and the terrain tiles it took in.
+//! renderer made of its frame, and the tiles each base layer took in.
 
 use crate::sys::sched::tick::TickReport;
 use pxl_global::Global;
 use pxl_render::renderer::GpuRead;
 use pxl_render::spec::span::FrameKind;
+use pxl_spec::bake::publication::BaseKind;
+use pxl_spec::bake::tile::division::DivisionTile;
+use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;
+use crate::domain::layer::earth::EarthTile;
 use crate::domain::scene::stage::FrameReport;
 use crate::perf::frame::{
-    DeviceSample, EFFECT_CNT, FrameSample, GpuSample, INVALIDATION_REASON_CNT, RaySample,
+    DeviceSample, EFFECT_CNT, FrameSample, GpuSample, INVALIDATION_REASON_CNT, LAYER_CNT,
+    RaySample, STAGE_PART_CNT,
 };
 use crate::perf::record::{
     RayRead, perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays,
@@ -77,13 +82,11 @@ pub(crate) fn set_renderer_frame(report: &FrameReport) {
             triangle_cnt,
             frame: stat.frame,
             light_changed: stat.light_changed,
-            decor_rect_cnt: stat.decor_rect_cnt,
             ..GpuSample::default()
         },
         device: DeviceSample {
             upload_cnt: stat.upload_cnt,
             upload_bytes: stat.upload_bytes,
-            pack_bytes: stat.pack_bytes,
         },
         gpu_read: stat.gpu,
         ray_read: stat.ray_cnt.map(|r| RayRead {
@@ -93,10 +96,31 @@ pub(crate) fn set_renderer_frame(report: &FrameReport) {
     });
 }
 
+/// The tiles each base layer's tile cache took in and those it refused a
+/// slot since the frame before, each indexed by `BaseKind`. Taking a count
+/// starts it again from zero.
+fn cache_cnts() -> ([f64; LAYER_CNT], [f64; LAYER_CNT]) {
+    fn of<L: Base>() -> (f64, f64) {
+        let cache = L::tile_cache();
+        (
+            f64::from(cache.take_load_cnt()),
+            f64::from(cache.take_refusal_cnt()),
+        )
+    }
+    let cnts = BaseKind::ALL.map(|layer| match layer {
+        BaseKind::Terrain => of::<TerrainTile>(),
+        BaseKind::Place => of::<PlaceTile>(),
+        BaseKind::Division => of::<DivisionTile>(),
+        BaseKind::Earth => of::<EarthTile>(),
+    });
+    (cnts.map(|c| c.0), cnts.map(|c| c.1))
+}
+
 /// What this frame held, for the recording's extremes: the heap as its
-/// allocator reports it, the body slots' peak since the frame before, and the terrain tiles refused a slot since then. Taking a peak or
-/// a count starts it again from zero.
-fn peaks(h: &HeapStat) -> RecordingSection {
+/// allocator reports it, the body slots' peak since the frame before, and
+/// the tiles refused a slot since then, `refusals`. Taking a peak starts it
+/// again from zero.
+fn peaks(h: &HeapStat, refusals: [f64; LAYER_CNT]) -> RecordingSection {
     RecordingSection {
         frame_cnt: 1.0,
         heap_live_max_bytes: h.live as f64,
@@ -106,7 +130,7 @@ fn peaks(h: &HeapStat) -> RecordingSection {
         heap_largest_free_min_bytes: h.largest_free as f64,
         heap_refusal_cnt: f64::from(h.refusals),
         body_slots_peak: f64::from(body::take_peak()),
-        terrain_refusal_cnt: TerrainTile::tile_cache().take_refusal_cnt() as f64,
+        refusals,
     }
 }
 
@@ -123,10 +147,12 @@ pub(crate) struct CpuSample {
     pub paced_ms: f64,
     /// Whether this frame asked for no next one.
     pub settled: bool,
-    pub effects_ms: f64,
     /// Each effect's time in the frame, by `EffectName`.
     pub effects: [f64; EFFECT_CNT],
-    pub stage_ms: f64,
+    /// The requests' pump's time, and each part of the stage's, by
+    /// `StagePartName`.
+    pub pump_ms: f64,
+    pub stage_parts: [f64; STAGE_PART_CNT],
     /// The invalidations for a frame since the frame before, by `InvalidationReason`
     /// (sys/sched.rs `take_invalidations`).
     pub invalidations: [u32; INVALIDATION_REASON_CNT],
@@ -139,8 +165,8 @@ pub(crate) fn perf_frame(t: CpuSample) {
     // The peaks and counts are taken whether or not the profiler records, so
     // a recording that starts later counts from its own start.
     let heap = heap::stat();
-    let section = peaks(&heap);
-    let terrain_load_cnt = f64::from(TerrainTile::tile_cache().take_load_cnt());
+    let (loads, refusals) = cache_cnts();
+    let section = peaks(&heap, refusals);
     let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
     if !perf_recording() {
         return;
@@ -159,15 +185,16 @@ pub(crate) fn perf_frame(t: CpuSample) {
         paced_ms: t.paced_ms,
         settled: f64::from(u8::from(t.settled)),
         budget_ms: t.tick.budget_ms,
-        effects_ms: t.effects_ms,
+        overran: f64::from(u8::from(t.tick.overran)),
         tick_ms: t.tick.total_ms,
         phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
-        stage_ms: t.stage_ms,
+        pump_ms: t.pump_ms,
+        stage_parts: t.stage_parts,
         effects: t.effects,
         invalidations: t.invalidations.map(f64::from),
         kind: f64::from(renderer.kind as u8),
         gpu: renderer.gpu,
-        terrain_load_cnt,
+        loads,
         device: renderer.device,
         heap_used_bytes: heap.peak as f64,
         // The interval's figures come later: its frames' as each ends, and its

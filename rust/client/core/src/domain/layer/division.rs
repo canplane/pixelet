@@ -22,9 +22,10 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Body;
-use crate::sys::io::demand::PhaseList;
+use crate::sys::io::demand::{PhaseList, TaskPhaseName};
 use crate::sys::io::failure::Exit;
 use crate::sys::range::{OwnedRange, arr_sz};
+use xpute_guest::clock::now;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
@@ -49,11 +50,14 @@ impl Base for DivisionTile {
         _tile: Quadrant,
         slot: u32,
         pkt: Body,
-        _phases: &mut PhaseList,
+        phases: &mut PhaseList,
     ) -> Result<DivisionTile, Exit> {
+        let at = now();
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
         let cells = unsafe { RANGE.arr::<u32>(slot * SLOT_SZ, CELL_CNT) };
-        Ok(division::decode_into(&pkt, cells)?)
+        let tile = division::decode_into(&pkt, cells)?;
+        phases.push(TaskPhaseName::DecodeMs, now() - at);
+        Ok(tile)
     }
 }
 

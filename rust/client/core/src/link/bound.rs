@@ -10,6 +10,7 @@
 //! What the UI sends in past a frame is refused with EMSGSIZE.
 
 use crate::abi::overlay::Snapshot;
+use crate::abi::perf::Rows;
 use crate::domain::setting::SettingKey;
 use crate::spec::perf::limit;
 use pxl_render::gpu::surface::SURFACE_CAP;
@@ -30,9 +31,9 @@ const SNAPSHOT: usize = {
     Snapshot::SZ + draft + settings + surfaces
 };
 
-/// A perf read's return data: one page (perf.json5 LIMIT.PAGE_SZ), a list of
-/// bytes.
-const PERF_PAGE: usize = 8 + list(limit::PAGE_SZ as usize, 1);
+/// A perf read's return data at its largest, a table's rows (wit/perf.wit):
+/// one page of bytes (perf.json5 LIMIT.PAGE_SZ).
+const PERF_PAGE: usize = Rows::SZ + list(limit::PAGE_SZ as usize, 1);
 
 /// scene.chat's args, which the core takes: one string (wit/scene.wit), a
 /// line at its cap.

@@ -15,7 +15,6 @@ use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::frame::refused_frames;
-use crate::perf::frame::overran;
 use crate::perf::frame::{FrameSample, GPU_SPAN_CNT, RaySample};
 use crate::perf::record::{
     perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
@@ -41,7 +40,6 @@ use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 
 const REASON_CAP: usize = limit::REASON_CAP as usize;
-const STEP_CAP: usize = limit::STEP_CAP as usize;
 
 /// STAT's words then NOW's, as `perf.stats`'s reply names them. They live on
 /// the heap, not in a static, because a native build's statics lie outside the
@@ -158,11 +156,17 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         seconds,
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
-        overran: cnt(&overran),
+        overran: cnt(&|f| f.overran != 0.0),
         interval: percentile(scratch, moving().map(|f| f.interval_ms)),
         tick: percentile(scratch, frames.iter().map(|f| f.tick_ms)),
-        effect: percentile(scratch, frames.iter().map(|f| f.effects_ms)),
-        stage: percentile(scratch, frames.iter().map(|f| f.stage_ms)),
+        effect: percentile(scratch, frames.iter().map(FrameSample::effects_ms)),
+        pump: percentile(scratch, frames.iter().map(|f| f.pump_ms)),
+        stage: percentile(scratch, frames.iter().map(FrameSample::stage_ms)),
+        stage_parts_p95: core::array::from_fn(|k| {
+            percentile(scratch, frames.iter().map(|f| f.stage_parts[k])).p95
+        }),
+        fill: percentile(scratch, frames.iter().map(|f| f.fill_ms)),
+        fill_cnt: frames.iter().map(|f| f.fill_cnt).sum(),
         perf: percentile(scratch, frames.iter().map(|f| f.perf_ms)),
         effects_p95: core::array::from_fn(|k| {
             percentile(scratch, frames.iter().map(|f| f.effects[k])).p95
@@ -190,7 +194,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
             sum.add(&f.ray_sample);
             sum
         }),
-        first: *first,
+        heap_used_delta_bytes: last.heap_used_bytes - first.heap_used_bytes,
         last: *last,
     }
 }
@@ -351,9 +355,8 @@ fn view() -> ViewSection {
 
 fn steps() -> StepSection {
     let mut steps = StepSection::default();
-    for (name, s) in step_stats().take(STEP_CAP) {
+    for (name, s) in step_stats() {
         steps.slots[steps.cnt as usize] = StepStat {
-            phase: f64::from(s.phase as u8),
             name: f64::from(name as u8),
             ms: s.ms,
             cnt: s.cnt as f64,

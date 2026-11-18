@@ -49,7 +49,7 @@ use crate::spec::span::GpuSpanName;
 
 /// Hands each waiting earth tile's layer and texels to the writer, until the writer refuses
 /// one by returning false.
-pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
+pub type Upload<'a> = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool) + 'a;
 
 /// How many of the air's entries every painter and the sky read (record.rs `AIR`).
 pub const AIR_ENTRY_CNT: usize = AIR.len();
@@ -470,7 +470,7 @@ impl Atmosphere {
         g: &Gpu,
         window: [i32; 2],
         layers: &[u32],
-        upload: &mut Upload,
+        upload: &mut Upload<'_>,
     ) -> bool {
         let (texture, mut came) = (self.earth_tiles.0, false);
         upload(&mut |layer, texels| {

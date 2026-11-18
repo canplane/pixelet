@@ -19,6 +19,9 @@ pub(crate) struct TickContext {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct TickReport {
     pub budget_ms: f64,
+    /// Whether the entry's budget was spent as the tick ended (sys/sched.rs
+    /// `spent`).
+    pub overran: bool,
     pub phase_ms: [f64; Phase::ALL.len()],
     pub total_ms: f64,
 }
@@ -45,6 +48,7 @@ impl TickContext {
     pub(crate) fn report(&self, start: f64) -> TickReport {
         TickReport {
             budget_ms: sched::deadline_ms(),
+            overran: sched::spent(),
             phase_ms: self.phase_ms,
             total_ms: now() - start,
         }

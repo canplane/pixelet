@@ -948,6 +948,8 @@ enum Stage {
 enum Poll {
     /// A part ran, and more may.
     Ran,
+    /// A part ran and completed a brick's fill, and more may.
+    Filled,
     /// The host holds what the part writes, so a later frame runs it.
     Stop,
     /// No brick is due.
@@ -958,13 +960,15 @@ enum Poll {
 /// It runs as far as the entry's budget holds (sys/sched.rs `spent`), and
 /// always at least one part, so an entry that spent its budget before this
 /// point still moves the fill. What is left, and a filled brick waiting to be
-/// handed over, ask for the next frame.
-pub(crate) fn fill_share() {
+/// handed over, ask for the next frame. It answers how many bricks it filled,
+/// for the profiler.
+pub(crate) fn fill_share() -> u32 {
     let w = clipmap();
     if core::mem::take(&mut w.due_stale) {
         due(w);
     }
     let mut ran = false;
+    let mut filled_cnt = 0;
     loop {
         match fill_stage(w) {
             Poll::Done => break,
@@ -973,6 +977,10 @@ pub(crate) fn fill_share() {
                 break;
             }
             Poll::Ran => ran = true,
+            Poll::Filled => {
+                ran = true;
+                filled_cnt += 1;
+            }
         }
         if sched::spent() {
             break;
@@ -981,6 +989,7 @@ pub(crate) fn fill_share() {
     if ran {
         invalidate(InvalidationReason::Pending);
     }
+    filled_cnt
 }
 
 /// A brick with no line reads this: no bin holds any segment.
@@ -1167,7 +1176,10 @@ fn end(w: &mut Clipmap, b: u32, fill: Fill) -> Poll {
     w.slots[b as usize].fill = fill;
     w.filling = None;
     fill_scratch().lines = Vec::new();
-    Poll::Ran
+    match fill {
+        Fill::Filled => Poll::Filled,
+        _ => Poll::Ran,
+    }
 }
 
 /// Clip levels that a caller already holds, read as a center reads them: its

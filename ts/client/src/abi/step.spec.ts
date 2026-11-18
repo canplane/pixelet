@@ -3,8 +3,10 @@
 // GENERATED from spec/client/core/perf/step.json5 (xpute-gen data.rs)
 //
 // The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs
-// registers them, the effects a frame runs around them, and the reasons a frame is asked for. The profiler records and
+// registers them, and the phase each runs in, the effects a frame runs before them, the parts of the stage it runs after them and the requests' pump, and the reasons a frame is asked for. The profiler records and
 // reports them by these names (spec/client/core/perf/perf.json5).
+
+import type { Phase } from "./phase.spec.ts";
 
 export const STEP_NAMES = [
   "controller",
@@ -83,6 +85,20 @@ export function name_StepName(val: StepName): string {
   }
 }
 
+/** The phase each step runs in, in STEP_NAME's order (pxl-core frame.rs `tick`). */
+export const STEP_PHASE = [
+  0 as Phase,
+  0 as Phase,
+  0 as Phase,
+  0 as Phase,
+  0 as Phase,
+  0 as Phase,
+  0 as Phase,
+  0 as Phase,
+  1 as Phase,
+  1 as Phase,
+] as const;
+
 export const EFFECT_NAMES = [
   "navigation",
   "bootstrap",
@@ -139,6 +155,48 @@ export function name_EffectName(val: EffectName): string {
       return "object";
     case EFFECT_NAME_SETTING:
       return "setting";
+  }
+}
+
+/** The parts of a frame's stage, in the order they start (pxl-core domain/scene/stage.rs `stage_render`): `assemble` what the renderer's frame is made from, the eye's cast among it; `upload` the ground's bricks and the earth's tiles handed to the renderer, which asks for them as it encodes; `encode` the renderer's frame, less those uploads; `judge` what the frame leaves, the images it took given back and the drawn resolution judged. */
+export const STAGE_PART_NAMES = [
+  "assemble",
+  "upload",
+  "encode",
+  "judge",
+] as const;
+
+export type StagePartName =
+  | typeof STAGE_PART_NAME_ASSEMBLE
+  | typeof STAGE_PART_NAME_UPLOAD
+  | typeof STAGE_PART_NAME_ENCODE
+  | typeof STAGE_PART_NAME_JUDGE;
+export const STAGE_PART_NAME_ASSEMBLE = 0;
+export const STAGE_PART_NAME_UPLOAD = 1;
+export const STAGE_PART_NAME_ENCODE = 2;
+export const STAGE_PART_NAME_JUDGE = 3;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_StagePartName(val: number): StagePartName | null {
+  return val === STAGE_PART_NAME_ASSEMBLE ||
+    val === STAGE_PART_NAME_UPLOAD ||
+    val === STAGE_PART_NAME_ENCODE ||
+    val === STAGE_PART_NAME_JUDGE
+    ? val
+    : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_StagePartName(val: StagePartName): string {
+  switch (val) {
+    case STAGE_PART_NAME_ASSEMBLE:
+      return "assemble";
+    case STAGE_PART_NAME_UPLOAD:
+      return "upload";
+    case STAGE_PART_NAME_ENCODE:
+      return "encode";
+    case STAGE_PART_NAME_JUDGE:
+      return "judge";
   }
 }
 

@@ -9,7 +9,6 @@ use core::cmp::Ordering;
 
 use pxl_spec::bake::publication::BaseKind;
 
-use crate::spec;
 pub(crate) use crate::spec::demand::StreamName as Stream;
 pub(crate) use crate::spec::demand::TaskPhaseName;
 
@@ -60,10 +59,10 @@ pub(crate) struct Order {
     pub near: f64,
 }
 
-pub(crate) const PHASE_CAP: usize = spec::demand::TASK_PHASE_CAP as usize;
+pub(crate) const PHASE_CAP: usize = TaskPhaseName::ALL.len();
 
-/// The timings a run reports, each under the name the run gives it. A timing
-/// past `PHASE_CAP` is dropped.
+/// The timings a run reports, each under the name the run gives it and each
+/// at most once, in the order it reports them.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PhaseList {
     items: [(TaskPhaseName, f64); PHASE_CAP],
@@ -167,10 +166,8 @@ impl Default for PhaseList {
 
 impl PhaseList {
     pub(crate) fn push(&mut self, name: TaskPhaseName, val: f64) {
-        if self.len < PHASE_CAP {
-            self.items[self.len] = (name, val);
-            self.len += 1;
-        }
+        self.items[self.len] = (name, val);
+        self.len += 1;
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {

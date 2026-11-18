@@ -13,7 +13,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 
 import { type Frame, isList, COLUMNS, read } from "@/service/core/perf.ts";
-import { LIST_NAMES } from "./column.ts";
+import { BIT_NAMES, effectsMs, LIST_NAMES, stageMs } from "./column.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
@@ -66,19 +66,24 @@ const threadName = (tid: u32, name: string) =>
 function frameArgs(f: Frame): ArgMap {
   const args: ArgMap = {};
   for (const { name } of COLUMNS) {
-    if (!isList(name)) {
-      args[name] = fixedN(f[name], 2);
+    if (isList(name)) {
+      const names = LIST_NAMES[name];
+      f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
       continue;
     }
-    const names = LIST_NAMES[name];
-    f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
+    const bits = BIT_NAMES[name];
+    if (bits === undefined) args[name] = fixedN(f[name], 2);
+    else
+      bits.forEach((bit, k) => (args[`${name}_${bit}`] = (f[name] >> k) & 1));
   }
   return args;
 }
 
-/** The profiler's window as a trace, whole. */
+/** The profiler's window as a trace, whole, its metadata saying how many
+ * frames and tasks the tables dropped under the read. */
 export async function perfTrace(): Promise<object> {
-  const [frames, tasks] = await Promise.all([read("frames"), read("tasks")]);
+  const [{ frames, lost: lostFrameCount }, { tasks, lost: lostTaskCount }] =
+    await Promise.all([read("frames"), read("tasks")]);
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
@@ -145,15 +150,19 @@ export async function perfTrace(): Promise<object> {
         event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)),
       );
       // A frame's record is taken as its stage ends, at `t`. So the stage
-      // ends at `t`, the tick ends where the stage starts, and the effects
-      // end where the tick starts.
+      // ends at `t`, the pump ends where the stage starts, the tick where the
+      // pump starts, and the effects where the tick starts; the ground's fill
+      // starts where the stage ends.
       const span = (name: string, endMs: f64, ms: f64) =>
         events.push(
           event(name, "frame", "X", ts - us(endMs + ms), us(ms), TID_FRAMES),
         );
-      span("stage", 0, f.stage_ms);
-      span("tick", f.stage_ms, f.tick_ms);
-      span("effects", f.stage_ms + f.tick_ms, f.effects_ms);
+      const stage = stageMs(f);
+      span("stage", 0, stage);
+      span("pump", stage, f.pump_ms);
+      span("tick", stage + f.pump_ms, f.tick_ms);
+      span("effects", stage + f.pump_ms + f.tick_ms, effectsMs(f));
+      events.push(event("fill", "frame", "X", ts, us(f.fill_ms), TID_FRAMES));
     }
   }
 
@@ -186,6 +195,8 @@ export async function perfTrace(): Promise<object> {
       build_number: BUILD_NUMBER,
       build_id: BUILD_ID,
       build_time: BUILD_TIME,
+      lost_frame_cnt: lostFrameCount,
+      lost_task_cnt: lostTaskCount,
     },
   };
 }

@@ -3,8 +3,10 @@
 // GENERATED from spec/client/core/perf/step.json5 (xpute-gen data.rs)
 //
 // The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs
-// registers them, the effects a frame runs around them, and the reasons a frame is asked for. The profiler records and
+// registers them, and the phase each runs in, the effects a frame runs before them, the parts of the stage it runs after them and the requests' pump, and the reasons a frame is asked for. The profiler records and
 // reports them by these names (spec/client/core/perf/perf.json5).
+
+use crate::spec::phase::Phase;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -70,6 +72,20 @@ impl StepName {
     }
 }
 
+/// The phase each step runs in, in STEP_NAME's order (pxl-core frame.rs `tick`).
+pub const STEP_PHASE: [Phase; 10] = [
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Interaction,
+    Phase::Visible,
+    Phase::Visible,
+];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum EffectName {
@@ -118,6 +134,47 @@ impl EffectName {
             EffectName::Decor => "decor",
             EffectName::Object => "object",
             EffectName::Setting => "setting",
+        }
+    }
+}
+
+/// The parts of a frame's stage, in the order they start (pxl-core domain/scene/stage.rs `stage_render`): `assemble` what the renderer's frame is made from, the eye's cast among it; `upload` the ground's bricks and the earth's tiles handed to the renderer, which asks for them as it encodes; `encode` the renderer's frame, less those uploads; `judge` what the frame leaves, the images it took given back and the drawn resolution judged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum StagePartName {
+    Assemble = 0,
+    Upload = 1,
+    Encode = 2,
+    Judge = 3,
+}
+
+impl StagePartName {
+    /// Every member, in its source's own order.
+    pub const ALL: [StagePartName; 4] = [
+        StagePartName::Assemble,
+        StagePartName::Upload,
+        StagePartName::Encode,
+        StagePartName::Judge,
+    ];
+
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<StagePartName> {
+        match val {
+            0 => Some(StagePartName::Assemble),
+            1 => Some(StagePartName::Upload),
+            2 => Some(StagePartName::Encode),
+            3 => Some(StagePartName::Judge),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            StagePartName::Assemble => "assemble",
+            StagePartName::Upload => "upload",
+            StagePartName::Encode => "encode",
+            StagePartName::Judge => "judge",
         }
     }
 }

@@ -95,7 +95,7 @@ export async function perfReportRead(): Promise<PerfReport> {
     frames: s.frames,
     steps: s.steps,
     tasks: s.tasks,
-    recent,
+    recent: recent.tasks,
     worst,
     longs: longFramesSince(-Infinity),
     truncated: s.recordingState.truncated,

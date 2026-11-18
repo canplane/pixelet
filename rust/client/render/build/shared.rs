@@ -1012,6 +1012,7 @@ fn cloud_hash() -> String {
 /// its sRGB; the ramp read straight between its stops.
 fn debug_look() -> String {
     use debug_look::{grid, share, steps};
+    use pxl_engine::cast::STEPS_CAP;
     use pxl_spec::color::Rgb;
     use pxl_spec::space::camera::grid::SPANS;
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays stop on it
@@ -1021,6 +1022,13 @@ fn debug_look() -> String {
         assert!(
             share::finer::MOST == 1.0 && share::within::MOST == SPANS * SPANS,
             "debug_look.json5's share bounds are the split's"
+        );
+    }
+    // The ramp runs up to the most steps a ray takes, so no ray's color lies past its top.
+    const {
+        assert!(
+            steps::MOST == STEPS_CAP as f32,
+            "debug_look.json5's most steps are the walk's cap"
         );
     }
     let light = |c: Rgb| color::linear_rgb(c).map(|v| v as f32);

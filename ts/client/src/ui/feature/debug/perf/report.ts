@@ -7,6 +7,7 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 
 import type {
   Frame,
+  ListColumn,
   Percentile,
   RayCount,
   RecordingSection,
@@ -15,10 +16,21 @@ import type {
   ViewSection,
   Worst,
 } from "@/service/core/perf.ts";
-import { n1, phaseText, tris, valueText } from "./column.ts";
+import {
+  bitsOf,
+  effectsMs,
+  LIST_NAMES,
+  n1,
+  phaseName,
+  phaseText,
+  stageMs,
+  tris,
+  valueText,
+} from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
+import { LIGHT_CHANGEDS } from "@/abi/span.spec.ts";
 import { type LongFrame } from "@/service/platform/types.ts";
 import * as longFrame from "@/service/platform/long-frame.ts";
 import * as share from "@/service/platform/share.ts";
@@ -79,6 +91,12 @@ function viewText(v: ViewSection, gpuPx: f64): string {
   }`;
 }
 
+const counted = (rows: { name: string; n: f64 }[]) =>
+  rows
+    .filter((r) => r.n > 0)
+    .map((r) => `${r.name} ${r.n}`)
+    .join("  ") || "-";
+
 function recordingText(recording: RecordingSection): string {
   if (!recording.frame_cnt) return "  since   no frame folded";
   return `  since   heap max live ${bytes(recording.heap_live_max_bytes)}  run ${bytes(
@@ -89,7 +107,7 @@ function recordingText(recording: RecordingSection): string {
     recording.heap_largest_free_min_bytes,
   )}   refusals ${recording.heap_refusal_cnt}   body slots peak ${
     recording.body_slots_peak
-  }   terrain refused ${recording.terrain_refusal_cnt}   (over the ${
+  }   tiles refused ${counted(recording.refusals)}   (over the ${
     recording.frame_cnt
   } frames since the recording started)`;
 }
@@ -99,11 +117,13 @@ export function failText(fail: u32, detail: u32): string {
   return detail === 0 ? name : `${name} ${detail}`;
 }
 
-/** What each task stream waits on, judged by hand from profiling. It only
- * labels the report: scheduling never reads it. */
-const BOUND: Record<string, string> = {
-  terrain: "network",
-  division: "network",
+/** What a stream's runs waited on over the window: the phase its runs' mean
+ * time is longest in, or none where they reported no time. */
+const boundText = (means: [string, f64][] | null) => {
+  const timed = (means ?? []).filter(([k]) => k.endsWith("_ms"));
+  return timed.length === 0
+    ? "-"
+    : phaseName(timed.reduce((a, b) => (b[1] > a[1] ? b : a))[0]);
 };
 
 const phasesText = (p: [string, f64][]) =>
@@ -128,10 +148,21 @@ function taskLine(task: TaskRecord): string {
 
 const worstEffectText = (f: Frame) => {
   const k = f.effects.reduce((w, ms, i) => (ms > f.effects[w] ? i : w), 0);
-  return f.effects_ms > 0
+  return effectsMs(f) > 0
     ? `  worst ${EFFECT_NAMES[k] ?? "-"} ${n1(f.effects[k])}`
     : "";
 };
+
+/** A list column's slots that are not 0, each by its name. */
+const listText = (
+  f: Frame,
+  column: ListColumn,
+  text: (v: f64) => string = String,
+) =>
+  f[column]
+    .map((v, k) => (v > 0 ? `${LIST_NAMES[column][k]} ${text(v)}` : ""))
+    .filter(Boolean)
+    .join(" ") || "-";
 
 /** For one frame, the uploads and the heap mean something only as a change
  * from the frame before, so the line adds their deltas (`Δ`). */
@@ -142,16 +173,18 @@ function frameLine({ sample, delta }: Worst): string {
       : `  Δuploads ${signed(delta.uploadCount)} Δuploads bytes ${signedBytes(
           delta.uploadBytes,
         )} Δheap used ${signedBytes(delta.heapUsedBytes)}`;
-  return `[${n1(sample.t).padStart(9)}] ${valueText(
+  return `[${n1(sample.t).padStart(9)}] frame ${sample.gpu_frame} ${valueText(
     "kind_name",
     sample.kind_name,
-  )}  interval ${n1(sample.interval_ms)}  effects ${n1(sample.effects_ms)}${worstEffectText(sample)}  tick ${n1(sample.tick_ms)}/${n1(
+  )}  interval ${n1(sample.interval_ms)}  asked by ${listText(sample, "invalidations")}  effects ${n1(effectsMs(sample))}${worstEffectText(sample)}  tick ${n1(sample.tick_ms)}${sample.overran ? " overran" : ""}  deadline ${n1(
     sample.budget_ms,
-  )}${sample.settled ? " (still)" : ""}  stage ${n1(sample.stage_ms)}  perf ${n1(sample.perf_ms)}  gpu busy ${
+  )} from the entry's start${sample.settled ? " (still)" : ""}  pump ${n1(sample.pump_ms)}  stage ${n1(stageMs(sample))} (${listText(sample, "stage_parts", n1)})  fill ${n1(sample.fill_ms)} (${sample.fill_cnt} bricks)  perf ${n1(sample.perf_ms)}  gpu busy ${
     sample.gpu_timed ? n1(sample.gpu_busy_ms) : "-"
-  }  draws ${sample.draw_cnt} tris ${tris(sample.triangle_cnt)}  uploads ${sample.upload_cnt}  heap used ${bytes(
-    sample.heap_used_bytes,
-  )}${deltaText}`;
+  }  light cast by ${
+    bitsOf(LIGHT_CHANGEDS, sample.light_changed).join(" ") || "-"
+  }  draws ${sample.draw_cnt} tris ${tris(sample.triangle_cnt)}  tiles ${listText(sample, "loads")}  uploads ${sample.upload_cnt} (${bytes(
+    sample.upload_bytes,
+  )})  heap used ${bytes(sample.heap_used_bytes)}${deltaText}`;
 }
 
 function longSourcesText(): string {
@@ -187,12 +220,6 @@ function windowSection(report: PerfReport): string[] {
           )
           .join("  ");
 
-  const counted = (rows: { name: string; n: f64 }[]) =>
-    rows
-      .filter((r) => r.n > 0)
-      .map((r) => `${r.name} ${r.n}`)
-      .join("  ") || "-";
-
   return [
     `frames n=${frames.n}  over ${n1(frames.seconds)}s  fps ${n1(
       fps(frames) ?? NaN,
@@ -213,7 +240,11 @@ function windowSection(report: PerfReport): string[] {
         .join("  ") || "-"
     }`,
     `  invalidations ${frames.invalidations.map((a) => `${a.name} ${a.n}`).join("  ")}`,
-    `  stage   ${percentile(frames.stage)} ms   (the pump and the render)`,
+    `  pump    ${percentile(frames.pump)} ms   (the requests', after the tick)`,
+    `  stage   ${percentile(frames.stage)} ms   p95 ${frames.stagePartsP95
+      .map((s) => `${s.name} ${n1(s.p95)}`)
+      .join("  ")}`,
+    `  fill    ${percentile(frames.fill)} ms   bricks ${frames.fillCount}   (the ground's, after the frame)`,
     `  perf ${percentile(frames.perf)} ms   (its own record and the UI's reads)`,
     frames.gpuTimed > 0
       ? `  gpu     ${percentile(
@@ -244,7 +275,7 @@ function tasksSection(tasks: TaskSummary[]): string[] {
   if (total === 0) return ["tasks n=0"];
   const lines = [`tasks n=${total}`];
   for (const summary of tasks) {
-    const bound = BOUND[summary.stream] ?? "?";
+    const bound = boundText(summary.phaseMean);
     const reasons =
       summary.reasons.length === 0
         ? ""

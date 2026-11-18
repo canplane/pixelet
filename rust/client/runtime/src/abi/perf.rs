@@ -13,8 +13,36 @@ pub const STOP: _rt::Method = 1;
 pub const STATS: _rt::Method = 2;
 /// `table`
 pub const TABLE: _rt::Method = 3;
+/// `worst`
+pub const WORST: _rt::Method = 4;
 /// `strtab`
-pub const STRTAB: _rt::Method = 4;
+pub const STRTAB: _rt::Method = 5;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rows {
+    pub first: u64,
+    pub end: u64,
+    pub bytes: Vec<u8>,
+}
+
+impl Rows {
+    pub const SZ: usize = 24;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u64(at, self.first);
+        w.u64(at + 8, self.end);
+        w.arr(at + 16, &self.bytes);
+    }
+
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Rows, _rt::Errno> {
+        Ok(Rows {
+            first: r.u64(at)?,
+            end: r.u64(at + 8)?,
+            bytes: r.arr::<u8>(at + 16)?,
+        })
+    }
+}
 
 pub fn start(side_: &_rt::Side) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
     let (r, data) = side_.call(HANDLE, START, _rt::Packet::Args(None));
@@ -54,15 +82,24 @@ pub fn stats(side_: &_rt::Side, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::
     })
 }
 
-pub fn table(side_: &_rt::Side, table: u32, from: u32) -> Result<Vec<u8>, _rt::Errno> {
+pub fn table(side_: &_rt::Side, table: u32, from: u64, cnt: u32) -> Result<Rows, _rt::Errno> {
     let (r, data) = side_.call(
         HANDLE,
         TABLE,
-        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((24, &|w_: &mut _rt::Lower| {
             w_.u32(0, table);
-            w_.u32(4, from);
+            w_.u64(8, from);
+            w_.u32(16, cnt);
         }))),
     );
+    _rt::answer(r).and_then(|_| {
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
+        Rows::load(r_, 0)
+    })
+}
+
+pub fn worst(side_: &_rt::Side) -> Result<Vec<u8>, _rt::Errno> {
+    let (r, data) = side_.call(HANDLE, WORST, _rt::Packet::Args(None));
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.arr::<u8>(0)

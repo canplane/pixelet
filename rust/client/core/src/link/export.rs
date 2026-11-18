@@ -224,13 +224,16 @@ impl abi::perf::Guest for Core {
     fn stop(&self) -> Result<(), Errno> {
         with_frame(perf::stop())
     }
-    // The three below only read, and a read asks for no frame: it would
+    // The four below only read, and a read asks for no frame: it would
     // draw into what the profiler measures.
     fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
         perf::stats(window_ms)
     }
-    fn table(&self, table: u32, from: u32) -> Result<Vec<u8>, Errno> {
-        perf::table(table, from)
+    fn table(&self, table: u32, from: u64, cnt: u32) -> Result<abi::perf::Rows, Errno> {
+        perf::table(table, from, cnt)
+    }
+    fn worst(&self) -> Result<Vec<u8>, Errno> {
+        perf::worst()
     }
     fn strtab(&self) -> Result<Vec<u8>, Errno> {
         perf::strtab()
