@@ -101,13 +101,18 @@ $(OUT)/test/libxpute.a: $(LIBRARY_OBJECTS)
 
 # Each file is written whole under a name of its own and then moved, so a make
 # that reads it, or another writing it at once, never sees half of one.
-$(AMALGAMATION)/xpute.hpp: amalgamation.awk $(LIBRARY_HEADERS) Makefile
-	@mkdir -p $(@D)
-	@awk -f amalgamation.awk -v part=hpp $(LIBRARY_HEADERS) > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
+# Each of the two files opens with the license, since a program takes them
+# without the tree they came from.
+LICENSE := $(ROOT)/LICENSE
+LICENSE_COMMENT = sed -e 's|^|// |' -e 's| *$$||' $(LICENSE) && echo
 
-$(AMALGAMATION)/xpute.cpp: amalgamation.awk $(LIBRARY_HEADERS) $(LIBRARY_SOURCES) Makefile
+$(AMALGAMATION)/xpute.hpp: amalgamation.awk $(LIBRARY_HEADERS) $(LICENSE) Makefile
 	@mkdir -p $(@D)
-	@awk -f amalgamation.awk -v part=cpp $(LIBRARY_HEADERS) $(LIBRARY_SOURCES) > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
+	@{ $(LICENSE_COMMENT) && awk -f amalgamation.awk -v part=hpp $(LIBRARY_HEADERS); } > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
+
+$(AMALGAMATION)/xpute.cpp: amalgamation.awk $(LIBRARY_HEADERS) $(LIBRARY_SOURCES) $(LICENSE) Makefile
+	@mkdir -p $(@D)
+	@{ $(LICENSE_COMMENT) && awk -f amalgamation.awk -v part=cpp $(LIBRARY_HEADERS) $(LIBRARY_SOURCES); } > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
 
 # Each object names the headers it read (-MMD), so a header's change rebuilds
 # what includes it. Each depends on this file and the compilers' stamp, so a
