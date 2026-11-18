@@ -91,20 +91,23 @@ pub(crate) fn resolve(at: &Q3, cur: V3) -> V3 {
     }
 }
 
-/// A point with a known Z, such as a location fix's altitude, put on the
-/// floor nearest that Z. None until a leaf gives that floor.
-pub(crate) fn nearest(at: &Q3) -> Option<Q3> {
-    World::now()
-        .support_nearest(at)
-        .exact()
-        .flatten()
-        .map(|top| on_floor(at, top))
-}
-
 /// Where `at` stands, once a leaf gives the floor there. A point with an
 /// unknown Z gets its Z from here.
 pub(crate) fn exact(at: &Q3) -> Option<Q3> {
     standing(World::now(), at).exact().flatten()
+}
+
+/// Where a camera sent to `at` stands, once a leaf gives the floor there:
+/// on the surface where its height is not known, and else on the floor
+/// nearest its height. It is read as an eye standing there reads, not the
+/// observer's, which is elsewhere or nowhere yet.
+pub(crate) fn arriving(at: &Q3) -> Option<Q3> {
+    let world = World::now();
+    let top = match is_unknown(at) {
+        true => world.surface_support_by(None, at),
+        false => world.support_nearest(None, at),
+    };
+    top.exact().flatten().map(|top| on_floor(at, top))
 }
 
 /// `resolve` for a camera's `to`. A Z not yet known is written into `to` once

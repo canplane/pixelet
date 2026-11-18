@@ -8,7 +8,7 @@
 
 use super::change;
 use super::decor::claim;
-use super::detail::{cell_zoom_read, detail, leaf_over};
+use super::detail::{cell_zoom_read, detail};
 use super::node::At;
 use super::world::World;
 use crate::domain::layer::Answer;
@@ -264,10 +264,23 @@ impl World {
         path: &mut Path,
         descent: &mut Option<Descent>,
     ) -> Answer<Option<Hit>> {
+        self.along_by(observer::eye(), ray, until, decors, path, descent)
+    }
+
+    /// `along` as `eye` reads the world, or, with none, as an eye at the
+    /// ray's origin does: a place the camera is sent to is read as it will
+    /// be seen from there (`SplitCell::over`).
+    pub(super) fn along_by(
+        &self,
+        eye: Option<V3>,
+        ray: &Ray,
+        until: Until,
+        decors: Option<u32>,
+        path: &mut Path,
+        descent: &mut Option<Descent>,
+    ) -> Answer<Option<Hit>> {
         let o = ray.origin;
-        let Some(eye) = observer::eye() else {
-            return Answer::Lack(leaf_over(&origin(o[0], o[1], o[2])));
-        };
+        let eye = eye.unwrap_or(o);
         let detail = detail(eye, o);
         let mut query = CastWorld {
             viewer: decors.map(|decors| Viewer {

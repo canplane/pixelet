@@ -144,6 +144,9 @@ struct SplitCell<'w> {
     across: u32,
     /// The zoom of a column's cells.
     own: Zoom,
+    /// The eye the cell's rays read by, none for an eye standing in the
+    /// column (`over`).
+    eye: Option<V3>,
     lack: Option<Quadrant>,
     /// The zoom of the tiles the cell is of.
     zoom: Zoom,
@@ -154,29 +157,42 @@ struct SplitCell<'w> {
 }
 
 impl<'w> SplitCell<'w> {
-    /// The cell drawn over `xy` (`over`). A column has one cell for an eye,
-    /// whatever height in it is asked, so a height an answer gives is asked
-    /// again in the cell that gave it.
-    fn new(world: &'w World, xy: [f64; 2], path: Path) -> Option<SplitCell<'w>> {
-        SplitCell::over(world, xy, path).map(|(c, _)| c)
+    /// The cell the observer's eye draws over `xy` (`over`). A column has one
+    /// cell for an eye, whatever height in it is asked, so a height an answer
+    /// gives is asked again in the cell that gave it.
+    fn new(world: &'w World, xy: [f64; 2], path: Path) -> SplitCell<'w> {
+        SplitCell::over(world, observer::eye(), xy, path).0
     }
 
-    /// The cell drawn over `xy`, with the top of its ground: the cell the eye
-    /// draws the ground with at the ground's own surface there. None until
-    /// the camera stands somewhere: nothing is observed. It starts from the cell drawn at the column's point
-    /// nearest the eye, the finest the column can be drawn with, and takes
-    /// the cell drawn at each cell's own surface in turn while that one is
-    /// coarser.
-    fn over(world: &'w World, xy: [f64; 2], path: Path) -> Option<(SplitCell<'w>, Option<f64>)> {
-        let eye = observer::eye()?;
-        let mut c = SplitCell::of(world, eye, [xy[0], xy[1], eye[2]], path);
+    /// The cell drawn over `xy`, with the top of its ground: the cell `eye`
+    /// draws the ground with at the ground's own surface there. With no eye
+    /// it is the cell an eye standing in the column draws, the leaves': a
+    /// place the camera is sent to is read as it will be seen from there,
+    /// and before the camera stands anywhere that is the one reading there
+    /// is. It starts from the cell drawn at the column's point nearest the
+    /// eye, the finest the column can be drawn with, and takes the cell
+    /// drawn at each cell's own surface in turn while that one is coarser.
+    fn over(
+        world: &'w World,
+        eye: Option<V3>,
+        xy: [f64; 2],
+        path: Path,
+    ) -> (SplitCell<'w>, Option<f64>) {
+        let cell = |z: f64, path: Path| {
+            let at = [xy[0], xy[1], z];
+            SplitCell {
+                eye,
+                ..SplitCell::of(world, eye.unwrap_or(at), at, path)
+            }
+        };
+        let mut c = cell(eye.map_or(0.0, |e| e[2]), path);
         loop {
             let Some(top) = c.surface() else {
-                return Some((c, None));
+                return (c, None);
             };
-            let at = SplitCell::of(world, eye, [xy[0], xy[1], top], c.path);
+            let at = cell(top, c.path);
             if at.zoom >= c.zoom {
-                return Some((c, Some(top)));
+                return (c, Some(top));
             }
             c = SplitCell { lack: c.lack, ..at };
         }
@@ -204,6 +220,7 @@ impl<'w> SplitCell<'w> {
             side: side / f64::from(1u32 << finer),
             across: 1 << finer,
             own: cell_zoom + finer,
+            eye: Some(eye),
             lack: None,
             zoom,
             path,
@@ -228,9 +245,14 @@ impl<'w> SplitCell<'w> {
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
-        let answer = self
-            .world
-            .along(&ray, until, None, &mut self.path, &mut self.descent);
+        let answer = self.world.along_by(
+            self.eye,
+            &ray,
+            until,
+            None,
+            &mut self.path,
+            &mut self.descent,
+        );
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -413,9 +435,13 @@ impl World {
     /// what fills the surface, or else drops onto the first solid under it.
     /// None where nothing stands: a cell with no surface and nothing placed.
     pub(crate) fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
-        let Some((mut c, surface)) = SplitCell::over(self, xy(at), Path::default()) else {
-            return Answer::Lack(leaf_over(at));
-        };
+        self.surface_support_by(observer::eye(), at)
+    }
+
+    /// `surface_support` as `eye` draws the world there, or, with none, as an
+    /// eye standing at `at` does (`SplitCell::over`).
+    pub(crate) fn surface_support_by(&self, eye: Option<V3>, at: &Q3) -> Answer<Option<f64>> {
+        let (mut c, surface) = SplitCell::over(self, eye, xy(at), Path::default());
         let [lo, hi] = [BOUND.min[2], BOUND.max[2]];
         // With no surface, the search starts at the highest solid, or at the
         // bottom of the world's bound.
@@ -432,9 +458,7 @@ impl World {
     /// top. None where nothing stands under `at`.
     pub(crate) fn floor_under(&self, at: &Q3) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
-        let Some(mut c) = SplitCell::new(self, xy(at), Path::default()) else {
-            return Answer::Lack(leaf_over(at));
-        };
+        let mut c = SplitCell::new(self, xy(at), Path::default());
         let stands = match c.depenetrate(start) {
             (z, _) if z > start => Some(z.min(BOUND.max[2])),
             (z, cell_top) => c.below(z, cell_top),
@@ -444,12 +468,11 @@ impl World {
 
     /// The floor nearest `at`'s height: the top of a solid with room over
     /// it, under `at` or over it, or the cell's surface. None where nothing
-    /// stands.
-    pub(crate) fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
+    /// stands. It is read as `eye` draws the world there, or, with none,
+    /// as an eye standing at `at` does (`SplitCell::over`).
+    pub(crate) fn support_nearest(&self, eye: Option<V3>, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
-        let Some(mut c) = SplitCell::new(self, xy(at), Path::default()) else {
-            return Answer::Lack(leaf_over(at));
-        };
+        let mut c = SplitCell::over(self, eye, xy(at), Path::default()).0;
         let down = match c.depenetrate(z) {
             (t, _) if t > z => Some(t.min(BOUND.max[2])),
             (t, cell_top) => c.below(t, cell_top),
@@ -535,7 +558,7 @@ impl World {
         // what is over that counts as a ceiling.
         let mut path = Path::default();
         floor = {
-            let mut c = SplitCell::new(self, center(at), path)?;
+            let mut c = SplitCell::new(self, center(at), path);
             let (f, _) = c.depenetrate(floor);
             path = c.path;
             c.held(f)?
@@ -598,12 +621,12 @@ impl World {
             return Some(None);
         }
         let height = body_height_u();
-        let mut c = SplitCell::new(self, to, *path)?;
+        let mut c = SplitCell::new(self, to, *path);
         let (z, cell_top) = c.depenetrate(floor);
         let moved = if c.above(z, z + height).is_some() {
             None
         } else if z > floor {
-            let mut from_cell = SplitCell::new(self, from, c.path)?;
+            let mut from_cell = SplitCell::new(self, from, c.path);
             let stopped = from_cell.above(floor, z + height).is_some();
             (*path, c.path) = (from_cell.path, from_cell.path);
             from_cell.held(())?;
