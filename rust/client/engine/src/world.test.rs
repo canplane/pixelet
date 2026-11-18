@@ -6,17 +6,17 @@ use crate::clipmap;
 use crate::clipmap::{
     ACROSS, BOUND_ENTRY_WORDS, BOUNDS_AT, BRICK_MIP_LAST, BRICK_WORDS, CLIP_LEVEL_CNT, CLIP_SIZE,
     COLUMNS_AT, ENTRY_CNT, EYE_CLIP_LEVEL_CNT, Entry, FIRST_CELL_ZOOM, JOINED_ENTRY_CNT,
-    JOINED_MIP_CNT, JOINED_WORDS, ORIGIN_AT, OWN_AT, OWN_CELL_CNT, Pool, bound_over, column_top,
-    entry, fold, join, joined_idx, mip_idx,
+    JOINED_MIP_CNT, JOINED_WORDS, ORIGIN_AT, OWN_AT, OWN_CELL_CNT, Pool, bound_over, entry, fold,
+    join, joined_idx, mip_idx,
 };
 use crate::content::Sample;
 use crate::fill::{LoneBrick, column_of, mip_of, own_of, put, root_of};
 use crate::ground::Extent;
-use crate::support::{asset, column_surface};
+use crate::support::column_surface;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT, of_idx};
 use pxl_spec::ground::{GroundId, word};
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::hierarchy::tree::{ancestor_at, child_of};
+use pxl_spec::space::hierarchy::tree::ancestor_at;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use xpute_kit::math::rng::mix64;
@@ -30,8 +30,7 @@ const CELL_ZOOM: Zoom = LEAF_CELL_ZOOM;
 const EYE: [i32; 2] = [1000 << 10, (1 << 20) + 12_345];
 
 /// The ground's top at leaf cell `[x, y]`, in leaf cells: hills, and a tower in the far
-/// quarter of every brick of the leaves (`TOWER`), so that a bound that falls short of a
-/// whole brick misses the tower.
+/// quarter of every brick of the leaves (`TOWER`).
 fn ele_at([x, y]: [i32; 2]) -> i32 {
     let hills = 40.0 + 25.0 * libm::sinf(x as f32 * 0.003) + 20.0 * libm::cosf(y as f32 * 0.004);
     let tower =
@@ -232,9 +231,8 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
 }
 
 /// Each clip level's entries folded a level at a time, as the core folds them
-/// (`clipmap::fold`). Where `zero` is set, a block with a brick the clip level does not hold
-/// present gets the zero entry instead: no bound, which only makes rays split more.
-fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {
+/// (`clipmap::fold`).
+fn folded(rows: &[Entry], ground: &[u32]) -> Vec<[u32; JOINED_WORDS as usize]> {
     let mut joined =
         vec![[0; JOINED_WORDS as usize]; (EYE_CLIP_LEVEL_CNT * JOINED_ENTRY_CNT) as usize];
     for l in 1..=JOINED_MIP_CNT {
@@ -245,20 +243,7 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
                 joined: &joined,
                 ground,
             };
-            let entries: Vec<_> = (0..blocks)
-                .map(|b| {
-                    let [x, y] = of_idx(b);
-                    let unheld = (0..4).any(|k| {
-                        let s = entry(child_of([x as i32, y as i32], k));
-                        !w.brick(cell_zoom, s).1
-                    });
-                    if zero && l == 1 && unheld {
-                        [0; JOINED_WORDS as usize]
-                    } else {
-                        fold(&w, cell_zoom, l, b)
-                    }
-                })
-                .collect();
+            let entries: Vec<_> = (0..blocks).map(|b| fold(&w, cell_zoom, l, b)).collect();
             for (b, e) in entries.into_iter().enumerate() {
                 joined[((cell_zoom - FIRST_CELL_ZOOM) * JOINED_ENTRY_CNT + joined_idx(l, [0, 0]))
                     as usize
@@ -267,97 +252,6 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
         }
     }
     joined
-}
-
-/// A block with a brick its clip level does not hold yet is bounded by the cells a ray reads
-/// in the brick's place, a coarser clip level's: every one of them lies within the bound that
-/// a node over the block reads (`clipmap::fold`).
-#[test]
-fn partial_block_bounded() {
-    let (rows, ground) = clipmap();
-    let joined = folded(&rows, &ground, false);
-    let w = Clipmap {
-        rows: &rows,
-        joined: &joined,
-        ground: &ground,
-    };
-    let (first, _) = w.origin(CELL_ZOOM);
-    let (zoom, side) = (CELL_ZOOM - BRICK_MIP_LAST - 1, 2 * BRICK as i32);
-    let mut unheld = 0;
-    for k in 0..ENTRY_CNT / 4 {
-        let c = [
-            (first[0] >> 1) + (k % (ACROSS / 2)) as i32,
-            (first[1] >> 1) + (k / (ACROSS / 2)) as i32,
-        ];
-        if (0..4).all(|d| w.present(CELL_ZOOM, child_of(c, d)).1) {
-            continue;
-        }
-        unheld += 1;
-        let mut place = Lookup::NONE;
-        let (b, _, here) = bound_over(&w, &mut place, [CELL_ZOOM, CELL_ZOOM], (zoom, c));
-        assert!(
-            here && b[0][0] > ground::UNBOUNDED[0],
-            "{c:?} bounded: {b:?}"
-        );
-        for i in 0..side * side {
-            let g = [c[0] * side + i % side, c[1] * side + i / side];
-            let (_, column, _, f) = clipmap::cell(&w, Lookup::NONE, CELL_ZOOM, g);
-            assert!(f.here(), "{g:?} held");
-            let top = column_top(column);
-            assert!(
-                b[0][0] <= top && top <= b[0][1],
-                "{g:?}: {top} in {:?}",
-                b[0]
-            );
-        }
-    }
-    assert_eq!(unheld, ENTRY_CNT / 8);
-}
-
-/// A column surface found down any column of the half-held clip level stands where it
-/// stands when a block with an unheld brick has no bound, with the same assets around it off
-/// its line.
-#[test]
-fn footing_without_bound() {
-    let (rows, ground) = clipmap();
-    let (none, folded) = (folded(&rows, &ground, true), folded(&rows, &ground, false));
-    let world = |joined| Asking {
-        w: Clipmap {
-            rows: &rows,
-            joined,
-            ground: &ground,
-        },
-    };
-    let (mut was, mut is) = (world(&none), world(&folded));
-    let (first, _) = was.w.origin(CELL_ZOOM);
-    let mut hits = 0;
-    // Spread over the clip level, and on every brick's tower.
-    let (side, brick) = (ACROSS as i32, BRICK as i32);
-    let spread = (0..CLIP_SIZE as i32)
-        .step_by(29)
-        .flat_map(|x| (0..CLIP_SIZE as i32).step_by(37).map(move |y| [x, y]));
-    let towers = (0..side * side).map(|k| [k % side * brick + 44, k / side * brick + 44]);
-    for [gx, gy] in spread.chain(towers) {
-        let g = [
-            (first[0] << BRICK_SHIFT) + gx,
-            (first[1] << BRICK_SHIFT) + gy,
-        ];
-        let (a, b) = (
-            column_surface(&mut was, CELL_ZOOM, g),
-            column_surface(&mut is, CELL_ZOOM, g),
-        );
-        assert_eq!((a.top, a.end), (b.top, b.end), "{g:?}");
-        hits += (a.end == End::Hit) as u32;
-        for d in 0..27 {
-            let c = [g[0] + d % 3 - 1, g[1] + d / 3 % 3 - 1, a.top.0 + d / 9 - 1];
-            assert_eq!(
-                asset(&mut was, &a.line, CELL_ZOOM, c),
-                asset(&mut is, &b.line, CELL_ZOOM, c),
-                "{g:?} {c:?}"
-            );
-        }
-    }
-    assert!(hits > 0, "some column_surface stands on the ground");
 }
 
 /// The clip levels `0` with a service area of the shards at `SHARD_ZOOM` west of the `1`th
@@ -462,7 +356,7 @@ fn wall_off_any_brick() {
 #[test]
 fn cell_answer_takes_no_zooms() {
     let (rows, ground) = clipmap();
-    let joined = folded(&rows, &ground, false);
+    let joined = folded(&rows, &ground);
     let mut unheld = rows.clone();
     for e in unheld
         .iter_mut()
@@ -470,7 +364,7 @@ fn cell_answer_takes_no_zooms() {
     {
         *e = Entry::absent(e.brick().0);
     }
-    let unheld_joined = folded(&unheld, &ground, true);
+    let unheld_joined = folded(&unheld, &ground);
     let mut kinds = [0u32; 3];
     for (rows, joined) in [(&rows, &joined), (&unheld, &unheld_joined)] {
         let w = Clipmap {
