@@ -13,7 +13,8 @@ meant to do and where it is, not why its author thinks it is right.
   `git diff` and `git show HEAD:<path>` are fine.
 - Review only the scope you were given.
 - Read code with whichever tool is efficient: text search or the LSP tool.
-- Before anything else, read AGENTS.md, the code and naming skills
+- Before anything else, read AGENTS.md, `README.md`, the changed part's
+  section of `ARCHITECTURE.md` and its README, the code and naming skills
   (`.agents/skills/code/`, `.agents/skills/naming/`), and the skill for the
   changed code.
 
@@ -38,6 +39,15 @@ meant to do and where it is, not why its author thinks it is right.
 - **History.** The change contradicts, unremarked, what a commit or the
   user's decision made the code; or it removes nothing that the fact's move
   makes needless.
+- **Another eye.** Anything but the camera's eye that sets the size a place is
+  asked at: an eye passed as a parameter, a fallback where there is none, a
+  reader's own place or a destination's taken for it; a kept answer keyed by
+  anything but its cube, its size and the world's changes; a word that calls
+  something else an eye or an observer.
+- **Residue.** Asked whether only what should remain is left, answer yes or
+  no first, then list every field, branch, parameter, value held or computed
+  twice, name and sentence that belongs to a form that is gone, in the change
+  and in what it touches.
 - **A piece laid on.** A guard, an assert, a flag, a branch, a case of a test
   or a sentence that lets a fault or a finding pass while its cause stands; a
   structure kept because the code or a test there expects it, with no

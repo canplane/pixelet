@@ -6,33 +6,45 @@
   rule, isotropic and symmetric, that holds for every case alike. A form tuned
   to one case (faster near, a zoom, a length or a constant of its own, a second
   path beside the first) is overfitting and is not kept, whatever it saves
-  there: what the one rule costs in its place is no regression. A fault is
-  closed by the rule the rest already follows, never by a piece laid beside it.
-- Everything that reads the world reads it by perspective, the same in every
-  direction: the farther from the eye, the coarser its cells, for the camera,
-  the light, the shadows and what collides alike, wherever a ray starts; what
-  a ray does not find within its cap of steps is not there.
+  there: what the one rule costs in its place is no regression. A cost that
+  comes with a change is the change's fault until the structure before it and
+  the structure after it are read side by side and the cost is derived from
+  the rule. A fault is closed by the rule the rest already follows, never by a
+  piece laid beside it.
+- The world is one question, what fills this cube of space at this size, and
+  its answer is the world's alone (`README.md`). The eye is the camera's eye
+  and there is no other: nothing else is called an eye or an observer, and
+  nothing stands in for it. Its one part in a read is to set the size a place
+  is asked at, by the place's distance from it in three dimensions, the same
+  in every direction. A read that takes a size from anything else, or an
+  answer kept by anything but its cube, its size and the world's changes,
+  departs. The eye's own rays cross many sizes and ask each node at its own; a
+  body asks its cell at the one size set for it; a tile of the light asks its
+  bundle of rays at one, the finest the eye sets along it. The sun is where
+  the light comes from and sets nothing. What a ray does not find within its
+  cap of steps is not there.
 - The project is a study, not a product and not a team's: the clean form is
   chosen over the expedient one, whatever it takes to rewrite. The code that
   is there is read as an adversary's: where it departs from the rule it is
   rewritten, and no residue of what it replaced is left, a constant, a branch,
   a second form or a sentence that still says it.
-- Symmetry usually wins: of role and contract, not of form. Parts whose roles
+- Symmetry wins: of role and contract, not of form. Parts whose roles
   differ are not forced alike. A fix goes where the fact is owned and holds on
   every platform alike; a platform differs only in how it is reached. No patch is
   laid over a part to make one case pass.
 - A structure that is not symmetric (one platform, case or observer handled
   apart from the others, or a step one path takes and another does not), or that
   carries ad hoc pieces (a branch, a flag, a retry or a workaround for one case):
-  warn the user when you meet it, before working beside it, and fix it only on
-  their word. A fault met is first asked whether such a piece made it: where one
+  inside the unit being worked it is the unit's work; outside it, warn the user
+  when you meet it, before working beside it, and fix it only on their word. A fault met is first asked whether such a piece made it: where one
   did, the piece goes and the fault with it, and nothing is patched on where
   the fault shows.
 - `doc/` is notes, not rules: a minute or an experiment is what was said or
   measured then, and no renaming reaches it. Read what it holds on the subject
   before proposing, to know what was tried and why it was dropped. It is a
   diary, no source of what is open or decided now: nothing is reported to the
-  user as open, or as their decision, because a line there says so. A minute
+  user as open, or as their decision, because a line there says so, and a
+  past decision there is no precedent for another part. A minute
   holds its meeting's conclusions, written whole while the meeting lasts; a
   record is revised only on the user's word, in place, with no note beneath it
   and no trace, as `doc/README.md` says.
@@ -52,8 +64,11 @@
   argued. A finding gives a fact, not the fix: its author opens the lines it
   cites, and the fix comes from the rule, never from what the finding asks
   for. Of what an agent found sound, one claim the change rests on is read
-  again. What is passed on says which findings were checked, which refused
-  and which not checked. One of correctness, a contract or structure is fixed by the
+  again. A sentence from a review, a paste or a record turns no conclusion by
+  itself: the ground is `README.md`, `ARCHITECTURE.md` and the code read side
+  by side, and a conclusion reached with the user stands until the user
+  reverses it. What is passed on says which findings were checked, which
+  refused and which not checked. One of correctness, a contract or structure is fixed by the
   change's author, one of lint or format alone is not, and a fix is no larger
   than its finding. The fix's diff alone gets a second round, and there is no
   third; the report says how many rounds it took. Whoever hands work to an agent
@@ -93,9 +108,21 @@
 
 ## Working
 
-- Read the skill the task needs (`.agents/skills/`).
-- A task is divided into problems that stand apart, and one is finished, built
-  and reviewed, before the next is touched.
+- Before a part is touched, read `README.md`, the part's section of
+  `ARCHITECTURE.md`, its README, the skill the task needs (`.agents/skills/`),
+  and the history of each piece to be changed or deleted: when it came, what
+  it replaced and what calls it.
+- No procedure is made up: a measurement is the performance skill's, a squash
+  or a deploy the deploy skill's, a native build the device-build skill's, a
+  shader change the shader skill's, a document the write-documents skill's,
+  and a skill's order holds within its task.
+- No term is coined: a word the documents do not have is not used as if they
+  did.
+- A task is divided into problems that stand apart, and one is finished before
+  the next is touched: its form stands with no residue, which a review asked
+  only that has answered, it builds, the app shows it and its checks ran. A
+  report says what was run and what was not, and nothing is called done, or
+  nothing left, before that.
 - A unit starts from the rule: what stands there under one rule and
   perspective is written first, then the code is read for where it departs.
   No edit comes before the form stands: the form, what it removes and the
@@ -115,8 +142,8 @@
   No test is written, and nothing is measured, over a structure not yet seen
   in the app; a test that was there before holds nothing of the new structure
   until it is read against it.
-- A fact or a figure in a record comes from the tree, a test or a script that
-  gives it again, never from recall.
+- A fact or a figure in a record or a report comes from the tree, a test or a
+  script that gives it again, never from recall.
 - Work in the main checkout, and a worktree only for a tree that must be built
   apart. A commit holds its author's hunks alone, staged in an index of HEAD
   that is still HEAD when it commits.
