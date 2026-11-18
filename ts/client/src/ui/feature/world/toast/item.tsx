@@ -1,12 +1,13 @@
 // @pxl/client/ui/feature/world/toast/item.tsx
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { PixelRatio, StyleSheet, Text, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/ui/shared/component/icon.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
-import { LABEL, STATUS } from "@/ui/shared/component/palette.ts";
+import { STATUS } from "@/ui/shared/component/palette.ts";
 import { Pill } from "@/ui/feature/world/pill.tsx";
 import { BackingPlace } from "@/ui/shared/component/backing.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
@@ -22,7 +23,6 @@ import {
   CHROME,
   COLOR,
   SHADOW,
-  SURFACE,
   SYSTEM,
   TEXT_SCALE_CAP,
   TEXT_STYLE,
@@ -36,9 +36,8 @@ const EDGE = 4;
 
 const OPEN_AFTER_MS = 450;
 
-/** Each tone's mark is drawn white on a filled disc, as Apple's status glyphs
- * are. A green stroke drawn straight on the glass reads at under 2:1
- * contrast. */
+/** A tone's mark is white, on a faint white disc over the band, and its color
+ * is the dot's (`status`). */
 const TONE: Record<
   ToastTone,
   { mark: "checkmark" | "xmark" | null; status: string }
@@ -49,16 +48,17 @@ const TONE: Record<
 };
 
 function ToneGlyph({ tone }: { tone: ToastTone }) {
-  const { mark, status } = TONE[tone];
-  if (!mark) return <Spinner size={CHROME.glyph} color={LABEL.primary} />;
+  const { mark } = TONE[tone];
+  if (!mark) return <Spinner size={CHROME.glyph} color={COLOR.white} />;
   return (
-    <View style={[STYLE.disc, { backgroundColor: status }]}>
+    <View style={[STYLE.disc, { backgroundColor: alpha(COLOR.white, 0.2) }]}>
       <Glyph glyph={mark} size={12} weight="black" color={COLOR.white} />
     </View>
   );
 }
 
-interface ToastProps extends ToastSpec {
+interface ToastProps {
+  spec: ToastSpec;
   fade: f64;
   fadeTransition: Transition;
   touch?: boolean;
@@ -66,14 +66,13 @@ interface ToastProps extends ToastSpec {
 }
 
 export function Toast({
-  message,
-  tone,
+  spec: { key, tone },
   fade,
   fadeTransition,
   touch,
   touchBelow,
 }: ToastProps) {
-  const error = tone === ToastTone.ERROR;
+  const { t } = useTranslation();
   const windowWidth = useWindowSize().width;
   const [open, setOpen] = useState(false);
   const [contentWidth, setContentWidth] = useState<f64>(TOAST_SIDE);
@@ -91,14 +90,10 @@ export function Toast({
       width={width}
       height={TOAST_SIDE}
       spanPx={windowWidth}
-      fill={error ? SURFACE.alarm.fill : COLOR.ground}
-      tint={error ? SURFACE.alarm.glass : undefined}
+      fill={COLOR.band}
+      solid
       place={BackingPlace.OVER_MAP}
-      border={{
-        width: 2,
-        color: error ? SURFACE.alarm.edge : alpha(COLOR.white, 0.9),
-      }}
-      shadow={error ? `0 6px 20px ${SURFACE.alarm.shadow}` : SHADOW.lift}
+      shadow={tone === ToastTone.ERROR ? SHADOW.alarm : SHADOW.lift}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}
@@ -137,7 +132,7 @@ export function Toast({
             },
           ]}
         >
-          {message}
+          {t(key)}
         </Text>
       </Motion>
       <View style={STYLE.slot}>
@@ -166,7 +161,7 @@ const STYLE = StyleSheet.create({
   },
   message: {
     ...TEXT_STYLE.notice,
-    color: LABEL.primary,
+    color: COLOR.white,
     paddingHorizontal: MESSAGE_PAD,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },

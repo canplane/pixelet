@@ -107,8 +107,7 @@ export function Toaster() {
                 : arrived > 0
                   ? MAKE_ROOM
                   : SETTLE;
-            // This view takes no opacity, because an opacity over the native
-            // glass draws the glass wrongly. The card fades through `fade`.
+            // The card fades through its pill's `fade`, as every pill does.
             return (
               <Motion
                 key={key}
@@ -127,8 +126,7 @@ export function Toaster() {
                 ]}
               >
                 <Toast
-                  message={item.message}
-                  tone={item.tone}
+                  spec={item}
                   fade={present ? pose.fade : 0}
                   fadeTransition={transition}
                   touch={front}

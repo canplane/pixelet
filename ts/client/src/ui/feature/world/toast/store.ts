@@ -8,8 +8,10 @@ import * as ToastTone from "./tone.ts";
 type ToastTone = (typeof ToastTone)[keyof typeof ToastTone];
 export { ToastTone };
 
+/** A toast holds its words' locale key, and its card reads them in the
+ * current language. */
 export interface ToastSpec {
-  message: string;
+  key: string;
   tone: ToastTone;
 }
 
@@ -78,11 +80,7 @@ export function showToast(id: u32, spec: ToastSpec): void {
   const shown = entries.find((e) => e.id === id);
   // The same toast shown again, as a toast held past its cause is, changes
   // nothing and does not come to the front.
-  if (
-    shown !== undefined &&
-    shown.message === spec.message &&
-    shown.tone === spec.tone
-  )
+  if (shown !== undefined && shown.key === spec.key && shown.tone === spec.tone)
     return;
   if (shown !== undefined) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });

@@ -1,9 +1,11 @@
 // @pxl/client/ui/feature/world/pill.ios.tsx
 
 /**
- * An iPhone's pill is one piece of glass, laid out again at each new place and
- * width and animated by LayoutAnimation, because clipped pieces would show
- * seams through the glass. Its content fades on the glass, never over it.
+ * An iPhone's pill is one piece, of glass or of the fill (for a solid pill, or
+ * where the system has no glass), laid out again at each new place and width
+ * and animated by LayoutAnimation, because clipped pieces would show seams
+ * through the glass. On glass its content fades on the glass, never over it;
+ * a fill fades with its content.
  */
 
 import { useRef } from "react";
@@ -37,6 +39,7 @@ export function Pill({
   height,
   fill,
   tint,
+  solid,
   place,
   interactive,
   border,
@@ -80,6 +83,7 @@ export function Pill({
       <Backing
         fill={fill}
         tint={tint}
+        solid={solid}
         place={place}
         interactive={interactive}
         fade={fade}

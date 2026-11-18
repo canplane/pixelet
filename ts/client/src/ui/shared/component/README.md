@@ -20,17 +20,17 @@ the colors that part do in `theme.ts`.
 
 ## Which technology draws what
 
-| Piece            | iPhone                                                                                                                   | Android            | Web                                                 |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------ | --------------------------------------------------- |
-| `panel`          | SwiftUI sheet (`@expo/ui` BottomSheet)                                                                                   | the web's, + back  | React Native sheet                                  |
-| `segmented`      | UIKit (`SegmentedControl.swift`)                                                                                         | the web's          | React Native                                        |
-| `toggle-row`     | UIKit switch (React Native's Switch)                                                                                     | the web's          | the row is the switch                               |
-| `backing`        | UIKit's blur (`Blur.swift`) under the fill for a material; else Liquid Glass (expo-glass-effect), or the fill without it | the fill, solid    | the fill, CSS backdrop blur under a see-through one |
-| `pill`           | UIKit glass (expo-glass-effect)                                                                                          | the web's fill     | fill                                                |
-| `text-field`     | system clear button                                                                                                      | the web's          | its own clear button                                |
-| `icon`           | SF Symbols (expo-symbols)                                                                                                | the web's Carbon   | IBM's Carbon                                        |
-| `palette`        | system colors                                                                                                            | the web's          | iOS's light values                                  |
-| `above-keyboard` | react-native-keyboard-controller                                                                                         | the iPhone's       | visual viewport                                     |
+| Piece            | iPhone                                                                                                                                      | Android           | Web                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------- |
+| `panel`          | SwiftUI sheet (`@expo/ui` BottomSheet)                                                                                                      | the web's, + back | React Native sheet                                  |
+| `segmented`      | UIKit (`SegmentedControl.swift`)                                                                                                            | the web's         | React Native                                        |
+| `toggle-row`     | UIKit switch (React Native's Switch)                                                                                                        | the web's         | the row is the switch                               |
+| `backing`        | UIKit's blur (`Blur.swift`) under the fill for a material; else Liquid Glass (expo-glass-effect), or the fill without it or for a solid one | the fill, solid   | the fill, CSS backdrop blur under a see-through one |
+| `pill`           | UIKit glass (expo-glass-effect), or the fill without it or for a solid one                                                                  | the web's fill    | fill                                                |
+| `text-field`     | system clear button                                                                                                                         | the web's         | its own clear button                                |
+| `icon`           | SF Symbols (expo-symbols)                                                                                                                   | the web's Carbon  | IBM's Carbon                                        |
+| `palette`        | system colors                                                                                                                               | the web's         | iOS's light values                                  |
+| `above-keyboard` | react-native-keyboard-controller                                                                                                            | the iPhone's      | visual viewport                                     |
 
 Android takes the web's own drawing wherever Material's controls would read as
 any Android app's. Its backing is the fill made solid: it cannot blur the map,

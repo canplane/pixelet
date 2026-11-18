@@ -110,12 +110,6 @@ export const SURFACE = {
     fill: tint(CORAL.base, 0.1),
     edge: alpha(CORAL.base, 0.6),
   },
-  alarm: {
-    glass: alpha(SYSTEM.red, 0.15),
-    fill: tint(SYSTEM.red, 0.06),
-    edge: tint(SYSTEM.red, 0.3),
-    shadow: alpha(SYSTEM.red, 0.15),
-  },
 } as const;
 
 export interface Material {
@@ -136,7 +130,10 @@ export const MATERIAL = {
  * dims, never the glass under it. */
 export const DISABLED_CONTENT = 0.4;
 
-export const SHADOW = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
+export const SHADOW = {
+  lift: "0 6px 20px rgba(0, 0, 0, 0.25)",
+  alarm: `0 0 28px ${alpha(SYSTEM.red, 0.3)}`,
+} as const;
 
 /** A dark halo that lets white text read over any ground. It is drawn as
  * black copies of the text, grown by 1 to `width` pixels on each side, each at

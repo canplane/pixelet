@@ -1,7 +1,6 @@
 // @pxl/client/ui/feature/world/toast/controller.tsx
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { messageKey } from "@/ui/shared/locale/message-key.ts";
 import {
@@ -15,7 +14,7 @@ import {
 import { GPU_WAITING, type Gpu } from "@/service/sys/gpu.ts";
 import { bootState, watchBoot, BOOT_STARTED } from "@/service/sys/boot.ts";
 
-import { dismissToast, showToast, ToastTone } from "./store.ts";
+import { dismissToast, showToast, type ToastSpec, ToastTone } from "./store.ts";
 import { useGpu, useCore, useOnline, useSensor } from "@/ui/shared/watch.ts";
 
 /** The reports that can each show a toast. Among toasts of one tone, a lower
@@ -44,28 +43,12 @@ const READY_MS = 3000;
  * value is a product choice. */
 const SERVER_HOLD_MS = 3000;
 
-interface Notice {
-  key: string;
-  tone: ToastTone;
-}
-
-/** A function that stays the same across renders and reads words with the
- * current `t`. react-i18next makes a new `t` on a language change, and a new
- * function would show every toast again. */
-function useWords(): (key: string) => string {
-  const { t } = useTranslation();
-  const tRef = useRef(t);
-  tRef.current = t;
-  return useRef((key: string) => tRef.current(key)).current;
-}
-
-function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
-  const words = useWords();
-  const key = notice?.key ?? null;
-  const tone = notice?.tone ?? null;
+function useToast(id: Report, spec: ToastSpec | null, holdMs = 0): void {
+  const key = spec?.key ?? null;
+  const tone = spec?.tone ?? null;
   useEffect(() => {
     if (key !== null && tone !== null) {
-      showToast(id, { message: words(key), tone });
+      showToast(id, { key, tone });
       return;
     }
     if (holdMs === 0) {
@@ -74,13 +57,16 @@ function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
     }
     const timer = setTimeout(() => dismissToast(id), holdMs);
     return () => clearTimeout(timer);
-  }, [id, key, tone, words, holdMs]);
+  }, [id, key, tone, holdMs]);
 }
 
-const error = (key: string): Notice => ({ key, tone: ToastTone.ERROR });
-const loading = (key: string): Notice => ({ key, tone: ToastTone.LOADING });
+const error = (key: string): ToastSpec => ({ key, tone: ToastTone.ERROR });
+const loading = (key: string): ToastSpec => ({ key, tone: ToastTone.LOADING });
 
-function location(status: SensorStatus, failure: string | null): Notice | null {
+function location(
+  status: SensorStatus,
+  failure: string | null,
+): ToastSpec | null {
   if (failure !== null) return error(failure);
   return status === SENSOR_STATUS_LOADING
     ? loading("toast.location_checking")
@@ -89,11 +75,11 @@ function location(status: SensorStatus, failure: string | null): Notice | null {
 
 /** The GPU's toast shows while the client asks again for a GPU, because none
  * answered or the one drawing was lost. */
-function gpuError(gpu: Gpu): Notice | null {
+function gpuError(gpu: Gpu): ToastSpec | null {
   return gpu === GPU_WAITING ? error("toast.gpu_unstable") : null;
 }
 
-function serverError(stall: Message | null): Notice | null {
+function serverError(stall: Message | null): ToastSpec | null {
   return stall === MESSAGE_WORLD_READ_FAILING ? error(messageKey(stall)) : null;
 }
 
@@ -102,7 +88,7 @@ function world(
   shown: boolean,
   companionLoading: boolean,
   greeting: Greeting,
-): Notice | null {
+): ToastSpec | null {
   if (outside) return error("toast.outside");
   if (!shown) return loading("toast.world_loading");
   if (companionLoading) return loading("toast.companion_loading");
@@ -116,13 +102,13 @@ function world(
 export function ToastController() {
   const locationStatus = useSensor((l) => l.state.status);
   const locationError = useSensor((l) => l.state.error);
-  useNotice(LOCATION, location(locationStatus, locationError));
+  useToast(LOCATION, location(locationStatus, locationError));
 
   const gpu = useGpu();
   const stall = useCore((s) => s.stall);
-  useNotice(GPU, gpuError(gpu));
-  useNotice(NETWORK, useOnline() ? null : error("toast.network_unstable"));
-  useNotice(SERVER, serverError(stall), SERVER_HOLD_MS);
+  useToast(GPU, gpuError(gpu));
+  useToast(NETWORK, useOnline() ? null : error("toast.network_unstable"));
+  useToast(SERVER, serverError(stall), SERVER_HOLD_MS);
 
   const outside = useCore((s) => s.pivot.outside);
   const shown = useCore((s) => s.pivot.ground_shown);
@@ -141,7 +127,7 @@ export function ToastController() {
     const timer = setTimeout(() => setGreeting(SAID), READY_MS);
     return () => clearTimeout(timer);
   }, [greeting]);
-  useNotice(WORLD, world(outside, shown, companionLoading, greeting));
+  useToast(WORLD, world(outside, shown, companionLoading, greeting));
 
   return null;
 }

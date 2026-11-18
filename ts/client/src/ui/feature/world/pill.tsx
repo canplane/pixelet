@@ -39,6 +39,7 @@ export interface PillProps {
   spanPx: f64;
   fill: ColorValue;
   tint?: ColorValue;
+  solid?: boolean;
   place: BackingPlace;
   interactive?: boolean;
   border?: { width: f64; color: ColorValue };
@@ -57,7 +58,7 @@ export interface PillProps {
 }
 
 const SHADOW_ROOM = 32;
-// `tint`, `place` and `interactive` only apply on an iPhone.
+// `tint`, `solid`, `place` and `interactive` only apply on an iPhone.
 export function Pill({
   x,
   width,

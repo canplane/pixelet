@@ -25,6 +25,9 @@ export interface BackingProps {
    * sets its opacity. */
   fill: ColorValue;
   material?: Material;
+  /** The fill drawn solid on every platform, with no glass or blur under it
+   * and no material. */
+  solid?: boolean;
   tint?: ColorValue;
   interactive?: boolean;
   place: BackingPlace;

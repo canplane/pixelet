@@ -2,10 +2,10 @@
 
 /**
  * The backing behind a floating control on an iPhone: Liquid Glass where the
- * system has it, and the plain fill elsewhere. The glass never fades by its
- * opacity, because UIKit renders a visual effect wrongly under any alpha below
- * one, or never installs it again. The glass fades by changing its style
- * instead, through "clear" to "none".
+ * system has it, and the plain fill elsewhere or for a solid backing. The
+ * glass never fades by its opacity, because UIKit renders a visual effect
+ * wrongly under any alpha below one, or never installs it again. The glass
+ * fades by changing its style instead, through "clear" to "none".
  */
 
 import { requireNativeView } from "expo";
@@ -45,6 +45,7 @@ export function Backing(props: BackingProps) {
   const {
     fill,
     material,
+    solid,
     tint,
     interactive,
     place,
@@ -96,7 +97,7 @@ export function Backing(props: BackingProps) {
     );
   }
 
-  if (!SYSTEM_BACKING) return <Fill {...props} />;
+  if (solid || !SYSTEM_BACKING) return <Fill {...props} />;
 
   const {
     boxShadow: _shadow,
