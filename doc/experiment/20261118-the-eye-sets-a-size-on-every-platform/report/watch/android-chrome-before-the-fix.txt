@@ -1,0 +1,6 @@
+android-chrome, release build; runs in tmp/perf/android-chrome
+longest frame ms: 323 -> 314
+GPU p50 102.83 -> 58.92, p95 180.29 -> 127.86, frames 176 -> 232, timed 175 -> 231
+tick p50 4.60 -> 6.10, p95 10.90 -> 13.30
+FAIL tick p50 past 1.15x the base's
+fail

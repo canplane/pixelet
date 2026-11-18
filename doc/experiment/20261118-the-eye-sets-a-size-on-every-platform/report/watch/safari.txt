@@ -1,0 +1,5 @@
+safari, release build; runs in tmp/perf/safari
+longest frame ms: 0 -> 0
+GPU p50 15.93 -> 15.84, p95 26.71 -> 25.48, frames 792 -> 825, timed 792 -> 825
+tick p50 2.00 -> 2.00, p95 2.00 -> 3.00
+pass
