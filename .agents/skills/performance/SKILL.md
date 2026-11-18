@@ -50,7 +50,7 @@ Make the program faster while keeping every condition the design met.
   Android phone, `adb shell svc power stayon usb`, put back after), and to
   leave Safari's Remote Automation on and no private tab in front.
 - Every run writes the same into `<dir>`, and all of it is read: `values.json`
-  (`build`, `longest`, `gpu`, `tick`) for the comparison, `report.txt` for where
+  (`build`, `longest`, `gpu`, `tick`, `drawn`) for the comparison, `report.txt` for where
   the time went, `trace.json` at ui.perfetto.dev for a frame on the timeline;
   and, however the run ends, `log.txt` and `shots/`. `log.txt` holds, each
   after the run's seconds, every line the app wrote but the result, the host's
@@ -109,6 +109,10 @@ Make the program faster while keeping every condition the design met.
   only when the user orders a comparison, on the two builds they name, the
   deployed build included. It only assembles: it runs the vendor's script on them
   by turns, keeps each run under `tmp/perf/` and compares their `values.json`.
+  Runs that drew unlike counts of pixels (`drawn`) are not compared: the Mac's
+  Chrome draws 3840 × 2160 wherever its window opens, and every other window
+  draws what its screen gives it, so the Mac's Safari draws another picture on
+  another screen. A record says what each platform drew.
 - Devices are apart: a phone's runs and the Mac's go side by side, and only one
   device's own runs go one at a time. A build that is ready is measured without
   waiting on another device's work.

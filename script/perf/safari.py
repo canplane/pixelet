@@ -37,7 +37,16 @@ class Safari(WebKit):
     """Safari started afresh, and quit as the run ends. The state is the
     Mac's, then how many command buffers the Mac logged as aborted in its GPU
     process since the last capture, and why, then the CPU its page, its GPU
-    process and the Metal compiler took."""
+    process and the Metal compiler took.
+
+    Its window is `SIZE` in CSS pixels on whichever screen it opens, at that
+    screen's device pixels a CSS pixel, and no smaller only where the screen
+    is as wide. Safari takes no scale as Chrome does, and no screen is named
+    for it: one that is not attached would end the run, and a Mac's built-in
+    screen at two device pixels is narrower than `SIZE`. So one build draws
+    2.0 Mpx on a screen of one device pixel and 7.9 on the built-in one, and
+    the two are not one measurement: `drawn` in the run's values says which,
+    and gate.py refuses to compare them."""
 
     @staticmethod
     def running():

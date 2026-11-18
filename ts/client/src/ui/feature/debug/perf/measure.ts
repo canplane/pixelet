@@ -6,8 +6,9 @@
  * standard drive once the world has started and had a moment to load, with
  * its values, the report and the trace, as one JSON text told in numbered
  * pieces that fit a line of Android's log (script/perf/ listens). The
- * values name the build, dev or release, which no comparison mixes. The
- * settings the drive changed are put back.
+ * values name the build, dev or release, and the pixels the last frame drew,
+ * neither of which a comparison mixes. The settings the drive changed are put
+ * back.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -155,6 +156,7 @@ async function run(): Promise<string> {
       ? [frames.gpuBusy.p50, frames.gpuBusy.p95, frames.n, frames.gpuTimed]
       : [null, null, 0, 0],
     tick: frames ? [frames.tick.p50, frames.tick.p95] : [null, null],
+    drawn: frames ? frames.gpuPx : 0,
     report: perfReportText(perfReport),
     trace,
   });

@@ -4,7 +4,9 @@
 # the change's median runs past the base's: its longest frame by more
 # than `LONGEST_SLACK_MS`, its GPU's or its tick's p50 or p95 by more than
 # `P50_SHARE` or `P95_SHARE`, its tick also by more than `TICK_SLACK_MS`. A dev
-# build is never compared with a release build.
+# build is never compared with a release build, nor a run with one that drew
+# another count of pixels: a window that opens on another screen draws another
+# picture.
 #
 #   ./script/perf/gate.py <vendor> <base> <change> [rounds]
 #
@@ -61,6 +63,9 @@ def main():
     builds = {r["build"] for rs in runs.values() for r in rs}
     if len(builds) != 1:
         sys.exit(f"not compared: the runs' builds are {sorted(builds)}")
+    drawn = {r["drawn"] for rs in runs.values() for r in rs if "drawn" in r}
+    if len(drawn) > 1:
+        sys.exit(f"not compared: the runs drew {sorted(drawn)} pixels")
     print(f"{vendor}, {builds.pop()} build; runs in {os.path.join(RUNS, vendor)}")
     fails = []
     longest = [median([r["longest"] for r in runs[who]]) for who in ("base", "change")]
