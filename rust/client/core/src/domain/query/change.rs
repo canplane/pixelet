@@ -139,7 +139,11 @@ fn join(cells: [[f64; 2]; 2]) {
 /// eye has moved, or when a change to the ground or the object layer touched
 /// those columns (`forget_touched`). An answer that read nothing is not
 /// kept, since no change would ever tell it to go.
-pub(crate) struct Memo<K, A>(Option<(K, Option<V3>, [[f64; 2]; 2], A)>);
+pub(crate) struct Memo<K, A>(Option<Kept<K, A>>);
+
+/// A kept answer: its key, the eye it was asked under, the columns it read
+/// and the answer.
+type Kept<K, A> = (K, Option<V3>, [[f64; 2]; 2], A);
 
 impl<K, A> Default for Memo<K, A> {
     fn default() -> Self {

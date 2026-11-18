@@ -783,7 +783,7 @@ fn height_nearest_floor() {
     // A deck a cube thick has its top at 10, with the ground at 5 under it.
     write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
     let access = placed(store);
-    let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
+    let near = |z: f64| access.support_nearest(observer::eye(), &world::point(x + 0.5, y + 0.5, z));
     assert_eq!(
         near(6.0),
         Answer::Exact(Some(5.0)),
@@ -793,7 +793,7 @@ fn height_nearest_floor() {
     // A cube right under the deck's cube has no clear cell over its top.
     write(store::object_mut(), [x, y, 8.0], OBJECT_COARSEST, red);
     assert_eq!(
-        access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)),
+        access.support_nearest(observer::eye(), &world::point(x + 0.5, y + 0.5, 9.0)),
         Answer::Exact(Some(10.0))
     );
 }

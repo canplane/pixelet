@@ -13,8 +13,7 @@ use pxl_spec::space::layer::lattice::{GROUND, Grid};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::control::camera::controller::{Motion, put_pivot};
-use crate::domain::control::support::{exact, nearest};
-use crate::domain::query::is_unknown;
+use crate::domain::control::support::arriving;
 use crate::sys::sched;
 use pxl_global::Global;
 
@@ -64,11 +63,7 @@ pub(crate) fn dst_step() {
     let Some((at, motion)) = *dst() else {
         return;
     };
-    let Some(to) = (if is_unknown(&at) {
-        exact(&at)
-    } else {
-        nearest(&at)
-    }) else {
+    let Some(to) = arriving(&at) else {
         return;
     };
     *dst() = None;
