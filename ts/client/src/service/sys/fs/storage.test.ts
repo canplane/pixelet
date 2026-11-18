@@ -16,6 +16,7 @@ import {
   commitStorage,
   openStorage,
   setAside,
+  setStorage,
   type Storage,
 } from "./storage.ts";
 
@@ -47,7 +48,8 @@ test("setAside - a refused file is copied, read back, then its slot emptied", ()
     "pxl:settings": "AAAA",
     "pxl:settings:aside:7": "older",
   });
-  setAside(s, SETTINGS, 7);
+  setStorage(s);
+  setAside(SETTINGS, 7);
   assert.deepStrictEqual(s.map.get("pxl:settings"), "");
   assert.deepStrictEqual(s.map.get("pxl:settings:aside:7"), "older");
   assert.deepStrictEqual(s.map.get("pxl:settings:aside:7-1"), "AAAA");
@@ -55,28 +57,30 @@ test("setAside - a refused file is copied, read back, then its slot emptied", ()
 
 test("setAside - storage that refuses the copy keeps the slot as it was", () => {
   const s = storage({ "pxl:settings": "AAAA" }, true);
+  setStorage(s);
   assert.deepStrictEqual(
-    code(() => setAside(s, SETTINGS, 7)),
+    code(() => setAside(SETTINGS, 7)),
     ERROR_CODE_IO,
   );
   assert.deepStrictEqual(s.map.get("pxl:settings"), "AAAA");
   assert.deepStrictEqual(
-    code(() => setAside(storage(), 99, 7)),
+    code(() => setAside(99, 7)),
     ERROR_CODE_NO_ENTRY,
   );
 });
 
 test("openStorage - a file's bytes read back as committed, kept as text", () => {
   const s = storage();
-  commitStorage(SETTINGS, new Uint8Array([1, 0, 255]), s);
+  setStorage(s);
+  commitStorage(SETTINGS, new Uint8Array([1, 0, 255]));
   assert.deepStrictEqual(s.map.get("pxl:settings"), "AQD_");
-  assert.deepStrictEqual([...openStorage(SETTINGS, s)], [1, 0, 255]);
+  assert.deepStrictEqual([...openStorage(SETTINGS)], [1, 0, 255]);
 });
 
 test("openStorage - text that keeps no bytes is no file of bytes", () => {
-  const s = storage({ "pxl:settings": '{"ao":"screen"}' });
+  setStorage(storage({ "pxl:settings": '{"ao":"screen"}' }));
   assert.deepStrictEqual(
-    code(() => openStorage(SETTINGS, s)),
+    code(() => openStorage(SETTINGS)),
     ERROR_CODE_BAD_MESSAGE,
   );
 });

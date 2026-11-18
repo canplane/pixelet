@@ -27,7 +27,6 @@ import {
   commitStorage,
   openStorage,
   setAside,
-  STORAGE,
 } from "@/service/sys/fs/storage.ts";
 import { readObject } from "@/service/sys/fs/tile.ts";
 
@@ -116,9 +115,7 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
           ? commitStorage(path.STORAGE.SETTINGS.ID, bytes)
           : readOnly(),
       setAside: (rest, nowMs) =>
-        rest.length === 0
-          ? setAside(STORAGE, path.STORAGE.SETTINGS.ID, nowMs)
-          : none(),
+        rest.length === 0 ? setAside(path.STORAGE.SETTINGS.ID, nowMs) : none(),
     },
   ],
   [

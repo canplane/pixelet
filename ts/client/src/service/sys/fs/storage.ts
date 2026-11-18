@@ -2,13 +2,14 @@
 
 /**
  * The backend of the core's `path.STORAGE` files (file.json5), which hold
- * the settings, in the platform's storage. The core hands and takes a file's
- * bytes, while the platform keeps text, so each file is kept as the base64url
- * of its bytes. Text that is not base64url reads as `bad-message`, which the core
- * refuses. The core also refuses a file that is not in its slot's format, and
- * writes nothing over it. This module decides each slot's key and what becomes
- * of a refused file. Nothing kept is dropped: a refused file is set aside, and
- * read back, before its slot is emptied.
+ * the settings, in the storage whoever mounts the files gives (`setStorage`).
+ * The core hands and takes a file's bytes, while the storage keeps text, so
+ * each file is kept as the base64url of its bytes. Text that is not base64url
+ * reads as `bad-message`, which the core refuses. The core also refuses a file
+ * that is not in its slot's format, and writes nothing over it. This module
+ * decides each slot's key and what becomes of a refused file. Nothing kept is
+ * dropped: a refused file is set aside, and read back, before its slot is
+ * emptied.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -18,6 +19,8 @@ import {
   bytes_to_b64url,
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
+import { bug } from "@xpute/kit/status/bug.ts";
+import { ERRNO_ENOTRECOVERABLE } from "@xpute/kit/status/errno.spec.ts";
 import { ComponentError } from "@xpute/link";
 import {
   ERROR_CODE_BAD_MESSAGE,
@@ -26,7 +29,6 @@ import {
 } from "@xpute/host/abi/fs/types.enum.ts";
 
 import { path } from "@/abi/file.spec.ts";
-import * as local from "@/service/platform/storage.ts";
 
 /** A write the platform refuses keeps nothing and does not throw. */
 export interface Storage {
@@ -34,12 +36,18 @@ export interface Storage {
   set(key: string, value: string): void;
 }
 
-export let STORAGE: Storage = local;
+let STORAGE: Storage | null = null;
 
-/** The web worker cannot reach the page's storage, so the core's worker keeps
- * a copy of it that writes back to the page (runtime/worker.ts). */
+/** Makes `s` the storage the files are kept in, before the files are
+ * mounted: the platform's storage as the thread that mounts them reaches
+ * it. */
 export function setStorage(s: Storage): void {
   STORAGE = s;
+}
+
+/** The storage installed. Reading it before one is installed is a bug. */
+function storage(): Storage {
+  return STORAGE ?? bug(ERRNO_ENOTRECOVERABLE);
 }
 
 function bytesOf(text: string): U8Array {
@@ -69,7 +77,8 @@ export function isStorageKey(key: string): boolean {
  * then empties `key`. When the copy does not read back, the storage refused
  * the write, so `key` is left as it was and the set-aside fails `io`: the file
  * is never emptied without a copy. */
-function setAsideKey(s: Storage, key: string, nowMs: number): void {
+function setAsideKey(key: string, nowMs: number): void {
+  const s = storage();
   const text = s.get(key);
   if (text !== null && text !== "") {
     let aside = `${key}:aside:${nowMs}`;
@@ -82,8 +91,8 @@ function setAsideKey(s: Storage, key: string, nowMs: number): void {
   s.set(key, "");
 }
 
-export function setAside(s: Storage, slot: u32, nowMs: number): void {
-  setAsideKey(s, keyOf(slot), nowMs);
+export function setAside(slot: u32, nowMs: number): void {
+  setAsideKey(keyOf(slot), nowMs);
 }
 
 function keyOf(slot: u32): string {
@@ -92,19 +101,16 @@ function keyOf(slot: u32): string {
   return key;
 }
 
-export function openStorage(slot: u32, s: Storage = STORAGE): U8Array {
-  const text = s.get(keyOf(slot));
+export function openStorage(slot: u32): U8Array {
+  const text = storage().get(keyOf(slot));
   if (text === null) throw new ComponentError(ERROR_CODE_NO_ENTRY);
   return bytesOf(text);
 }
 
 /** Writes `bytes` as the file in `slot`, and fails `io` where the platform
  * refused the write: what it holds then does not read back. */
-export function commitStorage(
-  slot: u32,
-  bytes: U8Array,
-  s: Storage = STORAGE,
-): void {
+export function commitStorage(slot: u32, bytes: U8Array): void {
+  const s = storage();
   const key = keyOf(slot);
   const text = bytes_to_b64url(bytes);
   s.set(key, text);

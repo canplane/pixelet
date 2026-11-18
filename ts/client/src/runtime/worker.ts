@@ -24,11 +24,9 @@ import { setOnline } from "@/service/origin/online.ts";
 import { mountFiles } from "@/service/sys/fs/file.ts";
 import { mountObjects } from "@/service/sys/fs/object.ts";
 import {
-  type Declaration,
+  currentSource,
   declareSource,
-  type Source,
-  sourceDeclaration,
-  sourceState,
+  type DeclarationOrState,
   watchSource,
 } from "@/service/sys/fs/source.ts";
 import { setStorage } from "@/service/sys/fs/storage.ts";
@@ -45,8 +43,7 @@ export interface Kept {
 /** The source's state, as the worker tells the page. */
 export interface SourceReport {
   kind: "source";
-  state: Source;
-  declaration: Declaration | null;
+  source: DeclarationOrState;
 }
 
 /** A kept key the worker wrote, which the page keeps too. */
@@ -63,7 +60,8 @@ onmessage = ({ data: m }: MessageEvent<Instantiate & Kept>) => {
   void boot(m);
 };
 
-/** A copy of the page's kept entries, each write sent back to the page. */
+/** Keeps the files in a copy of the page's kept entries, each write sent
+ * back to the page: a worker cannot reach the page's storage. */
 function keep(entries: [string, string][]): void {
   const store = new Map(entries);
   setStorage({
@@ -120,12 +118,6 @@ async function boot(m: Instantiate): Promise<void> {
 
 /** Declares the tile source to the core, and tells the page its state. */
 async function declare(side: Side): Promise<void> {
-  watchSource(() =>
-    tell({
-      kind: "source",
-      state: sourceState(),
-      declaration: sourceDeclaration(),
-    }),
-  );
+  watchSource(() => tell({ kind: "source", source: currentSource() }));
   await declareSource(sender(side));
 }

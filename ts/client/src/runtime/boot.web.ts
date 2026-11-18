@@ -23,7 +23,7 @@ import {
 import { BUILD_ID } from "@/build.ts";
 import { stopped } from "@/service/sys/abort.ts";
 import { GPU_STATE, setGpu } from "@/service/sys/gpu.ts";
-import { mirrorSource } from "@/service/sys/fs/source.ts";
+import { setSource } from "@/service/sys/fs/source.ts";
 import { isStorageKey } from "@/service/sys/fs/storage.ts";
 import * as storage from "@/service/platform/storage.ts";
 import { tellDrive } from "@/service/platform/drive.ts";
@@ -50,9 +50,7 @@ export function boot(): void {
   stopped_on(stopped);
   trap_on(trapped);
   message_on<GpuReport>("gpu", (m) => setGpu(GPU_STATE[m.state]));
-  message_on<SourceReport>("source", (m) =>
-    mirrorSource(m.state, m.declaration),
-  );
+  message_on<SourceReport>("source", (m) => setSource(m.source));
   message_on<KeepReport>("keep", (m) => storage.set(m.key, m.value));
   // The worker writes its runtime's records itself; a build made for
   // measuring keeps them for the tool that drives the page as well.
