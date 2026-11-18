@@ -779,7 +779,7 @@ pub const TILE: u32 = 8;
 /// `margin`. Each `BEAM`-square cell of the box starts at the least of the beam rays within
 /// `BEAM_WINDOW` of its corners. Its texels resume from that ray's line where every beam ray
 /// of the window asked their band, and walk from the root where one asked another
-/// (`cast::Detail::alike`, `beam::CELL_RESUMES`), as the proof below holds for walks alike.
+/// (`beam::CELL_RESUMES`), as the proof below holds for walks alike.
 ///
 /// Why that is a texel's walk from the root, as in the eye's proof but with the rays
 /// parallel: take `X`, the cell a texel's ray ends at, `e` its entry, and `Y` the smallest

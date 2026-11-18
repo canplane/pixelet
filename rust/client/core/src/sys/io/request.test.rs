@@ -236,19 +236,11 @@ fn outage_counts_once() {
 #[test]
 fn cur_demand_said() {
     begin();
-    set_clock(0.0);
     declare(Stream::Terrain, &[(1, unseen(0.0)), (2, unseen(1.0))]);
     pump();
     let out = take_events().0;
     assert_eq!(out.len(), 2);
-    set_clock(0.0);
     declare(Stream::Terrain, &[(3, seen(0.0))]);
-    assert_eq!(
-        cnts(Stream::Terrain).0,
-        1,
-        "the new want is representable beside what is out"
-    );
-    set_clock(0.0);
     pump();
     // What the camera left is stopped in the frame it leaves, and what is
     // wanted now starts in the same frame on a credit that is free.

@@ -34,8 +34,7 @@ pub(crate) fn stand(at: &Q3) -> Q3 {
 /// The last answer of `standing`. It is kept until another point is asked,
 /// the eye moves or the world changes in the columns the answer read
 /// (`change::Memo`),
-/// because a camera's `to` and a destination ask for the same point on every
-/// tick until a leaf gives its Z, and `resolve_to` asks twice in one tick.
+/// because the figures at a pivot ask for the same point on every tick.
 static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
 
 fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
@@ -91,12 +90,6 @@ pub(crate) fn resolve(at: &Q3, cur: V3) -> V3 {
     }
 }
 
-/// Where `at` stands, once a leaf gives the floor there. A point with an
-/// unknown Z gets its Z from here.
-pub(crate) fn exact(at: &Q3) -> Option<Q3> {
-    standing(World::now(), at).exact().flatten()
-}
-
 /// Where a camera sent to `at` stands, once a leaf gives the floor there:
 /// on the surface where its height is not known, and else on the floor
 /// nearest its height. It is read as an eye standing there reads, not the
@@ -105,7 +98,7 @@ pub(crate) fn arriving(at: &Q3) -> Option<Q3> {
     let world = World::now();
     let top = match is_unknown(at) {
         true => world.surface_support_by(None, at),
-        false => world.support_nearest(None, at),
+        false => world.support_nearest(at),
     };
     top.exact().flatten().map(|top| on_floor(at, top))
 }
@@ -114,7 +107,7 @@ pub(crate) fn arriving(at: &Q3) -> Option<Q3> {
 /// a leaf gives it, and a known Z is not written over.
 pub(crate) fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
     let Some(at) = *to else { return cur };
-    if let Some(p) = exact(&at).filter(|_| is_unknown(&at)) {
+    if let Some(p) = arriving(&at).filter(|_| is_unknown(&at)) {
         *to = Some(p);
     }
     resolve(&to.unwrap_or(at), cur)

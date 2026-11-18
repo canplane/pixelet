@@ -9,9 +9,10 @@
 /// Writes the start of cell `c`: the least of the beam rays' starts within its window, which
 /// spans `2 + 2 · BEAM_WINDOW` beam rays a side from the cell's own corner, and the beam ray
 /// that holds it, whose line the cell's rays resume from. The rays resume from that line only
-/// where every beam ray of the window asked the band the cell's rays ask
-/// (`cast::Detail::alike`). The light's beam has one spacing, so the band alone decides. Where
-/// a beam ray asked another band, the cell's rays walk from the root. A beam ray lies a tile
+/// where every beam ray of the window asked the band the cell's rays ask: a walk takes what
+/// another met only where both asked the same zooms from the same eye at the same spacing, and
+/// the light's beam has one eye and one spacing, so the band alone decides. Where a beam ray
+/// asked another band, the cell's rays walk from the root. A beam ray lies a tile
 /// from the next (`light::BEAM`), so the window's beam rays lie on every tile from its first's
 /// to its last's, and `tiles_ask` checks them all. A workgroup is a square of the light's
 /// list's lanes, as `light_item` reads them.

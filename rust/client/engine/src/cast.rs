@@ -92,19 +92,6 @@ impl Detail {
     pub fn hold(self, z: Zoom) -> Zoom {
         z.max(self.range[0]).min(self.range[1])
     }
-
-    /// Whether a walk asking this detail may take what a walk asking `other` met: the cell it
-    /// stopped at, the sky past it, the line it left. It may only where both asked the same zooms
-    /// from the same eye at the same spacing.
-    pub fn alike(self, other: Detail) -> bool {
-        self.eye[0] == other.eye[0]
-            && self.eye[1] == other.eye[1]
-            && self.eye[2] == other.eye[2]
-            && self.range[0] == other.range[0]
-            && self.range[1] == other.range[1]
-            && self.spacing.angle == other.spacing.angle
-            && self.spacing.across == other.spacing.across
-    }
 }
 
 /// Whether a node whose squared side is `side2` is too narrow for a beam ray to share, where

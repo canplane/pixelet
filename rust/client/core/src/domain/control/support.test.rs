@@ -84,3 +84,23 @@ fn a_destination_stands_whatever_the_observer_sees() {
     observer::set_pose(None);
     assert_eq!(arriving(&to).map(|p| height(&p)), Some(over(5.0)), "no eye");
 }
+
+/// The app's start: with no eye and no pivot, a camera sent to a place whose
+/// height is not known comes to stand there once the leaf is held, and has
+/// an eye from then on. Nothing on the way waits for an eye.
+#[test]
+fn a_camera_sent_somewhere_stands_with_no_eye_before() {
+    use crate::domain::control::camera::controller::{self, Motion};
+    use crate::domain::control::navigation::destination;
+    use crate::domain::observer;
+    let [x, y] = flat_at_five();
+    placed(Store::default());
+    observer::set_pose(None);
+    assert!(controller::pose().is_none(), "no eye yet");
+    destination::go_to_ground(unknown(&world::point(x + 0.5, y + 0.5, 0.0)), Motion::Snap);
+    destination::dst_step();
+    assert_eq!(destination::pending(), None, "the destination is reached");
+    let pivot = controller::pivot().expect("a pivot");
+    assert_eq!(height(&pivot), over(5.0));
+    assert!(controller::pose().is_some(), "the camera has an eye");
+}

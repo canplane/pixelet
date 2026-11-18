@@ -41,12 +41,8 @@ fn answers() -> &'static mut List<Response, { CREDIT_CNT as usize }> {
 }
 
 /// Reads the want `id` of `stream` for the attempt `key`, in a task of its
-/// own. The pool is the credits, which bound the reads at the host. An
-/// attempt stopped before its read began makes none.
+/// own. The pool is the credits, which bound the reads at the host.
 pub(crate) fn start(key: u64, stream: Stream, id: u64) {
-    if attempt_of(key).is_none() {
-        return end_read(key);
-    }
     // A stream read here is a layer's or the object's, which has a path.
     let path = file::path_of(stream, id).or_bug(Errno::ENOTRECOVERABLE);
     executor::spawner().spawn(fetch(key, stream, path, now()).or_bug(Errno::ENOSPC));

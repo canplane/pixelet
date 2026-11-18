@@ -42,7 +42,7 @@ fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let at = cell_start(id.xy);
   beams[at + CELL_T] = least.x;
   beams[at + CELL_CORNER] = least.y;
-  // The eye's cells and corners all ask at the eye's one detail (`Detail::alike`), so the rays
+  // The eye's cells and corners all ask at the eye's one detail, so the rays
   // of every cell resume from its corner's line.
   beams[at + CELL_RESUMES] = 1u;
 }
