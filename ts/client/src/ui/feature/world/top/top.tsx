@@ -15,7 +15,7 @@ import { SensorIcons } from "./sensor-icon.tsx";
 import { MapScaleBar } from "./scale-bar.tsx";
 import { CompassBar } from "./compass-bar.tsx";
 import { LocationStack } from "./location-stack.tsx";
-import { ViewButtons } from "./view-button.tsx";
+import { ModeButton, PlaceButton } from "./view-button.tsx";
 import { BusyBlock, BusyDim } from "@/ui/feature/world/busy-dim.tsx";
 import { useChromeTop } from "@/ui/feature/world/chrome.ts";
 import { CircularButton } from "@/ui/shared/component/circular-button.tsx";
@@ -26,6 +26,9 @@ import {
   watchDragMode,
   watchZoom,
 } from "@/service/core/input.ts";
+
+/** The left column's depth: the settings and, under them, the camera's mode. */
+export const LEFT_DEPTH = 2 * CHROME.control + CHROME.controlGap;
 
 export function TopOverlays() {
   const { t } = useTranslation();
@@ -92,6 +95,7 @@ export function TopOverlays() {
           onPress={() => openModal("settings")}
           label={t("settings.trigger_aria_label")}
         />
+        <ModeButton />
       </BusyDim>
 
       <BusyBlock style={[STYLE.center, { top }]}>
@@ -100,7 +104,7 @@ export function TopOverlays() {
 
       <BusyDim style={[STYLE.right, { top }]}>
         <LocationStack />
-        <ViewButtons />
+        <PlaceButton />
       </BusyDim>
     </>
   );
@@ -218,8 +222,8 @@ const STYLE = StyleSheet.create({
     position: "absolute",
     left: CHROME.inset,
     zIndex: LAYER.chrome,
-    alignItems: "flex-start",
-    gap: 12,
+    alignItems: "center",
+    gap: CHROME.controlGap,
   },
   center: {
     position: "absolute",

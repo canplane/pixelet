@@ -21,7 +21,7 @@ import { KEEPS_KEYBOARD } from "@/ui/shared/component/keyboard.tsx";
 import { useChromeTop } from "./chrome.ts";
 import { BusyDim } from "./busy-dim.tsx";
 import { Dock } from "./dock/dock.tsx";
-import { TopOverlays } from "@/ui/feature/world/top/top.tsx";
+import { LEFT_DEPTH, TopOverlays } from "@/ui/feature/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/ui/feature/world/toast/controller.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
@@ -53,7 +53,7 @@ function World() {
 }
 
 function BetweenChrome({ children }: { children: ReactNode }) {
-  const top = useChromeTop() + CHROME.control + PANEL_GAP_PX;
+  const top = useChromeTop() + LEFT_DEPTH + PANEL_GAP_PX;
   const bottom =
     bottomRest(useSafeArea(), CHROME.inset) +
     DOCK_HEIGHT +
