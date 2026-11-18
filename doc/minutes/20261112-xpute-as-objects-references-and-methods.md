@@ -22,7 +22,7 @@ ABI holds in the component model. Its layers correspond:
 | --- | --- | --- |
 | Interface | WIT | WIT |
 | Bindings | wit-bindgen | xpute's generator |
-| Boundary ABI | Canonical ABI (lift, lower) | the frame, XTP and the link |
+| Boundary ABI | Canonical ABI (lift, lower) | the frame, the Canonical ABI's layout and the link |
 | A resource's reference | an integer handle, `ResourceTable` | an integer handle, the handle table |
 | The host's implementation | registered in Wasmtime's `Linker` | the opener and handle tables, polymorphic behind them |
 
@@ -30,11 +30,8 @@ The differences are chosen. One passage carries every call where the component
 model links each function, since a device's FFI, the UI's port and completion by
 TAG all assume one. Memory is lent in place for the call or until the
 completion, where the Canonical ABI copies and ends a borrow at the call's
-return. Only the vocabulary of own and borrow is taken from it. XTP stays the one
-encoding.
-
-> Since 2026-11-14 (50f39b1b27): the link's values cross in the Canonical ABI
-> layout; RESULT is status alone; XTP stays the format of stored and served data.
+return. The vocabulary of own and borrow is taken from it, and the layout its
+values cross in. XTP stays the format of stored and served data.
 
 ## How the work is judged
 
@@ -84,12 +81,9 @@ The user holds every change to these:
   in any WIT world.
 - A frame carries four words. TAG is the request's id, from the sender's counter.
   The counter wraps, skipping tags still pending. CMD names the target and the
-  method, with one RES bit. RESULT is a value ≥ 0 or a negative errno. PKT is the
-  XTP packet's length. XTP stays the args' encoding.
-
-> Since 2026-11-14 (50f39b1b27): the link's values cross in the Canonical ABI
-> layout; RESULT is status alone; XTP stays the format of stored and served data.
-
+  method, with one RES bit. RESULT is status alone. PKT is the packet's length. The
+  link's values cross in the Canonical ABI layout, and XTP stays the
+  format of stored and served data.
 - A pointer is an offset into the core's memory and a length, `(at, len)`. Offset
   0 is not special. A pointer lent to a call is valid for the call; one lent to an
   async request is valid until its completion. Data crossing to another thread,
@@ -138,7 +132,10 @@ The user holds every change to these:
     are quiet. The UI post then follows, so a woken task never waits for an entry
     that may not come.
   - "Want a frame" is one signal, `invalidate`. Timed wakes keep one earliest time
-    armed. A per-entry deadline is read from the clock.
+    armed. A per-entry deadline is read from the clock: it runs from the frame's
+    start and its paced interval, the deployed build's rule, and the pace is
+    capped at 60 Hz
+    ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)).
   - A yield is `sleep(0)`. The browser's 4 ms clamp on nested timeouts is open.
 - Auto resolution and the auto frame rate both stay.
   - The rate is paced in the core by skipping vsyncs to a whole number of measured
@@ -204,11 +201,5 @@ name becomes a number.
   stop handler, `boot::set`, `layout::install`).
 - **pixelet:** it compiles again and runs on the web and devices. Resolution and
   pacing are then measured apart.
-- **Small items:** `BUDGET_MS`'s value, regenerating the perf spec, and EDEADLK in
-  the errno spec.
-
-> Since 2026-11-16 (`deb1fbb08c`): `BUDGET_MS` is gone; an entry's deadline is the
-> deployed build's rule again, from the frame's start and its paced interval, and
-> the pace is capped at 60 Hz again, neither yet measured against that build
-> ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)).
+- **Small items:** regenerating the perf spec, and EDEADLK in the errno spec.
 - **C++ catches up last.**

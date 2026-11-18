@@ -87,14 +87,12 @@ wait for the catalog's redesign.
 
 ## The native runtime, paused
 
-Native work stops here; neither it nor C++ is widened now (**the user**). What was
+Native work stops here; neither it nor C++ is widened now (**the user**). The C++
+guest runs on the link as the Rust guest does: `xpute/cpp/xpute/link`
+holds the link machine, `xpute/cpp/xpute/guest` the guest's end, and
+xpute-link-gen writes its calls and serves. The old core, the conformance core
+and their tests are gone, and the C++ builds natively and for wasm32. What was
 decided before the pause:
-
-> Since 2026-11-14 (8a9b0eabe9): the C++ guest runs on the link as the
-> Rust guest does: `xpute/cpp/xpute/link` holds the link machine,
-> `xpute/cpp/xpute/guest` the guest's end, and xpute-link-gen writes its calls
-> and serves. The old core, the conformance core and their tests are gone, and
-> the C++ builds natively and for wasm32.
 
 - The runtime runs on the core's thread, as the page's worker holds the runtime
   and the core together (**the user**, on the agents' proposal). The core thread
@@ -107,74 +105,35 @@ decided before the pause:
   behind one lock (**the user**).
 - Native builds unwind, so a panic in the core is a trap that stops the core and
   leaves the UI (**the agents**).
-- The program composes its runtime in the order it runs, as the page's worker
-  does; xpute offers pieces, not a start with hooks (**the agents**).
-
-  > Since 2026-11-15 (05d5167e9b): the program builds its host as one list, its
-  > servers in no order with its world's `IMPORTS` and `LATER`, and each
-  > runtime runs the fixed steps itself, on a page and on a device alike:
-  > it mounts each server, serves the UI's side, enters the guest only once
-  > every import under a named handle is mounted, tells it the UI attached,
-  > and on a device runs the loop (**the user**).
-
-  > Since 2026-11-15 (5ee892cc51): an import is checked by interface, an
-  > opened one included: `IMPORTS` lists every interface the world imports,
-  > and the runtime refuses to start where no server serves one, under its
-  > named handle or by an opener mounted for it at some prefix; which
-  > prefixes the guest opens stays the program's (**the agents**).
-
+- The program builds its host as one list, its servers in no order with its
+  world's `IMPORTS` and `LATER`, and each runtime runs the fixed steps itself, on
+  a page and on a device alike: it mounts each server, serves the UI's side,
+  enters the guest only once every import under a named handle is mounted, tells
+  it the UI attached, and on a device runs the loop (**the user**). An import is
+  checked by interface, an opened one included: `IMPORTS` lists every interface
+  the world imports, and the runtime refuses to start where no server serves
+  one, under its named handle or by an opener mounted for it at some prefix;
+  which prefixes the guest opens stays the program's (**the agents**).
 - What a path is bound to is the program's on both platforms; xpute offers only
   the platform's storage (**the agents**).
-
-Open when native resumes:
-
-- The disk's own thread goes: the page's storage is synchronous on the worker's
-  thread, and the files a device keeps are small (**the user** flagged it as an
-  operating system's analogy).
-
-  > Since 2026-11-14 (64de3e409d): the disk keeps its own thread, in
-  > xpute-native-host (**the user**). A page's storage does its I/O off the
-  > worker's thread too, in IndexedDB and by message to the page, so the
-  > thread is that role on a device, and a sync stays off the core's thread.
-
-  > Since 2026-11-15 (9c1d429c43): the disk goes, its thread with it (**the
-  > user**). A device's storage is the platform's, as a page's is, through
-  > the client's `service/platform/storage.native.ts`.
-
-- The runtime's composition sits in pxl-core's `sys/`, which may not name the
-  renderer.
-
-  > Since 2026-11-14 (88830d333a): the composition is pxl-runtime
-  > (`rust/client/runtime`), the device's counterpart of the page's worker,
-  > with the device's servers of pixelet's own interfaces, the text and the
-  > files, and their bindings; the device's library is built from it, and
-  > pxl-core is a guest that names no host (**the user**).
-
-- The runtime's environment (the event loop, threads, hooks, the log) and its
-  host (the link and the interfaces it serves) are mixed in one crate.
-
-  > Since 2026-11-14 (64de3e409d): they split as the web's do (**the user**).
-  > xpute-native-runtime (`xpute/native/runtime/rust`) is the environment: the
-  > event loop, wait, the log, JNI, the lifecycle, the link that enters the
-  > guest, the UI's channel, and the host-side bindings beside the link.
-  > xpute-native-host keeps the clock, the stop and the disk over it.
-
-  > Since 2026-11-15 (9c1d429c43): xpute-native-host keeps the clock and the
-  > stop; the disk goes (**the user**).
-
-  > Since 2026-11-15: the link's host end and the host-side bindings are the
-  > host's, which the runtime injects into and which names no runtime
-  > (**the user**,
-  > `20261115-xpute-s-parts-cut-by-what-they-are-and-what-they-vary-on.md`).
-
-- The device's platform modules, and a source for the origin's paths on a device.
-
-  > Since 2026-11-14: no new platform module (**the user**). A device's origin
-  > paths are served by the UI's JavaScript over the remote, through
-  > `service/platform/origin.native.ts` `get`, so the Rust has no HTTP client:
-  > the worker fetches them on a page and the UI's thread on a device. The
-  > remote carries no answer from the UI yet, so a device's file server answers
-  > them, and the objects, `no-entry`.
+- A device has no disk of xpute's and no thread for one (**the user**): its
+  storage is the platform's, as a page's is, through the client's
+  `service/platform/storage.native.ts`.
+- The runtime's composition is pxl-runtime (`rust/client/runtime`), the device's
+  counterpart of the page's worker, with the device's server of pixelet's own
+  text interface and its bindings; the device's library is built from it, and
+  pxl-core is a guest that names no host (**the user**).
+- The runtime's environment and its host split as the web's do (**the user**).
+  The runtime is the environment: the event loop, wait, the log, JNI, the
+  lifecycle, the link that enters the guest and the UI's channel. The host keeps
+  the clock and the stop, with the link's host end and the host-side bindings.
+  The host varies by language and the runtime by platform, and the runtime
+  injects into the host, which names no runtime
+  ([xpute's parts](./20261115-xpute-s-parts-cut-by-what-they-are-and-what-they-vary-on.md)).
+- No new platform module (**the user**). A device's origin paths are served by
+  the UI's JavaScript, through `service/platform/origin.native.ts` `get`, so the
+  Rust has no HTTP client: the worker fetches them on a page and the UI's thread
+  on a device.
 
 ## How the work is reviewed
 
@@ -192,10 +151,5 @@ name already taken (**the user**).
 
   > Since 2026-11-13 (`73e2174df5`): the core is the guest, its server the
   > host and the platform's environment the runtime (**the user**).
-
-  > Since 2026-11-15: the host varies by language and the runtime by platform,
-  > and the runtime injects into the host, which names no runtime
-  > (**the user**,
-  > `20261115-xpute-s-parts-cut-by-what-they-are-and-what-they-vary-on.md`).
 - The catalog's redesign, which removes the slot types and the last exempt cycle.
 - C++ catches up last.

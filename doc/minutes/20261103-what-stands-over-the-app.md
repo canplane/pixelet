@@ -77,13 +77,9 @@ hash of those files in Metro's `cacheVersion` keeps a changed value from coming 
 of the cache.
 
 > Since 2026-11-10 (7d6a786b0f): built as `inline` in `ts/client/babel.config.ts`,
-> release builds only. It writes a literal where an importer reads it; a literal
-> its own module reads (a generated binding's `HANDLE` and method numbers) keeps
-> its export's name in the bundle.
->
-> Since 2026-11-14 (327a129ec9): `inline` writes a literal where its own module
-> reads it too, and tree shaking drops an export no read names. A binding's
-> handle and method numbers still keep their names where a module imports the
+> release builds only. It writes a literal where an importer reads it and where
+> its own module reads it, and tree shaking drops an export no read names. A
+> binding's handle and method numbers keep their names where a module imports the
 > binding whole (`import * as`), as the bundle keeps every export of such a
 > module.
 

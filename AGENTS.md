@@ -33,9 +33,9 @@
   before proposing, to know what was tried and why it was dropped. It is a
   diary, no source of what is open or decided now: nothing is reported to the
   user as open, or as their decision, because a line there says so. A minute
-  holds its meeting's conclusions, written whole while the meeting lasts; once
-  it is over, a deferral found settled gets a note beneath it, as
-  `doc/README.md` says.
+  holds its meeting's conclusions, written whole while the meeting lasts; a
+  record is revised only on the user's word, in place, with no note beneath it
+  and no trace, as `doc/README.md` says.
 - The user's machine is theirs: ask before taking its screen, a browser or a
   device, and never raise a window by force. Work goes to another session only
   on the user's word.

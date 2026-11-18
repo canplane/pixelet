@@ -183,19 +183,16 @@ process held 280 to 380 MiB on #98 and 280 to 330 on HEAD.
   entry may run to 85% of two intervals past the frame's start, past the real next
   vsync, whose answer the frame task takes only when the entry yields; then the frame
   runs and asks again late. While the entries have work to fill the budget, the misread
-  holds itself. Whether this held the Mac's Safari at 30 frames a second was not shown:
-  its reports were not kept. #98 read the same: its refresh was read off the animation
+  holds itself. That is not what held the Mac's Safari at 30 frames a second: with the
+  web host running an animation frame loop and giving the gap between frames it saw
+  back to back, that gap read 31 to 32 ms there too ("Then: the night's quick
+  comparison" below). Safari ran the dedicated worker's animation frames at about
+  30 Hz; why (a low-power mode, a worker's limit) was not read. #98 read the same: its refresh was read off the animation
   frames by xpute's host pacing, which the user kept in xpute on 2026-11-05
   ([xpute not yet for other programs](../../minutes/20261105-xpute-not-yet-for-other-programs.md));
   `a8e1547d6e` deleted that runtime and paced in the core by vsyncs skipped to a whole
   number of measured intervals
   ([xpute as objects](../../minutes/20261112-xpute-as-objects-references-and-methods.md)).
-
-  > Since 2026-11-17 (`3ac60df141`): not the loop above. The web host now runs an
-  > animation frame loop and gives the gap between frames it saw back to back; in the
-  > Mac's Safari that gap read 31 to 32 ms on HEAD too ("Then: the night's quick
-  > comparison" below). Safari ran the dedicated worker's animation frames at about
-  > 30 Hz; why (a low-power mode, a worker's limit) was not read.
 
 ## One S23 app run
 
@@ -382,15 +379,12 @@ The change. The runs were under `tmp/perf/cmp/`, not kept; the figures above are
 The tree measured above (`72226f95af`) against HEAD after the day's further changes
 (`6de67851df`: the vsync answering `next(after)` with the frame's gap, a web wait of 0
 on a posted message, the location indicator's cells and the markers asked under the
-budget). Release web builds with `PXL_PERF_DRIVE=1`, both under HEAD's scripts, a warm-up
+budget). The last of these was taken back:
+the location is one memo for the zone, keyed by the fix's leaf cell, and runs as a tick
+after the ghost, and the markers ask as before, a brick's shown until it is read again.
+The figures below are the taken-back code's. Release web builds with `PXL_PERF_DRIVE=1`, both under HEAD's scripts, a warm-up
 and one ABBA round each: the S23's Chrome cooled to 38.5 °C before each run, the Mac's
 Chrome, then its Safari.
-
-> Since 2026-11-17 (`600037b61c`, `aff9dfde09`, `63f0ec4499`): the code these figures
-> measure for the location indicator and the markers was taken back. The location is
-> again one memo for the zone, keyed by the fix's leaf cell, and runs as a tick after
-> the ghost; the markers ask as before, a brick's shown until it is read again. The
-> tree since is not measured; the figures below are the taken-back code's.
 
 | platform | build | frames | GPU p50 / p95 | tick p50 / p95 | effects p95 | scene p50 / p95 |
 | --- | --- | --- | --- | --- | --- | --- |

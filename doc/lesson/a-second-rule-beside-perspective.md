@@ -10,9 +10,12 @@ and its figures in
 ## The rule the user holds
 
 Everything that reads the world reads it by perspective, the same in every
-direction: the farther from where a ray starts, the coarser its cells. It holds
-for the camera, the light, the shadows and what collides alike, and what a ray
-does not find within its cap of steps is not there, as in a fog. The user has
+direction: the farther from the eye, the coarser its cells, wherever a ray
+starts. The eye is the camera's and there is no other; it sets the size a place
+is asked at, and the answer is the world's
+([the eye sets a size, and the world answers](../minutes/20261118-the-eye-sets-a-size-and-the-world-answers.md)).
+It holds for the camera, the light, the shadows and what collides alike, and
+what a ray does not find within its cap of steps is not there, as in a fog. The user has
 said so of the camera and the light for more than a month. It is in `AGENTS.md`
 since this day.
 
@@ -52,8 +55,8 @@ the answers are right.
 
 ## How the agent went round it
 
-The agent met the fault six times and laid a piece beside it each time before it
-took the rule:
+The agent met the fault eight times and laid a piece beside it each time before
+it took the rule:
 
 1. a walk that crosses an empty shard in one step (`18598cc6e8`), for one of two
    cases;
@@ -64,10 +67,16 @@ took the rule:
 5. the finest detail kept and the ray's length held to a count of cells derived
    from the cap, with a loop over reaches and an early end;
 6. the rays by distance, and then taken back by the agent on its own judgment,
-   because two tests failed and a near walk was a tenth slower.
+   because two tests failed and a near walk was a tenth slower;
+7. one function for every ray of control (`World::near`), which read what it met
+   far off again from nearer inside one query, a zoom finer a pass;
+8. a reader that asked by its distance from where it stood, and after it an eye
+   for whatever had none: a place the camera is sent to read as an eye standing
+   there, a pan leading an eye of its own.
 
-Each piece closed what was in front of it and left the second rule standing. The
-sixth is the one to keep in mind: the general rule failed two tests, and the
+Each piece closed what was in front of it and left a second rule standing. The
+last two were second rules themselves, each a size that something other than the
+eye set. The sixth is the one to keep in mind: the general rule failed two tests, and the
 agent read that as the rule's fault. Both failures were the old code's. A ray by
 distance reported its coarsest zoom's cells as read, 2048 units a side for one
 point, whatever it had read; and the tests held answers that only the fixed zoom
@@ -97,23 +106,20 @@ case's wrong answers with it.
 
 ## How to check
 
-- For any ray, ask what decides the zoom it reads: only its distance from where
-  it starts, or something else.
-- What a ray meets far off is a coarser cell. A reader that needs the exact
-  thing reads again from near it (`SplitCell::meet`), and that is the whole of
-  the mechanism.
+- For any read, ask what decides the size it asks at: the eye alone, by its
+  distance, or something else. The eye's own rays ask each node at its own
+  distance from the eye; a body asks its cell at the one size the eye sets for
+  the body. With no eye a read answers a lack.
+- What is met far from the eye is a coarser cell, and that is the answer.
+  Nothing reads it again from nearer.
 - A walk's steps should not grow with how far it goes. Time a query from near
   and from very far: by distance the two are of one order.
-
-> Since 2026-11-18 (`0778e18a47`, `d079616413`): the mechanism is `World::near`, which
-> every ray of control reads by, and it reads again from half way to what it met,
-> a zoom finer a pass, starting each pass outside what it looks for.
 
 ## The last of it
 
 The orbit's rays (`orbit.rs` `line_clear`, `toward_eye`) and the pointer's
-(`pick.rs`) read by `finest` for a few hours more. They read by the one function
-the walker's do (`World::near`), and `finest` is gone from the code.
+(`pick.rs`) read by `finest` for a few hours more. They are the one walk the
+walker's are, and `finest` is gone from the code.
 
 ## The day, as it went
 
@@ -154,12 +160,3 @@ The names were a second thread. I had been calling things by words nobody had
 chosen, in Korean and in English, and the user could not tell what I meant.
 The world's box was `BOUNDS` and is `BOUND`. A walker is a walker and a column is
 the code's word, not mine to translate.
-
-> Since 2026-11-18 (`65c734f32c`): `World::near` was itself a second rule beside
-> perspective, a far hit read again from nearer inside one query, and is gone. A reader
-> asks from where it stands.
-
-> Since 2026-11-18 (this note's commit): reading from where the asker stands was a
-> second rule too, for an asker that is not the eye. Near and far are told from the
-> observer's eye alone, for a body's rays as for the camera's, and a reader passes no
-> eye and no zoom of its own.

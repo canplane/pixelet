@@ -73,29 +73,22 @@ What the user reproved in the agents' work, to be kept clear of:
   JavaScript thread, as a browser's does, which is what the 2026-10-16 decision
   (`f6a5b3b7a0`) asks of a native transport; `origin.native.ts`'s own decode
   serves where a transport passes zstd through, as iOS's did then.
-- **Gaps noted beside the Figma comparison, not pursued** (the agents). The
-  comparison found our boundary already in Figma's shape. Unmeasured, and our
-  own rather than Figma's: a yield (`wait_for(0)`) is a timer's round trip,
-  which the browser clamps once nested; an entry's budget is a flat 8 ms
-  whatever the time to the next vsync, and the vsync's timestamp is dropped;
-  each answer runs the core's whole `end`; a skipped or refused frame still
-  costs an entry each vsync.
-
-> Since 2026-11-16 (`deb1fbb08c`): an entry's budget runs from the frame's start
-> and its paced interval, the vsync answers its timestamp, and a refused frame
-> waits for the next paced slot, as a skipped one does
-> ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)).
-
-> Since 2026-11-16 (`3ac60df141`): the core asks the host for the first vsync from
-> when its frame is due (`vsync.next(after)`), so a skipped or refused frame costs
-> no entry at each vsync.
-
-> Since 2026-11-16 (`738224d277`): a web wait of 0 answers by a posted message,
-> which no timer nesting clamps, so a yield is no timer's round trip. Each answer
-> still runs the core's whole `end`, left so: its two flushes, the GPU's run and
-> the UI's post, each hold one in flight, and the rest reads as microseconds an
-> entry in the code, unmeasured; an event loop's norm is the same, a cheap drain
-> each event and one frame a turn.
+- **Gaps noted beside the Figma comparison** (the agents). The comparison
+  found our boundary already in Figma's shape. Four gaps were our own rather
+  than Figma's, unmeasured. A yield (`wait_for(0)`) was a timer's round trip,
+  which the browser clamps once nested: a web wait of 0 answers by a posted
+  message, which no timer nesting clamps. An entry's budget was
+  a flat 8 ms whatever the time to the next vsync, with the vsync's timestamp
+  dropped: it runs from the frame's start and its paced interval, and the
+  vsync answers its timestamp
+  ([20261116](./20261116-the-deployed-builds-pace-taken-back.md)). A skipped or
+  refused frame cost an entry each vsync: the core asks the host for the first
+  vsync from when its frame is due (`vsync.next(after)`), and a
+  refused frame waits for the next paced slot, as a skipped one does. Each
+  answer runs the core's whole `end`, left so: its two flushes, the GPU's run
+  and the UI's post, each hold one in flight, and the rest reads as
+  microseconds an entry in the code; an event loop's norm is the same, a cheap
+  drain each event and one frame a turn.
 
 ## What was decided
 

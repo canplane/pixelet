@@ -100,15 +100,17 @@ Brought under it at the meeting:
   a drag stopped single frames for 100 to 560 ms. The eye had closed that on
   2026-10-11 (far out the world was a map) and `5b054bb5fd` of 2026-11-09 opened it.
   The user's rule: a placed cube has the ground's level of detail, and a glTF mesh
-  placed in the pyramid has a decor's. A walker fills a leaf cell, so it stands where
-  a decor of that box is drawn, out to 192 units from the eye. There alone its
+  placed in the pyramid has a decor's. A walker claims one box, `BODY_BOX`, `[1, 1, 2]` leaf
+  cells, so it stands where a decor of that box is drawn, out to 192 units from the
+  eye. There alone its
   character is drawn, which an angle about a sphere decided before (out to 768 times
-  the model's radius); there alone the chat's line hangs over it, which a marker's
+  the model's radius) and its height, the spec's, decides now; there alone the chat's line hangs over it, which a marker's
   zooms decided before (out to 3072 units); and a walk is walked only where the
-  walker stands at both its ends for the drawn camera's eye, which the walk itself
-  measures, so it is under 384 leaf cells an axis for any input. Any other move ends
-  where it is sent with its height unknown, one walled staying rather than leave the
-  area. Tried on the way and taken back: the walk crossing an empty shard in one step
+  walker stands at both its ends, which the walk itself measures, so it is under 384
+  leaf cells an axis for any input. A pan's walk and a companion's take no eye of
+  their own: a walker is walked where the eye draws one. Any other move ends where
+  it is sent with its height unknown, one walled staying rather than leave the area;
+  a destination is put once a tile held gives its ground exactly, which is no read. Tried on the way and taken back: the walk crossing an empty shard in one step
   (`18598cc6e8`), which closed one of the two cases by a second path; the rule of
   2026-10-11 put back as it was, which tested the walk's start alone by the drawn eye
   while the pan's length read the distance asked; a walk over the cells of the zoom
@@ -131,13 +133,16 @@ Brought under it at the meeting:
   leaf cells of solid, 4.9 km, the floor answered was the world's top. The user's
   rule, held for the camera, the light and the shadows from the start: what reads the
   world is isotropic and by perspective, the farther the coarser, and what a ray did
-  not find within the cap is not there. Control's rays now read so, by one function
-  (`World::near`) for the walker, the orbit's way and the pointer, where each read
-  the finest zoom at every distance (`finest`, gone): what a ray meets far off is a
-  coarser cell, which may hold what it looks for anywhere from the cell before it
-  on, so the ray starts again a cell of that zoom short of it, looking back where
-  that cell is already what it looks for, and what it answers is met at the finest
-  zoom it asks.
+  not find within the cap is not there. Control's rays now read so, the
+  walker's, the orbit's way and the pointer's, where each read the finest zoom at
+  every distance. They are the one walk every reader takes, and near and far are
+  told from the eye and from nothing else, wherever a line starts: the eye sets the
+  size a place is asked at, the eye's own rays ask each node at its own, a walker
+  asks its cell at the one size the eye sets for it, and with no eye a read answers
+  a lack
+  ([the eye sets a size, and the world answers](./20261118-the-eye-sets-a-size-and-the-world-answers.md)).
+  What a ray meets far off is a coarser cell, and that is its answer: nothing reads
+  it again from nearer, which would be a second rule.
   From far a gap too thin to tell is passed, as an eye passes it. A
   ray reports the cells it read as far as it went, at the detail it asked there,
   where a ray by distance reported its coarsest zoom's cells whole, 2048 units a side
@@ -147,13 +152,27 @@ Brought under it at the meeting:
   dropped on the user's word: the finest detail kept and the ray's length held to a
   count of cells derived from the cap, with a loop over reaches, which was a second
   rule beside the one every other ray reads by.
+- **A ray into ground not held.** West of a held leaf the coarser tiles of its line
+  stand in, out to the edge of the coarsest, and past that edge every reader answers
+  a lack; so a ray that leaves the held tile ends at a lack only there, and the
+  climb's reading of `Coarser(None, _)` as filled stands.
+- **A bound read through a stand-in.** A ray that passed whole a node wider than a
+  brick answered exact over ground no leaf held, by a bound a coarser clip level
+  stood in for. `clipmap::stood_in` says whether a node's bound is read so;
+  `TileCache::relief` then answers it coarser, and a CPU ray asks the nodes under
+  it. The bound itself, `bound_over` and the shaders stand as they were: a block
+  with no bound over a brick not yet held costs ten times the nodes at the clip
+  levels' edge, and a coarser clip level answering in a brick's place is the rule a
+  cell follows.
+- **One floor under the orbit's eye**: the orbit reads `World::floor_under` whether
+  or not the sky is open over the pivot, so a climb's eye may come to rest in a cave
+  under a hill.
 - **One fact, one name** (`c95305007c`): a decor opens into its model at the grid's
   `SPANS`, as the ground's cell opens into its finer ones.
 
 State the meeting added: the bricks whose place tile is still to come, the scheduler's
 counts by reason, a view's pose that may differ from the camera's by less than can be
-told apart, a place showing by what it was handed, and a place's two heights where
-it had one. State it removed: the
+told apart, and a place showing by what it was handed. State it removed: the
 ease's two ends, the smoothing's `eps` and its flag, the location's two-fold key, the effect that did real
 work, the memo cleared on a refused block, the pick's own pose, a decor's constant, a
 place's tile and index, and the asks for a frame written in each method's body.
@@ -166,6 +185,14 @@ with the location's zone laid only while drawn its tick fell from 5.9 to 7.1 ms 
 p50 to 4.8 to 5.8, and from 13.1 to 14.1 at p95 to 10.1 to 11.4
 ([the experiment](../experiment/20261116-the-deployed-builds-pace-measured/README.md)).
 The iPhone was not measured.
+
+Control's rays as the one walk were seen in the app on the Mac's Chrome by the user
+and found without fault, and measured against the tree before them
+([the day's structure against the tree before](../experiment/20261118-the-days-structure-against-the-tree-before/README.md)):
+the Mac's Chrome passes the gate. The S23's rounds parted nothing, the phone hot, and
+the form that stands, its GPU's walk the base's, was not measured there.
+
+Not pushed, not deployed.
 
 What stands as it is, and why:
 - **A place stands on the ground as drawn**, asked again when the detail drawn where
@@ -196,101 +223,6 @@ What stands as it is, and why:
   (`manifest.json5` `fixed_sz`), so changing it moves those for no gain shown.
 - The effects were read and do no real work (0.1 ms at p95).
 
-## Open at the meeting's end
-
-Left for the next session, most pressing first. `7101e3c7c5` is the last commit of
-the meeting.
-
-1. **A ray into ground not held.** A test that a ray leaving the held tile answers a
-   lack (`first_met`, a level ray west out of the fixture's leaf at z 5.5) failed and
-   was taken out unread. Either `CastWorld::ended` (`ray.rs`) does not hold what
-   `032d46cd9c` says of it, or the ray did not end at a lack. Read which before
-   anything else: the climb's reading of `Coarser(None, _)` as filled rests on it.
-2. **Two changes to `World::near` taken back.** Starting again two coarser cells
-   short of what was met (the cell before it whole), and testing the cell the walk
-   starts in (`ray.at(next)`) where it tests half a cell on. Together with a
-   three-cell pass after the look back they broke `stands_from_any_depth_in_stepped_ground`
-   (asking again from where it stood answered 2.0, not 6.0). Which of the three did
-   was not found. What they were for: a hit's `t` is a fill box's entry, not a cell's
-   face, where a cell is read coarser than held; and on a slant the cell tested is
-   not the one the walk starts in, so one cell of the finest zoom can be passed.
-3. **A slanted ray's look back has no test.** One written over stepped ground
-   compared a far ray with one started four units short of where a ray from the air
-   first met the ground; the two differed by hundreds of units, so the reference was
-   no reference. `a_far_slanted_ray_meets_as_a_near_one` holds the restart, not the
-   look back.
-4. **The passes of `near` have no cap**, as a walk has its steps'. They end by
-   geometry: each starts at least 47 of the cells it met nearer.
-5. **A pan at the edge.** The pan reads the camera's eye before the tick's ease
-   against a `to` that leads the drawn pivot, so within some units of 192 a fast drag
-   away from the eye stops walking a frame or two before the character goes.
-6. **The names are not in the naming skill's table**: `ceiling`, `pull_forward`,
-   `depenetrate`, `body`, `shows_at`, `floor_under` and `floor_drawn`.
-7. **Not reviewed**: the three renames (`96f43a423d`, `215a271b3e`, `46bd8ef614`) and
-   `7101e3c7c5`, checked by building and by the tests alone.
-8. **Not measured** since `0778e18a47`: a near walk, an orbit's line, a pick. Not on
-   a phone at all.
-9. **A character's size.** Every body is one leaf cell (`[1, 1, 1]`), the pet too;
-   another session was bringing a `BODY_BOX` in at the meeting's end. The character's
-   angle test still measures a sphere about its origin where a decor measures its
-   model's longest side.
-10. `doc/lesson/a-second-rule-beside-perspective.md` names `SplitCell::meet` under
-    "How to check"; the mechanism is `World::near`.
-
-> Since 2026-11-18 (`2c89834cd6`, another session's): a body claims one box, `BODY_BOX`
-> `[1, 1, 2]` leaf cells, which `body_shown` reads, and shows at the same zooms as
-> before; item 9's first half is settled, its angle test is not. Every step of a walk
-> now asks that box clear in the cell it enters, one more stack of rays up a step, so
-> the near walk's figure in the experiment (about 335 µs for 27 cells) is out of date
-> and item 8's measurement takes that in. First person stands its eye over its pivot
-> by the box, no longer at it.
-
-> Since 2026-11-18 (`26f5f61910`, `4a8888e52a`): item 1 is settled. The ray of the test
-> taken out did not end at a lack: west of the fixture's leaf the coarser tiles of its
-> line stand in, out to the edge of the coarsest, and past that edge every reader
-> answers a lack, so `CastWorld::ended` holds what `032d46cd9c` says and the climb's
-> reading stands. Reading it showed another fault: a ray that passed a node wider than
-> a brick whole answered exact over ground no leaf held, by a bound a coarser clip
-> level stood in for (`882626a690`, `3a6938ffb5`, which gave the GPU's walk that bound
-> and left the answer's form as it was). Such a bound is now answered coarser and a ray
-> splits the node. For item 4: a level `first_met` half a cell over flat ground reads
-> again about every 96 units, 433 passes over 41,000. For item 8: a walk of 27 cells
-> with the body's box is 291 µs native on the Mac's test build.
-
-> Since 2026-11-18 (`d079616413`): items 2 and 3 are settled, and item 4 is as it was.
-> Neither change of item 2 is put back. Testing the cell the walk starts in passed
-> every test alone; starting again where the ray enters the cell's cube was wrong, the
-> ground's thin top being folded away from far, so that the first cell met is under
-> the ground and its surface in the cell before. Both mended parts that are gone:
-> `World::near` now reads again from half way to what it met, where it asks a zoom
-> finer of it, the step halving again while the point it comes to is already what the
-> ray looks for; the ray back, the pass of two cells and `found` are removed. The
-> form before answered a cell seven units past the ground's on a slant, and a floor of
-> 52 under a column a cell wide whose top is 305, the ray back taking the first gap
-> behind for the outside. A slanted ray's test and a column's and a shaft's hold it.
-> A far ray costs three to four times what it did, a pass a zoom. The passes still
-> have no cap and end by geometry, each at least 48 cells of the zoom asked on.
-
-> Since 2026-11-18 (`f99b852f92`, `672ba3d9f1`, `bd8617cb44`): items 6, 7 and 10 are
-> settled. The names are in the naming skill's table. The three renames, read by the
-> name agent, had left four tests, three locals and some sixty lines of prose in the
-> old words, now changed; what it found beside them is the user's to choose: `ceiling`
-> also names the top of the world's bound (`strata::ceiling`), `ground_under` stands
-> beside `floor_under`, `first_cell_zoom` beside `coarsest_shown`, `is_decor_shown`
-> beside `shows_at`, and `BODY_SHARE` is a drawn model's half width. `7101e3c7c5`,
-> read by the review agent, stands: its rule is the start's own asked of the end, and
-> is needed with `World::near` as it is. It had no test and now has one; `toward_eye`
-> took an exact answer alone where the way took any, and reads as the way does. Open
-> from it, the user's: `in_solid` reads the column's top where the sky is open over the
-> pivot, so air under an overhang stops a way.
-> Also since (`4a8888e52a`, `bde5980c4b`, `43940f88c2`): a ground bound a coarser clip
-> level stands in for is answered coarser; a viewer's pass starts outside a decor's
-> box; and the query's test fixture folds its coarser tiles as the bake folds, where
-> it handed each the leaf's own cells, which is why the reference of item 3 differed
-> by hundreds of units.
-
-Not pushed, not deployed.
-
 ## The way of working
 
 The user's: what simplifies the structure, keeps a symmetry or clears the state space
@@ -299,100 +231,3 @@ finished before the next. An agent's verdict is judged by the law and refused wh
 departs. A fault met is first asked whether an ad hoc piece made it, and the piece
 goes rather than the fault being patched. A minute holds conclusions, written whole.
 These are carried into `AGENTS.md`, the code skill and `doc/README.md`.
-
-> Since 2026-11-18 (`d4333c9909`, `8a4e979e17`, `630c31c8f2`): the three notes above,
-> and the messages of the commits they name, were audited against the code and by runs
-> on each commit's parent, and state more than is held. No bench or sweep is in the
-> tree: every µs figure, and the counts of slanted rays answering as the leaves' zoom
-> does (2,454 and 2,872 of 2,880, 2,308 and 2,870), came from tests written under
-> `tmp/` and deleted, and none can be run again. Of the figures themselves: a far ray's
-> cost by the messages' own rows is 1.5 to 3.9 times, not three to four; a level
-> `first_met` over 41,000 units ran 427 or 428 passes, not 433; a pass comes at least
-> 48 cells on only where the half-way point is not already what the ray looks for, and
-> under one cell where it is; the old form's largest gap on the slanted test's rays is
-> 0.59 units on the fixture as it was and 1.32 on the folded one, and nothing shows the
-> seven units or the hundreds said of item 3's reference. `3a6938ffb5`'s own message
-> gives a CPU cause (a footing's walk), not the GPU's walk. The change of item 2 the
-> note calls wrong (starting where the ray enters the cell's cube) is a trial of this
-> session's, not the item's second change (two coarser cells short), which was not
-> tried again. Four locals were renamed, not three. The shaft of the column's test
-> passes on the parent; the column alone fails there. The review rounds the messages
-> state have no record in the tree.
-
-> Since 2026-11-18 (`65c734f32c`, `47dadaf233`, `f828525a10`, `02e26c643e`): `World::near`
-> is gone, and with it items 2, 3 and 4: control's rays are the walk read by its
-> distance from where its asker stands, and what one meets far off is the coarser cell
-> an eye there sees. The tests of a far hit read again from near are deleted, and what
-> the notes above say of `near`'s passes holds of nothing. Item 9 is settled: a
-> character's angle tests take its height, the spec's. Whether a node's bound is mixed
-> is the engine's to say whole. The names the reviews left to choose are taken
-> (`variant_first_cell_zoom`, `spans_impostor_at`, `strata::top`,
-> `BODY_HALF_WIDTH_SHARE`, `withhold`). Open: the orbit's floor under its eye still has
-> two readings by whether the sky is open over the pivot (`ground_at`), which a floor
-> read up out of a hill alone would trade for an eye stopped at every cave under one;
-> a CPU ray still splits a node whose bound is mixed where the GPU's passes it; the
-> query's test fixture folds by its own copy of the bake's rules; item 5 is not read;
-> item 8 is not measured.
-
-> Since 2026-11-18 (`0e39b2a6e9`): the note above says more than stands. The mixed bound
-> (`4a8888e52a`, `f828525a10`) and the fixture's fold (`43940f88c2`) are taken back, laid
-> on from below as they were: a ray that passes whole a node wider than a brick again
-> answers exact over ground a coarser clip level stands in for, and the fixture's
-> coarser tiles are the leaf's ground again. The orbit reads one floor under its eye,
-> `World::floor_under`, whether or not the sky is open over the pivot; `column_top` and
-> the test of a hollow in a hill are gone, and a climb's eye may now come to rest in a
-> cave under a hill.
-
-> Since 2026-11-18 (this note's commit): a node the clip level asked does not hold whole,
-> or a brick of whose block it does not hold present, is not held and splits, in the
-> engine's `bound_over` and the shader's port alike, as the architecture says of a node
-> not held; no coarser clip level is read in its place for a bound. The fault the note
-> above left standing is closed by it. The tests of the bound read in a brick's place
-> (`partial_block_bounded`, `device_loss_drops_bounds`) are deleted. The shader was built
-> and not run on a GPU.
-
-> Since 2026-11-18 (this note's commit): item 5 is settled. A pan judges whether a body
-> shows by an eye and a pivot of one state: the drawn eye moved by as far as the pan's
-> start leads the drawn pivot, where it took the drawn eye against that start. No test
-> holds it and it was not run in the app. Item 8, the measuring, is the one item open.
-
-> Since 2026-11-18 (`096349ab89`): the structure of the notes above was seen in the app
-> on the Mac's Chrome by the user and found without fault, the tests that guarded what
-> is gone were deleted, and item 8 has one run, the Mac's Chrome on the release bundle
-> (`doc/experiment/20261118-the-walk-alone-on-the-macs-chrome`): tick 2.0 ms at p50 and
-> 6.4 at p95, the GPU 26.2 and 46.1. It compares nothing, and no phone was measured.
-
-> Since 2026-11-18 (this note's commit): item 8 is measured against the tree before the
-> day's work (`doc/experiment/20261118-a-node-not-held-splits-measured`). The Mac's Chrome
-> passes the gate, its GPU's p50 24.8 to 27.3 ms. The S23's Chrome fails it: the GPU's p50
-> 51.7 to 68.0 ms and 83.4 to 121.3 over two rounds, a fifth fewer frames. The record
-> named in the note above was renamed to this one.
-
-> Since 2026-11-18 (this note's commit): the split of a node not held, in the engine and
-> the shader (`a98cfe631a`, `7ec11bd818`), is taken back: `3a6938ffb5` had recorded what a
-> block without a bound costs, ten times the nodes at the clip levels' edge, and the
-> bound read in a brick's place is the rule a cell follows, a coarser clip level answering
-> in its place. The shaders and `bound_over` are as before the day's work. What that
-> commit's form answered wrong was the CPU's label alone: a CPU ray now asks the nodes
-> under a node whose bound is read through a stand-in (`clipmap::stood_in`), and
-> `TileCache::relief` answers it coarser. The phone's rounds parted nothing, the phone
-> hot (`doc/experiment/20261118-a-node-not-held-splits-measured`); the form committed was
-> not measured, its GPU's walk being the base's.
-
-> Since 2026-11-18, on the user's word that near and far are told from the eye and from
-> nothing else: every walk asks a node by its distance from the observer's eye, wherever
-> its line starts (pxl-engine `cast::Detail::eye`, pxl-core `domain/query/detail.rs`),
-> where a reader asked from where it stood. The pose the world is seen from is
-> `domain/observer.rs`, under the query in the layers' order, and the view holds none.
-> With no observer a walk answers a lack. A kept answer is kept for the eye it was
-> asked under (`change::Memo`, a place's `asked`, a pin's `crowd`). A column has one
-> cell for an eye, the one drawn at its ground's surface, whatever height in it is
-> asked; `floor_drawn` is `floor_under`, and a place has one height again. The eye a
-> walk takes decides only whether there is a body to walk (`body_shown`): the
-> observer's for a body in the world, and for a pan the eye the camera keeps over the
-> pivot it starts from, as item 5 settled it. Built and its tests run; not run in the
-> app.
-
-> Since 2026-11-18 (this note's commit): the experiment the notes above name is
-> `doc/experiment/20261118-the-days-structure-against-the-tree-before`, renamed for what
-> it holds.
