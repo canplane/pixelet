@@ -6,7 +6,7 @@
 // light as the light's sky view is (atmos_skyview.wgsl): `AIR_FROXELS`
 // directions each way in Hillaire's layout (atmos_medium.wgsl `view_unit`),
 // and as many slices deep by one law for every direction (atmos_medium.wgsl
-// `air_dist`). A workgroup marches one column of froxels once, a thread a
+// `air_dist`). A workgroup marches the froxels along one ray once, a thread a
 // froxel, and writes each froxel (`air_scatter`). Nothing in the volume depends
 // on the view, so it holds as the eye turns. It is drawn together with its
 // light's sky view, for the same light and altitude and with the same layout
@@ -18,10 +18,10 @@
 // (atmos_skyview.wgsl).
 @group(0) @binding(14) var<uniform> light: vec4f;
 
-// The direction through the middle of column `c`, with the layout's ends on
+// The direction through the middle of cell `c`, with the layout's ends on
 // the first and last columns, up +z, the light's azimuth +x, and the horizon
 // dipping `beta`.
-fn column_dir(beta: f32, c: vec2u) -> vec3f {
+fn cell_dir(beta: f32, c: vec2u) -> vec3f {
   return view_dir(beta, vec2f(c) / f32(AIR_FROXELS - 1u));
 }
 
@@ -37,17 +37,17 @@ fn air_scatter(v: Veil) -> vec4f {
   return vec4f(select(vec3f(0.0), v.scattered / opacity, opacity > vec3f(1e-6)), 1.0);
 }
 
-var<workgroup> column_transmittance: array<vec3f, AIR_FROXELS>;
-var<workgroup> column_scattered: array<vec3f, AIR_FROXELS>;
-var<workgroup> column_scatter: array<vec4f, AIR_FROXELS>;
+var<workgroup> march_transmittance: array<vec3f, AIR_FROXELS>;
+var<workgroup> march_scattered: array<vec3f, AIR_FROXELS>;
+var<workgroup> march_scatter: array<vec4f, AIR_FROXELS>;
 
-// Marches a column once. Each thread gathers its stretch from the slice before
+// Marches one ray's froxels once. Each thread gathers its stretch from the slice before
 // its own (atmos_march.wgsl `gather_between`), and the stretches are joined
 // from the eye in five doublings. Every froxel so holds the one integral to
 // its depth, and no slice errs apart from the next.
 //
 // A froxel before its ray enters the air takes nothing and would hold
-// nothing. It holds the light of the first froxel past it in its column
+// nothing. It holds the light of the first froxel past it along its ray
 // instead, so the volume runs on smoothly into the air, and a read there does
 // not blur a step up from nothing (atmos_air.wgsl `air_scatter_of`). A pixel
 // before the air still scatters nothing, by its own 1 - T.
@@ -57,7 +57,7 @@ fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
   let light_k = u32(light.x);
   let l = view_layout(light_k);
   let toward = view_light(light_dir(light_k).z);
-  let dir = column_dir(l.x, id.xy);
+  let dir = cell_dir(l.x, id.xy);
   let e = l.yz;
   let last = f32(AIR_FROXELS - 1u);
   let k = id.z;
@@ -67,22 +67,22 @@ fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
   var transmittance = v.transmittance;
   var scattered = v.scattered;
   for (var step = 1u; step < AIR_FROXELS; step <<= 1u) {
-    column_transmittance[k] = transmittance;
-    column_scattered[k] = scattered;
+    march_transmittance[k] = transmittance;
+    march_scattered[k] = scattered;
     workgroupBarrier();
     if (k >= step) {
-      let before = column_transmittance[k - step];
-      scattered = column_scattered[k - step] + before * scattered;
+      let before = march_transmittance[k - step];
+      scattered = march_scattered[k - step] + before * scattered;
       transmittance = before * transmittance;
     }
     workgroupBarrier();
   }
   let scatter = air_scatter(Veil(transmittance, scattered));
-  column_scatter[k] = scatter;
+  march_scatter[k] = scatter;
   workgroupBarrier();
   var out = scatter;
   for (var j = k; j < AIR_FROXELS && all(out.rgb == vec3f(0.0)); j++) {
-    out = column_scatter[j];
+    out = march_scatter[j];
   }
   textureStore(air_out, vec3u(id.x + light_k * AIR_FROXELS, id.y, k), out);
 }

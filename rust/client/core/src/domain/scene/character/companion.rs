@@ -176,7 +176,7 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let s = companion();
     s.pet_floor.forget_touched();
     // A memo must see every change once, so the pivot's floor checks for
-    // touched columns on every frame, also on one that does not ask it.
+    // a touched rect on every frame, also on one that does not ask it.
     s.pivot_floor.forget_touched();
     let settings = settings();
     for ((slot, walk), (group, number)) in s

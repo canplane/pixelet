@@ -12,8 +12,8 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 
-import { type Frame, isList, COLUMNS, read } from "@/service/core/perf.ts";
-import { BIT_NAMES, effectsMs, LIST_NAMES, stageMs } from "./column.ts";
+import { type Frame, isList, LANES, read } from "@/service/core/perf.ts";
+import { BIT_NAMES, effectsMs, LIST_NAMES, stageMs } from "./lane.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
@@ -65,7 +65,7 @@ const threadName = (tid: u32, name: string) =>
 
 function frameArgs(f: Frame): ArgMap {
   const args: ArgMap = {};
-  for (const { name } of COLUMNS) {
+  for (const { name } of LANES) {
     if (isList(name)) {
       const names = LIST_NAMES[name];
       f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));

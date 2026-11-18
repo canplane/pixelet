@@ -499,7 +499,7 @@ pub fn fill_bound((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32
 /// on its grid from the origin `o`, and the share of the node's side by which its top lies
 /// over that floor. The top is its cube's where its word `asset` keeps the cube whole, and its
 /// fill box's otherwise. A body and decor stand on it (pxl-core domain/query/ray.rs `hit`,
-/// `support::column_surface`).
+/// `support::surface`).
 pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
     (n.idx(o)[2], fill_bound(([0.0; 3], [1.0; 3]), asset).1[2])
 }

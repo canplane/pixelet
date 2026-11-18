@@ -22,7 +22,7 @@ pub(crate) struct World {
 
 impl World {
     /// The world as stored. Every mechanic asks it: the pick, a walk, the
-    /// camera's clearance, an edit's reads and decor's column surface.
+    /// camera's clearance, an edit's reads and decor's surface.
     pub(crate) fn now() -> World {
         World {
             object: store::object(),

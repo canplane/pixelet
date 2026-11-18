@@ -43,7 +43,7 @@ struct Frame {
     walk_zoom: Zoom,
     drawing: [u32; drawing::WORDS as usize],
     recs: Vec<[u32; generation::REC_WORDS as usize]>,
-    /// The damage: the column boxes, in leaf cells, where objects were written
+    /// The damage: the rects, in leaf cells, where objects were written
     /// since a frame last took them (`note_damage`). The first `damage_cnt` of
     /// them are the ones the next frame hands.
     damage: [[i32; 4]; object::WRITE_DAMAGE_CAP as usize],
@@ -199,7 +199,7 @@ fn walk_zoom() -> Zoom {
 }
 
 /// Whether a box of damage, `[x0, y0, x1, y1)` in leaf cells, meets the
-/// columns of `around`. X goes round the world, and the box's X is on whatever
+/// rect of `around`. X goes round the world, and the box's X is on whatever
 /// lap it was written on, so the test tries it on every lap that could meet.
 fn meets(e: &[i32; 4], around: &Aabb) -> bool {
     let leaf = units(LEAF_CELL_ZOOM);
@@ -243,7 +243,7 @@ fn drawing(p: &mut [u32; drawing::WORDS as usize], key: Key) {
 }
 
 /// Holds the regions where objects were written (domain/query/change.rs) for
-/// the next frame to hand. Each is kept as its columns in leaf cells,
+/// the next frame to hand. Each is kept as its rect in leaf cells,
 /// `[x0, y0, x1, y1)`, with X on whatever lap it was written on. Past
 /// `object::WRITE_DAMAGE_CAP` regions, the rest are joined into the last one
 /// (pxl-render gpu/generator.rs `hold`), so no write is lost however many

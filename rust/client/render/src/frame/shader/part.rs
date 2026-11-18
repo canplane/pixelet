@@ -57,7 +57,7 @@ pub const SHADER_SCREEN_RAY: u32 = 24;
 /// port by hand with one compute entry point.
 pub const SHADER_CAST: u32 = 25;
 /// Generates the decor of the ground in the eye's clip levels, one record a thread: each decor
-/// stands on its column's surface and takes its pose (decor_pose.wgsl). It has one compute
+/// stands on its cell's surface and takes its pose (decor_pose.wgsl). It has one compute
 /// entry point.
 pub const SHADER_GENERATION: u32 = 26;
 /// The three passes after `SHADER_GENERATION` (pxl-content `generation::drawing`). The count
@@ -72,7 +72,7 @@ pub const SHADER_GENERATION_COMPACT: u32 = 29;
 /// `SHADER_GENERATION_THIN` and `SHADER_GENERATION` (decor_mark.wgsl). It has one compute
 /// entry point.
 pub const SHADER_GENERATION_MARK: u32 = 30;
-/// Fills a light's share of the air's volume, one column of froxels a workgroup
+/// Fills a light's share of the air's volume, one ray's froxels a workgroup
 /// (atmos_froxel.wgsl). It has one compute entry point.
 pub const SHADER_ATMOS_FROXEL: u32 = 31;
 /// Walks the eye's beam rays over the node cache alone, first (queue_walk.wgsl over corner.wgsl
@@ -164,7 +164,7 @@ pub const SHADER_SKINNED_MARK: u32 = 58;
 /// Carries the words of the light's box's tiles over once the box slid, the eye's zooms moved
 /// or the world under the box changed (light_slide.wgsl). A tile the box slid onto, a tile
 /// moved into another band (pxl-engine `Light::keeps`), and a tile whose rays may meet a
-/// changed column are set to none, so they are cast again. It is a port by hand.
+/// changed rect are set to none, so they are cast again. It is a port by hand.
 pub const SHADER_LIGHT_SLIDE: u32 = 59;
 /// The four shaders that draw decor, an impostor, the location indicator's zone and its beacon
 /// where each was and where it is. Each fragment marks its screen tile (tile_mark.wgsl).

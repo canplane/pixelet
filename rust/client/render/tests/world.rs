@@ -186,8 +186,8 @@ fn tell_way(w: World, (z, c): (Zoom, [i32; 3]), seen: &mut BTreeMap<[i32; 2], u3
         return;
     }
     let s = 1 << (LEAF_CELL_ZOOM - z);
-    let column = clip::cell(&w, Lookup::NONE, z, [c[0], c[1]]).1;
-    let under = (c[2] + 1) * s <= clip::column_top(column);
+    let ele_word = clip::cell(&w, Lookup::NONE, z, [c[0], c[1]]).1;
+    let under = (c[2] + 1) * s <= clip::ele_of(ele_word);
     let kind = if v == Sentinel::Void as u32 {
         1
     } else if v == PIER {
@@ -461,7 +461,7 @@ fn hand_world_answers_as_the_rust() {
         built.groundless.clone(),
     );
     let mut draw = Draw(built.draw.0);
-    let top_at = |g: [i32; 2]| built.top_at(g);
+    let ele_at = |g: [i32; 2]| built.ele_at(g);
 
     // The points the descents are sent to, in leaf cells. Each group of points reaches some of
     // the kinds of answer a descent must meet, and some groups carry the zooms that meet them.
@@ -474,7 +474,7 @@ fn hand_world_answers_as_the_rust() {
             EYE[0] + draw.within(-reach, reach),
             EYE[1] + draw.within(-reach, reach),
         ];
-        points.push([g[0], g[1], top_at(g) + draw.within(-4, 4)]);
+        points.push([g[0], g[1], ele_at(g) + draw.within(-4, 4)]);
     }
     // Points in the caves: leaves the caves take, found by asking under the ground about the
     // eye.
@@ -484,7 +484,7 @@ fn hand_world_answers_as_the_rust() {
             EYE[0] + draw.within(-200, 200),
             EYE[1] + draw.within(0, 300),
         ];
-        let z = top_at(g) - draw.within(4, 60);
+        let z = ele_at(g) - draw.within(4, 60);
         let c = [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1], z];
         if cave::hollow((LEAF_CELL_ZOOM, c)) >= FULL {
             points.push([g[0], g[1], z]);
@@ -523,7 +523,7 @@ fn hand_world_answers_as_the_rust() {
     for (_, corner) in CORNERS {
         for _ in 0..150 {
             let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
-            let z = top_at(corner) + draw.within(-6, 3);
+            let z = ele_at(corner) + draw.within(-6, 3);
             asked_at.push(([corner[0], corner[1], z], [leaves - 1, leaves]));
         }
     }
@@ -586,7 +586,7 @@ fn hand_world_answers_as_the_rust() {
             EYE[0] + draw.within(-400, 400),
             EYE[1] + draw.within(0, 400),
         ];
-        points.push([g[0], g[1], top_at(g) + draw.within(-2000, 2000)]);
+        points.push([g[0], g[1], ele_at(g) + draw.within(-2000, 2000)]);
     }
     // Points at the edges of every clip level, asked from nodes wider than a brick, which the
     // level's blocks reach or do not.
@@ -606,7 +606,7 @@ fn hand_world_answers_as_the_rust() {
             ] {
                 let far = cell_zoom.saturating_sub(draw.next() % 3);
                 let g = [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1]];
-                let z = top_at(g) + 40 + draw.within(0, 1000);
+                let z = ele_at(g) + 40 + draw.within(0, 1000);
                 asked_at.push(([g[0], g[1], z], [far, cell_zoom]));
             }
         }
@@ -620,7 +620,7 @@ fn hand_world_answers_as_the_rust() {
         ];
         let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
         asked_at.push((
-            [g[0], g[1], top_at(g) - draw.within(1, 70)],
+            [g[0], g[1], ele_at(g) - draw.within(1, 70)],
             [leaves - 1, leaves],
         ));
         let g = [
@@ -629,7 +629,7 @@ fn hand_world_answers_as_the_rust() {
         ];
         let near = 17 + draw.next() % 7;
         asked_at.push((
-            [g[0], g[1], top_at(g) - draw.within(16, 300)],
+            [g[0], g[1], ele_at(g) - draw.within(16, 300)],
             [near - 2, near],
         ));
     }
@@ -652,7 +652,7 @@ fn hand_world_answers_as_the_rust() {
         ];
         let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
         asked_at.push((
-            [g[0], g[1], top_at(g) + draw.within(-6, 3)],
+            [g[0], g[1], ele_at(g) + draw.within(-6, 3)],
             [leaves - 1, leaves],
         ));
     }
@@ -671,7 +671,7 @@ fn hand_world_answers_as_the_rust() {
         ] {
             let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
             asked_at.push((
-                [g[0], g[1], top_at(g) + draw.within(-6, 3)],
+                [g[0], g[1], ele_at(g) + draw.within(-6, 3)],
                 [leaves - 1, leaves],
             ));
         }

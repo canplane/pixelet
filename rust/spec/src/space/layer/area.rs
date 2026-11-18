@@ -3,8 +3,8 @@
 //! wgsl-port: where the world's data ends, and the ground's own rule at that edge
 //! (pxl-content strata.rs). The service area is the set of shards a source serves. Past it lies
 //! the Earth's ground, as the content gives it (pxl-engine `Content::earth`). Inside it, a leaf
-//! column beside a column past the area is the wall (`is_wall`): bedrock up to the column's own
-//! face, so the wall's outer face stands on the area's edge at every zoom. The area's edge runs
+//! cell beside one past the area is the wall (`is_wall`): bedrock up to the cell's own
+//! elevation, so the wall's outer face stands on the area's edge at every zoom. The area's edge runs
 //! along shards' edges, which no node of a shard's size or finer straddles.
 
 use crate::space::coord::world::wrap_idx as wrap;
@@ -148,7 +148,7 @@ impl Shard {
     pub const fn inside(self) -> bool {
         self.served_bits() == SHARD_ALL
     }
-    /// Whether any leaf column among the leaf cells `lo` to `hi`, both included, is the wall
+    /// Whether any leaf cell among the leaf cells `lo` to `hi`, both included, is the wall
     /// (`is_wall`), read from the nine bits `self` knows for the node `(zoom, c)`. None is in a
     /// shard known `inside`. Ask it only where those cells, and the leaf cells around them, lie in
     /// the nine around the node's shard. Every asker's do, because the node is no wider than a
@@ -177,24 +177,24 @@ impl Shard {
 }
 
 /// The service area's wall, the one rule that every reader asks, on the CPU and on a GPU
-/// alike. The column `b` at `cell_zoom` is the wall exactly where it is a leaf column or
+/// alike. The cell `c` at `cell_zoom` is the wall exactly where it is a leaf cell or
 /// finer and the leaf cell holding it has a leaf cell beside it past the area. So the wall is
-/// one leaf column thick at every zoom past the leaves, bedrock (`Sentinel::Unknown`) up to its own
-/// face, with its outer face on the area's edge. The area alone decides it, through `shard`,
-/// the shard of the node `(cell_zoom, b)` (`Shard::at`). A column is read by this rule
+/// one leaf cell thick at every zoom past the leaves, bedrock (`Sentinel::Unknown`) up to its own
+/// elevation, with its outer face on the area's edge. The area alone decides it, through `shard`,
+/// the shard of the node `(cell_zoom, c)` (`Shard::at`). A cell's ground is read by this rule
 /// (pxl-engine `clipmap::ground`), the ways' fill writes no way into the wall
 /// (`way::ColumnGrid::is_walled`), and `World::within` and `World::editable` refuse it (pxl-core
 /// domain/query/limit.rs).
-pub fn is_wall(shard: Shard, cell_zoom: Zoom, b: [i32; 2]) -> bool {
+pub fn is_wall(shard: Shard, cell_zoom: Zoom, c: [i32; 2]) -> bool {
     if cell_zoom < LEAF_CELL_ZOOM {
         return false;
     }
     let s = cell_zoom - LEAF_CELL_ZOOM;
-    let l = [b[0] >> s, b[1] >> s];
-    shard.walls((cell_zoom, b), [l, l])
+    let l = [c[0] >> s, c[1] >> s];
+    shard.walls((cell_zoom, c), [l, l])
 }
 
-/// Whether any leaf column among the leaf cells `lo` to `hi`, both included, is the wall
+/// Whether any leaf cell among the leaf cells `lo` to `hi`, both included, is the wall
 /// (`is_wall`), asking `area` itself a shard at a time, so the box may be of any width.
 pub fn walls_in(area: &impl Area, lo_hi: [[i32; 2]; 2]) -> bool {
     area.ends() && past_about(lo_hi, |q| nine_at(area, q) & OWN == 0)
@@ -204,7 +204,7 @@ pub fn walls_in(area: &impl Area, lo_hi: [[i32; 2]; 2]) -> bool {
 /// a shard that `past` says is past the area. X may run on across the world's seam. `past` is
 /// asked once for each shard's cell at `SHARD_ZOOM`, with X as the world names it. A shard is
 /// many leaf cells a side, so asking each shard with the eight around it covers every leaf
-/// cell's neighbors: this is the wall's rule (`is_wall`) over every leaf column in the box.
+/// cell's neighbors: this is the wall's rule (`is_wall`) over every leaf cell in the box.
 fn past_about([lo, hi]: [[i32; 2]; 2], past: impl Fn([i32; 2]) -> bool) -> bool {
     let t = LEAF_CELL_ZOOM - SHARD_ZOOM;
     let mut y = (lo[1] - 1) >> t;

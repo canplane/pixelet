@@ -174,7 +174,7 @@ struct LightCase {
 /// the ground with more holes than a frame's hits hold (`ray::HITS_A_FRAME`). Two of the frames
 /// cast their samples first, and the rest leave the entries to the holes' hits.
 fn eye_cases(built: &Built) -> Vec<(EyeCase, Screen)> {
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let way = built
         .way_points
         .iter()
@@ -228,7 +228,7 @@ fn eye_cases(built: &Built) -> Vec<(EyeCase, Screen)> {
         (
             EyeCase {
                 name: "the eye, by a way",
-                origin: q8([way[0], way[1], built.top_at([way[0], way[1]]) + 12]),
+                origin: q8([way[0], way[1], built.ele_at([way[0], way[1]]) + 12]),
                 look: [0.5, -0.3, -0.8],
                 tan: [0.3, 0.3],
                 far: 600.0,
@@ -265,7 +265,7 @@ fn eye_cases(built: &Built) -> Vec<(EyeCase, Screen)> {
 /// The light's boxes the test casts: about the eye, and wide over the clip levels, where many
 /// cells fill short of their cube.
 fn light_cases(built: &Built) -> Vec<LightCase> {
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     vec![
         LightCase {
             name: "the light, about the eye",

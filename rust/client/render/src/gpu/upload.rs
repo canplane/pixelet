@@ -54,13 +54,13 @@ fn mem(at: u64, n: u32) -> &'static [u8] {
     unsafe { mem::bytes(at, n) }
 }
 
-/// The table's columns, in words a slot: handle, address (two), length, the vertex and index
+/// The table's lanes, in words a slot: handle, address (two), length, the vertex and index
 /// counts, buffer, the bytes written and group.
-const UPLOAD_COLUMN_CNT: usize = 9;
+const UPLOAD_LANE_CNT: usize = 9;
 
-/// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_sz`).
+/// The table's lanes for `live` uploads, then the draw list's (gpu/draw.rs `lists_sz`).
 pub const fn uploads_sz(live: usize) -> u32 {
-    (UPLOAD_COLUMN_CNT * slots_of(live) * 4) as u32 + draw::lists_sz(live)
+    (UPLOAD_LANE_CNT * slots_of(live) * 4) as u32 + draw::lists_sz(live)
 }
 
 /// Lays the table for `live` uploads, then the draw list's, in `room`, `uploads_sz(live)`
@@ -68,20 +68,20 @@ pub const fn uploads_sz(live: usize) -> u32 {
 pub fn set_uploads(room: &'static mut [u32], live: usize) {
     let slots = slots_of(live);
     let mut room = room;
-    let mut column = |words: usize| {
+    let mut lane = |words: usize| {
         let (c, rest) = core::mem::take(&mut room).split_at_mut(words * slots);
         room = rest;
         c
     };
     UPLOADS.set(UploadTable {
-        handle: column(1),
-        at: column(2),
-        len: column(1),
-        vertex_cnt: column(1),
-        idx_cnt: column(1),
-        buf: column(1),
-        resident_sz: column(1),
-        group: column(1),
+        handle: lane(1),
+        at: lane(2),
+        len: lane(1),
+        vertex_cnt: lane(1),
+        idx_cnt: lane(1),
+        buf: lane(1),
+        resident_sz: lane(1),
+        group: lane(1),
         live: live as u32,
         cnt: 0,
         bytes: 0,

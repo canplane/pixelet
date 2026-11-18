@@ -5,14 +5,14 @@ use crate::cast::{End, Query};
 use crate::clipmap;
 use crate::clipmap::{
     ACROSS, BOUND_ENTRY_WORDS, BOUNDS_AT, BRICK_MIP_LAST, BRICK_WORDS, CLIP_LEVEL_CNT, CLIP_SIZE,
-    COLUMNS_AT, ENTRY_CNT, EYE_CLIP_LEVEL_CNT, Entry, FIRST_CELL_ZOOM, JOINED_ENTRY_CNT,
+    ELE_AT, ENTRY_CNT, EYE_CLIP_LEVEL_CNT, Entry, FIRST_CELL_ZOOM, JOINED_ENTRY_CNT,
     JOINED_MIP_CNT, JOINED_WORDS, ORIGIN_AT, OWN_AT, OWN_CELL_CNT, Pool, bound_over, entry, fold,
     join, joined_idx, mip_idx,
 };
 use crate::content::Sample;
-use crate::fill::{LoneBrick, column_of, mip_of, own_of, put, root_of};
+use crate::fill::{LoneBrick, ele_word_of, mip_of, own_of, put, root_of};
 use crate::ground::Extent;
-use crate::support::column_surface;
+use crate::support::surface;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT, of_idx};
 use pxl_spec::ground::{GroundId, word};
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
@@ -22,7 +22,7 @@ use pxl_spec::space::layer::area::{Area, Shard};
 use xpute_kit::math::rng::mix64;
 
 /// The clip level whose bricks are only half held, its east half not yet, with the clip
-/// levels over it held whole. It is the leaves' level, which decor's column surfaces ask, and
+/// levels over it held whole. It is the leaves' level, which decor's surfaces ask, and
 /// where a node wider than a brick may stand clear over the ground.
 const CELL_ZOOM: Zoom = LEAF_CELL_ZOOM;
 
@@ -62,8 +62,8 @@ impl BrickSource for Clipmap<'_> {
     fn fold_at(&self, _: Zoom, _: u32, _: u32) -> u32 {
         word([Sample::GROUND; 4])
     }
-    fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
-        column_of(self.ground, slot * BRICK_WORDS, i)
+    fn ele_word(&self, _: Zoom, slot: u32, i: u32) -> u32 {
+        ele_word_of(self.ground, slot * BRICK_WORDS, i)
     }
     fn bound_mip(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         mip_of(self.ground, slot * BRICK_WORDS, j, at)
@@ -164,7 +164,7 @@ impl Query for Asking<'_> {
 }
 
 /// The clip levels from the first to `CELL_ZOOM`, each around `EYE`, with every brick held
-/// except the east half of `CELL_ZOOM`'s, and each held brick's columns, cells as laid and
+/// except the east half of `CELL_ZOOM`'s, and each held brick's elevations, cells as laid and
 /// levels, one slot each. The entries are not folded.
 fn clipmap() -> (Vec<Entry>, Vec<u32>) {
     let mut rows = vec![Entry::absent([0, 0]); (ORIGIN_AT + CLIP_LEVEL_CNT) as usize];
@@ -198,7 +198,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                     mid((q[1] << BRICK_SHIFT) + y as i32),
                 ];
                 let top = ele_at(leaf);
-                put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
+                put(&mut ground, base + ELE_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + OWN_AT + i / OWN_CELL_CNT) as usize];
                 *w |= (Sample::GROUND) << (GroundId::BITS * (i % OWN_CELL_CNT));
                 let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * mip_idx(0, [x, y]);
@@ -268,8 +268,8 @@ impl BrickSource for WestOf<'_> {
     fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32 {
         self.0.fold_at(cell_zoom, slot, i)
     }
-    fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32 {
-        self.0.column(cell_zoom, slot, i)
+    fn ele_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32 {
+        self.0.ele_word(cell_zoom, slot, i)
     }
     fn bound_mip(&self, cell_zoom: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         self.0.bound_mip(cell_zoom, slot, j, at)
@@ -303,9 +303,9 @@ impl Area for WestOf<'_> {
     }
 }
 
-/// The wall is the area's alone (`area::is_wall`). A leaf column beside a leaf cell past the
+/// The wall is the area's alone (`area::is_wall`). A leaf cell beside a leaf cell past the
 /// area is the wall, bedrock, whether it is read from a stand-in brick of a coarser clip
-/// level or from none, and at a zoom finer than the leaves too. A column one leaf cell
+/// level or from none, and at a zoom finer than the leaves too. A cell one leaf cell
 /// further in is its own ground.
 #[test]
 fn wall_off_any_brick() {
@@ -399,8 +399,8 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
             (first[0] << BRICK_SHIFT) + gx,
             (first[1] << BRICK_SHIFT) + gy,
         ];
-        // Around the ground's top where the column meets it, or else around its elevation.
-        let surface = column_surface(&mut asking, CELL_ZOOM, g);
+        // Around the surface where the ray down meets one, or else around the ground's elevation.
+        let surface = surface(&mut asking, CELL_ZOOM, g);
         let top = if surface.end == End::Hit {
             surface.top.0
         } else {

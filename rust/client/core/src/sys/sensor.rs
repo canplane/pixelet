@@ -48,22 +48,31 @@ pub(crate) fn set_heading(deg: Option<f64>) {
     sensor().heading = deg;
 }
 
-/// GPS gives `alt` over the ellipsoid. It is kept over sea level, the datum
+/// GPS gives `alt_ellipsoid`, over the ellipsoid. It is kept as an `alt`, over sea level, the datum
 /// the terrain uses, by the geoid's height at the base corner of the leaf
 /// tile the position falls in.
 pub(crate) fn set_pos(at: Option<Position>) {
-    sensor().pos = at.map(|Position { lon, lat, alt }| {
-        let (x0, y0, _) = GROUND
-            .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
-            .tile()
-            .rect();
-        let [base_lon, base_lat, _] =
-            epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
-        (
-            [lon, lat],
-            alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat)),
-        )
-    });
+    sensor().pos = at.map(
+        |Position {
+             lon,
+             lat,
+             alt_ellipsoid,
+         }| {
+            let (x0, y0, _) = GROUND
+                .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
+                .tile()
+                .rect();
+            let [base_lon, base_lat, _] = epsg4326::from_mercator(&[
+                epsg3857::merc_from_u(x0),
+                epsg3857::merc_from_u(y0),
+                0.0,
+            ]);
+            (
+                [lon, lat],
+                alt_ellipsoid.map(|h| h - epsg4326::geoid_m(base_lon, base_lat)),
+            )
+        },
+    );
 }
 
 pub(crate) fn set_location_status(status: LocationStatus) {

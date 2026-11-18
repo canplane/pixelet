@@ -11,7 +11,7 @@ fn a_position_is_kept_where_it_is() {
     set_pos(Some(Position {
         lon,
         lat,
-        alt: Some(100.0),
+        alt_ellipsoid: Some(100.0),
     }));
     let (got, alt) = pos().expect("a position");
     assert_eq!(got, [lon, lat]);

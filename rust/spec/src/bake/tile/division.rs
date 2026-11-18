@@ -49,7 +49,7 @@ type Packet = (
     Vec<String>,
 );
 
-/// One division of a tile, read from its columns.
+/// One division of a tile, read from its lanes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Division<'a> {
     /// Overture's id: what tiles compare divisions by.

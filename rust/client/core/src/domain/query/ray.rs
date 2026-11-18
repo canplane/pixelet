@@ -21,7 +21,7 @@ pub(super) use pxl_engine::cast::Until;
 use pxl_engine::cast::{self, DEPTH, Detail, End, Keep, Line, Query, Trace};
 use pxl_engine::object;
 use pxl_engine::support;
-use pxl_engine::support::ColumnSurface;
+use pxl_engine::support::Surface;
 use pxl_spec::asset::id::{self, kind_of};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -332,22 +332,22 @@ impl World {
         query.ended(hit, trace.end)
     }
 
-    /// The column surface down column `g` at `cell_zoom` (pxl-engine
-    /// `support::column_surface`), of what the layers compose: what a decor
+    /// The surface over cell `c` at `cell_zoom` (pxl-engine
+    /// `support::surface`), of what the layers compose: what a decor
     /// or a body stands on lies under the decor. The first value is the top of the cell
     /// met, as drawn, with what the world lacked on the way, or None where
-    /// the column meets nothing opaque. The second is the column surface
+    /// the ray down meets nothing opaque. The second is the surface
     /// itself, off whose line the cells around it are asked (`asset_about`).
-    pub(super) fn column_surface(
+    pub(super) fn surface(
         &self,
         cell_zoom: Zoom,
-        g: [i32; 2],
-    ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
+        c: [i32; 2],
+    ) -> (Answer<Option<(i32, f32)>>, Surface<At>) {
         let mut query = self.cast_world();
         let side = units(cell_zoom);
-        let middle = g.map(|v| (f64::from(v) + 0.5) * side);
+        let middle = c.map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, cell_zoom);
-        let f = support::column_surface(&mut query, cell_zoom, g);
+        let f = support::surface(&mut query, cell_zoom, c);
         (query.ended((f.end == End::Hit).then_some(f.top), f.end), f)
     }
 

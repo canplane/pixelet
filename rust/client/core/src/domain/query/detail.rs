@@ -46,7 +46,7 @@ pub(super) fn leaf_at(at: &Q3) -> Quadrant {
 /// point's distance from it (pxl-spec space/camera/grid.rs `cell_zoom_at`),
 /// the same in every direction, held within `zoom_range`. The point is over
 /// `xy` at the height `z`, or, with none, at the eye's own height, the
-/// column's point nearest the eye. It is the one thing a place's read takes
+/// point over `xy` nearest the eye. It is the one thing a place's read takes
 /// of the eye.
 pub(super) fn grid_zoom(eye: V3, xy: [f64; 2], z: Option<f64>) -> Zoom {
     let d = detail(eye, [xy[0], xy[1], z.unwrap_or(eye[2])]);

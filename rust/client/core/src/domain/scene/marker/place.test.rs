@@ -123,14 +123,14 @@ fn the_asks_of_a_place_over_nothing_known_end() {
 fn a_place_s_brick_at_a_zoom_is_in_line_with_its_own() {
     for lap in [-1, 0, 1] {
         let p = place_in(12, lap);
-        let (zoom, column) = p.brick;
+        let (zoom, c) = p.brick;
         assert_eq!(p.brick_at(zoom), p.brick);
         for z in zoom + 1..=zoom + 4 {
             let (_, finer) = p.brick_at(z);
-            assert_eq!(ancestor_of(finer, z - zoom), column, "lap {lap}, zoom {z}");
+            assert_eq!(ancestor_of(finer, z - zoom), c, "lap {lap}, zoom {z}");
         }
         for z in zoom - 4..zoom {
-            let coarser = (z, ancestor_of(column, zoom - z));
+            let coarser = (z, ancestor_of(c, zoom - z));
             assert_eq!(p.brick_at(z), coarser, "lap {lap}, zoom {z}");
         }
     }

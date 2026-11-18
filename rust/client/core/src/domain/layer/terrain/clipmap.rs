@@ -56,7 +56,7 @@ use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{
-    BRICKS_ACROSS, ELE_COLUMN, FOLD_COLUMN, brick_lines, cells_of, decode_into, segment_cnt,
+    BRICKS_ACROSS, ELE_LANE, FOLD_LANE, brick_lines, cells_of, decode_into, segment_cnt,
 };
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
@@ -393,7 +393,7 @@ pub(crate) fn pool_top() -> u32 {
 }
 
 /// Slot `b`'s words: the brick's whole words from its first, the way
-/// pxl-engine reads a brick's words (`fill::column_of`).
+/// pxl-engine reads a brick's words (`fill::ele_word_of`).
 fn cells(b: u32) -> &'static [u32] {
     let at = (b * CELLS_ARR_SZ / 4) as usize;
     &planes().cells[at..at + BRICK_WORDS as usize]
@@ -859,7 +859,7 @@ fn fill_scratch() -> &'static mut FillScratch {
         // SAFETY: the fill's arrays are its alone, plain numbers, zeroed at boot.
         unsafe {
             FillScratch {
-                ele: RANGE.arr(fill_off(0), ELE_COLUMN),
+                ele: RANGE.arr(fill_off(0), ELE_LANE),
                 spans: RANGE.arr(fill_off(1), SPANS_WORDS as usize),
                 lines: Vec::new(),
             }
@@ -902,7 +902,7 @@ pub(crate) fn cut(tile: Quadrant, pkt: &[u8]) {
         // Each layout a packet may hold the folds in has its own loop, so
         // the layout is not tested once per cell.
         match cells.len() {
-            FOLD_COLUMN => cut_into(b, place, &|c: usize| {
+            FOLD_LANE => cut_into(b, place, &|c: usize| {
                 u32::from_le_bytes([
                     cells[4 * c],
                     cells[4 * c + 1],
@@ -951,7 +951,7 @@ struct BrickFill {
 /// its spans, the ring's rows included.
 #[derive(Clone, Copy)]
 enum Stage {
-    Column,
+    Ele,
     Span(u32),
     Mip,
     Lay,
@@ -1042,9 +1042,9 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
         lines: lines_read(&f.lines),
     };
     filling.stage = match filling.stage {
-        Stage::Column => {
+        Stage::Ele => {
             let four = folds(b);
-            fill::columns(cells_mut(b), |i| four[i as usize], &site);
+            fill::elevations(cells_mut(b), |i| four[i as usize], &site);
             Stage::Span(0)
         }
         Stage::Span(row) => {
@@ -1113,7 +1113,7 @@ fn begin(w: &mut Clipmap) -> Poll {
                 (brick::bricks_zoom(slot.cell_zoom), slot.brick),
             ),
             past: false,
-            stage: Stage::Column,
+            stage: Stage::Ele,
         });
         return Poll::Ran;
     }
@@ -1250,8 +1250,8 @@ impl BrickSource for ClipRead<'_> {
         fill::own_of(cells(b), 0, i)
     }
 
-    fn column(&self, _: Zoom, b: u32, i: u32) -> u32 {
-        fill::column_of(cells(b), 0, i)
+    fn ele_word(&self, _: Zoom, b: u32, i: u32) -> u32 {
+        fill::ele_word_of(cells(b), 0, i)
     }
 
     fn bound_mip(&self, _: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
@@ -1374,7 +1374,7 @@ pub(crate) fn refetch_cap() -> u32 {
 /// tile, from now until another tile takes the slot.
 unsafe fn ele_of(slot: u32) -> &'static mut [i16] {
     // SAFETY: as this function's, and the plane is plain numbers.
-    unsafe { RANGE.arr(ele_off(slot), ELE_COLUMN) }
+    unsafe { RANGE.arr(ele_off(slot), ELE_LANE) }
 }
 
 #[cfg(test)]

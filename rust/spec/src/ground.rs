@@ -1,9 +1,9 @@
 // pxl-spec/ground.rs
 
-//! wgsl-port: the ground's cells as a tile holds them and the rules a column reads them by,
+//! wgsl-port: the ground's cells as a tile holds them and the rules a cell's ground is read by,
 //! which the bake and the client both run: a cell's elevation from the tile's samples
-//! (`ele_at`), its four asset ids and its own (`own`), and its top and face in cells of a
-//! zoom (`top`, `face_ele`). The ground's column as a descent asks it is pxl-engine's
+//! (`ele_at`), its four asset ids and its own (`own`), and its elevation in cells of a
+//! zoom and as that zoom draws it (`ele_cells`, `ele_drawn`). The ground as a descent asks it is pxl-engine's
 //! (`ground.rs` `node`).
 //!
 //! An asset id and an elevation are stored as a byte and an i16 and read into a word here,
@@ -34,7 +34,7 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 
 /// The elevation the surface draws at the center of a tile's cell `(x, y)`, in leaf cells, from
 /// its padded elevation samples `ele` (`ele_idx`). It is the one producer of a cell's
-/// elevation, which the core's fill and the bake both run (pxl-engine fill.rs `columns`):
+/// elevation, which the core's fill and the bake both run (pxl-engine fill.rs `elevations`):
 /// Catmull-Rom over the 4 × 4 samples around the center, rounded half to even and held to
 /// their range, so a bound over the surface is the samples' own.
 ///
@@ -44,7 +44,7 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 /// 2^31. A row's sum, with its weights' sizes summing under 1.23 · 2^16, is under 2^31.3. A
 /// row times a weight, the four summed, is under 2^47.6 and fits an `i64`, whose high word is
 /// the elevation's floor and whose low word is the fraction to round. Filling a brick costs, for
-/// each column, 16 products of 32 bits and 4 of 64.
+/// each cell, 16 products of 32 bits and 4 of 64.
 pub fn ele_at(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     let (x0, mx) = window(x);
     let (y0, my) = window(y);
@@ -181,19 +181,19 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     }
 }
 
-/// An elevation in leaf cells as cells of `cell_zoom` (`top`).
+/// An elevation in leaf cells as cells of `cell_zoom` (`ele_cells`).
 pub fn cells(cell_zoom: Zoom, ele: f32) -> i32 {
-    top(cell_zoom, ele).0
+    ele_cells(cell_zoom, ele).0
 }
 
 /// An elevation in leaf cells as cells of `cell_zoom`, and the share of the top cell it fills,
 /// in `share::FULL`'s units. Finer than the leaves, the elevation is shifted and every cell is
 /// whole. Coarser, the elevation is the mean in cells: its top is the cell it ends in where it
 /// fills an eighth of that cell or more (`share::eighths`), keeping the share filled there,
-/// and otherwise the cell under it, whole. So a coarse column's ground is the volume its mean
+/// and otherwise the cell under it, whole. So a coarse cell's ground is the volume its mean
 /// elevation fills, as a cell of it is drawn: whole under its top, with its top a box of its
 /// share's volume.
-pub fn top(cell_zoom: Zoom, ele: f32) -> (i32, u32) {
+pub fn ele_cells(cell_zoom: Zoom, ele: f32) -> (i32, u32) {
     let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
     if d >= 0 {
         return ((ele as i32) << d, FULL);
@@ -213,20 +213,24 @@ pub fn leaf_cells(cell_zoom: Zoom) -> i32 {
     1 << (cell_zoom as i32 - LEAF_CELL_ZOOM as i32).max(0)
 }
 
-/// The face of a top `top` cells of `cell_zoom` high, in leaf cells, as the grid draws it.
-/// Finer than the leaves, it is the leaf cell the top's cell lies in, rounded down under sea
+/// The elevation, in leaf cells, that the grid draws for one of `ele_cells` cells of
+/// `cell_zoom`. Finer than the leaves, it is the leaf cell the top cell lies in, rounded down under sea
 /// level as over it, as a cell's index is. Coarser, it is the mean as its cells round it
-/// (pxl-render world_rule.wgsl `face_ele`).
-pub fn face_ele(cell_zoom: Zoom, top: i32) -> i32 {
+/// (pxl-render world_rule.wgsl `ele_drawn`).
+pub fn ele_drawn(cell_zoom: Zoom, ele_cells: i32) -> i32 {
     let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
-    if d >= 0 { top >> d } else { top << -d }
+    if d >= 0 {
+        ele_cells >> d
+    } else {
+        ele_cells << -d
+    }
 }
 
-/// The face cell of a column whose face is `face` leaf cells high, in cells of `cell_zoom`:
-/// the first cell of the ground under the face, which a cave may take (`Cell::opens`) and in
+/// The ground's top cell where its elevation is `ele` leaf cells, in cells of `cell_zoom`:
+/// the first cell of the ground under the elevation, which a cave may take (`Cell::opens`) and in
 /// which a way's bore is lined (pxl-engine `way::way_cell`).
-pub fn face_cell(cell_zoom: Zoom, face: i32) -> i32 {
-    cells(cell_zoom, face as f32) - leaf_cells(cell_zoom)
+pub fn ele_cell(cell_zoom: Zoom, ele: i32) -> i32 {
+    cells(cell_zoom, ele as f32) - leaf_cells(cell_zoom)
 }
 
 const _: () = assert!(
@@ -244,31 +248,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn coarse_top_eighths() {
+    fn coarse_ele_cells_eighths() {
         // Cells of eight leaf cells.
         let cell_zoom = LEAF_CELL_ZOOM - 3;
-        assert_eq!(top(cell_zoom, 16.0), (2, FULL));
-        assert_eq!(top(cell_zoom, 17.0), (3, FULL / 8));
-        assert_eq!(top(cell_zoom, 23.0), (3, 7 * FULL / 8));
-        assert_eq!(top(cell_zoom, -1.0), (0, 7 * FULL / 8));
+        assert_eq!(ele_cells(cell_zoom, 16.0), (2, FULL));
+        assert_eq!(ele_cells(cell_zoom, 17.0), (3, FULL / 8));
+        assert_eq!(ele_cells(cell_zoom, 23.0), (3, 7 * FULL / 8));
+        assert_eq!(ele_cells(cell_zoom, -1.0), (0, 7 * FULL / 8));
         // An eighth of a cell of 64 is 8 leaf cells: under it, nothing.
-        assert_eq!(top(LEAF_CELL_ZOOM - 6, 7.0), (0, FULL));
-        assert_eq!(top(LEAF_CELL_ZOOM - 6, 8.0), (1, FULL / 8));
+        assert_eq!(ele_cells(LEAF_CELL_ZOOM - 6, 7.0), (0, FULL));
+        assert_eq!(ele_cells(LEAF_CELL_ZOOM - 6, 8.0), (1, FULL / 8));
         // At the leaves, every cell whole.
-        assert_eq!(top(LEAF_CELL_ZOOM, 5.0), (5, FULL));
+        assert_eq!(ele_cells(LEAF_CELL_ZOOM, 5.0), (5, FULL));
     }
 
-    /// A face past the leaves is the leaf cell its top's cell lies in,
+    /// An elevation drawn past the leaves is the leaf cell its top cell lies in,
     /// rounded down under sea level as over it; under the leaves, the cells
     /// scaled.
     #[test]
-    fn face_ele_floors() {
+    fn ele_drawn_floors() {
         let cell_zoom = LEAF_CELL_ZOOM + 2;
-        assert_eq!(face_ele(cell_zoom, 8), 2);
-        assert_eq!(face_ele(cell_zoom, 9), 2);
-        assert_eq!(face_ele(cell_zoom, -8), -2);
-        assert_eq!(face_ele(cell_zoom, -9), -3);
-        assert_eq!(face_ele(cell_zoom, -1), -1);
-        assert_eq!(face_ele(LEAF_CELL_ZOOM - 3, -5), -40);
+        assert_eq!(ele_drawn(cell_zoom, 8), 2);
+        assert_eq!(ele_drawn(cell_zoom, 9), 2);
+        assert_eq!(ele_drawn(cell_zoom, -8), -2);
+        assert_eq!(ele_drawn(cell_zoom, -9), -3);
+        assert_eq!(ele_drawn(cell_zoom, -1), -1);
+        assert_eq!(ele_drawn(LEAF_CELL_ZOOM - 3, -5), -40);
     }
 }

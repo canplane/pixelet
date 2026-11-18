@@ -197,7 +197,7 @@ pub const GPU_SPAN_PER_PX: [GpuSpanName; 10] = [
     GpuSpanName::Propagate,
 ];
 
-/// What changed that cast the light's map, a bit each, bit k the k-th (pxl-render ray/cast.rs `light_changed`): what it reads, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more columns of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the characters' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); or columns of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`).
+/// What changed that cast the light's map, a bit each, bit k the k-th (pxl-render ray/cast.rs `light_changed`): what it reads, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more rects of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the characters' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); or rects of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LightChanged {

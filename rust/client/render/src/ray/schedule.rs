@@ -33,9 +33,9 @@ pub(super) struct CastRead {
     /// (cast.rs `light_content`): the light's frame, whether shadows are on, and whether the
     /// world under the map moved whole.
     pub content_same: bool,
-    /// Whether the world under the map moved only in columns the cast can name. The epoch then
-    /// goes on, and only the tiles those columns reach are cast again.
-    pub world_columns: bool,
+    /// Whether the world under the map moved only in rects the cast can name. The epoch then
+    /// goes on, and only the tiles those rects reach are cast again.
+    pub world_rects: bool,
     /// The light box's corner (pxl-engine `light::CORNER`), and the eye's zooms
     /// (`eye::RANGE`), which bound each tile's band (`Light::band`).
     pub corner: [i32; 2],
@@ -59,9 +59,9 @@ pub(super) struct Light {
     /// Whether the box slid or the eye's zooms moved within the epoch. The reads then move with
     /// the box, and a tile whose band moved is cast again (`light_slide_cs`).
     pub slid: bool,
-    /// Whether columns of the world changed within the epoch, so the tiles whose rays may meet
+    /// Whether rects of the world changed within the epoch, so the tiles whose rays may meet
     /// them are cast again.
-    pub columns_changed: bool,
+    pub rects_changed: bool,
     /// The box's corner this cast is cast under, and the corner of the cast before
     /// (`light::HDR_LAST_CORNER`).
     pub corner: [i32; 2],
@@ -164,7 +164,7 @@ impl Schedule {
     ///
     /// The light casts while shadows are on and its cast is made, where what a tile holds
     /// moved, the box slid, which tiles are read moved, the footprints are owed, or the world
-    /// moved in columns.
+    /// moved in rects.
     pub(super) fn plan(&mut self, r: CastRead) -> Plan {
         let stands = self.stands(r.same);
         self.read = true;
@@ -210,7 +210,7 @@ impl Schedule {
                 LightChanged::Slide => slid,
                 LightChanged::Receivers => !r.receivers_same,
                 LightChanged::Footprint => footprint_owed,
-                LightChanged::World => r.world_columns,
+                LightChanged::World => r.world_rects,
             })
             .fold(0, |bits, m| bits | 1 << m as u32);
         // The world's receivers stand where the eye's rays hit. The next light cast marks them
@@ -236,7 +236,7 @@ impl Schedule {
                 changed,
                 epoch: !unchanged,
                 slid: unchanged && slid,
-                columns_changed: unchanged && r.world_columns,
+                rects_changed: unchanged && r.world_rects,
                 corner: r.corner,
                 last_corner,
                 last_range,

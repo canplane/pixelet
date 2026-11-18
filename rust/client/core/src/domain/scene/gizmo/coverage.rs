@@ -162,7 +162,7 @@ pub(crate) fn coverage_gizmo_step(show: bool) {
     // a tile about as wide as the eye is high. What is near the eye keeps its
     // precision, and the eye must move about its own height before the lines
     // are rebuilt about a new origin.
-    let height = (o.eye[2] - o.ground).max(1.0);
+    let height = (o.eye[2] - o.floor).max(1.0);
     let zoom = within(height).clamp(MIN_ZOOM as i32, LEAF_ZOOM as i32) as Zoom;
     let span = units(zoom);
     let eye = view().at().eye;
@@ -221,7 +221,7 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// not drawn is marked with the reason: no tile on it, only the floor's tile,
 /// or a tile whose brick is not filled yet.
 fn outline(o: &Observation, top: Zoom) -> Outline {
-    let height = (o.eye[2] - o.ground).max(0.0);
+    let height = (o.eye[2] - o.floor).max(0.0);
     let near = |(x0, y0, side): (f64, f64, f64)| {
         let x0 = world::nearest(x0 + side / 2.0, o.eye[0]) - side / 2.0;
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);

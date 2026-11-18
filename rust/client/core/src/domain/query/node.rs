@@ -11,8 +11,8 @@
 //! and handed down (`At`; `World::asset` serves an asker with nothing handed
 //! down):
 //!
-//! - the ground: its column off the clip levels, as the GPU reads it, or the
-//!   wall at the service area's edge where the column is that wall. The ways
+//! - the ground: a cell's off the clip levels, as the GPU reads it, or the
+//!   wall at the service area's edge where the cell is that wall. The ways
 //!   are read off the spans their brick's fill kept, which lie in the pool
 //!   and are read as the GPU reads them (pxl-engine `clipmap::ground`,
 //!   `clipmap::way_at`);
@@ -84,7 +84,7 @@ impl World {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            inheritance: world::Inheritance::of(&self.object.columns(), node),
+            inheritance: world::Inheritance::of(&self.object.lanes(), node),
         }
     }
 
@@ -92,7 +92,7 @@ impl World {
     /// finer, for an asker with nothing handed down: what `ask` answers fills
     /// it, asked at that zoom, or void where it is air or void. Each source
     /// finds what it needs down the node's line from the top. The cell's
-    /// column is reported as read (`change::report_read`).
+    /// rect is reported as read (`change::report_read`).
     pub(super) fn asset_at(
         &self,
         node: Node<3>,
@@ -119,7 +119,7 @@ impl World {
         let node = (zoom + 1, child_at(zoom, c, k));
         At {
             node,
-            inheritance: at.inheritance.child(&self.object.columns(), node),
+            inheritance: at.inheritance.child(&self.object.lanes(), node),
         }
     }
 
@@ -154,7 +154,7 @@ impl World {
         range: [Zoom; 2],
         path: &mut Path,
     ) -> (Answer<In<[u32; 2]>>, Option<ground::Extent>) {
-        let lanes = self.object.columns();
+        let lanes = self.object.lanes();
         let mut reading = GroundRead::new(path);
         let i = world::node(
             &mut reading,
@@ -266,8 +266,8 @@ impl ground::Resident for GroundRead<'_> {
         )
     }
 
-    /// The cell's column off the clip levels as the GPU reads it (pxl-engine
-    /// `clipmap::ground`), or the wall where the column is the wall. The
+    /// The cell's ground off the clip levels as the GPU reads it (pxl-engine
+    /// `clipmap::ground`), or the wall where the cell is the wall. The
     /// lookup steps on from where the node's relief found its cells.
     fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
         clipmap::ground(&clip_read(), shard, place, zoom, [c[0], c[1]]).0

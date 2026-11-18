@@ -12,7 +12,7 @@ interface sensor {
   record position {
     lon: f64,
     lat: f64,
-    alt: option<f64>,
+    alt-ellipsoid: option<f64>,
   }
 
   // The device's position, absent without a fix.

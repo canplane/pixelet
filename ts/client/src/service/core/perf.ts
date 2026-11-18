@@ -54,7 +54,7 @@ import * as perf from "@/abi/perf.ts";
 import { ui } from "@/service/core/core.ts";
 
 const WORD = 8;
-/** How many bytes a task's `path` column holds (perf.json5 `TASK`). */
+/** How many bytes a task's `path` lane holds (perf.json5 `TASK`). */
 const PATH_SZ = 3 * WORD;
 
 export function start(): void {
@@ -80,8 +80,8 @@ const site = (strtab: U8Array, file: u32, bytes: u32, line: u32) =>
     ? null
     : `${file === 0 ? "?" : td.decode(strtab.subarray(file, file + bytes))}:${line}`;
 
-/** The `FRAME` columns that are lists, one word for each name in the list. */
-const LIST_COLUMNS = [
+/** The `FRAME` lanes that are lists, one word for each name in the list. */
+const LIST_LANES = [
   "phases",
   "stage_parts",
   "effects",
@@ -89,20 +89,20 @@ const LIST_COLUMNS = [
   "gpu_spans",
   "loads",
 ] as const;
-export type ListColumn = (typeof LIST_COLUMNS)[number];
-export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
-type ScalarColumn = Exclude<FrameColumn, ListColumn>;
+export type ListLane = (typeof LIST_LANES)[number];
+export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
+type ScalarLane = Exclude<FrameLane, ListLane>;
 
-export type Frame = { [K in ScalarColumn]: f64 } & {
-  [K in ListColumn]: f64[];
+export type Frame = { [K in ScalarLane]: f64 } & {
+  [K in ListLane]: f64[];
 };
 
-/** Each `FRAME` column with its first word and its width in words. */
-export const COLUMNS: readonly { name: FrameColumn; at: u32; width: u32 }[] =
+/** Each `FRAME` lane with its first word and its width in words. */
+export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] =
   (() => {
-    const at = (Object.entries(FRAME) as [FrameColumn | "WORDS", u32][]).filter(
+    const at = (Object.entries(FRAME) as [FrameLane | "WORDS", u32][]).filter(
       ([k]) => k !== "WORDS",
-    ) as [FrameColumn, u32][];
+    ) as [FrameLane, u32][];
     at.sort((a, b) => a[1] - b[1]);
     return at.map(([name, a], i) => ({
       name,
@@ -111,13 +111,12 @@ export const COLUMNS: readonly { name: FrameColumn; at: u32; width: u32 }[] =
     }));
   })();
 
-const LISTS: ReadonlySet<string> = new Set(LIST_COLUMNS);
-export const isList = (column: FrameColumn): column is ListColumn =>
-  LISTS.has(column);
+const LISTS: ReadonlySet<string> = new Set(LIST_LANES);
+export const isList = (lane: FrameLane): lane is ListLane => LISTS.has(lane);
 
 export function frameAt(words: ArrayLike<f64>, o: u32): Frame {
   const f: Record<string, f64 | f64[]> = {};
-  for (const { name, at, width } of COLUMNS) {
+  for (const { name, at, width } of LANES) {
     const w = (k: u32) => words[o + at + k];
     if (isList(name)) {
       f[name] = Array.from({ length: width }, (_, k) => w(k));
@@ -172,7 +171,7 @@ export interface FrameSummary {
   /** How many of the world's pixels the last frame a read timed drew. */
   gpuPx: f64;
   /** The ray counts of the window's frames, summed for each of `FRAME`'s
-   * `rays` columns. */
+   * `rays` lanes. */
   rayCount: RayCount;
   /** How far the heap's high-water mark rose over the window: the last
    * frame's mark less the first frame's. */

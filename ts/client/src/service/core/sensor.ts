@@ -83,7 +83,7 @@ function bearing(deg: f64 | null): boolean {
  * out of its range is dropped whole. */
 export const SENSOR_LISTENER: SensorListener = {
   pos: (lon, lat, altitudeIn, accuracyIn, courseIn) => {
-    const [alt, accuracy, course] = [
+    const [altEllipsoid, accuracy, course] = [
       finite(altitudeIn),
       finite(accuracyIn),
       finite(courseIn),
@@ -96,7 +96,7 @@ export const SENSOR_LISTENER: SensorListener = {
       return;
     // A fix that comes without an accuracy is taken as having an infinite
     // error.
-    geolocationFix(lon, lat, alt, accuracy ?? Infinity, course);
+    geolocationFix(lon, lat, altEllipsoid, accuracy ?? Infinity, course);
     post();
   },
   positionError: (error, watching) => {
@@ -271,7 +271,9 @@ function heading(): f64 | null {
  * gives one; null without a fix. */
 function pos(): Position | null {
   const l = deviceLocationStore().location;
-  return l === null ? null : { lon: l.coord[0], lat: l.coord[1], alt: l.alt };
+  return l === null
+    ? null
+    : { lon: l.coord[0], lat: l.coord[1], alt_ellipsoid: l.altEllipsoid };
 }
 
 /** The location's status as the core takes it. */
@@ -290,7 +292,9 @@ function locationStatus(): LocationStatus {
 
 function isSamePosition(a: Position | null, b: Position | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.lon === b.lon && a.lat === b.lat && a.alt === b.alt;
+  return (
+    a.lon === b.lon && a.lat === b.lat && a.alt_ellipsoid === b.alt_ellipsoid
+  );
 }
 
 /** The facts last told the core, none before the first. */

@@ -9,7 +9,7 @@
 //! holds anything. It returns an exact answer, a coarser answer with the
 //! tile it lacked, or a lack with that tile.
 //!
-//! A cell is what the cast draws, by one rule, so picks and column surfaces
+//! A cell is what the cast draws, by one rule, so picks and surfaces
 //! stand on what is on the screen. A node coarser than the zoom asked is not
 //! what is drawn there; it is asked only whether anything under it fills, at
 //! any zoom.
@@ -22,7 +22,7 @@
 //! the ways' pool) are visible within `layer` alone, so the compiler refuses
 //! them anywhere else, and none is re-exported. A public `World` function
 //! answers from the composed world; an answer from one layer alone
-//! (`surface_of`) stays inside the query.
+//! (`ground_of`) stays inside the query.
 
 // layer.rs names this file by `#[path]`, so it resolves its children as a
 // mod-rs file does: each is named from here.
@@ -34,6 +34,8 @@ pub(crate) mod decor;
 mod detail;
 #[path = "query/entry.rs"]
 mod entry;
+#[path = "query/ground.rs"]
+mod ground;
 #[path = "query/limit.rs"]
 mod limit;
 #[path = "query/node.rs"]
@@ -46,8 +48,6 @@ mod ray;
 mod scatter;
 #[path = "query/support.rs"]
 mod support;
-#[path = "query/surface.rs"]
-mod surface;
 #[path = "query/world.rs"]
 mod world;
 
@@ -99,7 +99,7 @@ impl World {
     }
 }
 
-/// Reports as read the columns a decor claiming the node's leaf cell may
+/// Reports as read the rect a decor claiming the node's leaf cell may
 /// stand on, for an asker that keeps what the cell answers.
 fn report_claims((zoom, c): Node<3>) {
     if let Some(s) = zoom.checked_sub(GROUND.leaf_cell_zoom()) {

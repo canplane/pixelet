@@ -83,11 +83,17 @@ export function geolocationClose(): void {
 export function geolocationFix(
   lon: f64,
   lat: f64,
-  alt: f64 | null,
+  altEllipsoid: f64 | null,
   accuracy: f64,
   course: f64 | null,
 ): void {
-  setLocation(deviceLocationStore(), [lon, lat], alt, accuracy, course);
+  setLocation(
+    deviceLocationStore(),
+    [lon, lat],
+    altEllipsoid,
+    accuracy,
+    course,
+  );
 }
 
 /** Each error's words, by their locale key. */

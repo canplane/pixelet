@@ -14,7 +14,7 @@ use crate::space::coord::zoom::{Zoom, starts, units};
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
 pub type Node<const D: usize> = (Zoom, [i32; D]);
 
-/// The box a node stands for: a cube in three axes, and in fewer the column
+/// The box a node stands for: a cube in three axes, and in fewer the box
 /// over every axis it does not name or has no digit of, as far as the world
 /// reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {

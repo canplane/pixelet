@@ -18,7 +18,7 @@ use crate::ground::Extent;
 use crate::way;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT, bricks_zoom, idx_of, of_idx};
-use pxl_spec::ground::{GroundId, asset_ids, top};
+use pxl_spec::ground::{GroundId, asset_ids, ele_cells};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, MIN_ZOOM, Zoom, idx_at};
@@ -82,7 +82,7 @@ pub fn entry(q: [i32; 2]) -> u32 {
 }
 
 /// The brick holding cell `g`, and where the cell lies in it, X then Y. A reader spreads the
-/// place into an index (`idx_of`) only where it reads a column, and shifts it as it is to
+/// place into an index (`idx_of`) only where it reads a cell's word, and shifts it as it is to
 /// find a level's entry.
 pub fn brick_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
     let m = (BRICK - 1) as i32;
@@ -94,7 +94,7 @@ pub fn brick_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
 
 /// Where level `j` of a brick's levels begins among them, in entries. Each entry of level
 /// `j`, counting from 0, holds the lowest and highest of the 2^j × 2^j cells under it, the
-/// ground's and the ways' apart (`ground::Extent`); level 0 is each cell's own column
+/// ground's and the ways' apart (`ground::Extent`); level 0 is each cell's own
 /// (`fill::mip`).
 pub const fn bound_mip_at(j: u32) -> u32 {
     (4 * BRICK_CELL_CNT - ((4 * BRICK_CELL_CNT) >> (2 * j))) / 3
@@ -136,7 +136,7 @@ pub const WAYS_POOL_WORDS: u32 = 1 << 24;
 /// its column begins at in the run. A column there is `SPANS_COLUMN_WORDS`' words for its
 /// spans alone: the head word and, for each span, its lowest and past its highest and its
 /// value. A column with no span is kept only where a bore's air beside it may line it (it
-/// needs its face). A brick with no span takes no run.
+/// needs its top ground cell). A brick with no span takes no run.
 pub const RUN_BITS_AT: u32 = 0;
 pub const RUN_BITS_WORDS: u32 = SPANS_COLUMN_CNT.div_ceil(32);
 pub const RUN_RANK_AT: u32 = RUN_BITS_AT + RUN_BITS_WORDS;
@@ -147,15 +147,19 @@ pub const RUN_WORDS_MOST: u32 = RUN_OFFS_AT + SPANS_COLUMN_CNT * (1 + SPANS_COLU
 
 /// The bits of a head word that hold a column's spans' count (`SPANS_COLUMN_WORDS`).
 pub const SPANS_CNT: u32 = 0xffff;
-/// A head word's face cell where the column has none (`SPANS_COLUMN_WORDS`).
-pub const FACE_NONE: i32 = i16::MIN as i32;
+/// A head word's top ground cell where the column has none (`SPANS_COLUMN_WORDS`).
+pub const ELE_CELL_NONE: i32 = i16::MIN as i32;
 
-/// A head word's face cell (`i32::MIN` for none) and spans' count, held to pxl-spec `way::SPAN_CAP` so
+/// A head word's top ground cell (`i32::MIN` for none) and spans' count, held to pxl-spec `way::SPAN_CAP` so
 /// that a loop over them stays bounded whatever the word.
 pub const fn head_of(w: u32) -> (i32, u32) {
-    let face = w as i32 >> 16;
+    let ele_cell = w as i32 >> 16;
     (
-        if face == FACE_NONE { i32::MIN } else { face },
+        if ele_cell == ELE_CELL_NONE {
+            i32::MIN
+        } else {
+            ele_cell
+        },
         if w & SPANS_CNT < SPAN_CAP as u32 {
             w & SPANS_CNT
         } else {
@@ -165,7 +169,7 @@ pub const fn head_of(w: u32) -> (i32, u32) {
 }
 
 /// The spans a brick's run keeps, read as its fill kept them, for the one rule
-/// (`way::way_cell`): a column the run does not keep has no spans and no face.
+/// (`way::way_cell`): a column the run does not keep has no spans and no top ground cell.
 struct KeptSpans<'a, P: ?Sized> {
     pool: &'a P,
     run: u32,
@@ -260,18 +264,18 @@ pub const SPANS_AT: u32 = 0;
 pub const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMN_CNT: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (pxl-spec `way::SpanList`). The head word holds the count
-/// (`SPANS_CNT`) and, above it, the face cell as an `i16`, `FACE_NONE` for none (fill.rs
+/// (`SPANS_CNT`) and, above it, the top ground cell as an `i16`, `ELE_CELL_NONE` for none (fill.rs
 /// `hdr_word`). Then each span holds its lowest and past its highest, an `i16` each as the
 /// world's z is and held to that range (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * SPAN_CAP as u32;
 pub const SPANS_WORDS: u32 = SPANS_AT + SPANS_COLUMN_CNT * SPANS_COLUMN_WORDS;
 
-/// A brick's columns, one word a cell, row by row: a cell's ground top in leaf cells, an
-/// `i16` in the low half (`column_top`).
-pub(crate) const COLUMN_WORDS: u32 = BRICK_CELL_CNT;
+/// A brick's elevations, one word a cell, row by row: a cell's elevation in leaf cells, an
+/// `i16` in the low half (`ele_of`).
+pub(crate) const ELE_WORDS: u32 = BRICK_CELL_CNT;
 
-/// The ground top held in a column word: a signed 16-bit value in the word's low half.
-pub const fn column_top(w: u32) -> i32 {
+/// The elevation held in an ele word: a signed 16-bit value in the word's low half.
+pub const fn ele_of(w: u32) -> i32 {
     (w << 16) as i32 >> 16
 }
 
@@ -291,11 +295,11 @@ pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
 }
 
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
-/// order: its columns, its levels, its cells as laid and the first word of its run of kept
+/// order: its elevations, its levels, its cells as laid and the first word of its run of kept
 /// spans. The clip levels' bricks are one storage buffer bound whole on a GPU, under WebGPU's floor
 /// (pxl-render ray/ground.rs `GROUND_SZ`).
-pub const COLUMNS_AT: u32 = 0;
-pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
+pub const ELE_AT: u32 = 0;
+pub const BOUNDS_AT: u32 = ELE_AT + ELE_WORDS;
 pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// The first word of its run of kept spans in the ways' pool (`RUN_BITS_AT`); 0, a word never
 /// handed out, where it has none.
@@ -313,12 +317,12 @@ pub trait BrickSource {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
     /// The four asset ids of cell `i` of the brick in `slot` (`asset_ids`).
     fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
-    /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
+    /// Ele word `i` of the brick in `slot` (`ELE_WORDS`), `i` to
     /// `BRICK_CELL_CNT`.
-    fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
+    fn ele_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `at` of level `j` of the brick in `slot`: its bounds (`ground::Extent`) as bound
-    /// words (`answer::bound_word`), its columns' bounds joined (`join`), level 0 being one
-    /// column's.
+    /// words (`answer::bound_word`), its cells' bounds joined (`join`), level 0 being one
+    /// cell's.
     fn bound_mip(&self, cell_zoom: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// Cell `i`'s own asset id as its fill laid it (`OWN_WORDS`,
     /// `own_at`).
@@ -391,7 +395,7 @@ impl Lookup {
     }
 }
 
-/// The cell at `from` that column `c` of the cells at `zoom` lies in.
+/// The cell at `from` that cell `c` of the cells at `zoom` lies in.
 fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
     let s = zoom - from;
     [wrap_idx(from, c[0] >> s), c[1] >> s]
@@ -456,7 +460,7 @@ pub const fn clip_zoom(cell_zoom: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell_zoom`, read from the finest clip level holding it present,
-/// stepped from `place` (`step`): its four asset ids, its column's word (its elevation),
+/// stepped from `place` (`step`): its four asset ids, its ele word,
 /// its own asset id as laid, and where it is held; void at sea level where none holds
 /// it.
 pub fn cell(
@@ -472,14 +476,14 @@ pub fn cell(
     let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
         w.fold_at(from, slot, i),
-        w.column(from, slot, i),
+        w.ele_word(from, slot, i),
         w.own(from, slot, i),
         f,
     )
 }
 
-/// Column `b` at `zoom` as a reader reads it: the cell drawing it (a leaf's, finer than the
-/// leaves), stepped from `place`, where the column's own cells were found (`step`), with its
+/// The ground of cell `c` at `zoom` as a reader reads it: the cell drawing it (a leaf's, finer
+/// than the leaves), stepped from `place`, where the cell's own cells were found (`step`), with its
 /// own asset id as laid, or the wall's (`Sentinel::Unknown`) where it is the wall
 /// (`area::is_wall`); and where it is held. The wall is read from `shard`, what is known of
 /// the area there, or else asked of `w` (`Shard::at`).
@@ -488,19 +492,19 @@ pub fn ground(
     shard: Shard,
     place: Lookup,
     zoom: Zoom,
-    b: [i32; 2],
+    c: [i32; 2],
 ) -> (Cell, Lookup) {
     let read = clip_zoom(zoom);
-    let (word, column, own, f) = cell(w, place, read, cell_at(zoom, read, b));
-    let asset_id = if area::is_wall(shard.at(w, (zoom, b)), zoom, b) {
+    let (word, ele_word, own, f) = cell(w, place, read, cell_at(zoom, read, c));
+    let asset_id = if area::is_wall(shard.at(w, (zoom, c)), zoom, c) {
         Sentinel::Unknown as u32
     } else {
         own
     };
-    let (top, part) = top(zoom, column_top(column) as f32);
+    let (ele_cells, part) = ele_cells(zoom, ele_of(ele_word) as f32);
     let cell = Cell {
         asset_id,
-        top,
+        ele_cells,
         part,
         fold: asset_ids(word),
     };
@@ -854,7 +858,7 @@ pub fn stood_in(
 /// The lowest and highest that the cells at `cell_zoom` reach under the node `(zoom, c)`.
 /// For a node no wider than a brick, it reads the finest clip level holding them present,
 /// stepped from `place`, which becomes where they are held (`step`): one entry of its brick's
-/// levels, level 0 being the column holding a node no wider than a cell, with that clip
+/// levels, level 0 being the cell holding a node no wider than a cell, with that clip
 /// level's zoom. For a node wider than a brick, it reads what the clip level at `cell_zoom`
 /// holds of it (`level_bound`), and whether it holds all of it (`bound_over` reads on where it
 /// does not). It is false where no clip level holds the node, a lack.
@@ -885,7 +889,7 @@ fn bounded(
     )
 }
 
-/// The level of a brick at `from` that bounds a node at `zoom`, level 0 being a column's own
+/// The level of a brick at `from` that bounds a node at `zoom`, level 0 being a cell's own
 /// for a node no wider than a cell, and the entry in it for the node's first cell, at
 /// `[x, y]` in its brick.
 fn entry_at(zoom: Zoom, from: Zoom, [x, y]: [u32; 2]) -> (u32, [u32; 2]) {

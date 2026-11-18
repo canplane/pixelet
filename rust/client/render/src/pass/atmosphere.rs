@@ -27,7 +27,7 @@ use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_link::mem;
 
 use crate::frame::shader::word::atmos::{
-    CAMERA_ALT, DRAWN, EARTH_TILES, EARTH_WINDOW, KM_PER_U, LAND_ALT_KM, MOON_COLOR, MOON_DIR,
+    CAMERA_ALT, DRAWN, EARTH_TILES, EARTH_WINDOW, FLOOR_KM, KM_PER_U, MOON_COLOR, MOON_DIR,
     MOON_LAYOUT, MOON_LIGHT, MOON_REACHES, SUN_DIR, SUN_LAYOUT, SUN_REACHES,
 };
 use crate::frame::shader::word::{
@@ -443,7 +443,7 @@ impl Atmosphere {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, self.froxel.id);
         g.set_bind_group(pass, 0, self.froxel_groups[k], &[]);
-        // A workgroup makes a column of froxels (atmos_froxel.wgsl).
+        // A workgroup makes one ray's froxels (atmos_froxel.wgsl).
         g.dispatch(pass, AIR_FROXELS, AIR_FROXELS, 1);
         g.end(pass);
     }
@@ -518,7 +518,7 @@ impl Atmosphere {
             .copy_from_slice(&env[environment::MOON_COLOR..environment::MOON_COLOR + 3]);
         self.words[CAMERA_ALT] = alt_km;
         self.words[KM_PER_U] = env[environment::AIR + 1];
-        self.words[LAND_ALT_KM] = env[environment::AIR + 2];
+        self.words[FLOOR_KM] = env[environment::AIR + 2];
         self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
@@ -591,19 +591,19 @@ impl Atmosphere {
             );
             self.words[LAYOUTS[k]..LAYOUTS[k] + 3].copy_from_slice(&view_layout(alt));
         }
-        let ground = self.words[LAND_ALT_KM];
+        let floor = self.words[FLOOR_KM];
         let e = &mut self.exposure_read;
         e.begin();
         for at in EXPOSURE_READS {
             e.read(&self.words[at]);
         }
-        e.mark(fresh || due || self.ground.changed(ground));
+        e.mark(fresh || due || self.ground.changed(floor));
         self.plan.exposure = !e.end();
         if self.plan.exposure {
-            self.ground.at = Some(ground);
-            let measure = self.ground.left(ground) && busy & Measure::Ground.bit() == 0;
+            self.ground.at = Some(floor);
+            let measure = self.ground.left(floor) && busy & Measure::Ground.bit() == 0;
             if measure {
-                self.ground.measured = Some(ground);
+                self.ground.measured = Some(floor);
                 self.pending |= Measure::Ground.bit();
             }
             let flag = f32::from(u8::from(measure));

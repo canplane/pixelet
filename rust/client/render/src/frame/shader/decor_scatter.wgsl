@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/decor_scatter.wgsl
 
 // The decor the ground holds, found from the hashes alone (pxl-content scatter.rs): how many of
-// a decor a column holds, a leaf cell's candidate, and whether it stands clear of the decor's
+// a decor a cell holds, a leaf cell's candidate, and whether it stands clear of the decor's
 // others. It reads no world and keeps no state, so a thread asks of a leaf cell by its name
 // alone.
 
@@ -18,7 +18,7 @@ fn near_half(w: u32) -> u32 {
   return weight(0x7000u + ((w >> 16u) & 0x1fffu), w);
 }
 
-/// `scatter::cnt`: how many of decor `k` the column `b` at `zoom` holds.
+/// `scatter::cnt`: how many of decor `k` the cell `b` at `zoom` holds.
 fn scatter_cnt(k: u32, zoom: u32, b: vec2<i32>) -> u32 {
   return scatter_cnt_of(row_word(k, ROW_SEED), row_word(k, ROW_CHANCE), decor_root(k), zoom, b);
 }

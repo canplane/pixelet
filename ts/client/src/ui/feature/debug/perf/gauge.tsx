@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./column.ts";
+import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { failText } from "./report.ts";
@@ -86,7 +86,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Head>Pivot</Head>
       <Row k="coord" v={coordinate(v.pivot_x, v.pivot_y, v.pivot_z)} />
       <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
-      <Row k="alt" v={meters(v.pivot_alt)} />
+      <Row k="ele" v={meters(v.pivot_ele)} />
       <Head>Pointer</Head>
       <Row k="coord" v={coordinate(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell_zoom)} />

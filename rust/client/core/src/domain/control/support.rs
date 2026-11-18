@@ -35,7 +35,7 @@ pub(crate) fn stand(at: &Q3) -> Q3 {
 
 /// The last answer of `standing`. It is kept until another point is asked,
 /// the eye sets another size for a cell it read or the world changes in the
-/// columns it read (`change::Memo`),
+/// rect it read (`change::Memo`),
 /// because the figures at a pivot ask for the same point on every tick.
 static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
 
@@ -43,7 +43,7 @@ fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
     STAND_MEMO.get(|| Memo::NONE)
 }
 
-/// Drops the kept answer of `standing` where a change touched the columns
+/// Drops the kept answer of `standing` where a change touched the rect
 /// it read. It runs on every frame, so each change is seen exactly once
 /// (`change::within`).
 pub(crate) fn support_step() {

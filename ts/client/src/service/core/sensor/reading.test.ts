@@ -48,15 +48,18 @@ test("setLocation - a fix moves past its dead zone", () => {
   assert.equal(s.state.status, SENSOR_STATUS_READY);
   const near: [number, number] = [at[0] + 0.000009, at[1] - 0.000009];
   setLocation(s, near, 10.4, 5, null);
-  assert.deepEqual([s.location?.coord, s.location?.alt], [at, 10]);
-  for (const [coord, alt] of [
+  assert.deepEqual([s.location?.coord, s.location?.altEllipsoid], [at, 10]);
+  for (const [coord, altEllipsoid] of [
     [[at[0] + 0.000011, at[1]], 10],
     [[at[0] + 0.000011, at[1] - 0.000011], 10],
     [[at[0] + 0.000011, at[1] - 0.000011], 10.6],
     [[at[0] + 0.000011, at[1] - 0.000011], null],
   ] as [[number, number], number | null][]) {
-    setLocation(s, coord, alt, 5, null);
-    assert.deepEqual([s.location?.coord, s.location?.alt], [coord, alt]);
+    setLocation(s, coord, altEllipsoid, 5, null);
+    assert.deepEqual(
+      [s.location?.coord, s.location?.altEllipsoid],
+      [coord, altEllipsoid],
+    );
   }
 });
 
@@ -84,7 +87,7 @@ test("setLocation - accuracy and course refresh without movement", () => {
   setLocation(s, [at[0] + 0.000005, at[1]], 10.2, 4, 90);
   assert.deepEqual(s.location, {
     coord: at,
-    alt: 10,
+    altEllipsoid: 10,
     accuracy: 4,
     course: 90,
   });

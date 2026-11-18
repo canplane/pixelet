@@ -39,7 +39,7 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   return word;
 }
 
-/// Whether the node of `zoom` at column `c`, whose answer reads the clip levels up to
+/// Whether the node of `zoom` at cell `c`, whose answer reads the clip levels up to
 /// `finest`, reads a brick that moved. A query reads no clip level finer than it asked
 /// (clip.wgsl `step_to`, `clip_zoom`). A node no wider than a brick's levels reads only the
 /// bricks held present (`step_to`). It reads a moved brick where one lies in the box of the
@@ -85,7 +85,7 @@ fn forgets(zoom: u32, finest: u32, c: vec2<i32>) -> bool {
   return false;
 }
 
-/// Whether the node of `zoom` at column `c` stands over the box `b` of leaf cells,
+/// Whether the node of `zoom` at cell `c` stands over the box `b` of leaf cells,
 /// `[x0, y0, x1, y1)`, with X taken round the world (`object::cut_rect`).
 fn over_rect(zoom: u32, c: vec2<i32>, b: vec4<i32>) -> bool {
   var n: vec4<i32>;
@@ -183,7 +183,7 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 }
 
-/// Whether a node of `zoom` beside the one at column `c`, across a face or an edge, is
+/// Whether a node of `zoom` beside the one at cell `c`, across a face or an edge, is
 /// forgotten because it reads a brick that moved or stands over a box that changed (`forgets`,
 /// `over_rect`).
 fn changed_beside(zoom: u32, c: vec2<i32>) -> bool {

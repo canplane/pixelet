@@ -43,7 +43,7 @@ fn stretch(ja: vec3f, jb: vec3f, x: vec3f, left: vec3f) -> vec3f {
 // `up` as its up, over `knots` knots. It returns what the stretch lets through
 // of what lies past it and what it sends toward its near end. Stretches laid
 // end to end join into the whole, with T = T0·T1 and S = S0 + T0·S1, so a
-// column of them marched once gives every point on it by one integral.
+// ray of them marched once gives every point on it by one integral.
 fn gather_between(r: f32, up: vec3f, dir: vec3f, t0: f32, t1: f32, sun: vec3f, moon: vec3f, moon_light: f32, knots: i32) -> Veil {
   let mu = dot(up, dir);
   let end = short_of_ground(r, mu, t1);

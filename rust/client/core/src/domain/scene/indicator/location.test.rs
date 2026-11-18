@@ -11,7 +11,7 @@ use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::octant::Octant;
 
 /// A rough ground, level over each cell. It steps up and down by fractions of
-/// a cell, and here and there a column is unknown.
+/// a cell, and here and there a cell is unknown.
 fn rough(at: &Q3) -> Option<f64> {
     let [x, y] = cell_of(at);
     let h = (x * 7 + y * 13).rem_euclid(11);
@@ -71,7 +71,7 @@ fn zone_cells_once() {
                 let at = [0, 1].map(|k| center[k] + f64::from(at[k]) * cell);
                 rough(&world::point(at[0], at[1], center[2])).is_none()
             }),
-            "a column not known lies in the zone about {center:?}"
+            "a cell not known lies in the zone about {center:?}"
         );
     }
 }

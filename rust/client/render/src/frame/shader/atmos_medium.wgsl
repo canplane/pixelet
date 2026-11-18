@@ -81,7 +81,7 @@ fn air_path(r: f32, mu: f32) -> f32 {
 // elevation of its ground. Only drawing reads it; the tables keep the radius they
 // were baked at.
 fn land_below_km() -> f32 {
-  return atmos_camera_alt() - atmos_land_alt_km();
+  return atmos_camera_alt() - atmos_floor_km();
 }
 
 // Whether a ray from the eye along `dir` falls to that land. The world's z
@@ -97,7 +97,7 @@ fn to_land(dir: vec3f) -> f32 {
 }
 
 fn land_radius() -> f32 {
-  return BOTTOM_RADIUS_KM + atmos_land_alt_km();
+  return BOTTOM_RADIUS_KM + atmos_floor_km();
 }
 
 // How light `k`'s sky view and its share of the air's volume were laid

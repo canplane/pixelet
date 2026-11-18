@@ -5,7 +5,7 @@
 // and the ways' pool. It answers word for word as the Rust does (tests/world.rs). The code keeps to
 // scoped locals and small structs: no array, no atomic, and nothing held across a loop beyond what
 // is read after it. It works in integers alone: an elevation a word holds is exact through pxl-spec
-// `ground::top`'s floats, so `top_of` is its integer form.
+// `ground::ele_cells`'s floats, so `ele_cells` is its integer form.
 //
 // What a node hands down is a `vec3<u32>` laid out as pxl-engine `Inheritance::words`: what is
 // placed, the node's shard, and where its ground's cells were held. A cut is a `vec4<i32>` as
@@ -194,35 +194,35 @@ fn bound_over(place: u32, coarsest: u32, finest: u32, zoom: u32, c: vec2<i32>) -
 /// The port of pxl-engine `ground::Cell`, with its fold packed in one word.
 struct Cell {
   asset_id: u32,
-  top: i32,
+  ele_cells: i32,
   part: u32,
   fold: u32,
 }
 
 /// The port of pxl-engine `clipmap::ground`.
-fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
+fn ground_at(shard: u32, place: u32, zoom: u32, c: vec2<i32>) -> Cell {
   let clip = clip_zoom(zoom);
-  let s = step_to(place, clip, cell_at(zoom, clip, b));
+  let s = step_to(place, clip, cell_at(zoom, clip, c));
   var fold = 0u;
-  var column = 0u;
+  var ele_word = 0u;
   var own = VAL_VOID;
   if (lookup_here(s.place)) {
     let slot = lookup_slot(s.place);
     let i = cell_id(s.at);
     let base = brick_at(slot);
     fold = fold_at(slot * BRICK_CELL_CNT + i);
-    column = ground[base + COLUMNS_AT + i];
+    ele_word = ground[base + ELE_AT + i];
     own = (ground[base + OWN_AT + i / OWN_CELL_CNT] >> (GROUND_ID_BITS * (i % OWN_CELL_CNT))) & GROUND_ID_MAX;
   }
-  let t = top_of(zoom, column_top(column));
-  return Cell(select(own, VAL_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
+  let t = ele_cells(zoom, ele_of(ele_word));
+  return Cell(select(own, VAL_UNKNOWN, is_wall(shard, zoom, c)), t.cells, t.part, fold);
 }
 
 // The ground's cell, as pxl-engine ground.rs and pxl-content strata.rs answer it.
 
 /// The port of pxl-content `strata::by_depth`.
-fn by_depth(cell_zoom: u32, asset_id: u32, t: i32, z: i32) -> u32 {
-  if (z >= t) {
+fn by_depth(cell_zoom: u32, asset_id: u32, ele_cells: i32, z: i32) -> u32 {
+  if (z >= ele_cells) {
     return VAL_VOID;
   }
   if (cell_zoom < LEAF_CELL_ZOOM || asset_id == VAL_UNKNOWN) {
@@ -237,9 +237,9 @@ fn by_depth(cell_zoom: u32, asset_id: u32, t: i32, z: i32) -> u32 {
   } else if (asset_id == STRATA_WATER) {
     filler = STRATA_WATER;
   }
-  let face = t - s;
-  let filled = face - STRATA_FILLER_DEPTH * s;
-  if (z >= face) {
+  let ele_cell = ele_cells - s;
+  let filled = ele_cell - STRATA_FILLER_DEPTH * s;
+  if (z >= ele_cell) {
     return asset_id;
   }
   if (z >= filled) {
@@ -248,36 +248,36 @@ fn by_depth(cell_zoom: u32, asset_id: u32, t: i32, z: i32) -> u32 {
   if (z >= filled - sandstone * s) {
     return STRATA_SANDSTONE;
   }
-  return select(VAL_UNKNOWN, STRATA_STONE, z >= rock(cell_zoom, face_ele(cell_zoom, t)));
+  return select(VAL_UNKNOWN, STRATA_STONE, z >= rock(cell_zoom, ele_drawn(cell_zoom, ele_cells)));
 }
 
-/// The bedrock's top under a face at `face` (pxl-engine `ground::rock`, pxl-content
+/// The bedrock's top under an elevation `ele` (pxl-engine `ground::rock`, pxl-content
 /// `strata::bedrock`).
-fn rock(cell_zoom: u32, face: i32) -> i32 {
-  return top_of(cell_zoom, min(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells;
+fn rock(cell_zoom: u32, ele: i32) -> i32 {
+  return ele_cells(cell_zoom, min(ele, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells;
 }
 
 /// The port of pxl-engine `Cell::opens`.
 fn opens(col: Cell, cell_zoom: u32, z: i32) -> bool {
-  let face = face_ele(cell_zoom, col.top);
-  let under = top_of(cell_zoom, face).cells - leaf_cells(cell_zoom) - i32(col.part < FULL);
-  return col.asset_id != VAL_UNKNOWN && z < under && z >= rock(cell_zoom, face);
+  let ele = ele_drawn(cell_zoom, col.ele_cells);
+  let under = ele_cells(cell_zoom, ele).cells - leaf_cells(cell_zoom) - i32(col.part < FULL);
+  return col.asset_id != VAL_UNKNOWN && z < under && z >= rock(cell_zoom, ele);
 }
 
-/// What pxl-engine `ground::node` answers for a cell: its kind and asset, the column read
-/// (`Cell`), and where the column was held (`place`).
+/// What pxl-engine `ground::node` answers for a cell: its kind and asset, the ground read
+/// (`Cell`), and where it was held (`place`).
 struct GroundCell {
   kind: u32,
   asset: vec2<u32>,
   asset_id: u32,
-  top: i32,
+  ele_cells: i32,
   part: u32,
   fold: u32,
   place: u32,
   ways: vec2<i32>,
 }
 
-/// The answer for a cell where no column was read (pxl-engine `Cell::NONE`).
+/// The answer for a cell where no ground was read (pxl-engine `Cell::NONE`).
 fn ground_none(kind: u32, asset: vec2<u32>, place: u32) -> GroundCell {
   return GroundCell(kind, asset, VAL_VOID, 0i, FULL, 0u, place, vec2<i32>(EMPTY_LO, EMPTY_HI));
 }
@@ -295,16 +295,16 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
   if (!r.here) {
     return ground_none(KIND_LACK, vec2<u32>(VAL_VOID, 0u), r.place);
   }
-  let col = ground_column(shard, r.place, zoom, c.xy);
+  let col = ground_at(shard, r.place, zoom, c.xy);
   var asset = VAL_VOID;
   if (col.asset_id == VAL_UNKNOWN || is_ground(col.asset_id)) {
-    asset = by_depth(zoom, col.asset_id, col.top, c.z);
+    asset = by_depth(zoom, col.asset_id, col.ele_cells, c.z);
   }
   var cave = 0u;
   if (asset != VAL_VOID && opens(col, zoom, c.z)) {
     cave = hollow(zoom, c);
   }
-  return GroundCell(KIND_CELL, vec2<u32>(asset, cave), col.asset_id, col.top, col.part, col.fold, r.place, r.b.zw);
+  return GroundCell(KIND_CELL, vec2<u32>(asset, cave), col.asset_id, col.ele_cells, col.part, col.fold, r.place, r.b.zw);
 }
 
 // The caves, as pxl-content cave.rs carves them.
@@ -686,7 +686,7 @@ fn world_cell(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   var fill = 0u;
   var four = 0u;
   if (fills(val)) {
-    let share = select(FULL, g.part, c.z == g.top - 1i);
+    let share = select(FULL, g.part, c.z == g.ele_cells - 1i);
     fill = cover(share, VAL_AIR, g.asset.y).fill;
     four = select(g.fold, four_of(val), zoom >= LEAF_CELL_ZOOM || val != g.asset_id);
   }

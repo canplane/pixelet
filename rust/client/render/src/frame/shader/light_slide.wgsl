@@ -7,18 +7,18 @@
 // of the tile that held its world texels under the corner before (`light::HDR_LAST_CORNER`;
 // ray/cast.rs `prepare`). A tile's read is set to none where the box slid onto the tile,
 // where the slide or the zooms moved it into another band (`Light::keeps`), or where its rays
-// may meet a cell of its band over a column of the world that changed (`Light::reaches`,
-// `light::COLUMNS_AT`). The propagation then damages such a tile anew if a receiver reads it
+// may meet a cell of its band over a rect of the world that changed (`Light::reaches`,
+// `light::RECTS_AT`). The propagation then damages such a tile anew if a receiver reads it
 // (light_propagate.wgsl). The other tiles hold what their cast left. Each thread writes only
 // its own tile's word, and the first thread also writes the cast's number as the last cast the
 // slide ran in (`light::SLIDE_RAN`). The slide runs where the box slid, the zooms moved or the
 // world changed, and a receiver stands (`light::RECEIVER_TILES_SLIDE`). It runs after the
 // receivers stood, and before the propagation.
 
-/// Whether the rays of box tile `tile`, asking at its band, may meet a cell over the world's column
+/// Whether the rays of box tile `tile`, asking at its band, may meet a cell over the world's rect
 /// `c`, `[x0, y0, x1, y1]` in units from the eye (`Light::reaches`). Only a band from the first to
 /// the last of `band_range` reads the change. Seen from above, the tile's rays sweep a hexagon as
-/// its texels move along the light. The column, grown by a cell of the band and a texel, misses
+/// its texels move along the light. The rect, grown by a cell of the band and a texel, misses
 /// that hexagon where one of five axes parts them: X, Y, and the axis across each of the hexagon's
 /// three edges.
 fn reaches(tile: vec2<u32>, c: vec4<f32>, band_range: vec2<u32>) -> bool {
@@ -47,12 +47,12 @@ fn reaches(tile: vec2<u32>, c: vec4<f32>, band_range: vec2<u32>) -> bool {
     || parts(vec2<f32>(-e2.y, e2.x), at, half, e0, e1, e2));
 }
 
-/// Whether axis `n` parts the column from the hexagon whose edges are `e0`, `e1` and `e2`. The
-/// column is `half` wide each way, and its middle lies `at` from the hexagon's middle.
+/// Whether axis `n` parts the rect from the hexagon whose edges are `e0`, `e1` and `e2`. The
+/// rect is `half` wide each way, and its middle lies `at` from the hexagon's middle.
 fn parts(n: vec2<f32>, at: vec2<f32>, half: vec2<f32>, e0: vec2<f32>, e1: vec2<f32>, e2: vec2<f32>) -> bool {
   let swept = abs(dot(e0, n)) + abs(dot(e1, n)) + abs(dot(e2, n));
-  let column = abs(half.x * n.x) + abs(half.y * n.y);
-  return abs(dot(at, n)) > 0.5 * swept + column;
+  let rect = abs(half.x * n.x) + abs(half.y * n.y);
+  return abs(dot(at, n)) > 0.5 * swept + rect;
 }
 
 @compute @workgroup_size(SQUARE_SIDE, SQUARE_SIDE, 1)
@@ -66,10 +66,10 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let was = vec2<i32>(i32(hdr_word(LIGHT_HDR_LAST_CORNER)), i32(hdr_word(LIGHT_HDR_LAST_CORNER + 1u)));
   var reached = !keeps_tile(id.xy, was);
-  // The head holds `LIGHT_COLUMN_CAP` columns at most (pxl-engine `light::COLUMN_CAP`).
-  let columns = min(u32(hdr[LIGHT_COLUMNS_AT].x), LIGHT_COLUMN_CAP);
-  for (var k = 0u; k < columns && !reached; k += 1u) {
-    let at = LIGHT_COLUMNS_AT + 1u + 2u * k;
+  // The head holds `LIGHT_RECT_CAP` rects at most (pxl-engine `light::RECT_CAP`).
+  let rects = min(u32(hdr[LIGHT_RECTS_AT].x), LIGHT_RECT_CAP);
+  for (var k = 0u; k < rects && !reached; k += 1u) {
+    let at = LIGHT_RECTS_AT + 1u + 2u * k;
     reached = reaches(id.xy, bitcast<vec4<f32>>(hdr[at]), bitcast<vec2<u32>>(hdr[at + 1u].xy));
   }
   if (reached) {

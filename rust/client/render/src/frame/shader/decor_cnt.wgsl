@@ -3,7 +3,7 @@
 // Picks the region each of the eye's records draws in this frame, writes it into the record's
 // first word, and counts it. A workgroup takes an entry's records or a run of placed decor. A
 // record draws nothing where the rays at its distance ask another zoom, held to the clip levels
-// that hold its column (`generation::ray_zoom`), than the one its record's clip level draws at
+// that hold its cell (`generation::ray_zoom`), than the one its record's clip level draws at
 // (`generation::drawn_at`), or where it is the decor left out. Otherwise it is sized for the
 // screen as a model, an impostor, or culled (`generation::drawing::lod`).
 

@@ -155,7 +155,7 @@ fn slot_ray(c: &Case, s: &Light, starts: &StartGrid, slot: [u32; 2]) -> ([i32; 3
 
 fn cases(b: &Built) -> Vec<Case> {
     let none = [Cut::NONE; 2];
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], b.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], b.ele_at(g) + up]);
     // A point on a way of the lines `lines` where the world answers with a way at the leaf
     // zoom.
     let way = |lines: [u32; 2]| {
@@ -334,7 +334,7 @@ fn cases(b: &Built) -> Vec<Case> {
             name: "straight down",
             origin: {
                 let g = [EYE[0] + 40, EYE[1] + 40];
-                [g[0] << FRAC_W, g[1] << FRAC_W, (b.top_at(g) + 30) << FRAC_W]
+                [g[0] << FRAC_W, g[1] << FRAC_W, (b.ele_at(g) + 30) << FRAC_W]
             },
             dir: [0.0, 0.0, -1.0],
             side: 1.0,
@@ -374,7 +374,7 @@ fn cases(b: &Built) -> Vec<Case> {
             name: "through corners",
             origin: {
                 let g = [EYE[0] + 40, EYE[1] + 40];
-                [g[0] << FRAC_W, g[1] << FRAC_W, (b.top_at(g) + 30) << FRAC_W]
+                [g[0] << FRAC_W, g[1] << FRAC_W, (b.ele_at(g) + 30) << FRAC_W]
             },
             dir: [0.6, 0.6, -0.53],
             side: core::f32::consts::SQRT_2,
@@ -484,7 +484,7 @@ fn hand_light_holes_answer_as_cast_walk() {
         placed: gpu.buf(&west.objects, store),
         pool: gpu.buf(&west.pool, store),
     };
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], west.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], west.ele_at(g) + up]);
     let case = Case {
         name: "about an eye west of X = 0",
         origin: over([EYE_WEST[0] + 90, EYE_WEST[1] + 90], 40),
@@ -521,7 +521,7 @@ fn hand_light_holes_answer_as_cast_walk() {
         origin: q8([
             10,
             EYE_ZERO[1] + 90,
-            zero.top_at([10, EYE_ZERO[1] + 90]) + 40,
+            zero.ele_at([10, EYE_ZERO[1] + 90]) + 40,
         ]),
         dir: [0.3, 0.2, -0.93],
         side: 1.0,
@@ -1029,7 +1029,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
     };
     let (before, after) = (bufs(&was), bufs(now));
     let forget = gpu.pipeline(src(SHADER_FORGET), "forget_cs");
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let case = Case {
         name,
         origin: over([eye[0] + by[0], eye[1] + by[1]], 40),
@@ -1116,7 +1116,7 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
 
 /// A change to the world must keep the tiles it does not reach (pxl-engine `Light::reaches`).
 /// The changes are bricks of the leaf clip level handed in, a brick over the leaf's handed in,
-/// and a preview's cut moved. In each, every slot of a tile that no changed column reaches must
+/// and a preview's cut moved. In each, every slot of a tile that no changed rect reaches must
 /// hold the same word in a map cast fresh after the change as in one cast fresh before it, by
 /// the GPU and by the engine's walk alike. The change must also move slots of the tiles it
 /// reaches.
@@ -1146,12 +1146,12 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         placed: gpu.buf(&built.objects, store),
         pool: gpu.buf(&built.pool, store),
     };
-    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
+    let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.ele_at(g) + up]);
     let now = &built.clipmap;
     let after = bufs(now);
 
     // Two of the leaf clip level's bricks under the box are wanted and not yet filled before
-    // the change, and held after it. Their columns are taken as the host takes them
+    // the change, and held after it. Their rects are taken as the host takes them
     // (ray/cast.rs).
     let g = [EYE[0] + 90, EYE[1] + 90];
     let bricks_case = Case {
@@ -1169,7 +1169,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     let leaf = ((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRY_CNT) as usize;
     let s = brick::BRICK_SHIFT;
     let mut was = now.clone();
-    let mut brick_columns = Vec::new();
+    let mut brick_rects = Vec::new();
     for q in [[g[0] >> s, g[1] >> s], [(g[0] >> s) + 2, g[1] >> s]] {
         let row = &mut was[leaf + clipmap::entry(q) as usize];
         assert!(
@@ -1177,12 +1177,12 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
             "the leaf clip level holds the brick"
         );
         row[2..].fill(0);
-        light::brick_columns(
+        light::brick_rects(
             bricks_case.origin,
             LEAF_CELL_ZOOM,
             q,
             |_| false,
-            |c| brick_columns.push(c),
+            |c| brick_rects.push(c),
         );
     }
     real_world::fold(
@@ -1211,13 +1211,13 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     eprintln!("the brick over the leaf's at {coarser}, the leaf's at {LEAF_CELL_ZOOM}");
     let mut was_over = now.clone();
     was_over[row_of(coarser, q)][2..].fill(0);
-    let mut over_columns = Vec::new();
-    light::brick_columns(
+    let mut over_rects = Vec::new();
+    light::brick_rects(
         over_case.origin,
         coarser,
         q,
         |c| Entry::of(now[row_of(coarser + 1, c)]).holds(c),
-        |c| over_columns.push(c),
+        |c| over_rects.push(c),
     );
     real_world::fold(
         &mut was_over,
@@ -1252,7 +1252,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         least: &[],
     };
     let b = object::cut_rect(cut.zoom, cut.at);
-    let cut_columns = vec![light::Column::every_band(light::column_of(
+    let cut_rects = vec![light::Rect::every_band(light::rect_of(
         cut_case.origin,
         LEAF_CELL_ZOOM,
         [b[0], b[1]],
@@ -1272,7 +1272,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
                 built.world(),
             ],
             [[Cut::NONE; 2]; 2],
-            brick_columns,
+            brick_rects,
         ),
         (
             &over_case,
@@ -1285,17 +1285,17 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
                 built.world(),
             ],
             [[Cut::NONE; 2]; 2],
-            over_columns,
+            over_rects,
         ),
         (
             &cut_case,
             [&after, &after],
             [built.world(), built.world()],
             [[Cut::NONE; 2], [cut, Cut::NONE]],
-            cut_columns,
+            cut_rects,
         ),
     ];
-    for (case, [b0, b1], [w0, w1], [c0, c1], columns) in changes {
+    for (case, [b0, b1], [w0, w1], [c0, c1], rects) in changes {
         let (s, starts) = box_of(case);
         let (walked, got0) = fresh_map(&gpu, b0, case, c0);
         let (_, got1) = fresh_map(&gpu, b1, case, c1);
@@ -1318,10 +1318,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
                 &s,
                 &cast::first(&mut q1, o, &r, d, Until::Opaque),
             ));
-            if columns
-                .iter()
-                .any(|&c| s.reaches(SIZE, case.range, tile, c))
-            {
+            if rects.iter().any(|&c| s.reaches(SIZE, case.range, tile, c)) {
                 reached += 1;
                 changed += u32::from(want0 != want1);
                 continue;

@@ -14,20 +14,20 @@ use pxl_spec::brick;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::layer::lattice::GROUND;
 
-const COLUMNS: [[f64; 2]; 2] = [[0.5, 0.5], [1.5, 1.5]];
+const RECT: [[f64; 2]; 2] = [[0.5, 0.5], [1.5, 1.5]];
 
-/// A memo keeping `a` for the key 0, which read `COLUMNS` and nothing of the
+/// A memo keeping `a` for the key 0, which read `RECT` and nothing of the
 /// eye.
 fn keeping<A>(a: A) -> Memo<u32, A> {
     let read = Read {
-        columns: Some(COLUMNS),
+        rect: Some(RECT),
         ..Read::default()
     };
     Memo(Some((0, read, a)))
 }
 
 /// Whether a kept answer, exact or not, survives a frame whose one change is
-/// the ground node at `zoom` over `COLUMNS`.
+/// the ground node at `zoom` over `RECT`.
 fn kept(exact: bool, zoom: Zoom) -> bool {
     changes().ground = vec![Quadrant::new(zoom, [0, 0])];
     changes().damage.clear();
@@ -65,10 +65,10 @@ fn what_objects_wrote_drops_an_exact_answer() {
     changes().damage.clear();
 }
 
-/// The queries report the columns they read, joined: a support reads its own
+/// The queries report the rect they read, joined: a support reads its own
 /// cell, and a walk reads every cell it passes.
 #[test]
-fn queries_report_the_columns_they_read() {
+fn queries_report_the_rect_they_read() {
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
     let cell = units(GROUND.leaf_cell_zoom());
@@ -80,7 +80,7 @@ fn queries_report_the_columns_they_read() {
     let ((), read) = reads(|| {
         world.surface_support(&point(at[0], at[1], 0.0));
         assert_eq!(
-            read().as_ref().unwrap().columns,
+            read().as_ref().unwrap().rect,
             Some([c, c.map(|v| v + cell)])
         );
         step_slide_by(
@@ -91,7 +91,7 @@ fn queries_report_the_columns_they_read() {
             true,
         );
     });
-    assert_eq!(read.columns, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
+    assert_eq!(read.rect, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
     // A body of known height that does not show reads nothing, however
     // far it goes.
     let high = point(at[0], at[1], 1000.0);
@@ -104,30 +104,30 @@ fn queries_report_the_columns_they_read() {
             true,
         )
     });
-    assert_eq!(read.columns, None);
+    assert_eq!(read.rect, None);
 }
 
 /// A memo keeps what a cell's asset answers and asks again when a change
-/// touches the cell's column.
+/// touches the cell's rect.
 #[test]
-fn a_memo_keeps_a_cell_until_its_column_changes() {
+fn a_memo_keeps_a_cell_until_its_rect_changes() {
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
     let mut memo = Memo::<u32, Option<u32>>::NONE;
     let at = point(x + 0.5, y + 0.5, 4.5);
     let asked = memo.of(0, || world.asset_of(&at).val());
     assert!(asked.is_some());
-    assert!(memo.0.is_some(), "a cell's asset read its column");
+    assert!(memo.0.is_some(), "a cell's asset read its rect");
     changes().ground.clear();
     changes().damage.clear();
     memo.forget_touched();
-    assert!(memo.0.is_some(), "no change touched the column");
+    assert!(memo.0.is_some(), "no change touched the rect");
     changes().damage = vec![Aabb {
         min: [x, y, BOUND.min[2]],
         max: [x + 1.0, y + 1.0, BOUND.max[2]],
     }];
     memo.forget_touched();
-    assert!(memo.0.is_none(), "a write over the column drops it");
+    assert!(memo.0.is_none(), "a write over the rect drops it");
     changes().damage.clear();
 }
 
@@ -167,7 +167,7 @@ fn led<A: Copy + PartialEq + core::fmt::Debug>(
 
 /// A cube placed on the flat ground, which the eye draws from near and
 /// folds into a coarser cell from far, so the floor over it differs by the
-/// zoom it is read at. Returns the middle of the cube's column.
+/// zoom it is read at. Returns the middle of the cube's rect.
 fn cube_on_flat() -> (World, [f64; 2]) {
     let [x, y] = flat_at_five();
     let mut store = Store::default();
@@ -266,7 +266,7 @@ fn a_memo_keeps_the_eyes_ray_for_where_the_eye_stood() {
     assert!(hits[0].val().flatten().is_some());
 }
 
-/// A read from a height not known settles on a cell from the column's point
+/// A read from a height not known settles on a cell from the point over it
 /// at the eye's height: it is kept while the eye chooses the same sizes
 /// there and for the cells it went on to, and asked again when it does not.
 #[test]

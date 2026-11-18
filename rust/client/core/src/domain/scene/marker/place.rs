@@ -44,8 +44,8 @@ pub(super) struct Place {
 impl Place {
     /// The brick of `zoom` it stands in, on its own brick's lap of X.
     pub(super) fn brick_at(&self, zoom: Zoom) -> Brick {
-        let (z, column) = self.brick;
-        let lap = column[0] - wrap_idx(z, column[0]);
+        let (z, c) = self.brick;
+        let lap = c[0] - wrap_idx(z, c[0]);
         let [x, y, _] = idx_of(zoom, &self.ground.mid());
         (zoom, [x + idx_at(z, lap, zoom), y])
     }
@@ -65,20 +65,20 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
     }
     let found_cnt = found.len();
     let t = PLACE_LATTICE.read_zoom(finest);
-    let (z, column) = brick;
-    // The tile over the column, or the tiles under it: `n` of them along each
+    let (z, c) = brick;
+    // The tile over the brick, or the tiles under it: `n` of them along each
     // side, from the first.
     let ([x0, y0], n) = if t <= z {
-        (ancestor_of(column, z - t), 1)
+        (ancestor_of(c, z - t), 1)
     } else {
-        (first_descendant_of(column, t - z), 1 << (t - z))
+        (first_descendant_of(c, t - z), 1 << (t - z))
     };
     let tiles = (y0..y0 + n)
         .filter(|y| quad_rows(t).contains(y))
         .flat_map(|y| (x0..x0 + n).map(move |x| Quadrant::new(t, [x, y])));
-    // The brick's column as the world names it, wrapped once round the
+    // The brick's index as the world names it, wrapped once round the
     // world.
-    let named = [wrap_idx(z, column[0]), column[1]];
+    let named = [wrap_idx(z, c[0]), c[1]];
     let whole = World::now().places_in(tiles, &mut |src, h| {
         if point_of(h.kind, h.first_zoom, None, zoom).is_none() {
             return;

@@ -67,7 +67,7 @@ fn shows_finer() {
     }
 }
 
-/// A column's count is its four's together, so a coarse cell's decor is
+/// A cell's count is its four's together, so a coarse cell's decor is
 /// what its leaf cells hold, and none is past what its leaf cells can.
 #[test]
 fn counts_hand_down_whole() {

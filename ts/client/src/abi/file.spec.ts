@@ -84,24 +84,24 @@ export const SHARD_ZOOM = 8 as number;
  * format byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made
  * it in a shard's file, in the order made in a batch, where void erases (pxl-core
  * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object.rs),
- * its row and its fields as columns. */
+ * its row and its fields as lanes. */
 export const write = {
-  /** A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom. */
+  /** A `strs` lane holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom. */
   KEY: 0 as number,
-  /** A `u32[]` column holding each row's catalog value. */
+  /** A `u32[]` lane holding each row's catalog value. */
   ASSET_ID: 1 as number,
-  /** A `u32[]` column holding, for each marker with a text, the row that text is for. */
+  /** A `u32[]` lane holding, for each marker with a text, the row that text is for. */
   TEXT_ROW: 2 as number,
-  /** A `strs` column holding those markers' texts. */
+  /** A `strs` lane holding those markers' texts. */
   TEXT: 3 as number,
 } as const;
 
 /** The children of the tree packet the top, (OBJECT, TOP), holds after its format byte, by index:
  * each row a shard holding objects, which only its leaves are under. */
 export const top = {
-  /** A `strs` column holding each row's shard by its quadkey. */
+  /** A `strs` lane holding each row's shard by its quadkey. */
   SHARD: 0 as number,
-  /** A `u32[]` column holding what each row's leaves fold to, its word in the object tree
+  /** A `u32[]` lane holding what each row's leaves fold to, its word in the object tree
    * (pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled. */
   FOLD: 1 as number,
 } as const;

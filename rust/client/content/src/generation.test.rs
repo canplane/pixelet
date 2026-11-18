@@ -57,7 +57,7 @@ impl clipmap::BrickSource for PresentTo {
     fn fold_at(&self, _: Zoom, _: u32, _: u32) -> u32 {
         unreachable!("step reads only what is present")
     }
-    fn column(&self, _: Zoom, _: u32, _: u32) -> u32 {
+    fn ele_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
         unreachable!("step reads only what is present")
     }
     fn bound_mip(&self, _: Zoom, _: u32, _: u32, _: [u32; 2]) -> [i32; 2] {
@@ -78,7 +78,7 @@ impl clipmap::BrickSource for PresentTo {
 }
 
 /// Decor generated at a coarser clip level is drawn where the rays ask a
-/// finer zoom that no clip level holds at its column (open sea's empty
+/// finer zoom that no clip level holds at its cell (open sea's empty
 /// pages), as the ground drawn there is that clip level's; where a finer one
 /// holds it, the finer one's alone.
 #[test]

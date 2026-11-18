@@ -31,7 +31,7 @@
 //! and the zooms at which it keeps the node (`key_zooms`). An entry holds the answer's kind
 //! and asset, what was handed the node after it was asked (`world::Inheritance::words`), and
 //! the node's zoom and index, which tell it from another node in the same slot (pxl-render
-//! forget.wgsl reads its column). What draws the entry lies apart (`STATES_AT`,
+//! forget.wgsl reads its cell). What draws the entry lies apart (`STATES_AT`,
 //! `RECS_AT`): it is none until a ray stops on the node, is written by the hits, the
 //! draws and the faces' pass, and its state is cleared wherever the slot is written. It lies apart
 //! because a walk reads a bucket's keys from one cache line and an entry's words from
@@ -88,7 +88,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 /// each entry of the eye's clip levels, a clip level's `clipmap::ENTRY_CNT` bits in turn, set
 /// where the brick it holds moved or was handed over since the last cast, and then, a clip
 /// level each, the box those bricks lie in (`CHANGED_BRICKS_AT`). From `RECTS_AT` come the
-/// boxes of leaf cells whose columns what is placed or a preview's cuts changed since the last
+/// rects of leaf cells over which what is placed or a preview's cuts changed since the last
 /// cast: their count, then four words each; decor's generation is asked over the same boxes
 /// (`object::DAMAGE_CAP`, `object::cut_rect`; pxl-render gpu/generator.rs). From `WRITTEN_AT` come
 /// the child groups of what is placed written since the last cast, by their first slots: their

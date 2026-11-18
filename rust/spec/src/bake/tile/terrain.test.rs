@@ -44,8 +44,8 @@ fn lines(rng: &mut Rng) -> Separation {
 /// Random lanes, as the bake holds them.
 fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
-    let ele: Vec<i16> = (0..ELE_COLUMN).map(|_| rng.next() as i16).collect();
-    let cells: Vec<GroundId> = (0..FOLD_COLUMN).map(|_| rng.next() as GroundId).collect();
+    let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
+    let cells: Vec<GroundId> = (0..FOLD_LANE).map(|_| rng.next() as GroundId).collect();
     TerrainTile::of(
         ele,
         cells.into(),
@@ -69,7 +69,7 @@ fn formats_round_trip() {
     );
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms.
-    let resident = decode_into::<Refused>(&terrain, vec![0; ELE_COLUMN].leak()).unwrap();
+    let resident = decode_into::<Refused>(&terrain, vec![0; ELE_LANE].leak()).unwrap();
     let want = Separation {
         first_zooms: Default::default(),
         ..tile.separation.clone()
@@ -139,7 +139,7 @@ fn non_tile_pkt_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("old_format_tile")).unwrap();
     assert!(decode(&small).is_err());
-    assert!(decode_into::<Refused>(&small, vec![0; ELE_COLUMN].leak()).is_err());
+    assert!(decode_into::<Refused>(&small, vec![0; ELE_LANE].leak()).is_err());
 }
 
 /// Every valid occupancy byte round-trips.
@@ -174,7 +174,7 @@ fn occupancy_vals() {
 }
 
 /// A packet's cells are one asset id a cell or four, and one whose cells
-/// column holds any other count is refused.
+/// lane holds any other count is refused.
 #[test]
 fn cells_of_any_other_count_refused() {
     let t = tile(1);
@@ -186,16 +186,16 @@ fn cells_of_any_other_count_refused() {
         )
         .unwrap()
     };
-    for n in [GROUND_COLUMN, FOLD_COLUMN] {
+    for n in [GROUND_LANE, FOLD_LANE] {
         assert_eq!(cells_of(&pkt(n)).ok().map(<[GroundId]>::len), Some(n));
     }
     for n in [
         0,
         1,
-        GROUND_COLUMN - 1,
-        GROUND_COLUMN + 1,
-        2 * GROUND_COLUMN,
-        FOLD_COLUMN + 1,
+        GROUND_LANE - 1,
+        GROUND_LANE + 1,
+        2 * GROUND_LANE,
+        FOLD_LANE + 1,
     ] {
         assert!(cells_of(&pkt(n)).is_err(), "{n} cells");
     }

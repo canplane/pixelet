@@ -56,7 +56,7 @@ fn at(eye: [f64; 3], east: Option<f64>, top: Zoom) -> Observation {
             Frustum { planes }
         }),
         demand_dist: demand_dist(GROUND, top),
-        ground: 0.0,
+        floor: 0.0,
     }
 }
 

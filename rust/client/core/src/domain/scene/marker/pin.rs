@@ -92,7 +92,7 @@ impl Pin {
     }
 }
 
-/// Reads the pins put up over `brick`, whose columns are `bounds`. A pin
+/// Reads the pins put up over `brick`, the box over whose rect is `bounds`. A pin
 /// belongs to the brick its base is in, so no pin is read by two bricks.
 pub(super) fn read(brick: Brick, bounds: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();

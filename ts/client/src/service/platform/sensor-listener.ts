@@ -29,7 +29,7 @@ function nullIfNegative(v: f64 | null): f64 | null {
 export const MEASURE_PLACE: Fix = {
   lat: 38.1193,
   lon: 128.4656,
-  alt: null,
+  altEllipsoid: null,
   altitudeAccuracy: null,
   accuracy: 10,
   heading: null,
@@ -40,7 +40,7 @@ export function coordinatesFix(c: Coordinates): Fix {
   return {
     lon: c.longitude,
     lat: c.latitude,
-    alt: c.altitude,
+    altEllipsoid: c.altitude,
     altitudeAccuracy: c.altitudeAccuracy,
     accuracy: c.accuracy,
     heading: c.heading,
@@ -53,7 +53,7 @@ export function geolocationFix(fix: Fix): void {
   listener.pos(
     fix.lon,
     fix.lat,
-    nullIfNegative(fix.altitudeAccuracy) === null ? null : fix.alt,
+    nullIfNegative(fix.altitudeAccuracy) === null ? null : fix.altEllipsoid,
     nullIfNegative(fix.accuracy),
     nullIfNegative(fix.heading),
   );

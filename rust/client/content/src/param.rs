@@ -43,13 +43,13 @@ pub mod cave {
 }
 
 pub mod strata {
-    /// A layer of ground cells under a face, in leaf cells, before the stone.
+    /// A layer of ground cells under the ground's top cell, in leaf cells, before the stone.
     pub const FILLER_DEPTH: i32 = 3;
 
     /// Sandstone under a sand or beach face's filler, in leaf cells.
     pub const SANDSTONE_DEPTH: i32 = 2;
 
-    /// The bedrock's top under a face, this far under it or under sea level,
+    /// The bedrock's top under the ground, this far under its elevation or under sea level,
     /// whichever is lower, in leaf cells (strata.rs `bedrock`).
     pub const BEDROCK_DEPTH: i32 = 64;
 

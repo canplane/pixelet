@@ -7,12 +7,12 @@
 pub(crate) mod animation;
 pub(crate) mod cast;
 pub(crate) mod character;
-pub(crate) mod column;
 pub(crate) mod decor;
 pub(crate) mod environment;
 pub(crate) mod frame;
 pub(crate) mod gizmo;
 pub(crate) mod indicator;
+pub(crate) mod lane;
 pub(crate) mod marker;
 pub(crate) mod model;
 pub(crate) mod param;

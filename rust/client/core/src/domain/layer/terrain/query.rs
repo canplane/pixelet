@@ -26,7 +26,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 
 /// What only the world's query (domain/query.rs) reads of the ground: a node's
 /// bound and the cursor a descent carries to it, the ground's relief and
-/// columns, and the lines they are read on. A node names part of the hierarchy
+/// cells, and the lines they are read on. A node names part of the hierarchy
 /// the ground shares with the object layer; it says what it asks and how fine its
 /// cells are, and the answer says what it lacked (`Answer`).
 impl TileCache<IndexedTerrainTile> {
@@ -41,7 +41,7 @@ impl TileCache<IndexedTerrainTile> {
     /// nothing shows. The box covers what is stored down to the depth where
     /// everything around it is solid, since nothing past that depth is seen.
     /// What is not known is carried by the `Answer`, not by the box, so a
-    /// bound has no third state. The node stands for the whole column over
+    /// bound has no third state. The node stands for the whole height over
     /// it.
     ///
     /// The bound joins the clip levels' relief of the ground and of the ways
@@ -87,7 +87,7 @@ impl TileCache<IndexedTerrainTile> {
     }
 
     /// The lowest and highest elevations, in leaf cells, of the ground over
-    /// column `node`'s own cells, with the ways' heights kept apart
+    /// cell `node`'s own cells, with the ways' heights kept apart
     /// (pxl-engine `ground::Extent`). They are the bounds over the cells of
     /// `line`'s tile, taken from the finest clip level of each center that
     /// holds them (clipmap.rs `bound_over`), whatever the node's size. A
@@ -119,13 +119,13 @@ impl TileCache<IndexedTerrainTile> {
         }
     }
 
-    /// Column `node` as read from the clip levels, or the wall where the
-    /// column is the wall, read as the GPU reads it (pxl-engine
+    /// The ground of the cell `node` as read from the clip levels, or the wall
+    /// where the cell is the wall, read as the GPU reads it (pxl-engine
     /// `clipmap::ground`) and stepped from `place`. The answer is exact where
     /// `line` gives the ground at the zoom of the clip level read or coarser,
     /// and otherwise coarser, naming the tile (`answer_at`). Where no clip
-    /// level holds the column, the answer is the lack.
-    pub(in crate::domain::layer) fn column(
+    /// level holds the cell, the answer is the lack.
+    pub(in crate::domain::layer) fn ground(
         &self,
         line: &Line,
         place: Lookup,

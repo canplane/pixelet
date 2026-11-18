@@ -27,7 +27,7 @@ export function load_LocationStatus(r: Lift, at: number): LocationStatus {
 export interface Position {
   lon: number;
   lat: number;
-  alt: number | null;
+  alt_ellipsoid: number | null;
 }
 
 export const POSITION_SZ = 32;
@@ -36,9 +36,9 @@ export const POSITION_ALIGN = 8;
 export function store_Position(w: Lower, at: number, v: Position): void {
   w.f64(at, v.lon);
   w.f64(at + 8, v.lat);
-  if (v.alt !== null) {
+  if (v.alt_ellipsoid !== null) {
     w.u8(at + 16, 1);
-    w.f64(at + 16 + 8, v.alt);
+    w.f64(at + 16 + 8, v.alt_ellipsoid);
   }
 }
 
@@ -46,7 +46,7 @@ export function load_Position(r: Lift, at: number): Position {
   return {
     lon: r.f64(at),
     lat: r.f64(at + 8),
-    alt: r.case(at + 16, 2) === 0 ? null : r.f64(at + 16 + 8),
+    alt_ellipsoid: r.case(at + 16, 2) === 0 ? null : r.f64(at + 16 + 8),
   };
 }
 

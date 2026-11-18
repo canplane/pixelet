@@ -3,7 +3,7 @@
 //! The rules that the CPU runs and the GPU's WGSL is written to. A module headed `wgsl-port`
 //! computes what the CPU and the GPU must compute alike, the WGSL being its other form.
 //!
-//! The crate holds a node's seed, the answer a node gives, the ground's column and the clip
+//! The crate holds a node's seed, the answer a node gives, the ground of a cell and the clip
 //! levels that hold its cells, the ways as a cell reads them, what is placed, the ray's
 //! descent, and the samples' hits as the boxes a raster draws. It computes over the model
 //! pxl-spec gives every crate (the zooms, the lattices, the value space, the service area, a

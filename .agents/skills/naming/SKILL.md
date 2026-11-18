@@ -129,6 +129,25 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the cell zoom at a point by its distance from the eye, as the eye's rays draw it, and as a walk reads it | `cell_zoom_drawn`, `cell_zoom_read` | |
 
   `at` is where a thing is, `to` where it is going.
+- The `eye` is the camera's eye and nothing else. Nothing else is named an eye
+  or an observer: the light's are a cast, its rays, a tile's bundle of them; a
+  character surface draws from a viewpoint. "The eye" takes no qualifier,
+  since there is no other to tell it from.
+- A height is named by the surface it is over. The ground's own, over sea
+  level, is its `ele`. A thing in the air over sea level has an `alt`, and an
+  altitude over any other datum names it (`alt_ellipsoid`). Over whatever is
+  under it, or as a size up, it is a `height`. The `surface` is the top of
+  whatever fills, ways and objects included, and a `floor` what a body or the
+  eye stands over. A form derived from one keeps its word and adds its unit or
+  its form (`ele_cells`, `ele_u`, `ele_drawn`, `ele_cell`), never a second
+  word (`top`, `face`).
+- One thing has one name, the field's where the field has one. A `column` is
+  only a vertical stack stored over one cell of the plane, as a voxel world
+  has it (the ways' spans, the object store's); a table's, a matrix's, a
+  grid's and a text's columns are their own fields'. What stores nothing
+  vertical takes what it is: a height a cell its `ele`, a ray straight down
+  the `surface` it finds, a footprint a `rect`, parallel arrays `lanes`. A
+  cell of the plane is indexed `c` through every function it passes.
 - xpute's names are the mechanism's, as the component model has them: the guest,
   the host that implements its imports, the UI, a device and a frame. Two are
   outside the standard: the `link`, xpute's own word, the protocol both sides
@@ -150,7 +169,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - A name is singular: a file, a folder, a type, an enum and its members, a
   function, a variable and a constant (`service/`, `remote.ts`, `component/`).
   It is plural only when the thing holds many of what it names, read by
-  meaning, not by type: a column is plural, the row read from it singular, and
+  meaning, not by type: a lane is plural, the row read from it singular, and
   one range's first and last is a `range` or singular (`GROUND`).
 - A quantity is named by its form: a count ends in `_cnt` (`LAYER_CNT`), a cap
   in `_cap` (`LOAD_FILE_CAP`), a size in bytes in `_sz` in both trees (`HDR_SZ`,

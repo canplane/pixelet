@@ -1,6 +1,6 @@
 // pxl-engine/ground.rs
 
-//! wgsl-port: the ground's column at a cell, the one rule by which a node's ground is
+//! wgsl-port: the ground at a cell, the one rule by which a node's ground is
 //! answered (`node`) before what overwrites it. A cell's asset id and elevation come from
 //! the clip level that draws it (`clipmap::ground`), by the ground's rules for a cell (pxl-spec
 //! ground.rs). Its cells go by depth, with a cave's air where a cave may take them, by its
@@ -11,7 +11,7 @@ use crate::answer::{
 };
 use crate::content::Content;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::ground::{cells, face_cell, face_ele};
+use pxl_spec::ground::{cells, ele_cell, ele_drawn};
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{
@@ -20,7 +20,7 @@ use pxl_spec::space::coord::zoom::{
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::value;
 
-/// What the clip levels bound under a node, each source on its own: the ground's faces,
+/// What the clip levels bound under a node, each source on its own: the ground's elevations,
 /// lowest and highest, and the leaf cells the ways fill, lowest and past the highest
 /// (`clipmap::BOUND_WORDS`, `fill::mip`).
 pub type Extent = [[i32; 2]; 2];
@@ -43,27 +43,27 @@ pub fn joined(a: Extent, b: Extent) -> Extent {
     ]
 }
 
-/// The top of the bedrock under a face `face` leaf cells high, in cells of `cell_zoom`, as
+/// The top of the bedrock under ground `ele` leaf cells high, in cells of `cell_zoom`, as
 /// `C` lays it (`Content::bedrock`).
-pub fn rock<C: Content>(cell_zoom: Zoom, face: i32) -> i32 {
-    cells(cell_zoom, C::bedrock(face) as f32)
+pub fn rock<C: Content>(cell_zoom: Zoom, ele: i32) -> i32 {
+    cells(cell_zoom, C::bedrock(ele) as f32)
 }
 
 /// Where the ground may fill the node `(zoom, c)` along z, at the zooms from `far` to `near`
-/// that a reader asks within it, where the faces under it at those zooms lie between `lo` and
+/// that a reader asks within it, where the elevations under it at those zooms lie between `lo` and
 /// `hi` leaf cells (`node`'s relief, all those zooms joined), in leaf cells by the ground's
 /// one rule (`cells`, `Cell::opens`). Coarser than a shard, the node may also hold the Earth
-/// past the service area, whose face is at sea level.
+/// past the service area, whose elevation is sea level.
 ///
-/// The slab's top lies past the highest top any of those zooms rounds `hi` to, since a
+/// The slab's top lies past the highest elevation any of those zooms draws `hi` at, since a
 /// coarser zoom's cell may round past a finer zoom's. Its bottom is the world's bottom: a node
 /// a cave takes all of is split, and its cells say so (`node`). It is empty where no zoom is
 /// asked within the node.
 ///
 /// What fills the node is the part of it inside the slab (`meets`). The node's bottom and top
 /// are whole cells of every zoom finer than it, an even number of each, and `cells` ends an
-/// elevation at the cell it fills an eighth of or more (`top`). So a zoom's top is at most the
-/// bottom exactly when the face lies under an eighth of that zoom's cell over it, and the
+/// elevation at the cell it fills an eighth of or more (`ele_cells`). So a zoom's elevation is at
+/// most the bottom exactly when the ground lies under an eighth of that zoom's cell over it, and the
 /// finest zoom decides it for all of them. A top kept short of whole still lies in the slab
 /// whole, which only splits more.
 pub fn slab(zoom: Zoom, [_, hi]: [i32; 2], [far, near]: [Zoom; 2]) -> [i32; 2] {
@@ -75,8 +75,8 @@ pub fn slab(zoom: Zoom, [_, hi]: [i32; 2], [far, near]: [Zoom; 2]) -> [i32; 2] {
     let mut over = EMPTY[1];
     let mut z = coarsest(zoom, far);
     while z <= near {
-        let top = face_ele(z, cells(z, hi as f32));
-        over = if top > over { top } else { over };
+        let ele = ele_drawn(z, cells(z, hi as f32));
+        over = if ele > over { ele } else { over };
         z += 1;
     }
     [UNBOUNDED[0], over]
@@ -104,7 +104,7 @@ pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
 }
 
 /// A bound over every elevation a cell holds, the whole range of an i16. It is a relief: the
-/// lowest and highest face elevations, both included. It is not a span of what may fill along z,
+/// lowest and highest elevations, both included. It is not a span of what may fill along z,
 /// which is half-open (`slab`) and is another fact in another unit.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 
@@ -136,7 +136,7 @@ pub trait Resident: Area {
         cell_range: [Zoom; 2],
         node: (Zoom, [i32; 3]),
     ) -> (Extent, bool);
-    /// The column of the cell `c` at `zoom` from the clip levels (`clipmap::ground`), or the
+    /// The ground of the cell `c` at `zoom` from the clip levels (`clipmap::ground`), or the
     /// wall where it is the wall (`area::is_wall`, read from `shard`, what is known of the area
     /// there). Its cell is taken where `place` found the zoom's cells (`relief`), or found anew
     /// where `place` is `NOWHERE`.
@@ -152,7 +152,7 @@ pub type Answer = In<[u32; 2]>;
 /// where they may take it (`Content::hollow`, a share), and the strata are the content `H`'s
 /// (`Cell::asset`). Past the service area the answer is the Earth's. Otherwise the node's own
 /// bound comes first, from each zoom's tile its cells are read from (`Resident::relief`). At
-/// its own zoom, the node is air above the ground, and otherwise its column's asset
+/// its own zoom, the node is air above the ground, and otherwise its ground's asset
 /// (`Cell::asset`) with the share the caves take. A coarser node no part of which lies where the
 /// ground may fill at the zooms asked (`slab`, `meets`) is a cube of air its size, and
 /// otherwise it is split. Where no tile over it is held, a node at its own zoom is the lack,
@@ -161,9 +161,9 @@ pub type Answer = In<[u32; 2]>;
 /// `shard` is what is known of the area at the node, known at a shard or finer; it is the
 /// asker's, which asks it once at its entry (`Shard::at`). `place` is where the cells of a
 /// node over it were held (`Resident::relief`), or `NOWHERE` where none were, and becomes the
-/// node's: where a cell's column was read, at which the ways written over it are read
+/// node's: where a cell's ground was read, at which the ways written over it are read
 /// (pxl-engine `world::node`), and `NOWHERE` past the area, where nothing is read. With the
-/// answer it returns the column the cell was read from, `Cell::NONE` for a coarser node, and
+/// answer it returns the ground the cell was read from, `Cell::NONE` for a coarser node, and
 /// the ways' bound read with the ground's own (`Resident::relief`), `EMPTY` where none was.
 pub fn node<H: Resident>(
     resident: &mut H,
@@ -208,10 +208,10 @@ pub fn node<H: Resident>(
     if zoom < MIN_ZOOM {
         return (split, Cell::NONE, EMPTY);
     }
-    // A cell's columns are its zoom's. A coarser node's are those of every zoom asked within it,
-    // from the coarsest to `near`. Each zoom's cells come from its own tile, whose face, its own
-    // samples' bicubic, no other zoom's bounds bound from above or below, so the bound is all of
-    // them joined, read once a clip level (`Resident::relief`).
+    // A cell's ground is its zoom's. A coarser node's is that of every zoom asked within it,
+    // from the coarsest to `near`. Each zoom's cells come from its own tile, whose elevation,
+    // its own samples' bicubic, no other zoom's bounds bound from above or below, so the bound
+    // is all of them joined, read once a clip level (`Resident::relief`).
     let first = coarsest(zoom, far);
     let cells = if is_cell {
         [zoom, zoom]
@@ -225,11 +225,11 @@ pub fn node<H: Resident>(
         return (if is_cell { lacks } else { split }, Cell::NONE, EMPTY);
     }
     if is_cell {
-        let column = resident.cell(shard, *place, zoom, c);
+        let cell = resident.cell(shard, *place, zoom, c);
         // The caves' share where they may take the cell, beside its asset:
         // the cell is void where they take it all.
-        let ground = column.asset::<H::Content>(zoom, c[2]);
-        let cave = if ground != Sentinel::Void as u32 && column.opens::<H::Content>(zoom, c[2]) {
+        let ground = cell.asset::<H::Content>(zoom, c[2]);
+        let cave = if ground != Sentinel::Void as u32 && cell.opens::<H::Content>(zoom, c[2]) {
             H::Content::hollow((zoom, c))
         } else {
             0
@@ -244,7 +244,7 @@ pub fn node<H: Resident>(
                 kind: Kind::Cell,
                 asset: [asset, cave],
             },
-            column,
+            cell,
             ways,
         );
     }
@@ -263,30 +263,34 @@ pub fn node<H: Resident>(
     (answer, Cell::NONE, ways)
 }
 
-/// A cell's ground, as a column reads it: its asset id (`Sentinel::Unknown` for the service
-/// area's wall), its top in cells of its zoom and the share of its top cell it fills (`top`),
+/// A cell's ground: its asset id (`Sentinel::Unknown` for the service
+/// area's wall), its elevation in cells of its zoom and the share of its top cell it fills (`ele_cells`),
 /// and the four asset ids its fold took (`asset_ids`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub asset_id: u32,
-    pub top: i32,
+    pub ele_cells: i32,
     pub part: u32,
     pub fold: [u32; 4],
 }
 
 impl Cell {
-    /// No ground: void at sea level, as a column no tile is read for.
+    /// No ground: void at sea level, as a cell no tile is read for.
     pub const NONE: Cell = Cell {
         asset_id: Sentinel::Void as u32,
-        top: 0,
+        ele_cells: 0,
         part: FULL,
         fold: [Sentinel::Void as u32; 4],
     };
 
     /// The share of cell `z` that its ground fills, in `share::FULL`'s units, where a cell of
-    /// it fills there (`asset`): whole under its top cell, and its part in the top cell (`top`).
+    /// it fills there (`asset`): whole under its top cell, and its part in the top cell (`ele_cells`).
     pub fn cover(&self, z: i32) -> u32 {
-        if z == self.top - 1 { self.part } else { FULL }
+        if z == self.ele_cells - 1 {
+            self.part
+        } else {
+            FULL
+        }
     }
 
     /// Whether it has ground at all: an asset id the catalog grounds, or the wall.
@@ -294,18 +298,18 @@ impl Cell {
         self.asset_id == Sentinel::Unknown as u32 || value::is_ground(self.asset_id)
     }
 
-    /// Whether a cave may take cell `z` of the column at `cell_zoom`, by the ground's one rule:
-    /// ground under the face cell, above the bedrock and off the area's wall, with the face and
-    /// the bedrock rounded to cells as the column rounds them. What lies under a top kept short
+    /// Whether a cave may take cell `z` over it at `cell_zoom`, by the ground's one rule:
+    /// ground under the top ground cell, above the bedrock and off the area's wall, with the
+    /// elevation and the bedrock rounded to cells as the ground rounds them. What lies under a top kept short
     /// of whole is ground, as under a shrunk box, so a cave does not take the cell under it
     /// either.
     pub fn opens<C: Content>(&self, cell_zoom: Zoom, z: i32) -> bool {
-        let face = face_ele(cell_zoom, self.top);
-        let under = face_cell(cell_zoom, face) - (self.part < FULL) as i32;
-        self.asset_id != Sentinel::Unknown as u32 && z < under && z >= rock::<C>(cell_zoom, face)
+        let ele = ele_drawn(cell_zoom, self.ele_cells);
+        let under = ele_cell(cell_zoom, ele) - (self.part < FULL) as i32;
+        self.asset_id != Sentinel::Unknown as u32 && z < under && z >= rock::<C>(cell_zoom, ele)
     }
 
-    /// The four asset ids that asset `g` of the column at `cell_zoom` is drawn by. Where
+    /// The four asset ids that asset `g` of its ground at `cell_zoom` is drawn by. Where
     /// `g` is the cell's own look at a cell coarser than the leaves', they are the four its fold
     /// took, whose mean it is drawn as, as the cell reads from afar. Otherwise, for a stratum
     /// under it or a leaf's cell, they are `g` four times. A way written over the cell gives its
@@ -318,7 +322,7 @@ impl Cell {
         }
     }
 
-    /// The asset in cell `z` of the column at `cell_zoom`, before the caves take their share
+    /// The asset in cell `z` over it at `cell_zoom`, before the caves take their share
     /// (`opens`, `Content::hollow`), by `C`'s strata (`Content::by_depth`): the ground's asset id,
     /// which at a coarser cell is its fold's majority, as what is placed is its fold's, or
     /// `Sentinel::Void` for air.
@@ -326,7 +330,7 @@ impl Cell {
         if !self.is_grounded() {
             return Sentinel::Void as u32;
         }
-        C::by_depth(cell_zoom, self.asset_id, self.top, z)
+        C::by_depth(cell_zoom, self.asset_id, self.ele_cells, z)
     }
 }
 

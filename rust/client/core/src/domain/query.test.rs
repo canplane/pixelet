@@ -7,7 +7,7 @@ use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::tile::terrain::{self, GROUND_COLUMN, GroundCells};
+use pxl_spec::bake::tile::terrain::{self, GROUND_LANE, GroundCells};
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM, Zoom, units};
@@ -38,7 +38,7 @@ use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Area;
 
-const CELL_CNT: usize = GROUND_COLUMN;
+const CELL_CNT: usize = GROUND_LANE;
 const SPAN: usize = TILE_CELLS as usize;
 
 fn top() -> Quadrant {
@@ -184,7 +184,7 @@ fn no_surface_placed_stands() {
     let access = placed(Store::default());
     assert_eq!(
         access
-            .surface_of(
+            .ground_of(
                 GROUND.leaf_cell_zoom(),
                 GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1
             )
@@ -262,7 +262,7 @@ fn ray_across_antimeridian() {
         &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())],
     );
     let top = placed(Store::default())
-        .surface_of(
+        .ground_of(
             GROUND.leaf_cell_zoom(),
             GROUND
                 .cell_of(LEAF_ZOOM, &point(-seam + 20.5, 100.5))
@@ -272,7 +272,7 @@ fn ray_across_antimeridian() {
         .val()
         .flatten()
         .unwrap()
-        .top;
+        .ele_u;
 
     let mut store = Store::default();
     let red = cube::Object::Red as AssetId;
@@ -336,7 +336,7 @@ fn ray_from_above_meets_ground() {
 /// leaves' cells, a cell dug in part keeps the eighths left as one box of
 /// their volume about the cell's center, whose top a ray meets
 /// (`answer::side`). A cell dug whole is air, and the ground under it is
-/// met. A body reads the cell as columns at the finest zoom placed in it
+/// met. A body reads the cell as parts at the finest zoom placed in it
 /// and stands on what is left as it is held, such as the half cubes over a
 /// dug lower half.
 #[test]
@@ -345,7 +345,7 @@ fn dig_met_as_folded() {
     use pxl_engine::answer::side;
     use pxl_spec::share::EIGHTH_CNT;
     let [x, y] = flat_at_five();
-    // A column with no cave under the dig, so the ground under it is met.
+    // A place with no cave under the dig, so the ground under it is met.
     let clear = |x: f64| hollow((LEAF_CELL_ZOOM, [x, y, 3.0].map(|v| libm::floor(v) as i32))) == 0;
     let x = (0..).map(|i| x + f64::from(i)).find(|&x| clear(x)).unwrap();
     let half = units(OBJECT_COARSEST + 1);
@@ -480,7 +480,7 @@ fn half_cube_met() {
 }
 
 /// A body near the eye stands on what is placed as it is held, wherever in
-/// its cell it lies and however small: its cell is read as columns at the
+/// its cell it lies and however small: its cell is read as parts at the
 /// finest zoom placed in it.
 #[test]
 fn body_stands_any_tier() {
@@ -575,7 +575,7 @@ fn ray_goes_on_from_the_last() {
 }
 
 /// A cell coarser than what is placed in it is read as the cast draws it
-/// there: one column, whatever is placed finer. From over it, from inside
+/// there: one part, whatever is placed finer. From over it, from inside
 /// the box it is drawn as, from that box's top, or from over it within the
 /// cell's own cube, its floor is that box's top (`cast::top`), where a ray at that zoom meets
 /// it.
@@ -629,8 +629,8 @@ fn coarse_cell_floored_as_drawn() {
     );
 }
 
-/// Quake III's step-slide, a column at a time. When blocked, the body
-/// climbs the blocker as far as its own column is open over its head, then
+/// Quake III's step-slide, a cell at a time. When blocked, the body
+/// climbs the blocker as far as it is open over its head, then
 /// settles. When a ceiling comes first it stops there, and a blocked axis is
 /// slid along.
 #[test]
@@ -638,7 +638,7 @@ fn body_climbs_or_slides() {
     let [x, y] = flat_at_five();
     let mut store = Store::default();
     let red = cube::Object::Red as AssetId;
-    // A wall three cubes high stands in the column east of the body's.
+    // A wall three cubes high stands in the cell east of the body's.
     for z in [5.0, 6.0, 7.0] {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
     }
@@ -819,7 +819,7 @@ fn box_placed_matches_store() {
     let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
     let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
     let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
-    let lanes = store.columns();
+    let lanes = store.lanes();
     let mut asked = Vec::new();
     let mut placed = placed_in(lo, hi);
     loop {
@@ -870,11 +870,10 @@ fn late_brick_spike() {
     let (x0, y0, _) = leaf.rect();
     resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let world = placed(Store::default());
-    // Find the spike's column in the clip level of the eye's leaves.
+    // Find the spike's cell in the clip level of the eye's leaves.
     let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
-    let top = |g: [i32; 2]| {
-        cells::column_top(cells::cell(&clip_read(), Lookup::NONE, LEAF_CELL_ZOOM, g).1)
-    };
+    let top =
+        |g: [i32; 2]| cells::ele_of(cells::cell(&clip_read(), Lookup::NONE, LEAF_CELL_ZOOM, g).1);
     let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
         .map(|k| {
             let w = CLIP_SIZE as i32;
@@ -914,16 +913,16 @@ fn generated_decor_stays() {
     let bare = near(Store::default());
     let tree = *bare.first().expect("a decor generates about the eye");
     let [cx, cy, cz] = tree.generated_in().unwrap();
-    let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
+    let over = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
     let mut store = Store::default();
     let red = cube::Object::Red as AssetId;
-    write(&mut store, column(6), OBJECT_COARSEST, red);
+    write(&mut store, over(6), OBJECT_COARSEST, red);
     assert_eq!(near(store), bare, "a cube over it moves nothing");
 
     for (under, what) in [(Sentinel::Air as AssetId, "a carve"), (red, "a cube")] {
         let mut store = Store::default();
-        write(&mut store, column(-1), OBJECT_COARSEST, under);
+        write(&mut store, over(-1), OBJECT_COARSEST, under);
         assert_eq!(near(store), bare, "{what} under it moves nothing");
     }
 }
@@ -1104,7 +1103,7 @@ fn placed_decor_answers_its_box() {
     );
 }
 
-/// A service area of the shards at `SHARD_ZOOM` in column `.0` and east of
+/// A service area of the shards at `SHARD_ZOOM` in cell `.0` and east of
 /// it, in every row, with their nines laid as a declaration lays them
 /// (`area::nine`).
 struct EastOf(i32);
@@ -1125,8 +1124,8 @@ impl Area for EastOf {
     }
 }
 
-/// The service area's edge is the wall's columns, a leaf cell thick. A leaf
-/// cell one in from the wall is the area's and editable; the wall's column
+/// The service area's edge is the wall's cells, a leaf cell thick. A leaf
+/// cell one in from the wall is the area's and editable; the wall's cell
 /// and a cell past it are neither (`World::within`, `World::editable`).
 #[test]
 fn area_edge_leaf_cell_thick() {
@@ -1146,7 +1145,7 @@ fn area_edge_leaf_cell_thick() {
     let cell = units(GROUND.leaf_cell_zoom());
     // For the leaf cell `i` cells east of the leaf's west edge: whether it
     // is the area's, and whether a cube of it on the ground is editable.
-    let column = |i: f64| {
+    let cell_at = |i: f64| {
         let (x, y) = (x0 + i * cell, y0 + 10.0 * cell);
         let space = Aabb {
             min: [x, y, 5.0],
@@ -1157,9 +1156,9 @@ fn area_edge_leaf_cell_thick() {
             world.editable_in(&area, &space),
         )
     };
-    assert_eq!(column(1.0), (true, true), "one in from the wall");
-    assert_eq!(column(0.0), (false, false), "the wall's column");
-    assert_eq!(column(-1.0), (false, false), "past the wall");
+    assert_eq!(cell_at(1.0), (true, true), "one in from the wall");
+    assert_eq!(cell_at(0.0), (false, false), "the wall's cell");
+    assert_eq!(cell_at(-1.0), (false, false), "past the wall");
 }
 
 /// A decor from another version's catalog, read from a saved file, is

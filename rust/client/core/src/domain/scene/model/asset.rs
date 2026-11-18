@@ -187,7 +187,7 @@ struct Part<'a> {
 }
 
 /// Writes the vertices `run` of `part` into the block's `words`, whose
-/// columns are `vertex_cnt` apart, and folds their lowest and highest Y as
+/// lanes are `vertex_cnt` apart, and folds their lowest and highest Y as
 /// placed into `ys`.
 fn lay_out(
     words: &mut [u32],
@@ -204,7 +204,7 @@ fn lay_out(
         ..
     } = *part;
     let remap = &part.remap;
-    let column = |k: usize| k * vertex_cnt;
+    let lane = |k: usize| k * vertex_cnt;
     let put_f = |words: &mut [u32], at: usize, v: f32| words[at] = v.to_bits();
     let mut p = [0.0; 3];
     for i in run {
@@ -225,36 +225,32 @@ fn lay_out(
             );
             normal = [n[0] as f32, n[1] as f32, n[2] as f32];
         }
-        put_f(words, column(0) + v * 3, x);
-        put_f(words, column(0) + v * 3 + 1, y);
-        put_f(words, column(0) + v * 3 + 2, z);
+        put_f(words, lane(0) + v * 3, x);
+        put_f(words, lane(0) + v * 3 + 1, y);
+        put_f(words, lane(0) + v * 3 + 2, z);
         for (c, val) in normal.into_iter().enumerate() {
-            put_f(words, column(3) + v * 3 + c, val);
+            put_f(words, lane(3) + v * 3 + c, val);
         }
         let uv = prim
             .uv
             .as_ref()
             .map_or([0.0, 0.0], |uv| [uv[i * 2], uv[i * 2 + 1]]);
-        put_f(words, column(6) + v * 2, uv[0]);
-        put_f(words, column(6) + v * 2 + 1, uv[1]);
+        put_f(words, lane(6) + v * 2, uv[0]);
+        put_f(words, lane(6) + v * 2 + 1, uv[1]);
         for c in 0..4 {
             match (remap, &prim.joints) {
                 (Some(remap), Some(joints)) => {
-                    words[column(8) + v * 4 + c] =
+                    words[lane(8) + v * 4 + c] =
                         *remap.get(joints[i * 4 + c] as usize).unwrap_or(&0);
                     let w = prim
                         .weights
                         .as_ref()
                         .map_or(if c == 0 { 1.0 } else { 0.0 }, |w| w[i * 4 + c]);
-                    put_f(words, column(12) + v * 4 + c, w);
+                    put_f(words, lane(12) + v * 4 + c, w);
                 }
                 _ => {
-                    words[column(8) + v * 4 + c] = if c == 0 { own_joint } else { 0 };
-                    put_f(
-                        words,
-                        column(12) + v * 4 + c,
-                        if c == 0 { 1.0 } else { 0.0 },
-                    );
+                    words[lane(8) + v * 4 + c] = if c == 0 { own_joint } else { 0 };
+                    put_f(words, lane(12) + v * 4 + c, if c == 0 { 1.0 } else { 0.0 });
                 }
             }
         }

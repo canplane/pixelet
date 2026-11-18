@@ -3,7 +3,7 @@
 use super::*;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::bake::tile::terrain::{ELE_COLUMN, FOLD_COLUMN};
+use pxl_spec::bake::tile::terrain::{ELE_LANE, FOLD_LANE};
 
 /// A tile whose lines hold `points` points, as one line.
 fn tile_of(points: usize) -> TerrainTile {
@@ -18,8 +18,8 @@ fn tile_of(points: usize) -> TerrainTile {
         first_zooms: vec![0; points],
     };
     TerrainTile::of(
-        vec![0; ELE_COLUMN],
-        vec![0; FOLD_COLUMN].into(),
+        vec![0; ELE_LANE],
+        vec![0; FOLD_LANE].into(),
         separation,
         Occupancy::LEAF,
     )

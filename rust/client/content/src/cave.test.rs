@@ -192,7 +192,7 @@ fn band() {
             let mut any = false;
             for z in sea - 64..sea {
                 all += 1;
-                // Columns 37 units apart, over 18 roots across.
+                // Lines straight down 37 units apart, over 18 roots across.
                 if hollow((LEAF_CELL_ZOOM, [x * 37, y * 37, z])) >= FULL {
                     hollow_n += 1;
                     any = true;
@@ -202,7 +202,7 @@ fn band() {
         }
     }
     println!(
-        "band: {hollow_n} of {all} leaves ({:.3}%), columns with any {cols_with} of {}",
+        "band: {hollow_n} of {all} leaves ({:.3}%), lines down with any {cols_with} of {}",
         hollow_n as f64 * 100.0 / all as f64,
         128 * 128
     );

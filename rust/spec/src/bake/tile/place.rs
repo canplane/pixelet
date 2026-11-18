@@ -121,7 +121,7 @@ impl Tile for PlaceTile {
     }
 }
 
-/// One place of a tile, read from its columns: what a source gave, the zoom
+/// One place of a tile, read from its lanes: what a source gave, the zoom
 /// it is shown from, and the ground leaf cell it stands in, as an offset in
 /// the tile.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -182,7 +182,7 @@ impl PlaceTile {
     fn push(&mut self, h: &Place) {
         self.offs.push(h.off.map(|v| v as u16));
         self.kinds.push(h.kind);
-        // The column keeps a zoom in a byte.
+        // The lane keeps a zoom in a byte.
         self.first_zooms.push(h.first_zoom as u8);
         self.names.push(h.name);
         self.ids.push(h.id);

@@ -78,7 +78,7 @@ pub(crate) fn observation() -> Option<Observation> {
             eye,
             frustum: Some(frustum),
             demand_dist,
-            ground: eye[2] - height_at(eye),
+            floor: eye[2] - height_at(eye),
         }));
     }
     cached.flatten()
@@ -97,13 +97,13 @@ pub(crate) fn observation() -> Option<Observation> {
 /// asks for.
 ///
 /// The bricks depend on the eye and the world alone, never on what a ray
-/// met. A column the world knows nothing of yet gets no brick, since there is
+/// met. A cell the world knows nothing of yet gets no brick, since there is
 /// nothing in it for a brick to stand in.
 pub(crate) fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let (Some(min_zoom), Some(flat)) = (IndexedTerrainTile::min_zoom(), floor::ring(o)) else {
         return;
     };
-    let height = (o.eye[2] - o.ground).max(0.0);
+    let height = (o.eye[2] - o.floor).max(0.0);
     let coarsest = GROUND.grid_zoom(min_zoom).max(BRICK_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);

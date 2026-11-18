@@ -1,6 +1,6 @@
 // pxl-spec/space/layer/demand.rs
 
-//! What an observation requires: tiles, with their columns known at their zoom. What
+//! What an observation requires: tiles, with their cells known at their zoom. What
 //! estimates them names a superset of the exact demand from what is known, never less, since
 //! a requirement left out is ground that never refines. What is known of a node is the core's
 //! query (pxl-core domain/query.rs), asked in the grid's cells.
