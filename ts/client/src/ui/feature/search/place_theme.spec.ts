@@ -5,12 +5,13 @@
 // What OpenStreetMap Carto draws for a place of each category: the tags Carto
 // styles it under (`carto`, the attributes `style/amenity-points.mss` reads,
 // anything else null as a point's are), the web zoom from which it shows as a
-// dot (`marker-width` with no file) and as its icon (`symbol`, under Carto's
-// `symbols/`), the zoom from which its name shows (`#text-point`'s
-// `text-name: [name]`), the icon's fill and the label's. Each value is the
-// one Carto's rules give for those tags at that zoom, colors computed from
-// its variables (`darken` as LESS does). A category with no row is one Carto
-// draws no point for, so it is neither carried in a tile nor drawn.
+// dot (`marker-width` with no file) and as its icon, the zoom from which its
+// name shows (`#text-point`'s `text-name: [name]`), the icon's fill and the
+// label's, and the icon (`symbol`), Maki's file of it under
+// asset/raw/place/symbol/. Each value but `symbol` is the one Carto's rules
+// give for those tags at that zoom, colors computed from its variables
+// (`darken` as LESS does). A category with no row is one Carto draws no point
+// for, so it is neither carried in a tile nor drawn.
 
 /** A category's icon or dot fill, `0xRRGGBB`, null where Carto draws no point for it, category k at `FILL[k - 1]`. */
 export const FILL: readonly (number | null)[] = [
@@ -274,15 +275,15 @@ export const FILL: readonly (number | null)[] = [
 
 /** A category's icon, its symbol's number (place-symbol.ts), 0 for none, category k at `SYMBOL[k - 1]`. */
 export const SYMBOL: readonly number[] = [
-  0, 0, 0, 1, 0, 5, 0, 0, 0, 0, 0, 62, 0, 35, 48, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 4, 5, 0, 66, 13, 18, 0, 0, 43, 0, 0, 0, 6, 64, 0, 0, 7, 31, 25, 0,
-  44, 10, 0, 6, 0, 0, 0, 10, 0, 0, 51, 0, 11, 2, 19, 12, 53, 0, 0, 0, 0, 58, 0,
-  0, 0, 0, 0, 0, 42, 17, 13, 0, 8, 0, 0, 0, 0, 0, 56, 50, 14, 0, 15, 36, 0, 0,
-  0, 0, 25, 0, 14, 0, 32, 16, 0, 0, 16, 0, 37, 0, 0, 36, 54, 0, 0, 45, 0, 0, 17,
-  67, 0, 0, 0, 67, 0, 24, 46, 0, 0, 0, 55, 0, 18, 39, 0, 5, 0, 0, 56, 0, 0, 33,
-  0, 0, 0, 34, 40, 9, 68, 0, 0, 47, 0, 0, 19, 6, 0, 13, 0, 20, 13, 28, 57, 49,
-  21, 0, 0, 0, 22, 0, 38, 23, 0, 0, 13, 52, 66, 0, 0, 0, 0, 29, 0, 0, 0, 0, 0,
-  0, 22, 0, 0, 13, 0, 0, 25, 0, 0, 65, 0, 63, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 26,
-  0, 0, 17, 0, 0, 0, 0, 0, 59, 0, 0, 0, 0, 0, 0, 0, 63, 60, 61, 0, 0, 27, 0, 0,
-  0, 28, 0, 30, 0, 0, 0, 0, 0, 0, 0, 0, 13, 13, 61, 41, 0, 0, 61, 0, 0, 0,
+  0, 0, 0, 1, 0, 4, 0, 0, 0, 0, 0, 31, 0, 21, 2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 3, 4, 0, 31, 14, 29, 0, 0, 42, 0, 0, 0, 5, 6, 0, 0, 7, 8, 46, 0,
+  43, 53, 0, 5, 0, 0, 0, 53, 0, 0, 12, 0, 53, 50, 35, 13, 48, 0, 0, 0, 0, 15, 0,
+  0, 0, 0, 0, 0, 16, 27, 14, 0, 9, 0, 0, 0, 0, 0, 48, 11, 17, 0, 18, 19, 0, 0,
+  0, 0, 46, 0, 17, 0, 8, 20, 0, 0, 20, 0, 23, 0, 0, 19, 26, 0, 0, 38, 0, 0, 27,
+  31, 0, 0, 0, 31, 0, 41, 44, 0, 0, 0, 28, 0, 29, 30, 0, 4, 0, 0, 48, 0, 0, 32,
+  0, 0, 0, 32, 33, 10, 34, 0, 0, 45, 0, 0, 35, 5, 0, 14, 0, 36, 14, 50, 22, 25,
+  37, 0, 0, 0, 38, 0, 39, 40, 0, 0, 14, 48, 31, 0, 0, 0, 0, 51, 0, 0, 0, 0, 0,
+  0, 38, 0, 0, 14, 0, 0, 46, 0, 0, 6, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 47, 0,
+  0, 27, 0, 0, 0, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 2, 24, 54, 0, 0, 49, 0, 0, 0,
+  50, 0, 52, 0, 0, 0, 0, 0, 0, 0, 0, 14, 14, 54, 55, 0, 0, 54, 0, 0, 0,
 ];

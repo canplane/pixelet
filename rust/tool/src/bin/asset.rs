@@ -194,7 +194,7 @@ fn run() -> Result<(), String> {
         faces,
     };
 
-    // Carto's symbols, which the client draws from its own binary rather than fetches.
+    // The place symbols, which the client draws from its own binary rather than fetches.
     let symbols = symbol::symbols(&raw_dir.join("place/symbol"))?;
     let masks: Vec<u8> = symbols
         .iter()
@@ -213,7 +213,10 @@ fn run() -> Result<(), String> {
         &table::render_json(
             &rows,
             &packed,
-            &symbols.iter().map(|s| s.path.clone()).collect::<Vec<_>>(),
+            &symbols
+                .iter()
+                .map(|s| s.file_name.clone())
+                .collect::<Vec<_>>(),
         ),
     )?;
     spec::generate(true)?;

@@ -2,7 +2,7 @@
 
 //! Markers: billboards drawn flat to the camera over the world, each from its
 //! own design on the one atlas. Three sources feed them: the places, as Carto
-//! draws them; the pins people put up, which are objects of the marker kind;
+//! lays them out; the pins people put up, which are objects of the marker kind;
 //! and the chat's line. Each source is read on its own, and one arrangement
 //! draws them all together (`arrangement.rs`). What a source hands the
 //! arrangement, which both speak, is written here.

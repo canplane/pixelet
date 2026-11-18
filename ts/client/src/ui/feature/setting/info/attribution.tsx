@@ -90,6 +90,9 @@ export function AttributionSection() {
               name="OpenStreetMap Carto"
               href="https://github.com/gravitystorm/openstreetmap-carto"
             >
+              <Line>The ground's palette and the places' style, {cc0}</Line>
+            </Provider>
+            <Provider name="Maki" href="https://github.com/mapbox/maki">
               <Line>Place icons, {cc0}</Line>
             </Provider>
             <Provider

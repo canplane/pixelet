@@ -464,10 +464,10 @@ const STYLE = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
 });
 
-/** How Carto draws a place of `category`, the same way the world draws it
- * (place_theme.spec.ts): its symbol in its fill color, or a dot of that fill
- * for a category with no symbol. It is null for a category Carto draws no
- * point for. */
+/** How a place of `category` is drawn, the same way the world draws it
+ * (place_theme.spec.ts): its Maki symbol in Carto's fill color for it, or a
+ * dot of that fill for a category with no symbol. It is null for a category
+ * Carto draws no point for. */
 function placeTheme(
   category: number,
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {

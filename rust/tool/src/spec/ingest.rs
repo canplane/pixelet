@@ -3,9 +3,9 @@
 //! What the asset ingest wrote (`spec/spec/asset/ingest.json5`), rendered:
 //! the files, each by its number with every field on both sides, which binds
 //! a file's number to its bucket key, and the texture pack's layout, which the
-//! renderer reads. A path is the specs' and the tools' name for a file; what
-//! is generated elsewhere names it by its number (`file_number`), and Carto's
-//! symbols by theirs (`symbol_number`).
+//! renderer reads. A path is the specs' and the tools' name for a file, and a
+//! file name a symbol's; what is generated elsewhere names a file by its
+//! number (`file_number`), and a symbol by its own (`symbol_number`).
 
 use std::fmt::Write;
 use std::sync::OnceLock;
@@ -71,11 +71,11 @@ pub(crate) fn file_number(path: &str) -> Result<u32, String> {
         ))
 }
 
-/// The symbol at `path` (as Carto gives it), by its place among those the
-/// ingest rasterized, from 1.
-pub(crate) fn symbol_number(path: &str) -> Result<u16, String> {
-    static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
-    let paths = PATHS
+/// The symbol whose file is `name` (as Maki gives it), by its place among
+/// those the ingest rasterized, from 1.
+pub(crate) fn symbol_number(name: &str) -> Result<u16, String> {
+    static NAMES: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
+    let names = NAMES
         .get_or_init(|| {
             read(INGEST_JSON)?
                 .get("symbols")
@@ -85,12 +85,12 @@ pub(crate) fn symbol_number(path: &str) -> Result<u16, String> {
         })
         .as_ref()
         .map_err(Clone::clone)?;
-    paths
+    names
         .iter()
-        .position(|p| p == path)
+        .position(|n| n == name)
         .map(|i| i as u16 + 1)
         .ok_or(format!(
-            "{path} is no symbol of {INGEST_JSON}: run the asset ingest"
+            "{name} is no symbol of {INGEST_JSON}: run the asset ingest"
         ))
 }
 

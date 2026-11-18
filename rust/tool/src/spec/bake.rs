@@ -264,7 +264,7 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let symbol = |k: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at("symbol")) {
             None | Some("") => Ok("0".into()),
-            Some(path) => symbol_number(path).map(|n| n.to_string()),
+            Some(name) => symbol_number(name).map(|n| n.to_string()),
         }
     };
     list(

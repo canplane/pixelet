@@ -1,7 +1,7 @@
 // pxl-tool/asset/symbol.rs
 
-//! Carto's place symbols, each SVG under `asset/raw/place/symbol/` named by the path Carto
-//! gives it (`symbols/…`), which is how the places' theme names it. For the marker atlas they
+//! The place symbols, Mapbox's Maki icons, each SVG under `asset/raw/place/symbol/` by Maki's
+//! file name (`airport.svg`), which is how the places' theme names it. For the marker atlas they
 //! become the masks it tints, each rasterized once to its coverage, a byte a pixel, in a
 //! square of `SYMBOL_PX`, laid end to end in one file the spec crate includes; for the UI,
 //! their outlines.
@@ -23,12 +23,12 @@ const SOURCE: &str = "asset/raw/place/symbol/";
 pub const RS: &str = "rust/spec/src/asset/symbol.spec.rs";
 pub const TS: &str = "ts/client/src/ui/feature/search/place-symbol.ts";
 
-/// The side of a symbol's mask in device pixels: Carto's side at the atlas's device pixels a
-/// pixel.
-pub(crate) const SYMBOL_PX: u32 = CARTO_PX * SYMBOL_RATIO;
+/// The side of a symbol's mask in device pixels: the symbols' side at the atlas's device
+/// pixels a pixel.
+pub(crate) const SYMBOL_PX: u32 = MAKI_PX * SYMBOL_RATIO;
 
-/// Carto's symbols' side, in pixels.
-const CARTO_PX: u32 = 14;
+/// The symbols' side, in pixels: Maki's grid.
+const MAKI_PX: u32 = 15;
 
 /// The device pixels a pixel at which the symbols are rasterized, written into the spec.
 /// pxl-render look/marker.rs draws the atlas at this scale, so a display finer than this
@@ -36,8 +36,8 @@ const CARTO_PX: u32 = 14;
 const SYMBOL_RATIO: u32 = 2;
 
 pub struct Symbol {
-    /// As Carto gives it.
-    pub path: String,
+    /// Its file's name, as Maki gives it.
+    pub file_name: String,
     pub mask: Vec<u8>,
     /// Its own box, and each shape in it as SVG path data and whether it
     /// fills even-odd.
@@ -45,22 +45,26 @@ pub struct Symbol {
     pub(crate) shapes: Vec<(String, bool)>,
 }
 
-/// Each symbol, sorted by path.
+/// Each symbol, sorted by its file name.
 pub fn symbols(dir: &Path) -> Result<Vec<Symbol>, String> {
-    let mut paths = Vec::new();
-    walk(dir, dir, &mut paths)?;
-    paths.sort();
-    paths
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".svg"))
+        .collect();
+    names.sort();
+    names
         .into_iter()
-        .map(|rel| {
-            let svg = std::fs::read(dir.join(&rel)).map_err(|e| format!("{rel}: {e}"))?;
+        .map(|name| {
+            let svg = std::fs::read(dir.join(&name)).map_err(|e| format!("{name}: {e}"))?;
             let tree = Tree::from_data(&svg, &resvg::usvg::Options::default())
-                .map_err(|e| format!("{rel}: {e}"))?;
+                .map_err(|e| format!("{name}: {e}"))?;
             let mut shapes = Vec::new();
             outline(tree.root(), &mut shapes);
             Ok(Symbol {
-                path: format!("symbols/{rel}"),
-                mask: mask(&tree).map_err(|e| format!("{rel}: {e}"))?,
+                mask: mask(&tree).map_err(|e| format!("{name}: {e}"))?,
+                file_name: name,
                 size: [tree.size().width(), tree.size().height()],
                 shapes,
             })
@@ -107,26 +111,6 @@ fn outline(group: &Group, out: &mut Vec<(String, bool)>) {
     }
 }
 
-fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<(), String> {
-    for entry in std::fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .flatten()
-    {
-        let path = entry.path();
-        if path.is_dir() {
-            walk(&path, base, out)?;
-        } else if path.extension().is_some_and(|e| e == "svg") {
-            out.push(
-                path.strip_prefix(base)
-                    .map_err(|e| e.to_string())?
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
-        }
-    }
-    Ok(())
-}
-
 /// The symbol's coverage, scaled from its own box to fill the square.
 fn mask(tree: &Tree) -> Result<Vec<u8>, String> {
     let size = tree.size();
@@ -156,7 +140,7 @@ pub fn outputs(root: &Path, symbols: &[Symbol]) -> Result<Vec<Output>, String> {
         (
             "$description".into(),
             description(&[
-                "Carto's place symbols (openstreetmap-carto `symbols/`, CC0), symbol n the (n - 1)th in",
+                "The place symbols (Mapbox's Maki, CC0), symbol n the (n - 1)th in",
                 "spec/spec/asset/ingest.json5's `symbols` order: in Rust each a mask of its coverage, a",
                 "byte a pixel, `SYMBOL_PX` a side, row by row, in `symbol.mask`; in TypeScript its",
                 "outline at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`), its box and each",

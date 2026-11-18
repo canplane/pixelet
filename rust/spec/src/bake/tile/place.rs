@@ -88,7 +88,7 @@ pub const fn first_zoom(kind: u16) -> Option<Zoom> {
     }
 }
 
-/// A category's Carto symbol, by its place among the masks
+/// A category's symbol, by its place among the masks
 /// (asset/symbol.spec.rs); none for a category Carto draws no icon for.
 pub fn symbol_of(kind: u16) -> Option<u16> {
     SYMBOL

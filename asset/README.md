@@ -22,7 +22,7 @@ asset/
 │   └── sky/        the Moon's near side (NASA), cloud/: the cumulus and stratus (Quaternius, CC0)
 └── raw/
     ├── cube/       the pack's manifest and its originals at source size
-    ├── place/      symbol/: the place icons (openstreetmap-carto `symbols/`, CC0), drawn into code
+    ├── place/      symbol/: the place icons (Mapbox's Maki, CC0), drawn into code
     └── sky/        moon/, star/: NASA's map and CDS's catalog, as fetched
 ```
 

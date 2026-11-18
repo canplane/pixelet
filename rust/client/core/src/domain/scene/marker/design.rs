@@ -1,7 +1,7 @@
 // pxl-core/domain/scene/marker/design.rs
 
 //! What a marker paints, each as its own design on the one atlas: text on a
-//! pill, a place as Carto draws it, or a line said in a bubble. A design
+//! pill, a place as Carto lays it out, or a line said in a bubble. A design
 //! describes only what is painted, never who shows it, so two markers that
 //! paint alike share one design. A design is measured, given its slot and
 //! painted once, and it is shown only once painted (`ready`). Each source
@@ -66,8 +66,8 @@ pub(crate) fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'
 pub(super) enum Design {
     /// Text in `ink` on a pill in `fill`.
     Pill { text: Rc<str>, fill: u32, ink: u32 },
-    /// A place as Carto draws it: its symbol when `icon` is set, or else a
-    /// dot, in its category's `fill`. Under it stands its name, when it has
+    /// A place as Carto lays it out: its Maki symbol when `icon` is set, or
+    /// else a dot, in its category's `fill`. Under it stands its name, when it has
     /// one, in its category's text color `ink`, wrapped at `wrap` pixels
     /// (`with_spacing`).
     Point {
