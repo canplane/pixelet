@@ -66,3 +66,21 @@ fn a_pan_walks_only_where_a_body_shows() {
     set_eye(to_world(&far));
     assert!(is_unknown(&pan_to(&from, 2.0, 0.0, 0.0, &far)));
 }
+
+/// A place the camera is sent to stands on its floor as an eye standing there
+/// reads it, wherever the observer's eye is: before the camera stands
+/// anywhere, as at the app's start, and with the eye too far off to draw the
+/// leaves there.
+#[test]
+fn a_destination_stands_whatever_the_observer_sees() {
+    use crate::domain::observer;
+    let [x, y] = flat_at_five();
+    placed(Store::default());
+    let to = unknown(&world::point(x + 0.5, y + 0.5, 0.0));
+    let known = world::point(x + 0.5, y + 0.5, 7.0);
+    set_eye([x + 0.5, y + 0.5, 5000.0]);
+    assert_eq!(arriving(&to).map(|p| height(&p)), Some(over(5.0)), "far");
+    assert_eq!(arriving(&known).map(|p| height(&p)), Some(over(5.0)), "far");
+    observer::set_pose(None);
+    assert_eq!(arriving(&to).map(|p| height(&p)), Some(over(5.0)), "no eye");
+}
