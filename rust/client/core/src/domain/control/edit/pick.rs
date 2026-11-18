@@ -1,8 +1,8 @@
 // pxl-core/domain/control/edit/pick.rs
 
 //! The pointer's pick (`Pick`), and what it struck means for a placement or
-//! an erase. The pick's ray reads the world as an eye's does, by its
-//! distance (`World::first_seen`). It then judges what it
+//! an erase. The pick's ray is the eye's: each node it crosses is asked at
+//! the size the eye sets there (`World::first_seen`). It then judges what it
 //! struck by the zoom the eye's rays draw there, since an edit takes only
 //! whole cells and a folded cell is a summary.
 
@@ -15,7 +15,6 @@ use pxl_spec::space::coord::zoom::{Zoom, of_side, units};
 use crate::domain::control::edit::collision::object_aabb;
 use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::observer::eye;
 use crate::domain::query::{Hit, HitKind, Ray, World, cell_zoom_read};
 use crate::domain::setting::settings;
 use crate::domain::view::frame::coord::world_to_canonical;
@@ -40,7 +39,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 }
 
 /// What the hover's pick struck, and the cell zoom at which the eye's rays
-/// draw the point it struck (domain/query/detail.rs `cell_zoom_read`). Near the eye
+/// draw the point it struck (domain/query/support.rs `cell_zoom_read`). Near the eye
 /// that zoom is finer than the ground's cells, as placed objects may be.
 /// `ray_zoom` is None without an eye.
 pub(crate) struct Pick {
@@ -160,14 +159,13 @@ impl Pick {
 /// The ray is cast from the view, so it strikes what is shown. None until the
 /// camera stands somewhere.
 pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
-    eye()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
     ray_of(ndc_x, ndc_y, &mut origin, &mut dir);
     let mut p = Pick {
         hit: ray_pick(origin, dir)?,
         ray_zoom: None,
     };
-    p.ray_zoom = eye().map(|eye| cell_zoom_read(eye, p.cell().center()));
+    p.ray_zoom = cell_zoom_read(p.cell().center());
     Some(p)
 }
 

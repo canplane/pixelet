@@ -1,6 +1,7 @@
 // pxl-core/domain/scene/character.test.rs
 
 use super::*;
+use crate::domain::query::test::set_eye;
 use crate::domain::scene::model::registry::test::swaying;
 use crate::sys::host::set_clock;
 use pxl_render::gpu::draw::{lists_sz, set_lists};
@@ -19,6 +20,7 @@ fn idle(dist: f64) -> Vec<(bool, bool)> {
     let model = models.add(&mut draw, swaying());
     let mut character = Character::new(&mut draw, &models, model, Group::Person, 0).unwrap();
     character.play(&models, 0, 0.0);
+    set_eye([dist, 0.0, 0.0]);
     let frame = Frame {
         camera: [dist, 0.0, 0.0],
         px_per_unit: PX_PER_UNIT,
@@ -112,10 +114,12 @@ fn a_body_is_drawn_clear_of_the_wall_beside_it() {
 fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     use crate::domain::layer::object::store::Store;
     use crate::domain::query::change::Memo;
-    use crate::domain::query::test::{flat_at_five, placed, set_eye, write};
+    use crate::domain::query::over;
+    use crate::domain::query::test::{flat_at_five, placed, write};
     use crate::domain::scene::character::companion::drawn_at;
     use pxl_spec::asset::{AssetId, cube};
     use pxl_spec::bake::constant::OBJECT_COARSEST;
+    use pxl_spec::space::coord::world::point;
     let [x, y] = flat_at_five();
     let mut store = Store::default();
     let wall = cube::Object::Red as AssetId;
@@ -124,7 +128,8 @@ fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     let at = [x + 0.9, y + 0.5];
     set_eye([at[0], at[1] - 3.0, 8.0]);
     let mut memo = Memo::NONE;
-    let [drawn_x, drawn_y, _] = drawn_at(&mut memo, at, 5.0, 0.25);
+    let stands = point(at[0], at[1], over(5.0));
+    let [drawn_x, drawn_y, _] = drawn_at(&mut memo, stands, 5.0, 0.25);
     assert_eq!([drawn_x, drawn_y], [x + 0.75, y + 0.5]);
 }
 
@@ -137,6 +142,7 @@ fn drawn(dist: f64) -> (bool, bool) {
     let mut models = ModelTable::default();
     let model = models.add(&mut draw, swaying());
     let mut character = Character::new(&mut draw, &models, model, Group::Person, 0).unwrap();
+    set_eye([dist, 0.0, 0.0]);
     let frame = Frame {
         camera: [dist, 0.0, 0.0],
         px_per_unit: PX_PER_UNIT,

@@ -3,10 +3,12 @@
 //! How the camera's pivot stands on the ground, and where a pan moves it.
 //! The pivot's Z is half a cell above the floor the character stands on,
 //! the height of a cell's center over its floor (`query::over`). The pivot
-//! follows that floor when the world under it changes. Only a leaf, a tile
-//! at `LEAF_ZOOM`, gives the floor. A pivot put over coarser ground keeps
-//! its Z unknown (`UNKNOWN_Z`) and is drawn on the finest ground known there
-//! until the leaf arrives.
+//! follows that floor when the world under it changes. Only an exact
+//! answer, the leaves' cells asked and held, is written as the pivot's
+//! height: a coarser answer stands in until the finer one arrives and is
+//! never made the height (ARCHITECTURE.md "Honest answers"). Until then the
+//! pivot keeps its Z unknown (`UNKNOWN_Z`) and is drawn on the floor the eye
+//! draws there.
 
 use crate::domain::query::change::Memo;
 use crate::domain::query::{floor_of, is_unknown, on_floor, unknown};
@@ -21,7 +23,7 @@ use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 
 /// Where the pivot stands for the cell center `at`, such as the center of
 /// the cell across the face a tap struck. It stands on the floor under that
-/// cell. Its Z is unknown until a leaf gives that floor.
+/// cell. Its Z is unknown until that floor is answered exactly.
 pub(crate) fn stand(at: &Q3) -> Q3 {
     match World::now().floor_under(at) {
         Answer::Exact(Some(top)) => on_floor(at, top),
@@ -32,8 +34,8 @@ pub(crate) fn stand(at: &Q3) -> Q3 {
 }
 
 /// The last answer of `standing`. It is kept until another point is asked,
-/// the eye moves or the world changes in the columns the answer read
-/// (`change::Memo`),
+/// the eye sets another size for a cell it read or the world changes in the
+/// columns it read (`change::Memo`),
 /// because the figures at a pivot ask for the same point on every tick.
 static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
 
@@ -52,8 +54,8 @@ pub(crate) fn support_step() {
 /// surface of the finest ground known there, or on nothing where nothing
 /// stands. A point with a known Z stays as it is unless the surface is
 /// followed (the `surface_follow` setting). When it is followed, the point
-/// stands on the floor under it as a leaf gives it: it drops when what it
-/// stood on is taken away, and it rises out of what fills its cell
+/// stands on the floor under it where that is answered exactly: it drops
+/// when what it stood on is taken away, and it rises out of what fills its cell
 /// (`World::floor_under`). The pivot and the figures at it then stand on
 /// one floor.
 fn standing(world: World, at: &Q3) -> Answer<Option<Q3>> {
@@ -90,24 +92,13 @@ pub(crate) fn resolve(at: &Q3, cur: V3) -> V3 {
     }
 }
 
-/// Where a camera sent to `at` stands, once a leaf gives the floor there:
-/// on the surface where its height is not known, and else on the floor
-/// nearest its height. It is read as an eye standing there reads, not the
-/// observer's, which is elsewhere or nowhere yet.
-pub(crate) fn arriving(at: &Q3) -> Option<Q3> {
-    let world = World::now();
-    let top = match is_unknown(at) {
-        true => world.surface_support_by(None, at),
-        false => world.support_nearest(at),
-    };
-    top.exact().flatten().map(|top| on_floor(at, top))
-}
-
 /// `resolve` for a camera's `to`. A Z not yet known is written into `to` once
 /// a leaf gives it, and a known Z is not written over.
 pub(crate) fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
     let Some(at) = *to else { return cur };
-    if let Some(p) = arriving(&at).filter(|_| is_unknown(&at)) {
+    if is_unknown(&at)
+        && let Answer::Exact(Some(p)) = standing(World::now(), &at)
+    {
         *to = Some(p);
     }
     resolve(&to.unwrap_or(at), cur)
@@ -115,10 +106,10 @@ pub(crate) fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
 
 /// Where a pan moves the pivot from `from`, by `lx` units across the screen
 /// and `ly` units up it. The pivot slides over the world as a body steps
-/// (`World::step_slide`) where a body shows for `eye`, the eye the camera
-/// keeps over `from`, and elsewhere goes where it is moved. There, and where a leaf on the way
-/// is not held, the pivot goes on with its Z unknown until a leaf gives it.
-pub(crate) fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
+/// (`World::step_slide`) where the eye draws a body, and elsewhere goes where
+/// it is moved. There, and where what the eye asks on the way is not held,
+/// the pivot goes on with its Z unknown until its floor is answered exactly.
+pub(crate) fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64) -> Q3 {
     let (s, c) = libm::sincos(azimuth);
     let l = to_world(from);
     let way = [lx * c + ly * s, -lx * s + ly * c];
@@ -129,7 +120,7 @@ pub(crate) fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 
     if way == [0.0, 0.0] {
         return *from;
     }
-    World::now().step_slide(from, &to, eye, false)
+    World::now().step_slide(from, &to, false)
 }
 
 #[cfg(test)]

@@ -108,9 +108,9 @@ pub const CHANGED_BRICKS_AT: u32 = CHANGED_AT + CHANGED_WORDS;
 pub const RECTS_AT: u32 = CHANGED_BRICKS_AT + 4 * EYE_CLIP_LEVEL_CNT;
 pub const WRITTEN_AT: u32 = RECTS_AT + 1 + 4 * DAMAGE_CAP;
 pub const WRITTEN_CAP: u32 = 32;
-/// Which observers' walks and pixels count what they ask, one bit an observer (`count::EYE`,
-/// `count::LIGHT`), set while the `ray_cnt` setting is on and the observer casts; then the
-/// words they count into, each observer's walk counters (`lane_at`).
+/// Which casts' walks and pixels count what they ask, one bit a cast (`count::EYE`,
+/// `count::LIGHT`), set while the `ray_cnt` setting is on and the cast runs; then the
+/// words they count into, each cast's walk counters (`lane_at`).
 pub const CNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
 pub(crate) const CNT_AT: u32 = CNT_ON + 1;
 pub(crate) const CNT_WORDS: u32 = count::OBSERVER_CNT * count::WALK_CNT;

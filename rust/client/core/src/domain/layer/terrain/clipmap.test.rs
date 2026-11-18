@@ -831,3 +831,56 @@ fn handing_shows_everywhere() {
     lay(w, far, far);
     assert_eq!(slot_of(w, LEAF_CELL_ZOOM, q), None);
 }
+
+/// A clip level that follows its center a brick on leaves a brick behind,
+/// which a coarser clip level answers from then on: the brick left is
+/// reported as changed, as the brick now wanted is.
+#[test]
+fn a_brick_a_clip_level_leaves_is_reported_changed() {
+    let w = fill_room();
+    request::open(|_| 0);
+    let terrain = IndexedTerrainTile::tile_cache();
+    let level = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM;
+    let wanted = |w: &Clipmap| {
+        (0..ENTRY_CNT)
+            .map(|s| want(w, level, s))
+            .collect::<Vec<_>>()
+    };
+    let on = w.on;
+    let before = wanted(w);
+    let mut changed = Vec::new();
+    terrain.take_changed(&mut changed);
+    let east = leaf([CENTER[0] + f64::from(BRICK), CENTER[1]]);
+    step([Some(east), Some(leaf(CENTER)), None], on);
+    terrain.take_changed(&mut changed);
+    let after = wanted(clipmap());
+    let left: Vec<_> = before.iter().filter(|q| !after.contains(q)).collect();
+    assert!(!left.is_empty());
+    for q in left {
+        assert!(changed.contains(&brick_quad(LEAF_CELL_ZOOM, *q)), "{q:?}");
+    }
+    for q in after.iter().filter(|q| !before.contains(q)) {
+        assert!(changed.contains(&brick_quad(LEAF_CELL_ZOOM, *q)), "{q:?}");
+    }
+}
+
+/// A clip level whose center goes holds no brick any more: every brick it
+/// held is reported as changed.
+#[test]
+fn a_clip_level_that_goes_reports_its_bricks_changed() {
+    let w = fill_room();
+    request::open(|_| 0);
+    let terrain = IndexedTerrainTile::tile_cache();
+    let level = EYE_CLIP_LEVEL_CNT;
+    assert!(layout(level).0 == Center::Pivot);
+    let cell_zoom = layout(level).1;
+    let held: Vec<_> = (0..ENTRY_CNT).map(|s| want(w, level, s)).collect();
+    let on = w.on;
+    let mut changed = Vec::new();
+    terrain.take_changed(&mut changed);
+    step([Some(leaf(CENTER)), None, None], on);
+    terrain.take_changed(&mut changed);
+    for q in held {
+        assert!(changed.contains(&brick_quad(cell_zoom, q)), "{q:?}");
+    }
+}

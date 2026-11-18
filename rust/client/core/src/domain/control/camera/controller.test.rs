@@ -52,7 +52,7 @@ fn pivot_along_facing() {
         assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
         controller().base = CameraMode::FirstPerson;
         // The pivot stands over a floor as a body does, and the eye over the
-        // same floor as a body's eye does.
+        // same floor as the eye in first person does.
         let [px, py, pz] = pivot_world().unwrap();
         let floor = pz - over(0.0);
         assert!(

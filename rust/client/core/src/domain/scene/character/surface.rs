@@ -2,8 +2,8 @@
 
 //! The character surfaces. Each canvas of the character picker is a surface
 //! that shows the companion's person or pet as it is now, the way a world
-//! surface shows the world. A surface draws its character by an eye of its
-//! own, over the color it clears to (`companion_surface_draw`, pxl-render
+//! surface shows the world. A surface draws its character from a viewpoint of
+//! its own, over the color it clears to (`companion_surface_draw`, pxl-render
 //! pass/character.rs).
 
 use crate::domain::scene::character::Group;

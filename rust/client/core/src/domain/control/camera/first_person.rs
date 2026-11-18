@@ -2,7 +2,7 @@
 
 //! The first-person camera turns about its eye, which stands over its pivot
 //! (`eye_off`): the pivot is where a body stands over its floor, and the eye
-//! where the body's eye stands (query/support.rs `over`, `eye_over`). No
+//! half a cell under the top of the body's box (query/support.rs `over`, `eye_over`). No
 //! control sets the height. The pivot's `to` (state.rs `CameraState`) stands
 //! wherever the pan's walk leaves it, and the drawn eye eases toward it, so a
 //! step up or down eases like every other move.

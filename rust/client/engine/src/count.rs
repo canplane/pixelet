@@ -12,12 +12,12 @@
 //! when it lists a hole. The boxes drawn are the raster's instance count
 //! (`raster::ARGS_INSTANCE_CNT`). The frame's last copies gather these into the array.
 
-/// The observers, each with a run of `LANE_CNT` counters in the array.
+/// The casts, the eye's and the light's, each with a run of `LANE_CNT` counters in the array.
 pub const EYE: u32 = 0;
 pub const LIGHT: u32 = 1;
 pub const OBSERVER_CNT: u32 = 2;
 
-/// An observer's counters. `BEAM`, `SAMPLE` and `HOLE_WALK` count the nodes visited by its
+/// A cast's counters. `BEAM`, `SAMPLE` and `HOLE_WALK` count the nodes visited by its
 /// beam rays, its samples and the walk of its holes. `ASK` counts the nodes its walks asked of
 /// the world, which no node cache slot answered. `VOXEL`, `HOLE` and `SKY` count the pixels or
 /// slots it cast again by what each took: the visible voxel, a walk of its own as a hole, or

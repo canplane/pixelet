@@ -139,7 +139,7 @@ pub const QUEUE_GROUP_CNT: u32 = 256;
 /// held.
 pub const ASKS_A_FRAME: u32 = 1 << 21;
 
-/// The hits an observer's list holds (pxl-render queue.wgsl `hit_in_cap`,
+/// The hits a cast's list holds (pxl-render queue.wgsl `hit_in_cap`,
 /// `beam::Grid::hits_at`, `light::hits_at`). A ray past it ends with no hit kept for the
 /// record, and its pixel shows a face word of 0 instead of its face's own.
 pub const HITS_A_FRAME: u32 = 1 << 18;

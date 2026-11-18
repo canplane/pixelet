@@ -207,12 +207,12 @@ impl Gpu {
         self.corners(true, world, node_cache);
     }
 
-    /// Runs an observer's holes as the cast runs them (ray/cast.rs `walk_run`), the light's
+    /// Runs a cast's holes as ray/cast.rs `walk_run` runs them, the light's
     /// where `light` is set and the eye's otherwise. Two walks read the node cache alone, and
     /// an ask follows each. The queue's hits are then copied into `node_cache`
     /// (`node_cache::HITS_ARGS`), as the cast copies them. The last walk runs after. `all`
     /// binds what any of the passes reads except the queue's words: the eye at 0, the world at
-    /// 1, 2 and 4 to 7, the rays or the map at 3, the observer's list at 8, the node cache at 9
+    /// 1, 2 and 4 to 7, the rays or the map at 3, the cast's list at 8, the node cache at 9
     /// and the light's header at 11. Each pass takes the bindings its entry reads.
     pub(crate) fn holes(
         &self,
@@ -251,7 +251,7 @@ impl Gpu {
         self.run(queue, ids, keep, all, node_cache, None);
     }
 
-    /// Runs an observer's beam rays as the cast runs them (ray/cast.rs `walk_run`), the
+    /// Runs a cast's beam rays as ray/cast.rs `walk_run` runs them, the
     /// light's where `light` is set and the eye's otherwise. The passes and bindings follow
     /// `samples`.
     pub(crate) fn corners(
@@ -285,11 +285,11 @@ impl Gpu {
         self.lattice(queue, ids, light, all, node_cache, None);
     }
 
-    /// Runs an observer's samples as the cast runs them (ray/cast.rs `walk_run`), the
+    /// Runs a cast's samples as ray/cast.rs `walk_run` runs them, the
     /// light's where `light` is set and the eye's otherwise. Two walks read the node cache
     /// alone, an ask follows each, and the last walk runs after. `all` binds what any of the
     /// passes reads except the queue's words: the eye at 0, the world at 1, 2 and 4 to 7, the
-    /// observer's list at 8, the node cache at 9 and the light's header at 11. Each pass takes
+    /// cast's list at 8, the node cache at 9 and the light's header at 11. Each pass takes
     /// the bindings its entry reads.
     pub(crate) fn samples(
         &self,
@@ -412,14 +412,14 @@ impl Gpu {
         }
         let groups = [ray::QUEUE_GROUP_CNT, 1, 1];
         let word = |w: u32| u64::from(w) * 4;
-        // The asks are counted in their observer's lane, which the asks' module reads off
-        // the queue it is bound to (ask_run.wgsl). The other observer's stays as it was.
+        // The asks are counted in their cast's lane, which the asks' module reads off
+        // the queue it is bound to (ask_run.wgsl). The other cast's stays as it was.
         let other_asked = (if queue_no >= ray::QUEUE_LIGHT_CORNERS {
             node_cache::lane_at(count::EYE, count::ASK)
         } else {
             node_cache::lane_at(count::LIGHT, count::ASK)
         }) as usize;
-        // Both observers count, as a frame that casts for the eye and the light does.
+        // Both casts count, as a frame that casts for the eye and the light does.
         self.queue
             .write_buffer(node_cache, word(node_cache::CNT_ON), bytes(&[0b11u32]));
         let before = self.read(node_cache)[other_asked];

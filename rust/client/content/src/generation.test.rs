@@ -10,6 +10,7 @@ use pxl_engine::cast::{Detail, Spacing};
 #[test]
 fn decor_at_its_clip_level() {
     let detail = Detail {
+        eye: [0.0; 3],
         range: [0, FINEST_ZOOM],
         spacing: Spacing::NONE,
     };

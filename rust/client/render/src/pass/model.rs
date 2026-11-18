@@ -91,7 +91,7 @@ pub(crate) fn on_skins_lost() {
 }
 
 /// Which of a model's two pipelines draws it. `Lit` draws it lit into the
-/// world's color. `Depth` draws its depth, seen from the light, into the shadow
+/// world's color. `Depth` draws its depth, along the light, into the shadow
 /// map.
 #[derive(Clone, Copy)]
 pub enum Stage {

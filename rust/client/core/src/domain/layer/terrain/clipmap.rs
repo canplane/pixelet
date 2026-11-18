@@ -433,10 +433,10 @@ pub(crate) fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = clipmap();
     let terrain = IndexedTerrainTile::tile_cache();
     let lost = core::mem::replace(&mut w.on, on) != on;
-    // For each clip level, whether its zoom changed, and whether anything of
-    // it changed.
-    let (mut zoom_changed, mut changed) = (
-        [false; CLIP_LEVEL_CNT as usize],
+    // For each clip level, the zoom it was laid out at before, none where it
+    // was not laid out, and whether anything of it changed.
+    let (mut was_zoom, mut changed) = (
+        [None::<Zoom>; CLIP_LEVEL_CNT as usize],
         [lost; CLIP_LEVEL_CNT as usize],
     );
     let released = wake(w);
@@ -468,7 +468,7 @@ pub(crate) fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             Some(f) => Entry::at(f, 1),
             None => Entry::absent([i32::MIN; 2]),
         };
-        zoom_changed[clip_level as usize] = was.0 != cell_zoom;
+        was_zoom[clip_level as usize] = was.1.map(|_| was.0);
         changed[clip_level as usize] |= was != (cell_zoom, first);
         stale |= was != (cell_zoom, first);
     }
@@ -476,21 +476,32 @@ pub(crate) fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         return false;
     }
     // A clip level that did not change wants its bricks where they already
-    // are, so only changed clip levels have their entries rewritten.
+    // are, so only changed clip levels have their entries rewritten. The
+    // ground answers otherwise both over the brick an entry now wants and
+    // over the one it leaves, which a coarser clip level answers from then
+    // on, so each is reported as changed.
     for clip_level in 0..CLIP_LEVEL_CNT {
+        if !changed[clip_level as usize] {
+            continue;
+        }
         let (cell_zoom, first) = (
             w.clip_levels[clip_level as usize].cell_zoom,
             first_of(w, clip_level),
         );
-        let Some(f) = first.filter(|_| changed[clip_level as usize]) else {
-            continue;
-        };
+        let was = was_zoom[clip_level as usize];
         for s in 0..ENTRY_CNT {
             let entry = &mut w.table.entries[(clip_level * ENTRY_CNT + s) as usize];
-            let want = entry_brick(cell_zoom, f, s);
-            if zoom_changed[clip_level as usize] || lost || entry.brick != want {
-                entry.brick = want;
-                terrain.changed_at(brick_quad(cell_zoom, want));
+            let want = first.map(|f| entry_brick(cell_zoom, f, s));
+            let held = was.map(|zoom| (zoom, entry.brick));
+            if !lost && held == want.map(|q| (cell_zoom, q)) {
+                continue;
+            }
+            if let Some((zoom, q)) = held {
+                terrain.changed_at(brick_quad(zoom, q));
+            }
+            if let Some(q) = want {
+                entry.brick = q;
+                terrain.changed_at(brick_quad(cell_zoom, q));
             }
         }
     }

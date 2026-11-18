@@ -343,8 +343,8 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // point, and the line while its speaker is drawn.
     let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
-    pin::show(&mut pins, o.eye, draft, &mut shown);
-    let places_stopped = place::show(&mut read_places, o.eye, &mut shown);
+    pin::show(&mut pins, draft, &mut shown);
+    let places_stopped = place::show(&mut read_places, &mut shown);
     shown.extend(seen.bubble.instance());
     let spacing = SPACING_PX;
     // What was drawn last, by its holder's key. When what a holder shows

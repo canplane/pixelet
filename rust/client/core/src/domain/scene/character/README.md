@@ -18,14 +18,14 @@ frame in the interaction phase (`companion.rs` `Walk`, `../../../frame.rs`
 `companion_tick`), the pet at its own place beside the person's, neither
 anchored to the other.
 
-Each view draws a character by its own eye. The world draws it where its walk
+The world and a character surface each draw a character. The world draws it where its walk
 stands it, while it shows as a decor of its cell does (`../../query/support.rs`
 `body_shown`), by the lens's decor lods (`../../view/lens.rs`), by how much
 of a camera cell it spans: posed down to the model's edge, its pose held down to
 the impostor's, and none below (`../character.rs` `Character::tick`,
 `Character::draw`), and nothing in first person. A character surface,
 the character picker's canvas, draws the companion's person or pet as it is,
-whole, before an eye of its own, whatever the world's eye sees of it
+whole, from a viewpoint of its own, whatever the eye sees of it
 (`surface.rs`, `Character::surface_draw`).
 
 The person's chat line is not a character. It is a marker the person holds, over

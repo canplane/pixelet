@@ -12,7 +12,6 @@
 //! (`clear_of_walls`). The models are Kenney's "Mini Characters" and "Cube
 //! Pets", CC0.
 
-use crate::domain::observer;
 use crate::domain::param;
 use crate::domain::query::World;
 use crate::domain::query::change::Memo;
@@ -277,8 +276,9 @@ impl Character {
     }
 }
 
-/// Where a walk is drawn, kept by where it stands and its floor there.
-type FloorMemo = Memo<([f64; 2], f64), ([f64; 2], f64)>;
+/// Where a walk is drawn and the floor it stands on, kept by where it stands
+/// and the floor taken where nothing is known under it.
+type FloorMemo = Memo<(Q3, f64), ([f64; 2], f64)>;
 
 struct Walk {
     at: [f64; 2],
@@ -292,9 +292,11 @@ struct Walk {
     init_facing_done: bool,
     follow_walk_until: f64,
     /// Where it stands, its height unknown as the pivot's can be. None until
-    /// it first has a place.
+    /// it first has a place. Its height is the one height a body has: the
+    /// floor under it at the size the eye sets now (`drawn_at`), on which it
+    /// is drawn and from which it walks on.
     stands: Option<Q3>,
-    /// Where the character is drawn and on what floor (`drawn_at`).
+    /// Where the character is drawn and the floor under it (`drawn_at`).
     floor_memo: FloorMemo,
 }
 
@@ -453,12 +455,11 @@ impl Walk {
             };
         }
         self.at = at;
-        let floor = self.floor(World::now()).unwrap_or(arrive_floor);
-        (
-            drawn_at(&mut self.floor_memo, at, floor, half),
-            self.heading as f32,
-            is_walking,
-        )
+        let drawn = drawn_at(&mut self.floor_memo, *stands, arrive_floor, half);
+        if !is_unknown(stands) {
+            *stands = center(at, drawn[2]);
+        }
+        (drawn, self.heading as f32, is_walking)
     }
 }
 
@@ -467,33 +468,34 @@ fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
     world_to_canonical(&[x, y, over(floor)])
 }
 
-/// Slides a step through `world` from `from` toward `to`, a body the
-/// observer's eye sees (`World::step_slide`). With no observer the body's
-/// own place stands for the eye.
+/// Slides a step through `world` from `from` toward `to`
+/// (`World::step_slide`).
 pub(super) fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
-    let eye = observer::eye().map_or(*from, |eye| world_to_canonical(&eye));
-    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), &eye, true)
+    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), true)
 }
 
-/// Where a body `half` wide on each side is drawn for `at`, on the floor the
-/// eye's rays draw there in place of `floor` (`World::floor_under`). The
-/// answer is kept in `memo` while none of its inputs moves. Where the zoom
-/// drawn there is not loaded a coarser answer is taken, as a ray draws
-/// whatever ground it has.
-pub(crate) fn drawn_at(memo: &mut FloorMemo, at: [f64; 2], floor: f64, half: f64) -> [f64; 3] {
-    let pos = [at[0], at[1], over(floor)];
+/// Where a body `half` wide on each side standing at `stands` is drawn, and
+/// in its Z the floor it stands on: the floor under it at the size the eye
+/// sets there now (`World::floor_under`), the drawn surface where its height
+/// is not known and `floor` where nothing is known under it; and clear of
+/// the walls beside it. The answer is kept in `memo`, so the floor is asked
+/// again when the eye sets another size there or the world changes. Where
+/// that size is not held a coarser answer is taken, as a ray draws whatever
+/// ground it has.
+pub(crate) fn drawn_at(memo: &mut FloorMemo, stands: Q3, floor: f64, half: f64) -> [f64; 3] {
     let world = World::now();
-    let ([x, y], drawn) = memo.of((at, floor), || {
-        let floor_at = |[x, y]: [f64; 2]| {
-            world
-                .floor_under(&world_to_canonical(&[x, y, pos[2]]))
-                .val()
-                .flatten()
+    let [x, y, _] = to_world(&stands);
+    let ([x, y], drawn) = memo.of((stands, floor), || {
+        let floor_at = |[x, y]: [f64; 2], floor: f64| {
+            world.floor_under(&center([x, y], floor)).val().flatten()
         };
-        let drawn = floor_at(at).unwrap_or(floor);
-        let rises = |p| floor_at(p).is_some_and(|top| top > drawn);
+        let own = world.stands(&stands).val().flatten().map(|p| floor_of(&p));
+        let drawn = own
+            .map(|own| floor_at([x, y], own).unwrap_or(own))
+            .unwrap_or(floor);
+        let rises = |p| floor_at(p, drawn).is_some_and(|top| top > drawn);
         (
-            clear_of_walls(at, half, units(GROUND.leaf_cell_zoom()), rises),
+            clear_of_walls([x, y], half, units(GROUND.leaf_cell_zoom()), rises),
             drawn,
         )
     });

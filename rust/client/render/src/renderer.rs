@@ -1362,7 +1362,7 @@ impl Renderer {
                 .dispatch(&mut ctx, self.resolve.tiles.square_cnt());
         }
         self.screen.dispatch(&mut ctx);
-        // The shadow map holds the world's depth seen from the light, in the
+        // The shadow map holds the world's depth along the light, in the
         // tiles a receiver reads. The rays hold the world it was cast with,
         // and the decor and the characters are drawn over it. Where
         // `map_masked`, it is drawn through its gate, with its stencil

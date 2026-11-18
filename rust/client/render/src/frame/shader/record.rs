@@ -867,7 +867,7 @@ const LIGHT_LATTICE_LAST_LAYOUT: Layout = &[
     [LIGHT_HDR_BINDING, UNIFORM],
 ];
 
-/// The group of an observer's samples' hits (sample_hit.wgsl): the eye, the samples' words,
+/// The group of a cast's samples' hits (sample_hit.wgsl): the eye, the samples' words,
 /// the node cache whose drawable entries they set, and the args of the faces' asks.
 const SAMPLE_HIT_LAYOUT: Layout = &[
     [0, UNIFORM],

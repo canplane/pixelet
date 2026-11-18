@@ -85,8 +85,8 @@ probe whose failure doubles the wait before the next.
 
 ## The shadow map
 
-The sun is a second observer. The same passes run for it over the parts each
-observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `sample_run.eye.wgsl`
+The light is a second cast. The same passes run for it over the parts each
+cast gives (`beam.eye.wgsl` and `beam.light.wgsl`, `sample_run.eye.wgsl`
 and `sample_run.light.wgsl`), into a map of the world's depth along the light
 in a square box about the eye (`pass/shadow.rs`). Each texel is fixed in the
 world and held in a slot by its index modulo the map's side, and its ray starts

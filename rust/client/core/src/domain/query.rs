@@ -3,8 +3,9 @@
 //! Queries over what is resident. Every query goes through the world's one
 //! query of what is in a node (`World::node`). On it stand the asset in a
 //! cell at the zoom it is asked (`World::asset`) and the first cell a ray
-//! meets (`first_hit`). An eye casts such rays, and a body casts them
-//! straight up and down its cell (`support.rs`). A query never fetches or
+//! meets (`first_hit`). A ray from the eye asks each node at the size the
+//! eye sets at the node, and a body casts its rays straight up and down its
+//! cell at the cell's one size (`support.rs`). A query never fetches or
 //! holds anything. It returns an exact answer, a coarser answer with the
 //! tile it lacked, or a lack with that tile.
 //!
@@ -50,10 +51,11 @@ mod surface;
 #[path = "query/world.rs"]
 mod world;
 
-pub(crate) use detail::{cell_zoom_drawn, cell_zoom_read, zoom_range};
+pub(crate) use detail::zoom_range;
 pub(crate) use ray::{Hit, HitKind, Ray};
 pub(crate) use support::{
-    body_room, body_shown, eye_over, floor_of, is_unknown, on_floor, over, unknown,
+    body_room, body_shown, cell_zoom_drawn, cell_zoom_read, eye_over, floor_of, is_unknown,
+    on_floor, over, unknown,
 };
 pub(crate) use world::{ColumnWalk, World};
 

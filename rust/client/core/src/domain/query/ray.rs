@@ -1,23 +1,24 @@
 // pxl-core/domain/query/ray.rs
 
-//! The first cell a ray meets, at the zoom its distance from the eye asks. The descent is
-//! pxl-engine's (`cast::first`), the same one the GPU's cast runs. Here the
+//! The first cell a ray meets, each node asked at the zooms the walk is
+//! given: one size for a body's cell, the eye's at each node's distance for
+//! a ray across what the eye sees. The descent is pxl-engine's
+//! (`cast::first`), the same one the GPU's cast runs. Here the
 //! world answers it from everything it holds, each node handed what its
 //! parent found (`CastWorld`). A viewer's walk answers the decor it sees too
 //! (`Viewer`), and a body's the layers alone.
 
 use super::change;
 use super::decor::claim;
-use super::detail::{cell_zoom_read, detail};
+use super::detail::{detail, leaf_at};
 use super::node::At;
 use super::world::World;
 use crate::domain::layer::Answer;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
-use crate::domain::observer;
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
-use pxl_engine::cast::{self, DEPTH, End, Keep, Line, Query, Trace};
+use pxl_engine::cast::{self, DEPTH, Detail, End, Keep, Line, Query, Trace};
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::ColumnSurface;
@@ -227,61 +228,68 @@ impl Query for CastWorld<'_> {
 }
 
 impl World {
-    /// The first cell that stops a body along `ray` within its `t_max`, at
-    /// the zoom its distance from the eye asks (`detail`): the layers alone, so
-    /// no decor is met. What the ray starts inside is not met, so an eye under
-    /// the ground is not stopped where it stands. A cell met coarser than it
-    /// is held comes with the tile lacked. A cell not held at all is lacked
-    /// too, and past it the ray tells nothing.
+    /// The first cell that stops a ray from the eye within its `t_max`
+    /// (`seen`): the layers alone, so no decor is met. The orbit camera asks
+    /// it of the lines its eye would go along and of the line from its pivot
+    /// to its eye, and the profiler of the pointer's ray. What the ray
+    /// starts inside is not met, so the eye under the ground is not stopped
+    /// where it stands. A cell met coarser than it is held comes with
+    /// the tile lacked. A cell not held at all is lacked too, and past it the
+    /// ray tells nothing.
     pub(crate) fn first_hit(&self, ray: &Ray) -> Answer<Option<Hit>> {
-        let mut path = Path::default();
-        self.along(ray, Until::Opaque, None, &mut path, &mut None)
+        self.seen(ray, None)
     }
 
-    /// The first thing a viewer sees along `ray`: everything placed and, of
-    /// what the ground generates at the leaves, `decors`
-    /// (`lens::leaf_decors`).
+    /// The first thing the eye sees along `ray`, a ray from it as the
+    /// pointer's pick casts (`seen`): everything placed and, of what the
+    /// ground generates at the leaves, `decors` (`lens::leaf_decors`).
     pub(crate) fn first_seen(&self, ray: &Ray, decors: u32) -> Answer<Option<Hit>> {
-        let mut path = Path::default();
-        self.along(ray, Until::Opaque, Some(decors), &mut path, &mut None)
+        self.seen(ray, Some(decors))
     }
 
-    /// The first cell along `ray` that `until` stops at, at the zoom its
-    /// distance from the eye asks (`detail`, pxl-engine `cast::first`). The ray starts at
-    /// its origin, which may stand off the world, as an eye over it does
-    /// (pxl-spec `world::origin`). With no observer it is read
-    /// from where it starts (`along_by`). With `decors` it is a viewer's (`Viewer`), and
-    /// without them a body's. The tiles' lines step on from `path`, the
-    /// ground's lines that a walk beside this ray read over the same tile
-    /// cache, and are left there for the next ray. A walk from the origin
-    /// `descent` names goes on from where that one ended, its asker holding
-    /// what the descent to there lacked, and leaves its own end there.
+    /// `along` for a ray from the eye or along the eye's way, the pointer's
+    /// and the orbit's lines: each node is asked at the
+    /// zoom its own distance from the eye asks (`detail`), as a pixel's ray
+    /// asks it, so the answer is of the eye where it stands (`change::eye`).
+    /// With no eye nothing is observed, and it answers a lack.
+    fn seen(&self, ray: &Ray, decors: Option<u32>) -> Answer<Option<Hit>> {
+        let o = ray.origin;
+        let Some(eye) = change::eye() else {
+            return Answer::Lack(leaf_at(&origin(o[0], o[1], o[2])));
+        };
+        let mut path = Path::default();
+        self.along(
+            ray,
+            detail(eye, o),
+            Until::Opaque,
+            decors,
+            &mut path,
+            &mut None,
+        )
+    }
+
+    /// The first cell along `ray` that `until` stops at, each node asked at
+    /// the zooms `detail` gives (pxl-engine `cast::first`): the eye's at the
+    /// node's distance (`detail`), or one size wherever the ray goes
+    /// (`one_zoom`), which is the one thing a body's ray and the eye's
+    /// differ in. The ray starts at its origin, which may stand off the
+    /// world, as the eye over it does (pxl-spec `world::origin`). With
+    /// `decors` it is a viewer's (`Viewer`), and without them a body's. The
+    /// tiles' lines step on from `path`, the ground's lines that a walk
+    /// beside this ray read over the same tile cache, and are left there for
+    /// the next ray. A walk from the origin `descent` names goes on from
+    /// where that one ended, its asker holding what the descent to there
+    /// lacked, and leaves its own end there.
     pub(super) fn along(
         &self,
         ray: &Ray,
-        until: Until,
-        decors: Option<u32>,
-        path: &mut Path,
-        descent: &mut Option<Descent>,
-    ) -> Answer<Option<Hit>> {
-        self.along_by(observer::eye(), ray, until, decors, path, descent)
-    }
-
-    /// `along` as `eye` reads the world, or, with none, as an eye at the
-    /// ray's origin does: a place the camera is sent to is read as it will
-    /// be seen from there (`SplitCell::over`).
-    pub(super) fn along_by(
-        &self,
-        eye: Option<V3>,
-        ray: &Ray,
+        detail: Detail,
         until: Until,
         decors: Option<u32>,
         path: &mut Path,
         descent: &mut Option<Descent>,
     ) -> Answer<Option<Hit>> {
         let o = ray.origin;
-        let eye = eye.unwrap_or(o);
-        let detail = detail(eye, o);
         let mut query = CastWorld {
             viewer: decors.map(|decors| Viewer {
                 ray,
@@ -308,7 +316,11 @@ impl World {
         // one it ended in, the coarsest of them the one its detail asks at
         // the end of its way farther from the eye.
         let went = f64::from(trace.hit.t).clamp(0.0, ray.t_max);
-        let coarsest = cell_zoom_read(eye, o).min(cell_zoom_read(eye, ray.at(went)));
+        let zoom_at = |t: f64| {
+            let e: [f32; 3] = core::array::from_fn(|k| detail.eye[k] - (ray.dir[k] * t) as f32);
+            detail.at(e[0] * e[0] + e[1] * e[1] + e[2] * e[2])
+        };
+        let coarsest = zoom_at(0.0).min(zoom_at(went));
         let end = ray.at(went + units(coarsest) / 2.0);
         change::report_read([o[0], o[1]], [end[0], end[1]], coarsest);
         let met = query.viewer.as_ref().and_then(|v| v.met);

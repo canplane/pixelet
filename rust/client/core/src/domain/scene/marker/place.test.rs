@@ -1,6 +1,8 @@
 // pxl-core/domain/scene/marker/place.test.rs
 
 use super::*;
+use crate::domain::query::test::set_eye;
+use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM};
 
 /// A place read from the brick it stands in, on the lap of X `lap` rounds
@@ -17,7 +19,7 @@ fn place_in(brick_zoom: Zoom, lap: i32) -> Place {
         ground,
         finest: LEAF_CELL_ZOOM,
         top: None,
-        asked: None,
+        surface: Memo::NONE,
     }
 }
 
@@ -48,7 +50,7 @@ fn standing() -> Vec<Place> {
         .map(|k| Place {
             ground: stands(src, [7 + 40 * k, 9]),
             kind: shown_kind(),
-            top: Some(3.0),
+            top: Some((3.0, LEAF_CELL_ZOOM)),
             ..place_in(12, 0)
         })
         .collect()
@@ -59,18 +61,21 @@ fn standing() -> Vec<Place> {
 #[test]
 fn a_place_read_again_keeps_its_stand() {
     let held = Place {
-        top: Some(3.0),
-        asked: Some([0.0; 3]),
+        top: Some((3.0, LEAF_CELL_ZOOM)),
         ..place_in(12, 0)
     };
     let mut read = vec![held, place_in(12, 0)];
     hand_held(&mut read, 1);
-    assert_eq!((read[1].top, read[1].asked), (Some(3.0), None));
+    assert_eq!(
+        (read[1].top, read[1].surface.keeps(&())),
+        (Some((3.0, LEAF_CELL_ZOOM)), false)
+    );
     // Its own ask takes the place of what it was handed: nothing is known
     // under it here.
     budget(false);
-    show(&mut read, [0.0, 0.0, 10.0], &mut Vec::new());
-    assert_eq!((read[1].top, read[1].asked.is_some()), (None, true));
+    set_eye([0.0, 0.0, 10.0]);
+    show(&mut read, &mut Vec::new());
+    assert_eq!((read[1].top, read[1].surface.keeps(&())), (None, true));
 }
 
 /// With the budget spent, a run asks one place's surface and the others
@@ -80,17 +85,17 @@ fn a_place_read_again_keeps_its_stand() {
 fn surfaces_are_asked_under_the_budget() {
     let mut read = standing();
     let [x, y, _] = q3::unpack(&read[0].ground.mid());
-    let eye = [x, y, 10.0];
-    let asked = |read: &[Place]| read.iter().filter(|p| p.asked.is_some()).count();
+    set_eye([x, y, 10.0]);
+    let asked = |read: &[Place]| read.iter().filter(|p| p.surface.keeps(&())).count();
     let mut out = Vec::new();
     budget(true);
-    assert!(show(&mut read, eye, &mut out), "some are left");
+    assert!(show(&mut read, &mut out), "some are left");
     assert_eq!(asked(&read), 1);
     assert_eq!(out.len(), 2, "those still to ask stand on what they hold");
-    assert!(show(&mut read, eye, &mut out));
-    assert!(!show(&mut read, eye, &mut out), "the last is asked");
+    assert!(show(&mut read, &mut out));
+    assert!(!show(&mut read, &mut out), "the last is asked");
     assert_eq!(asked(&read), 3);
-    assert!(!show(&mut read, eye, &mut out), "none is left to ask");
+    assert!(!show(&mut read, &mut out), "none is left to ask");
 }
 
 /// The asks of a place with nothing known under it end, the eye standing
@@ -102,14 +107,12 @@ fn the_asks_of_a_place_over_nothing_known_end() {
         .map(|p| Place { top: None, ..p })
         .collect();
     let [x, y, _] = q3::unpack(&read[0].ground.mid());
-    let eye = [x, y, 500.0];
+    set_eye([x, y, 500.0]);
     let mut out = Vec::new();
     budget(true);
-    let runs = (0..8)
-        .take_while(|_| show(&mut read, eye, &mut out))
-        .count();
+    let runs = (0..8).take_while(|_| show(&mut read, &mut out)).count();
     assert!(runs < 3, "the asks end: {runs} runs left some");
-    assert!(read.iter().all(|p| p.asked.is_some()));
+    assert!(read.iter().all(|p| p.surface.keeps(&())));
     assert!(out.is_empty(), "nothing stands on nothing known");
 }
 

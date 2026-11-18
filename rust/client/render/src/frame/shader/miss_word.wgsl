@@ -30,7 +30,7 @@ fn hit_fill(w: WalkEnd) -> u32 {
 /// Puts the hit of walk `w` at pixel `id` as hit `r`, which the record takes (`keep_hit`,
 /// `beam::HIT_WORDS`, record_hits.wgsl). The ray entered through `face`, which has
 /// `beam::HIT_LACK` set where the hit lacks. The hit holds its node, the asset it stopped
-/// at, and the line its observer gives it (hole.eye.wgsl, hole.light.wgsl `hit_line`).
+/// at, and the line its cast gives it (hole.eye.wgsl, hole.light.wgsl `hit_line`).
 fn hit_put(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) {
   let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;

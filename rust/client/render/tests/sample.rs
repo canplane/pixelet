@@ -55,8 +55,8 @@ const STEPS_TRIED: u32 = 32;
 /// The word every sample's words are laid with. A sample that no walk writes keeps it.
 const UNTOUCHED: u32 = 0xdead_beef;
 
-/// An observer's samples as the test lays them: the eye's words and the light's head, laid as
-/// pxl-engine eye.rs and light.rs place them, the observer's buffer of words, and how its
+/// A cast's samples as the test lays them: the eye's words and the light's head, laid as
+/// pxl-engine eye.rs and light.rs place them, the cast's buffer of words, and how its
 /// passes run.
 struct Observed {
     name: String,
@@ -72,7 +72,7 @@ struct Observed {
     source: RaySource,
 }
 
-/// Where an observer's rays start and go: the eye's grid or the light's box.
+/// Where a cast's rays start and go: the eye's grid or the light's box.
 enum RaySource {
     Eye {
         origin: [i32; 3],
@@ -525,7 +525,7 @@ fn light_beams(
 /// passes left.
 #[expect(
     clippy::too_many_arguments,
-    reason = "a frame's device, world, observer, words, tables, what it tells and its passes"
+    reason = "a frame's device, world, cast, words, tables, what it tells and its passes"
 )]
 fn run_frame(
     gpu: &Gpu,
@@ -698,11 +698,11 @@ fn run_frame(
     gpu.read(&node_cache)
 }
 
-/// Runs an observer's two frames. The second observer stands a step moved, and its frame runs
+/// Runs a cast's two frames. The second frame's stands a step moved, and its frame runs
 /// over the node cache the first frame left.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the device, the world, two frames' observers, their lines, what to tell and what failed"
+    reason = "the device, the world, two frames' casts, their lines, what to tell and what failed"
 )]
 fn two_frames(
     gpu: &Gpu,
@@ -1581,7 +1581,7 @@ fn holes_answer(
 /// its own zoom, which is the deepest node held (queue_last.wgsl `shows`).
 #[expect(
     clippy::too_many_arguments,
-    reason = "the world, the observer, its screen and origin, the pixels, their words and what to tell"
+    reason = "the world, the cast, its screen and origin, the pixels, their words and what to tell"
 )]
 fn lacks_answer(
     w: World,
@@ -1638,7 +1638,7 @@ fn lacks_answer(
 /// ray trace in `kind_cnt`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the world, the observer, its screen and origin, the pixels, their words and what to tell"
+    reason = "the world, the cast, its screen and origin, the pixels, their words and what to tell"
 )]
 fn marked_answers(
     w: World,
@@ -2046,7 +2046,7 @@ fn boxes_want(
 /// then on, and no other entry may be drawn. Failures go into `failed`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the device, the pass, its observer, words, groups, frame, what to tell and what failed"
+    reason = "the device, the pass, its cast, words, groups, frame, what to tell and what failed"
 )]
 fn light_rec_case(
     gpu: &Gpu,
@@ -2326,7 +2326,7 @@ fn light_raster_drawn(
 /// draw, and puts failures into `failed`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the device, the passes, its observer, words, origin and grid, what stood, what to tell and what failed"
+    reason = "the device, the passes, its cast, words, origin and grid, what stood, what to tell and what failed"
 )]
 fn rec_case(
     gpu: &Gpu,

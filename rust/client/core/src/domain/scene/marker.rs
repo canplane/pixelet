@@ -25,13 +25,12 @@ pub(crate) use chat::append_chat_line;
 pub(crate) use design::text_raster;
 
 use pxl_spec::brick::BRICK_SHIFT;
-use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::Cell;
 use pxl_spec::space::layer::octant::Octant;
 
-use crate::domain::query::{Ray, World};
 use design::Design;
 
 /// A brick of the eye's clip levels that markers are read over, named by its
@@ -79,17 +78,4 @@ struct Instance {
 pub(crate) enum MarkerHit {
     To(Q3),
     Pin(Octant, Q3),
-}
-
-/// The height at which a ray down over `at`, from `high`, first meets what is
-/// drawn above `low`, or None where nothing there is known.
-fn surface(at: &Q3, (high, low): (f64, f64)) -> Option<f64> {
-    let xy = q3::unpack(at);
-    let ray = Ray {
-        origin: [xy[0], xy[1], high],
-        dir: [0.0, 0.0, -1.0],
-        t_max: high - low,
-    };
-    let hit = World::now().first_hit(&ray).val().flatten()?;
-    Some(high - hit.t)
 }

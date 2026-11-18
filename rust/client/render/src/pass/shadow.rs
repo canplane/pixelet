@@ -1,6 +1,6 @@
 // pxl-render/pass/shadow.rs
 
-//! The light's shadow map: the world's depth seen from the light, orthographic, centered on
+//! The light's shadow map: the world's depth along the light, orthographic, centered on
 //! the eye and as wide as every effect reaches (`EFFECT_REACH`). Its texels are snapped to a
 //! grid fixed in the world (`Shadow::aim`). The world is cast a ray a texel through the
 //! world's query, as the eye's rays are (light.wgsl `light_cs`), into `world`, a clipmap over
@@ -353,13 +353,13 @@ impl Shadow {
             _ => light,
         };
         self.cast_from = Some(from);
-        // The box's eye stands two half widths up the light from the target, and its near and
+        // The box's origin stands two half widths up the light from the target, and its near and
         // far planes lie a half width either side of the target. The sphere of radius
         // `half_width` about the target then lies between them whatever the light's angle. A
         // margin lies past each plane, the two together `DEPTH_STEP` of the box's depth.
-        let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * half_width);
+        let origin: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * half_width);
         let (mut view, mut proj) = (mat4::new(), mat4::new());
-        mat4::look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
+        mat4::look_at(&mut view, origin, target, [0.0, 0.0, 1.0]);
         let margin = half_width * DEPTH_STEP / (1.0 - DEPTH_STEP);
         ortho(
             &mut proj,

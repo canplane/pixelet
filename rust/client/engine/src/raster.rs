@@ -3,7 +3,7 @@
 //! wgsl-port: the voxels drawn as boxes, so that the rasterizer leaves at each drawn pixel
 //! the cell that pixel shows (pxl-render raster.wgsl, ray/raster.rs). The eye's voxels
 //! and the light's are each kept in a record across frames (`record`), and every held voxel
-//! in view is drawn each frame its observer casts (pxl-render record_draw.wgsl). A box is a
+//! in view is drawn each frame its cast runs (pxl-render record_draw.wgsl). A box is a
 //! node as its ray stops on it (`cast::asset_box`).
 //!
 //! Of its faces turned to the eye, a box draws those its rays entered it through (`faces`);
@@ -42,7 +42,7 @@ use pxl_spec::space::coord::q3::FRAC_W;
 /// `EYED` where the box lies around the eye (`is_eyed`) and `STALE` where the voxel is not the
 /// node the light's walk stops on there (`record::light_fresh`). The box
 /// itself belongs to the entry, which the raster's vertex stage reads by the voxel's slot: the
-/// node's planes from the observer's origin, the cell its asset keeps inset
+/// node's planes from the cast's origin, the cell its asset keeps inset
 /// (`cast::asset_box`), and the faces it draws, one bit a side (`faces`). The eye draws the
 /// faces an eye's ray asked about (`record::ASKED`); the light draws every face some ray
 /// entered (`record::FACES`).

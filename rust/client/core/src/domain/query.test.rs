@@ -13,6 +13,7 @@ use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM, Zoom, units};
 use pxl_spec::space::layer::lattice::{self, GROUND, Grid, TILE_CELLS};
 
+use super::detail::one_zoom;
 use super::*;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::{Answer, Base as _};
@@ -109,10 +110,10 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
     set_eye([center[0], center[1], 64.0]);
 }
 
-/// `World::step_slide` with the eye stood at `eye`.
-pub(crate) fn step_slide_by(world: &World, from: &Q3, to: &Q3, eye: &Q3, walled: bool) -> Q3 {
-    set_eye([eye[0], eye[1], eye[2]].map(|v| q3::to_real(i64::from(v))));
-    world.step_slide(from, to, eye, walled)
+/// `World::step_slide` with the eye stood at `at`.
+pub(crate) fn step_slide_by(world: &World, from: &Q3, to: &Q3, at: &Q3, walled: bool) -> Q3 {
+    set_eye([at[0], at[1], at[2]].map(|v| q3::to_real(i64::from(v))));
+    world.step_slide(from, to, walled)
 }
 
 /// Stands the eye at `eye`. From 64 units over ground near the world's
@@ -545,15 +546,24 @@ fn ray_goes_on_from_the_last() {
         let (mut path, mut descent) = (Path::default(), None);
         access.along(
             &ray(z, 1.0),
+            one_zoom(LEAF_CELL_ZOOM),
             Until::Transparent,
             None,
             &mut path,
             &mut descent,
         );
         assert!(descent.is_some());
-        let on = access.along(&ray(z, -1.0), Until::Opaque, None, &mut path, &mut descent);
+        let on = access.along(
+            &ray(z, -1.0),
+            one_zoom(LEAF_CELL_ZOOM),
+            Until::Opaque,
+            None,
+            &mut path,
+            &mut descent,
+        );
         let top = access.along(
             &ray(z, -1.0),
+            one_zoom(LEAF_CELL_ZOOM),
             Until::Opaque,
             None,
             &mut Path::default(),
@@ -775,29 +785,19 @@ fn body_not_shown_keeps_to_the_area() {
     assert_eq!(step_slide_by(&world, &lost, &outside, &eye, true), lost);
 }
 
-/// A height picks the floor nearest it: the ground under a deck or the deck,
-/// whichever is closer. A solid with no clear cell over it is no floor.
+/// With no eye nothing is observed: a read of the world answers a lack.
 #[test]
-fn height_nearest_floor() {
+fn a_read_with_no_eye_answers_a_lack() {
     let [x, y] = flat_at_five();
-    let mut store = Store::default();
-    let red = cube::Object::Red as AssetId;
-    // A deck a cube thick has its top at 10, with the ground at 5 under it.
-    write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
-    let access = placed(store);
-    let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
-    assert_eq!(
-        near(6.0),
-        Answer::Exact(Some(5.0)),
-        "the ground under the deck"
-    );
-    assert_eq!(near(12.0), Answer::Exact(Some(10.0)), "the deck");
-    // A cube right under the deck's cube has no clear cell over its top.
-    write(store::object_mut(), [x, y, 8.0], OBJECT_COARSEST, red);
-    assert_eq!(
-        access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)),
-        Answer::Exact(Some(10.0))
-    );
+    let world = placed(Store::default());
+    observer::set_pose(None);
+    let at = world::point(x + 0.5, y + 0.5, over(5.0));
+    assert!(matches!(world.floor_under(&at), Answer::Lack(_)));
+    assert!(matches!(
+        world.surface_support(&unknown(&at)),
+        Answer::Lack(_)
+    ));
+    assert!(matches!(world.support_nearest(&at), Answer::Lack(_)));
 }
 
 #[test]
@@ -1189,4 +1189,60 @@ fn shown_share_of_what_is_asked() {
     let tile_cache = IndexedTerrainTile::tile_cache();
     assert!(tile_cache.is_shown());
     assert_eq!(tile_cache.shown_share(), 1.0);
+}
+
+/// The floor under a point high in the air is far from the eye that stands
+/// there: it is the floor the eye draws there, the one its own ray down
+/// meets, coarser than the leaves', over ground held and over ground a
+/// coarser tile stands in for alike.
+#[test]
+fn the_floor_far_under_a_point_is_the_one_drawn_there() {
+    let [x, y] = flat_at_five();
+    let world = placed(Store::default());
+    let eye = [x + 0.5, y + 0.5, 1005.0];
+    set_eye(eye);
+    let ray = Ray {
+        origin: eye,
+        dir: [0.0, 0.0, -1.0],
+        t_max: 4000.0,
+    };
+    for stood_in in [false, true] {
+        if stood_in {
+            withhold_at([x + 0.5, y + 0.5]);
+        }
+        let seen = world.first_hit(&ray).val().flatten().unwrap().cube.max[2];
+        assert!(seen > 5.0, "the eye draws a coarser cell there: {seen}");
+        let floor = world.floor_under(&world::point(eye[0], eye[1], eye[2]));
+        assert!(
+            matches!(floor, Answer::Coarser(Some(top), _) if top == seen),
+            "{floor:?}"
+        );
+    }
+}
+
+/// A deck two units thick whose top stands five units over the ground, and
+/// a point half a unit over it. From 100 units off, where the eye draws
+/// cells two units wide, the floor under the point is the deck. With the
+/// eye straight over it so that a zoom's edge passes between the point and
+/// the deck, the point read at the leaves' size and the deck a size
+/// coarser, it is the deck still: the solid under the point, and not the
+/// ground under that.
+#[test]
+fn the_floor_under_a_point_over_a_deck_is_the_deck() {
+    let [x, y] = flat_at_five();
+    let mut store = Store::default();
+    let red = cube::Object::Red as AssetId;
+    for [dx, dy, dz] in
+        (0..4).flat_map(|dx| (0..4).flat_map(move |dy| [8, 9].map(|dz| [dx, dy, dz])))
+    {
+        let at = [x + f64::from(dx), y + f64::from(dy), f64::from(dz)];
+        write(&mut store, at, OBJECT_COARSEST, red);
+    }
+    let world = placed(store);
+    let at = [x + 1.5, y + 1.5, 10.5];
+    for eye in [[at[0] + 100.0, at[1], at[2]], [at[0], at[1], at[2] + 95.8]] {
+        set_eye(eye);
+        let floor = world.floor_under(&world::point(at[0], at[1], at[2]));
+        assert_eq!(floor.val().flatten(), Some(10.0), "from {eye:?}: {floor:?}");
+    }
 }

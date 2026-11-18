@@ -11,9 +11,10 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - One rule, isotropic and symmetric (AGENTS.md). Before a fix, find the rule
   the rest of the system follows there and make the part follow it; a form
   that is faster in one case than the general rule is overfitting, and what
-  the general rule costs there is its price, not a regression. A reader of
-  the world takes its detail from its distance from the eye alone
-  (query/detail.rs), wherever its ray starts.
+  the general rule costs there is its price, not a regression. The eye sets
+  the size a place is asked at by the place's distance from it alone, the
+  same in every direction (query/detail.rs); the answer at a size is the
+  world's.
 - One owner. A fact has one definition; every other form derives from it. A
   fact held in several places is reviewed, and stays apart only where the CPU
   and the GPU each hold it or joining it would add branches. Where they each

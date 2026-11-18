@@ -1,16 +1,16 @@
 //! Checks that the record's passes over the holes' hits (frame/shader/record_hits.wgsl) answer
 //! as pxl-engine's record does, over the real world of tests/real_world.
 //!
-//! `rec_hits_cs` writes each hit an observer's holes kept into the entry that draws the
+//! `rec_hits_cs` writes each hit a cast's holes kept into the entry that draws the
 //! hit's node (record_put.wgsl `observe_hit`), the eye's hits and the light's alike
 //! (record_hits.eye.wgsl, record_hits.light.wgsl). The hits are those the holes' queue leaves
 //! over the world: the eye's in frames that cast their samples first, whose hits set the
 //! entries and whose faces' pass answered their asks, and in frames that leave the entries to
 //! the holes' hits; and the light's over its box. Some entries the hits find are then laid
-//! otherwise, as other frames and the other observer leave them (`lay_otherwise`). From those
+//! otherwise, as other frames and the other cast leave them (`lay_otherwise`). From those
 //! same words, the test works out what pxl-engine `record` says the pass leaves
 //! (`rec_want`) and compares every word of the node cache, of the raster's args and of the
-//! observer's words. The asks the eye's hits open are compared as a set, because the device
+//! cast's words. The asks the eye's hits open are compared as a set, because the device
 //! lays them in the order its threads come.
 //!
 //! `rec_faces_cs` must then put, at each pixel that still waits for its hit, the word that
@@ -380,13 +380,13 @@ fn drawer(cache: &[u32], h: &Hit) -> Option<u32> {
     slots.iter().copied().find(draws).or(slots.first().copied())
 }
 
-/// Lays some of the entries the hits find otherwise, as other frames and the other observer
+/// Lays some of the entries the hits find otherwise, as other frames and the other cast
 /// leave them, so that the record meets every case its rules part. Each entry a hit finds is
 /// chosen once, by its slot. One in eight has the face of the first hit on it entered by the
-/// other observer: by the light, which asks no word, where `reads`, and by the eye, which asks,
+/// other cast: by the light, which asks no word, where `reads`, and by the eye, which asks,
 /// where not. One in sixteen has its node held twice, the entry moved later in the bucket and
 /// an entry before it that draws nothing (`twice`), and half of those have that face entered
-/// by the other observer first. One in thirty-two is forgotten, as forget.wgsl forgets a slot:
+/// by the other cast first. One in thirty-two is forgotten, as forget.wgsl forgets a slot:
 /// its key is cleared. One in thirty-two has its node held twice, and the entry before it
 /// holds the node with another answer, which no hit takes.
 fn lay_otherwise(cache: &mut [u32], hits: &[Hit], reads: bool) {
@@ -460,7 +460,7 @@ struct Ask {
 }
 
 /// What `rec_hits_cs` leaves where the hits `hits` are written into the node cache `cache`
-/// and the raster's args `args`, by pxl-engine `record`; `reads` says the observer reads its
+/// and the raster's args `args`, by pxl-engine `record`; `reads` says the cast reads its
 /// faces' words, as the eye does. Each hit finds the entry that draws its node (`drawer`), and
 /// as no hit writes a key, every hit on a node finds the entry the pass began with. A hit on
 /// an entry with no face set before the pass marks it drawn in the frame's number, so no
@@ -641,7 +641,7 @@ fn cache_word(k: usize) -> String {
     }
 }
 
-/// An observer's frame up to its record of its holes' hits: the hits, and the words the
+/// A cast's frame up to its record of its holes' hits: the hits, and the words the
 /// record's passes run over, each kept as laid and bound on the device. `words` are the eye's
 /// beam rays' words or the light's list, and `asks_at` the first word of the asks its hits
 /// open. `rays` are the eye's rays or the light's map, `size` texels a layer. Only the light has
@@ -664,7 +664,7 @@ struct Run {
 }
 
 impl Run {
-    /// The bindings of `rec_hits_cs`: the eye at 0, the observer's words at 8, the node cache
+    /// The bindings of `rec_hits_cs`: the eye at 0, the cast's words at 8, the node cache
     /// at 9 and the raster's args at 16, and the light's head at 11 for the light.
     fn rec_binds(&self) -> Vec<(u32, wgpu::BindingResource<'_>)> {
         let mut binds = vec![
@@ -1002,7 +1002,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
 }
 
 /// Runs `rec_hits_cs` over the words of `run`, a thread for each hit a frame holds, and
-/// compares every word it leaves in the node cache, the raster's args and the observer's words
+/// compares every word it leaves in the node cache, the raster's args and the cast's words
 /// with `rec_want`'s. The asks it laid are put in the order of their targets first, and an
 /// ask's line may be that of any hit that may open it (`Ask`).
 fn rec_case(
