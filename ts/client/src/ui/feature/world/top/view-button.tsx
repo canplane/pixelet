@@ -24,7 +24,7 @@ export function ViewButtons() {
       <ButtonStack
         items={[
           {
-            glyph: first ? "eye" : "figure.stand",
+            glyph: first ? "view.3d" : "figure.stand",
             label: t(
               first
                 ? "world.controls.third_person"

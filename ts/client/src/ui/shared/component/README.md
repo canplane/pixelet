@@ -28,7 +28,7 @@ the colors that part do in `theme.ts`.
 | `backing`        | UIKit's blur (`Blur.swift`) under the fill for a material; else Liquid Glass (expo-glass-effect), or the fill without it | the fill, solid    | the fill, CSS backdrop blur under a see-through one |
 | `pill`           | UIKit glass (expo-glass-effect)                                                                                          | the web's fill     | fill                                                |
 | `text-field`     | system clear button                                                                                                      | the web's          | its own clear button                                |
-| `icon`           | SF Symbols (expo-symbols)                                                                                                | the web's Phosphor | Phosphor                                            |
+| `icon`           | SF Symbols (expo-symbols)                                                                                                | the web's Carbon   | IBM's Carbon                                        |
 | `palette`        | system colors                                                                                                            | the web's          | iOS's light values                                  |
 | `above-keyboard` | react-native-keyboard-controller                                                                                         | the iPhone's       | visual viewport                                     |
 

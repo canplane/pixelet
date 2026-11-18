@@ -43,8 +43,9 @@ export function Glyph({
   );
 }
 
-/** The strike's width on the 24-unit box. It matches Phosphor's regular and
- * bold strokes, which are 16 and 24 units wide on Phosphor's 256-unit box. */
+/** The strike's width on the 24-unit box. It matches the glyph's stroke:
+ * Carbon's, 2 units on its 32-unit box, and SF's regular; an SF weight above
+ * regular takes the wider. */
 function stroke(weight: IconProps["weight"] = "regular"): f64 {
   return weight === "regular" ? 1.5 : 2.25;
 }
