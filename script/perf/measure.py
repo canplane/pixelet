@@ -84,7 +84,11 @@ BATCH = 30
 # The seconds between captures of the screen and the device's state.
 CAPTURE_S = 10
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# A page's size: 4K, at Chrome's two device pixels a side.
+# A page's size in CSS pixels. What a run draws is this times its screen's device
+# pixels a CSS pixel, which only Chrome can set (chrome.py): there it is 4K on
+# every screen. A window that cannot be told its scale draws what the screen it
+# opens on gives, so each run says the pixels it drew (`drawn` in values.json)
+# and gate.py compares no runs whose counts differ.
 SIZE = {"width": 1920, "height": 1080}
 
 

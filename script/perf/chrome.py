@@ -62,6 +62,10 @@ class Page(Cdp):
                 "--no-default-browser-check",
                 # A CSS pixel is two device pixels on whichever screen the
                 # window opens: every run draws twice `SIZE`'s pixels a side.
+                # Left to the screen, a window on a Mac's built-in screen
+                # draws four times the pixels of one on a screen beside it,
+                # and the canvas follows the device pixels, so an emulated
+                # scale holds nothing.
                 "--force-device-scale-factor=2",
                 "--enable-logging=stderr",
                 "about:blank",
