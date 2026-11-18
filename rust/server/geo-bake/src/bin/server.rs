@@ -2,7 +2,7 @@
 
 //! The dev tile server, baking on demand. It keeps what it bakes, one directory a kind, across
 //! restarts, in `--oven` or else in the checkout's `tmp/`. After a re-ingest or a change to a
-//! bake the oven is purged by command. The Earth's picture is baked offline (`bin/earth.rs`),
+//! bake the oven is purged by command. The imagery is baked offline (`bin/imagery.rs`),
 //! so it is served from that bake (`./out`, or `--shelf`), under the names the bucket holds,
 //! however the rest is served.
 //! `--shelf` serves each kind's set (`tile/shard.rs`), so a bake can be looked at before
@@ -73,8 +73,7 @@ fn version_of(app: &App, layer: BaseKind) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
         _ if !is_sharded(layer) => {
-            read(&app.out.join(BaseKind::Earth.name()).join(pyramid::MANIFEST))
-                .map(|b| bytes_version(&b))
+            read(&app.out.join(layer.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
         }
         TileSource::Shelf(dir) => {
             read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
@@ -97,14 +96,14 @@ fn version_of(app: &App, layer: BaseKind) -> Result<String, String> {
 
 /// The source's declaration (`source.rs`) for the server as it stands: a shelf's
 /// sets as their manifests say; for the oven, the coverage in the formats this code writes;
-/// and for the Earth's picture, its bake's.
+/// and for the imagery, its bake's.
 fn decl(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;
         match &app.tile_source {
             _ if !is_sharded(l) => Ok(source::Kind {
                 shard: None,
-                ..source::of_set(&app.out.join(BaseKind::Earth.name()), &version)?
+                ..source::of_set(&app.out.join(l.name()), &version)?
             }),
             TileSource::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
                 k if k.shard.is_some() => Ok(k),
@@ -123,11 +122,11 @@ fn decl(app: &App) -> Result<String, String> {
     Ok(source::decl(app.min_zoom, &kinds, &OverrideMap::new())?.to_string())
 }
 
-async fn earth(app: &App, name: &str) -> Response {
+async fn imagery(app: &App, name: &str) -> Response {
     if Quadrant::of_key(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match fs::read(app.out.join(BaseKind::Earth.name()).join(name)).await {
+    match fs::read(app.out.join(BaseKind::Imagery.name()).join(name)).await {
         Ok(bytes) => tile_response(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
@@ -166,7 +165,7 @@ async fn tile(
     }
     let name = name.to_string();
     if !is_sharded(layer) {
-        return earth(&app, &name).await;
+        return imagery(&app, &name).await;
     }
     let oven = match &app.tile_source {
         TileSource::Oven(oven) => oven,

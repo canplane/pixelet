@@ -24,7 +24,7 @@ function code(f: () => unknown): unknown {
 }
 
 const T = tree.TERRAIN.ID;
-const E = tree.EARTH.ID;
+const I = tree.IMAGERY.ID;
 const S = tree.STORAGE.ID;
 const O = tree.OBJECT.ID;
 
@@ -37,8 +37,8 @@ test("BINDING - a path that leads to no node, or whose data its node does not ta
     [T, "0".repeat(LEAF_ZOOM + 1)],
     [T, 123],
     [T, "0123", "0"],
-    [tree.PLACE.ID, tree.EARTH.SPHERE.ID],
-    [E, tree.EARTH.SPHERE.ID, 0],
+    [tree.PLACE.ID, tree.IMAGERY.SPHERE.ID],
+    [I, tree.IMAGERY.SPHERE.ID, 0],
     [tree.ASSET.ID, "1"],
     [tree.ASSET.ID, 1, 1],
     [S],
@@ -77,8 +77,8 @@ test("BINDING - only the settings are written", () => {
 });
 
 test("walk - each node takes one token and hands the rest to the child it names", () => {
-  assert.deepStrictEqual(walk([E, tree.EARTH.SPHERE.ID])?.[1], []);
-  assert.deepStrictEqual(walk([E, "0123"])?.[1], ["0123"]);
+  assert.deepStrictEqual(walk([I, tree.IMAGERY.SPHERE.ID])?.[1], []);
+  assert.deepStrictEqual(walk([I, "0123"])?.[1], ["0123"]);
   assert.deepStrictEqual(walk([O, tree.OBJECT.TOP.ID, 7])?.[1], [7]);
   assert.deepStrictEqual(walk([999]), undefined);
 });

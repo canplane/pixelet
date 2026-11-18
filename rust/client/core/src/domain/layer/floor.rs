@@ -20,7 +20,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 /// supplies whole, whose ground lies within the eye's far edge
 /// (`Observation::demand_dist`). These hold every observed piece of ground.
 /// An eye higher than its far edge gets none: a pixel there covers more than
-/// a cell at the top, and the view has gone over to the Earth's picture.
+/// a cell at the top, and the view has gone over to the imagery.
 pub(crate) fn floor(o: &Observation, top: Zoom, each: impl FnMut(Quadrant)) {
     if let Some(r) = ring(o) {
         tiles_within(top, [o.eye[0], o.eye[1]], r).for_each(each);

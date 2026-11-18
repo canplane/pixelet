@@ -21,7 +21,7 @@ use crate::pyramid::MANIFEST;
 
 /// What a source says of one kind: the format it is in, where it is (the
 /// version a tile's name is under, which the core does not read) and the
-/// shards it holds; the Earth's picture is no shard's.
+/// shards it holds; the imagery is no shard's.
 #[derive(Clone)]
 pub struct Kind {
     pub format: u32,

@@ -21,13 +21,13 @@ pub(crate) const RETRY_ATTEMPT_CNT: u32 = 6;
 /// a platform runs.
 pub(crate) const CREDIT_CNT: u32 = 6;
 
-/// The body slots in `.fixed` (sys/io/body.rs), the most terrain and Earth
+/// The body slots in `.fixed` (sys/io/body.rs), the most terrain and imagery
 /// bodies held at once. A body holds its slot while it is on a credit and
-/// until it is decoded; an Earth body until its texels are taken. The number
+/// until it is decoded; an imagery body until its texels are taken. The number
 /// is sized for an eye that moves, not for the worst case.
 ///
 /// At most six reads are out (`CREDIT_CNT`), and
-/// at most four Earth bodies wait for their texels. A clip level spans one
+/// at most four imagery bodies wait for their texels. A clip level spans one
 /// tile's cells on a side (pxl-engine `clipmap::CLIP_SIZE`), so it wants at
 /// most four tiles, and a moving eye refills a few clip levels at once: four
 /// levels of four tiles. That makes 6 + 4 + 16 = 26, and the cap is 32. A

@@ -35,13 +35,13 @@ struct Row {
     execute: fn(Quadrant, &Path, &Path, u64) -> Result<(), String>,
 }
 
-/// None for a kind the oven does not bake, which is the Earth's picture.
+/// None for a kind the oven does not bake, which is the imagery.
 fn row(kind: BaseKind) -> Option<Row> {
     let (sources, execute): (fn(Quadrant) -> Vec<Quadrant>, _) = match kind {
         BaseKind::Terrain => (TerrainTile::sources, terrain::execute as _),
         BaseKind::Place => (PlaceTile::sources, place::execute as _),
         BaseKind::Division => (DivisionTile::sources, division::execute as _),
-        BaseKind::Earth => return None,
+        BaseKind::Imagery => return None,
     };
     Some(Row {
         kind,

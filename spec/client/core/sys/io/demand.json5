@@ -2,7 +2,7 @@
   $description: "A request's vocabulary, the core's and the UI's: what stream it is in, how\nits run came to an end, and the phases a run reports its time in. The profiler\nrecords and reports them by these names (spec/client/core/perf/perf.json5).",
   STREAM_NAME: {
     $type: "enum",
-    $value: ["terrain", "place", "division", "asset", "earth", "object"],
+    $value: ["terrain", "place", "division", "asset", "imagery", "object"],
     $extensions: { xpute: { names: true } },
   },
   OUTCOME_NAME: {

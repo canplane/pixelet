@@ -3,7 +3,7 @@
 use xpute_golden::Golden;
 
 use super::*;
-use crate::bake::tile::earth;
+use crate::bake::tile::imagery;
 use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/bake/terrain.tsv"));
@@ -127,11 +127,11 @@ fn brick_entries_are_the_walk_by_brick() {
     }
 }
 
-/// An Earth tile is as long as its texels say.
+/// An imagery tile is as long as its texels say.
 #[test]
-fn earth_pkt_size() {
-    let earth = earth::encode(&vec![0; earth::EARTH_SZ]).unwrap();
-    assert_eq!(earth.len(), earth::PKT_SZ as usize);
+fn imagery_pkt_size() {
+    let tile = imagery::encode(&vec![0; imagery::TILE_SZ]).unwrap();
+    assert_eq!(tile.len(), imagery::PKT_SZ as usize);
 }
 
 #[test]

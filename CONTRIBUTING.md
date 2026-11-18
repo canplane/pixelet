@@ -100,7 +100,7 @@ What a change takes before it is in a build:
 ## Making data
 
 Every kind of tile is baked by its own target (`terrain`, `place`, `division`
-and `earth`), and what a bake makes goes under `./out`. A bake goes through its
+and `imagery`), and what a bake makes goes under `./out`. A bake goes through its
 steps, the finest tiles first and then the folds, and one shard can be baked a
 step at a time:
 

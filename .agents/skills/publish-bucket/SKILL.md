@@ -51,10 +51,10 @@ A client takes `source` only where every kind is in its own format exactly
 (pxl-core `sys/io/source.rs`, `parse`). A version in a new format goes up with
 `upload` and is served with `serve` once the client that reads it is deployed.
 
-### Earth
+### Imagery
 
-The earth's bake writes its own `out/earth.publish/`
-([bake-tiles](../bake-tiles/SKILL.md)); `./script/publish.py earth` uploads it.
+The imagery's bake writes its own `out/imagery.publish/`
+([bake-tiles](../bake-tiles/SKILL.md)); `./script/publish.py imagery` uploads it.
 
 ### Assets
 

@@ -12,14 +12,14 @@ use pxl_global::Global;
 use pxl_render::frame::shader::word::{DECOR_GROUP_CNT, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
 use pxl_render::gpu::surface::SURFACE_CAP;
-use pxl_render::pass::atmosphere::EARTH_LAYER_CNT;
+use pxl_render::pass::atmosphere::IMAGERY_LAYER_CNT;
 use pxl_render::ray::{Cast, GroundInput, TerrainWrite};
-use pxl_render::renderer::{EarthLayer, FrameInput, FrameStat, render_frame};
+use pxl_render::renderer::{FrameInput, FrameStat, ImageryLayer, render_frame};
 use pxl_render::spec::span::FrameKind;
 use pxl_spec::space::coord::{q3, v3};
 use xpute_guest::clock::now;
 
-use crate::domain::layer::earth::{self, EARTH_SLOT_CNT, EarthTile};
+use crate::domain::layer::imagery::{self, IMAGERY_SLOT_CNT, ImageryTile};
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
@@ -47,9 +47,9 @@ pub(crate) fn screen_shows_world() -> bool {
 }
 
 /// NASA's Blue Marble for July 2004, one picture of the Earth that serves
-/// every hour and season. It is opened after EARTH, so it is under that
+/// every hour and season. It is opened after IMAGERY, so it is under that
 /// bake's version.
-const EARTH: Load = Load::Sphere;
+const SPHERE: Load = Load::Sphere;
 
 use crate::domain::layer::object::store;
 use crate::domain::layer::terrain::clipmap;
@@ -75,8 +75,8 @@ use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
 
 const _: () = assert!(
-    EARTH_SLOT_CNT == EARTH_LAYER_CNT,
-    "a GPU layer for each frame the earth layer holds"
+    IMAGERY_SLOT_CNT == IMAGERY_LAYER_CNT,
+    "a GPU layer for each frame the imagery layer holds"
 );
 
 /// What the renderer made of the frame, for the profiler to record
@@ -135,7 +135,7 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit, timed: bool) -> FrameR
         surface_cnt += 1;
     }
     let on = api::device_generation();
-    let (window, layers) = earth::window(EarthTile::demand().floor(), on);
+    let (window, layers) = imagery::window(ImageryTile::demand().floor(), on);
     // The renderer asks for the uploads as it encodes, so their time is taken
     // out of its own.
     let upload_ms = Cell::new(0.0);
@@ -144,8 +144,8 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit, timed: bool) -> FrameR
         upload();
         upload_ms.set(upload_ms.get() + clock() - at);
     };
-    let mut earth_upload = |write: &mut dyn FnMut(u32, &[u8]) -> bool| {
-        timed_upload(&mut || earth::upload(write, on));
+    let mut imagery_upload = |write: &mut dyn FnMut(u32, &[u8]) -> bool| {
+        timed_upload(&mut || imagery::upload(write, on));
     };
     let o = observation::observation();
     let eye = o
@@ -193,11 +193,11 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit, timed: bool) -> FrameR
         character_surfaces: &character_surfaces[..surface_cnt],
         pack: load_of(PACK).and_then(load_image),
         moon: load_of(moon::PICTURE).and_then(load_image),
-        earth: load_image(EARTH),
-        earth_layer: EarthLayer {
+        imagery_sphere: load_image(SPHERE),
+        imagery_layer: ImageryLayer {
             window,
             layers: &layers,
-            upload: &mut earth_upload,
+            upload: &mut imagery_upload,
         },
         ground: GroundInput {
             upload: &mut terrain_upload,

@@ -95,12 +95,12 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
     base(layer),
   ]),
   [
-    path.EARTH.SPHERE,
+    path.IMAGERY.SPHERE,
     {
       open: (rest, signal) =>
         rest.length === 0
           ? whenSourceDeclared(signal).then((d) =>
-              readObject(d, BASE_KINDS[path.EARTH.ID], TILE_SPHERE, signal),
+              readObject(d, BASE_KINDS[path.IMAGERY.ID], TILE_SPHERE, signal),
             )
           : none(),
     },

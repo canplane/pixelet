@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::place::PlaceTile;
 use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;
-use crate::domain::layer::earth::EarthTile;
+use crate::domain::layer::imagery::ImageryTile;
 use crate::domain::scene::stage::FrameReport;
 use crate::perf::frame::{
     DeviceSample, EFFECT_CNT, FrameSample, GpuSample, INVALIDATION_REASON_CNT, LAYER_CNT,
@@ -111,7 +111,7 @@ fn cache_cnts() -> ([f64; LAYER_CNT], [f64; LAYER_CNT]) {
         BaseKind::Terrain => of::<IndexedTerrainTile>(),
         BaseKind::Place => of::<PlaceTile>(),
         BaseKind::Division => of::<DivisionTile>(),
-        BaseKind::Earth => of::<EarthTile>(),
+        BaseKind::Imagery => of::<ImageryTile>(),
     });
     (cnts.map(|c| c.0), cnts.map(|c| c.1))
 }

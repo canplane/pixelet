@@ -1,14 +1,14 @@
-// pxl-tool/download/earth.rs
+// pxl-tool/download/imagery.rs
 
-//! The Earth's picture as NASA gives it, each file `infra/earth/source.json`
-//! names fetched into `infra/earth/raw/`, for `make bake-earth`.
+//! The imagery as NASA gives it, each file `infra/imagery/source.json`
+//! names fetched into `infra/imagery/raw/`, for `make bake-imagery`.
 //!
-//!   make download-earth
+//!   make download-imagery
 
 use crate::{fetch, root};
 
 pub fn run() -> Result<(), String> {
-    let path = root().join("infra/earth/source.json");
+    let path = root().join("infra/imagery/source.json");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let src: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -21,10 +21,10 @@ pub fn run() -> Result<(), String> {
         .chain(night)
         .filter_map(serde_json::Value::as_str)
         .collect();
-    let raw = root().join("infra/earth/raw");
+    let raw = root().join("infra/imagery/raw");
     for url in &urls {
         fetch::download(url, &raw)?;
     }
-    println!("[earth] {} files in {}", urls.len(), raw.display());
+    println!("[imagery] {} files in {}", urls.len(), raw.display());
     Ok(())
 }

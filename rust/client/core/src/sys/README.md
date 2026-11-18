@@ -55,11 +55,11 @@ web the runtime and host are the worker's JavaScript and the GPU the browser's,
 so the heap takes the core's alone. No allocator reaches `.fixed`, which is the
 same on both.
 
-The largest bodies, terrain and Earth packets of up to two mebibytes, take
+The largest bodies, terrain and imagery packets of up to two mebibytes, take
 slots in `.fixed` instead (`io/body.rs`): a fixed number of them, each as long
 as the longest such body. A slot is held by its guard from the moment it is
 taken until the guard drops: a read lends it and its answer hands it back, and
-a layer holds it until it has decoded the body, or an Earth body until a drawn
+a layer holds it until it has decoded the body, or an imagery body until a drawn
 frame takes its texels. With every slot out a body waits for one given back.
 Every other body is a heap buffer of its own, owned by whoever holds it.
 

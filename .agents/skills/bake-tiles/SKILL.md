@@ -1,6 +1,6 @@
 ---
 name: bake-tiles
-description: Bake the terrain, place and division tiles from the geo DB and the Earth's picture into each kind's set, out/<kind>/, and verify it before it is uploaded. Use when a bake pipeline or its source data changed, or a tile set needs (re)building. Uploading is the publish-bucket skill; deploying, the deploy skill.
+description: Bake the terrain, place and division tiles from the geo DB and the imagery into each kind's set, out/<kind>/, and verify it before it is uploaded. Use when a bake pipeline or its source data changed, or a tile set needs (re)building. Uploading is the publish-bucket skill; deploying, the deploy skill.
 ---
 
 # Baking tiles
@@ -11,7 +11,7 @@ description: Bake the terrain, place and division tiles from the geo DB and the 
 make bake-terrain    # Overture buildings/transportation/base, GEDTM30
 make bake-place      # Overture places
 make bake-division   # Overture divisions, leaves at z12
-make download-earth && make bake-earth   # the Earth's picture, out/earth/
+make download-imagery && make bake-imagery   # the imagery, out/imagery/
 make bake-star       # the Yale catalog's stars (make download-star first)
 make bake-geoid ARGS=egm2008-5.pgm   # EGM2008, into rust/spec/src/space/coord/geoid.rs
 ```

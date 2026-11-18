@@ -200,7 +200,7 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     // (domain/view/observation.rs `bricks`), as decor's are. Each is tested
     // as the box the world stands in over it, grown by how far a marker
     // draws past it at the box's far side. No brick past where the rays end
-    // is taken, since there the sky's Earth stands for the ground.
+    // is taken, since there the imagery stands for the ground.
     let now = &mut p.now;
     now.bricks.clear();
     let extent = extent_px(SPACING_PX);

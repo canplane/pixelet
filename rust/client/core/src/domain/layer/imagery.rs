@@ -1,6 +1,6 @@
-// pxl-core/domain/layer/earth.rs
+// pxl-core/domain/layer/imagery.rs
 
-//! The Earth's picture as a layer of the pyramid. Only its top zoom is
+//! The imagery as a layer of the pyramid. Only its top zoom is
 //! baked, and only the floor's tiles around the eye are held (`AskScope::Floor`,
 //! `MIN_ZOOM`). A tile holds its packet until the GPU has its texels, and
 //! then the device generation that does, and nothing in the core after a
@@ -8,7 +8,7 @@
 
 use pxl_global::Global;
 use pxl_spec::bake::publication::BaseKind;
-use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::bake::tile::imagery::{self, IMAGERY_ZOOM};
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILE_CAP};
@@ -23,9 +23,9 @@ use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CNT};
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 
-/// A held Earth tile: its packet until the GPU has its texels, whose words
+/// A held imagery tile: its packet until the GPU has its texels, whose words
 /// then live in the GPU layer of its slot.
-pub(crate) enum EarthTile {
+pub(crate) enum ImageryTile {
     /// The packet the GPU does not have yet. The tile owns the packet and
     /// lets it go with itself. Every slot may hold one, and the request
     /// scheduler leaves body slots for them (sys/io/request.rs `spare_slot_cnt`).
@@ -34,10 +34,10 @@ pub(crate) enum EarthTile {
     Sent(u32),
 }
 
-static EARTH: Global<TileCache<EarthTile>> = Global::new();
+static IMAGERY: Global<TileCache<ImageryTile>> = Global::new();
 
-impl Tile for EarthTile {
-    const KIND: BaseKind = BaseKind::Earth;
+impl Tile for ImageryTile {
+    const KIND: BaseKind = BaseKind::Imagery;
 
     /// Only the top zoom is baked, so no child has a tile.
     fn occupancy(&self) -> Occupancy {
@@ -45,12 +45,12 @@ impl Tile for EarthTile {
     }
 }
 
-impl Base for EarthTile {
+impl Base for ImageryTile {
     const ASK_SCOPE: AskScope = AskScope::Floor;
-    const MIN_ZOOM: Option<Zoom> = Some(EARTH_ZOOM);
+    const MIN_ZOOM: Option<Zoom> = Some(IMAGERY_ZOOM);
 
-    fn tile_cache() -> &'static mut TileCache<EarthTile> {
-        EARTH.get(TileCache::default)
+    fn tile_cache() -> &'static mut TileCache<ImageryTile> {
+        IMAGERY.get(TileCache::default)
     }
 
     fn receive(
@@ -58,11 +58,11 @@ impl Base for EarthTile {
         _slot: u32,
         pkt: Body,
         phases: &mut PhaseList,
-    ) -> Result<EarthTile, Exit> {
+    ) -> Result<ImageryTile, Exit> {
         let at = now();
-        earth::decode(&pkt)?;
+        imagery::decode(&pkt)?;
         phases.push(TaskPhaseName::DecodeMs, now() - at);
-        Ok(EarthTile::Waiting(pkt))
+        Ok(ImageryTile::Waiting(pkt))
     }
 }
 
@@ -71,28 +71,28 @@ impl Base for EarthTile {
 /// written goes back with its tile's change to `Sent`. A tile whose texels
 /// went to an earlier device is fetched again, since its packet is gone.
 pub(crate) fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
-    let cache = EarthTile::tile_cache();
-    for slot in 0..EARTH_SLOT_CNT {
+    let cache = ImageryTile::tile_cache();
+    for slot in 0..IMAGERY_SLOT_CNT {
         let Some((p, tile)) = cache.in_slot(slot) else {
             continue;
         };
-        if matches!(tile, EarthTile::Sent(s) if *s != on) {
+        if matches!(tile, ImageryTile::Sent(s) if *s != on) {
             cache.refetch(p);
         }
     }
-    for slot in 0..EARTH_SLOT_CNT {
+    for slot in 0..IMAGERY_SLOT_CNT {
         let Some((_, tile)) = cache.in_slot(slot) else {
             continue;
         };
-        let EarthTile::Waiting(pkt) = tile else {
+        let ImageryTile::Waiting(pkt) = tile else {
             continue;
         };
         // `receive` decoded this packet already, so decoding it again does
         // not fail.
-        if !earth::decode(pkt).map_or(true, |texels| write(slot, texels)) {
+        if !imagery::decode(pkt).map_or(true, |texels| write(slot, texels)) {
             return;
         }
-        *tile = EarthTile::Sent(on);
+        *tile = ImageryTile::Sent(on);
     }
 }
 
@@ -112,16 +112,16 @@ pub(crate) fn window(
     };
     // X wraps around the globe, so the window's west column is the floor
     // tile that lies the fewest tiles east of the first one.
-    let around = 1 << EARTH_ZOOM;
-    let east = |x: i32| wrap_idx(EARTH_ZOOM, x - first);
+    let around = 1 << IMAGERY_ZOOM;
+    let east = |x: i32| wrap_idx(IMAGERY_ZOOM, x - first);
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
-    let cache = EarthTile::tile_cache();
+    let cache = ImageryTile::tile_cache();
     for p in floor {
         let Some(slot) = cache.slot(p) else {
             continue;
         };
-        if matches!(cache.get(p), Some(EarthTile::Sent(s)) if *s == on) {
+        if matches!(cache.get(p), Some(ImageryTile::Sent(s)) if *s == on) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * GROUND_DEMAND_ACROSS + dx) as usize] = slot + 1;
@@ -130,14 +130,14 @@ pub(crate) fn window(
     ([x0, y0], layers)
 }
 
-/// The Earth tiles held at once, each in a GPU layer of its own.
-pub(crate) const EARTH_SLOT_CNT: u32 = TileCache::<EarthTile>::SLOT_CNT;
+/// The imagery tiles held at once, each in a GPU layer of its own.
+pub(crate) const IMAGERY_SLOT_CNT: u32 = TileCache::<ImageryTile>::SLOT_CNT;
 
 const _: () = assert!(
-    BODY_SLOT_CNT > CREDIT_CNT + EARTH_SLOT_CNT,
-    "the body slots keep a body on every credit and one more beside the Earth's frames"
+    BODY_SLOT_CNT > CREDIT_CNT + IMAGERY_SLOT_CNT,
+    "the body slots keep a body on every credit and one more beside the imagery's frames"
 );
 
 #[cfg(test)]
-#[path = "earth.test.rs"]
+#[path = "imagery.test.rs"]
 mod test;

@@ -19,7 +19,7 @@ fn shard_served_when_all_kinds() {
     let all = ["01033000", "01033001", "01033002", "01033003", "01033010"];
     let kinds = kinds(|l| match l {
         BaseKind::Division => kind(&all[..4]),
-        BaseKind::Earth => Kind {
+        BaseKind::Imagery => Kind {
             shard: None,
             ..kind(&[])
         },
@@ -42,13 +42,13 @@ fn unread_keys_unwritten() {
     let kinds = kinds(|l| Kind {
         format: 1,
         version: if l == BaseKind::Terrain { "a/b" } else { "v1" }.into(),
-        shard: shards().filter(|_| l != BaseKind::Earth),
+        shard: shards().filter(|_| l != BaseKind::Imagery),
     });
     assert!(
         decl(MIN_ZOOM, &kinds, &OverrideMap::new()).is_err(),
         "a version no segment"
     );
-    let earth_sharded = try_kinds(|_| {
+    let imagery_sharded = try_kinds(|_| {
         Ok(Kind {
             format: 1,
             version: "v1".into(),
@@ -57,15 +57,15 @@ fn unread_keys_unwritten() {
     })
     .expect("a kind each");
     assert!(
-        decl(MIN_ZOOM, &earth_sharded, &OverrideMap::new()).is_err(),
-        "the Earth's picture held by shards"
+        decl(MIN_ZOOM, &imagery_sharded, &OverrideMap::new()).is_err(),
+        "the imagery held by shards"
     );
 }
 
 #[test]
 fn override_names_shard() {
     let kinds = kinds(|l| match l {
-        BaseKind::Earth => Kind {
+        BaseKind::Imagery => Kind {
             shard: None,
             ..kind(&[])
         },
@@ -88,7 +88,7 @@ fn override_names_shard() {
 #[test]
 fn partial_shard_override_refused() {
     let kinds = kinds(|l| match l {
-        BaseKind::Earth => Kind {
+        BaseKind::Imagery => Kind {
             shard: None,
             ..kind(&[])
         },

@@ -11,7 +11,7 @@ export const STREAM_NAMES = [
   "place",
   "division",
   "asset",
-  "earth",
+  "imagery",
   "object",
 ] as const;
 
@@ -20,13 +20,13 @@ export type StreamName =
   | typeof STREAM_NAME_PLACE
   | typeof STREAM_NAME_DIVISION
   | typeof STREAM_NAME_ASSET
-  | typeof STREAM_NAME_EARTH
+  | typeof STREAM_NAME_IMAGERY
   | typeof STREAM_NAME_OBJECT;
 export const STREAM_NAME_TERRAIN = 0;
 export const STREAM_NAME_PLACE = 1;
 export const STREAM_NAME_DIVISION = 2;
 export const STREAM_NAME_ASSET = 3;
-export const STREAM_NAME_EARTH = 4;
+export const STREAM_NAME_IMAGERY = 4;
 export const STREAM_NAME_OBJECT = 5;
 
 /** The member `val` is, or null for a number no member has. */
@@ -35,7 +35,7 @@ export function of_StreamName(val: number): StreamName | null {
     val === STREAM_NAME_PLACE ||
     val === STREAM_NAME_DIVISION ||
     val === STREAM_NAME_ASSET ||
-    val === STREAM_NAME_EARTH ||
+    val === STREAM_NAME_IMAGERY ||
     val === STREAM_NAME_OBJECT
     ? val
     : null;
@@ -52,8 +52,8 @@ export function name_StreamName(val: StreamName): string {
       return "division";
     case STREAM_NAME_ASSET:
       return "asset";
-    case STREAM_NAME_EARTH:
-      return "earth";
+    case STREAM_NAME_IMAGERY:
+      return "imagery";
     case STREAM_NAME_OBJECT:
       return "object";
   }

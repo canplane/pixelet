@@ -1,7 +1,7 @@
 // pxl-core/sys/io/loader.rs
 
 //! The asset files, each read at most once: the catalog, which is asked for
-//! first (`catalog`), the models and images its slots name, and the Earth's
+//! first (`catalog`), the models and images its slots name, and the imagery's
 //! sphere. An asset is a want in the request scheduler just as a tile is, on
 //! the same credits, and it stays wanted until it arrives. A slot names no
 //! file until the catalog lands, and its reader treats it as still loading.

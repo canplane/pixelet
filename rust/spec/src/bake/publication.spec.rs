@@ -13,7 +13,7 @@ pub enum BaseKind {
     Terrain = 0,
     Place = 1,
     Division = 2,
-    Earth = 3,
+    Imagery = 3,
 }
 
 impl BaseKind {
@@ -22,7 +22,7 @@ impl BaseKind {
         BaseKind::Terrain,
         BaseKind::Place,
         BaseKind::Division,
-        BaseKind::Earth,
+        BaseKind::Imagery,
     ];
 
     /// The member `val` is, or none for a number no member has.
@@ -31,7 +31,7 @@ impl BaseKind {
             0 => Some(BaseKind::Terrain),
             1 => Some(BaseKind::Place),
             2 => Some(BaseKind::Division),
-            3 => Some(BaseKind::Earth),
+            3 => Some(BaseKind::Imagery),
             _ => None,
         }
     }
@@ -42,7 +42,7 @@ impl BaseKind {
             BaseKind::Terrain => "terrain",
             BaseKind::Place => "place",
             BaseKind::Division => "division",
-            BaseKind::Earth => "earth",
+            BaseKind::Imagery => "imagery",
         }
     }
 }
@@ -61,8 +61,8 @@ pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu
 /// before its name (pxl-spec bake/source.rs `is_version`).
 pub const VERSION_SZ: usize = 32;
 
-/// The Earth's picture whole, in place of a tile's name under the earth
-/// layer's version: the sphere's, no tile of the pyramid.
+/// The imagery's sphere, the picture whole, in place of a tile's name under
+/// the imagery layer's version: no tile of the pyramid.
 pub const TILE_SPHERE: &str = "sphere";
 
 /// A kind's object in a published set, the one place its segments are

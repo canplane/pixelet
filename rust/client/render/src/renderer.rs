@@ -157,8 +157,8 @@ pub struct FrameInput<'a> {
     /// The texture pack's image; none while it loads.
     pub pack: Option<Image>,
     pub moon: Option<Image>,
-    pub earth: Option<Image>,
-    pub earth_layer: EarthLayer<'a>,
+    pub imagery_sphere: Option<Image>,
+    pub imagery_layer: ImageryLayer<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
     pub ground: GroundInput<'a>,
@@ -309,11 +309,11 @@ impl FramePlan {
     }
 }
 
-/// The earth layer's tiles as the GPU reads them. `window` is the floor's
+/// The imagery layer's tiles as the GPU reads them. `window` is the floor's
 /// window, whose south-west tile comes first, and `layers` holds each tile's
 /// layer plus one. `upload` hands the writer each tile that has come, while
 /// the writer takes it.
-pub struct EarthLayer<'a> {
+pub struct ImageryLayer<'a> {
     pub window: [i32; 2],
     pub layers: &'a [u32],
     pub upload: &'a mut Upload<'a>,
@@ -948,17 +948,21 @@ impl Renderer {
         read.read(input.skins);
         read.mark(self.pack.step(g, &self.mip, input.pack));
         read.mark(self.moon.step(g, &self.mip, input.moon));
-        read.mark(self.atmosphere.earth.step(g, &self.mip, input.earth));
+        read.mark(
+            self.atmosphere
+                .imagery_sphere
+                .step(g, &self.mip, input.imagery_sphere),
+        );
         let mut cast = input.cast.take();
         // What the frame cannot put off is recorded before what can wait.
         // The light's cast is made first, then the bricks are uploaded, and
         // their uploads take only the room left in the stream.
         self.shadows_made(g, input.shadow);
         self.screen.hand(g, &mut input.ground);
-        let layer = &mut input.earth_layer;
+        let layer = &mut input.imagery_layer;
         read.mark(
             self.atmosphere
-                .set_earth_tiles(g, layer.window, layer.layers, layer.upload),
+                .set_imagery_tiles(g, layer.window, layer.layers, layer.upload),
         );
         read.mark(
             self.marker

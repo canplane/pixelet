@@ -6,10 +6,10 @@
 //! those seen and those unseen.
 //!
 //! 1. Layers rank in the order a view builds up. Terrain comes first. The
-//!    pictures come before the models, because a picture (the Earth's
+//!    pictures come before the models, because a picture (the imagery's
 //!    sphere, the moon's face, the ground's pack or a skin) is drawn whole
 //!    wherever it shows, while a model is one of the things decor draws. The
-//!    Earth's tiles rank with the pictures, since they are the far view's
+//!    imagery's tiles rank with the pictures, since they are the far view's
 //!    picture. The catalog's models come next, then places. The object
 //!    shards follow the ground's order: each shell of the ground, seen and
 //!    then unseen, is followed by the object shards of the same shell, so what is
@@ -41,7 +41,7 @@ const SHELL_CNT: u8 = 2;
 const TERRAIN: u8 = 0;
 const OBJECT: u8 = TERRAIN + 1;
 const GROUND_SHELL: u8 = 2;
-/// The pictures, and the Earth's tiles seen then unseen. A file ranks here or
+/// The pictures, and the imagery's tiles seen then unseen. A file ranks here or
 /// at `ASSET` by whether it is a picture or a model, never by which file it
 /// is.
 const PICTURE: u8 = TERRAIN + SHELL_CNT * GROUND_SHELL;

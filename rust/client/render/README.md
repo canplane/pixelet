@@ -207,7 +207,7 @@ every shader.
 
 The sky is drawn at the far plane, so only pixels no ray met run it
 (`sky.wgsl`); where such a ray falls to the land, it shows flat land shaded from
-the earth layer. The air between the eye and what is drawn is Hillaire's
+the imagery layer. The air between the eye and what is drawn is Hillaire's
 aerial-perspective volume (`atmos_froxel.wgsl` `froxel_cs`), read by each drawn
 point at its direction and depth (`atmos_air.wgsl`). Neither the sky view nor
 the volume reads the view's direction, so turning the eye keeps both, and both
