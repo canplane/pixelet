@@ -9,17 +9,44 @@ instead (`runtime/web/README.md`).
 
 ## The app's crate
 
-An app installs the module, which Expo autolinks, and names in its
-`package.json` under `xpute.guest.runtime` the Rust crate a native build links:
-its guest, and the function that starts it, which the crate exports the runtime
-over (`native_abi!`). The app builds that crate for the device as it builds, and
-the module links it: a static library at
-`$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an iPhone
-(`ios/Xpute.podspec`), and a shared one among the app's `jniLibs` on Android,
-which the Kotlin class `xpute.Runtime` loads by the crate's name
-(`android/build.gradle`). Swift reaches the runtime through its C header
-(`ios/CXpute/xpute.h`). A plugin's native UI end is a module of its own beside
-this one, which links into the same crate.
+A native app links one Rust crate: its guest, and the function that starts it,
+which the crate exports the runtime over (`native_abi!`). An app installs the
+module, which Expo autolinks, and names the crate in its `package.json`, under
+`xpute.guest`:
+
+```json
+"xpute": { "guest": {
+  "workspace": "<the cargo workspace, from the app>",
+  "runtime": "<the crate>",
+  "profile": { "debug": "<cargo profile>", "release": "<cargo profile>" },
+  "args": { "debug": ["<more of cargo's arguments>"], "release": [] }
+} }
+```
+
+`profile` is cargo's `dev` and `release` where it is not given, and `args`,
+features among them, nothing. The module builds the crate each time the app is
+built, for the configuration and the system the app is built as, and links
+what it built. On an iPhone its pod (`ios/Xpute.podspec`) asks cargo for a
+static library and leaves it at
+`$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a`, where the app links it.
+On Android its Gradle module (`android/build.gradle`) asks for a shared one in
+the task `buildGuestDebug` or `buildGuestRelease`, whose output is the library
+the module packs among the app's `jniLibs` and the Kotlin class
+`xpute.Runtime` loads by the crate's name. Cargo runs in the workspace, under
+the toolchain it names, with the environment of the build that runs it, so
+what cargo reads from its environment (`RUSTFLAGS`) an app sets there: a
+build setting of the pod, or the task's `environment`. A step of the app's own
+over the built library, a strip for one, is a script phase of a pod that
+depends on `Xpute`, or a task between the build's and
+`merge<Variant>JniLibFolders`.
+
+Swift reaches the runtime through its C header (`ios/CXpute/xpute.h`). A
+plugin's native UI end is a module of its own beside this one, which links
+into the same crate.
+
+The packages are their own source, and Metro reads only what lies under the
+folders it watches: an app beside this tree names each package's directory in
+its Metro config's `watchFolders`.
 
 ## The UI's end
 

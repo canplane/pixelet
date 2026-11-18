@@ -7,9 +7,11 @@ description: Build the native app (ts/client) and put it on an iPhone, the iOS s
 
 Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `expo prebuild` and are not committed. Each platform's build builds the core
-with its runtime, `pxl-runtime` (`ts/client/package.json` `xpute.guest.runtime`),
-through the app's `ts/client/script/core-build.py`, which `PxlPlatform.podspec`
-and `build.gradle` (`ts/client/modules/platform/`) run.
+with its runtime, `pxl-runtime` (`ts/client/package.json` `xpute.guest`), in
+`@xpute/expo`'s pod and its Gradle module (`xpute/expo/README.md`). A release's
+library then has its source paths numbered by `PxlPlatform.podspec` and
+`build.gradle` (`ts/client/modules/platform/`), under the prefixes the build
+plugins (`ts/client/plugin/`) hand cargo as `RUSTFLAGS`.
 
 After the app moves, pnpm's links are remade or a config plugin is dropped from `app.config.ts`, prebuild again with `--clean` and run `pod install` again.
 

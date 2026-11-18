@@ -6,7 +6,10 @@
  * target is the highest floor among the libraries the app links. Liquid
  * Glass needs a later iOS, so the app checks for it at run time. A release
  * ships no symbols, which a build without an archive otherwise leaves in, and
- * its C++ names no directory of this machine.
+ * its C++ and its Rust name no directory of this machine: the C++ by the
+ * compiler's flags, and the Rust by the flags cargo reads from the
+ * environment of the pod that builds the core (xpute's), which are the
+ * prefixes the paths are then numbered under (script/number-paths.py).
  */
 
 import {
@@ -18,13 +21,19 @@ import type { ConfigPlugin } from "expo/config-plugins";
 
 const DEPLOYMENT_TARGET = "16.4";
 
-const PREFIX_MARK = "# pxl: a release's C++ names no directory of this machine";
+const PREFIX_MARK =
+  "# pxl: a release's C++ and Rust name no directory of this machine";
 const PREFIX_STEP = `
     ${PREFIX_MARK} (plugin/ios-build.ts)
     prefix_maps = [File.expand_path('../../..', __dir__), ENV['HOME']].map { |dir| "-ffile-prefix-map=#{dir}=" }
+    app = File.expand_path('..', __dir__)
+    workspace = File.expand_path(JSON.parse(File.read(File.join(app, 'package.json'))).dig('xpute', 'guest', 'workspace'), app)
+    rust_remaps = IO.popen([File.join(app, 'script/number-paths.py'), '--remaps', workspace], &:read).strip
+    raise 'number-paths.py --remaps gave no flags' if rust_remaps.empty?
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         next unless config.name == 'Release'
+        config.build_settings['RUSTFLAGS'] = "$(inherited) #{rust_remaps}"
         %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS].each do |key|
           flags = config.build_settings[key] || '$(inherited)'
           flags = flags.split if flags.is_a?(String)

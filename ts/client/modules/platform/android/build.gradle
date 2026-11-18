@@ -1,7 +1,10 @@
 // @pxl/client/modules/platform/android/build.gradle
 //
 // The native half of the app's platform on Android, in src/main/java/.
-// This module builds and packs the core (script/core-build.py).
+// This module numbers the source paths a release's core holds, in the
+// library xpute's module builds (script/number-paths.py).
+
+import groovy.json.JsonSlurper
 
 plugins {
   id 'com.android.library'
@@ -28,28 +31,26 @@ dependencies {
   implementation 'androidx.core:core-ktx:1.16.0'
 }
 
-// Each variant's library lies in a directory of its own, which that variant
-// alone packs.
-["debug", "release"].each { variant ->
-  def out = layout.buildDirectory.dir("core/${variant}")
-  android.sourceSets[variant].jniLibs.srcDirs += out.get().asFile
+// xpute's module is read first, for the task that builds the core.
+evaluationDependsOn(':xpute-expo')
+def xpute = project(':xpute-expo')
+def guest = new JsonSlurper().parse(new File(app, "package.json")).xpute.guest
 
-  def build = tasks.register("buildCore${variant.capitalize()}", Exec) {
-    // cargo is what knows whether the core is current, and answers in a
-    // moment when it is: the task runs every build.
-    outputs.upToDateWhen { false }
-    def home = System.getProperty("user.home")
-    // rustup's installer puts its tools in the home directory, which
-    // Gradle's PATH need not name.
-    environment "PATH", "${home}/.cargo/bin:${System.getenv("PATH")}"
-    doFirst {
-      commandLine "${app}/script/core-build.py", "--android",
-        "--app", app.absolutePath,
-        "--variant", variant,
-        "--out", out.get().asFile.absolutePath,
-        "--ndk", android.ndkDirectory.absolutePath,
-        "--api", rootProject.ext.minSdkVersion.toString()
-    }
-  }
-  tasks.matching { it.name == "merge${variant.capitalize()}JniLibFolders" }.configureEach { dependsOn build }
+// The numbering runs on every release build, between the core's build and
+// its packing: over paths already numbered it changes nothing, and the table
+// of the run that numbered them stands. It asks cargo for the workspace's
+// packages, and rustup's installer puts its tools in the home directory,
+// which Gradle's PATH need not name.
+def number = tasks.register("numberCorePaths", Exec) {
+  def build = xpute.tasks.named("buildGuestRelease")
+  dependsOn build
+  outputs.upToDateWhen { false }
+  environment "PATH", "${System.getProperty("user.home")}/.cargo/bin:${System.getenv("PATH")}"
+  // The library lies under the ABI it is packed for, which names its table.
+  def so = build.get().outputs.files.singleFile
+  commandLine "${app}/script/number-paths.py",
+    so.absolutePath,
+    "${app}/core.paths.${so.parentFile.name}.json",
+    new File(app, guest.workspace).canonicalPath
 }
+xpute.tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach { dependsOn number }
