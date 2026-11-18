@@ -57,9 +57,9 @@ fn boot(_: std::path::PathBuf) -> Boot {
 #[test]
 fn failure_stops_then_traps() {
     let ui = app::start(boot, &[]);
-    let mut messages = Vec::new();
+    let mut msgs = Vec::new();
     app::post(ui, 1, RELAY, 0, None);
-    app::answer_to(ui, 1, &mut messages);
+    app::answer_to(ui, 1, &mut msgs);
     let told = app::exits();
     assert!(
         matches!(&told[..], [Exit::Stop(e, file), Exit::Trap(err)]
@@ -71,9 +71,9 @@ fn failure_stops_then_traps() {
     );
 
     app::post(ui, 2, RELAY, 0, None);
-    assert_eq!(app::answer_to(ui, 2, &mut messages), Errno::EPIPE as i64);
+    assert_eq!(app::answer_to(ui, 2, &mut msgs), Errno::EPIPE as i64);
     let _ = std::thread::spawn(|| panic!("the host fails again")).join();
     app::post(ui, 3, ROOT, OPEN, Some(app::lowered(&[])));
-    assert_eq!(app::answer_to(ui, 3, &mut messages), Errno::EPIPE as i64);
+    assert_eq!(app::answer_to(ui, 3, &mut msgs), Errno::EPIPE as i64);
     assert_eq!(app::exits(), []);
 }

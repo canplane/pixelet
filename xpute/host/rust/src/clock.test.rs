@@ -54,8 +54,8 @@ fn cancel_stops_wait() {
         *ANSWERS.lock().unwrap(),
         [(1, Errno::ECANCELED as i32), (2, 0)]
     );
-    let mut messages = Vec::new();
+    let mut msgs = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
-    assert_eq!(app::answer_to(ui, 1, &mut messages), Errno::ENOENT as i64);
+    assert_eq!(app::answer_to(ui, 1, &mut msgs), Errno::ENOENT as i64);
     assert_eq!(app::exits(), []);
 }

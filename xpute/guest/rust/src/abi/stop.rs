@@ -14,7 +14,7 @@ pub fn stopped(
     line: u32,
     n1: u64,
     n2: u64,
-    message: Option<&str>,
+    msg: Option<&str>,
 ) -> Result<(), _rt::Errno> {
     let (r, _) = _rt::link::call(
         HANDLE,
@@ -25,7 +25,7 @@ pub fn stopped(
             w_.u32(12, line);
             w_.u64(16, n1);
             w_.u64(24, n2);
-            if let Some(v) = &message {
+            if let Some(v) = &msg {
                 w_.u8(32, 1);
                 w_.str(36, v);
             }

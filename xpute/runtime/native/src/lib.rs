@@ -63,9 +63,9 @@ pub fn life(shown: bool) {
     event_loop::post_task(Box::new(move || life::tell(shown)));
 }
 
-/// A log record of the UI's: `message` at `level`, about `context`, written
+/// A log record of the UI's: `msg` at `level`, about `context`, written
 /// by the runtime's writer (`log`) as the host's are. Called on the
 /// JavaScript thread.
-pub fn log(level: u32, context: &str, message: &str) {
-    log::log(Level::of(level).or_bug(Errno::EINVAL), context, message);
+pub fn log(level: u32, context: &str, msg: &str) {
+    log::log(Level::of(level).or_bug(Errno::EINVAL), context, msg);
 }

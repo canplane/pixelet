@@ -31,11 +31,11 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   coordinate `coord`, declaration `decl`, definition `def`, sequence `seq`,
   atmosphere `atmos`, record `rec`, header `hdr`, command `cmd`, vector `vec`,
   condition `cond`, resource `resrc`, array `arr`, constructor `ctor`, previous
-  `prev`. A plural
+  `prev`, message `msg`. A plural
   is `vals`, `bufs`, `offs`, `cnts`, `idxs`, `recs`, `hdrs`, `cmds`, `vecs`,
-  `conds`, `resrcs`, `arrs` or `ctors`, and whole otherwise. `pkt` is only a wire
-  packet; `rec` only the noun, and to record stays whole. A condition variable
-  is `cv`.
+  `conds`, `resrcs`, `arrs`, `ctors` or `msgs`, and whole otherwise. `pkt` is
+  only a wire packet; `rec` only the noun, and to record stays whole. A
+  condition variable is `cv`.
 - Whole, though they look short: `zoom`; `size` for a size that is not in
   bytes (a GPU texture's, in texels); `environment`; `source` as a source of
   data; `encode`, `decode`.
@@ -129,6 +129,20 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the cell zoom at a point by its distance from the eye, as the eye's rays draw it, and as a walk reads it | `cell_zoom_drawn`, `cell_zoom_read` | |
 
   `at` is where a thing is, `to` where it is going.
+- The world and its units are told apart, each by one word:
+  - the `world` is the whole the app draws, what the one question asks of; a
+    `map` is not it: the map sources it is baked from, graphics' own (a
+    shadow map, a clipmap), and cartography's word for the world as drawn on
+    the screen (a scale bar's);
+  - a `cell` is a node of the space at its zoom, or a square of the camera
+    grid at its angle; a `pixel` (`px`) is a square of the screen;
+  - a `voxel` is a cell a ray stops on and draws as one box, at the cell's
+    own zoom, as a sparse voxel octree has it;
+  - an `asset` is what fills a cell, kept as its id, its kind over its index;
+    a `cube` is the asset kind of a solid cell, the ground's and what a player
+    stacks, and the question's cube of space;
+  - a block is the word a person reads for what a player stacks; the code
+    names that a cube.
 - The `eye` is the camera's eye and nothing else. Nothing else is named an eye
   or an observer: the light's are a cast, its rays, a tile's bundle of them; a
   character surface draws from a viewpoint. "The eye" takes no qualifier,

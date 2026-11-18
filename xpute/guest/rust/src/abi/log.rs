@@ -56,14 +56,14 @@ impl Level {
     }
 }
 
-pub fn log(level: Level, context: &str, message: &str) -> Result<(), _rt::Errno> {
+pub fn log(level: Level, context: &str, msg: &str) -> Result<(), _rt::Errno> {
     let (r, _) = _rt::link::call(
         HANDLE,
         LOG,
         Some((20, &|w_: &mut _rt::Lower| {
             w_.u8(0, level as u8);
             w_.str(4, context);
-            w_.str(12, message);
+            w_.str(12, msg);
         })),
     );
     _rt::answer(r)

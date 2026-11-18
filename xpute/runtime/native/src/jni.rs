@@ -602,16 +602,12 @@ macro_rules! jni_abi {
             _this: $crate::jni::sys::jobject,
             level: $crate::jni::sys::jint,
             context: $crate::jni::sys::jstring,
-            message: $crate::jni::sys::jstring,
+            msg: $crate::jni::sys::jstring,
         ) {
             // SAFETY: what JNI called with.
-            let (context, message) = unsafe {
-                (
-                    $crate::jni::text(env, context),
-                    $crate::jni::text(env, message),
-                )
-            };
-            $crate::log(level as u32, &context, &message);
+            let (context, msg) =
+                unsafe { ($crate::jni::text(env, context), $crate::jni::text(env, msg)) };
+            $crate::log(level as u32, &context, &msg);
         }
     };
 }

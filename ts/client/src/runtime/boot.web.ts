@@ -14,7 +14,7 @@
 import type { GpuReport } from "@pxl/gpu/host/web.ts";
 import { type Log } from "@xpute/runtime-web/message.ts";
 import {
-  message_on,
+  msg_on,
   open_ui,
   start,
   stopped_on,
@@ -49,13 +49,13 @@ export function boot(): void {
   const ui = open_ui(require.unstable_resolveWorker("./worker.ts"));
   stopped_on(stopped);
   trap_on(trapped);
-  message_on<GpuReport>("gpu", (m) => setGpu(GPU_STATE[m.state]));
-  message_on<SourceReport>("source", (m) => setSource(m.source));
-  message_on<KeepReport>("keep", (m) => storage.set(m.key, m.value));
+  msg_on<GpuReport>("gpu", (m) => setGpu(GPU_STATE[m.state]));
+  msg_on<SourceReport>("source", (m) => setSource(m.source));
+  msg_on<KeepReport>("keep", (m) => storage.set(m.key, m.value));
   // The worker writes its runtime's records itself; a build made for
   // measuring keeps them for the tool that drives the page as well.
   if (__PERF_DRIVE__)
-    message_on<Log>("log", (m) => tellDrive(`[${m.context}] ${m.message}`));
+    msg_on<Log>("log", (m) => tellDrive(`[${m.context}] ${m.msg}`));
   mountUi(ui);
   // A worker cannot read the page's kept entries, so they go with the core's
   // instantiation.

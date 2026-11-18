@@ -6,7 +6,6 @@
 
 #include <cstdint>
 #include <optional>
-#include <string>
 #include <string_view>
 
 #include "xpute/guest/link.hpp"
@@ -32,8 +31,8 @@ inline constexpr _rt::Handle HANDLE = 0x4eccaa;
 // `stopped`
 inline constexpr _rt::Method STOPPED = 0;
 
-inline _rt::Result<void> stopped(std::int32_t errnum, std::string_view file, std::uint32_t line, std::uint64_t n1, std::uint64_t n2, const std::optional<std::string> &message) noexcept {
-    auto [result_, data_] = _rt::call(HANDLE, STOPPED, _rt::Packet{48, [&](_rt::Lower &w_) { w_.put<std::int32_t>(0, errnum); w_.str(4, file); w_.put<std::uint32_t>(12, line); w_.put<std::uint64_t>(16, n1); w_.put<std::uint64_t>(24, n2); if (message) { w_.put<std::uint8_t>(32, 1); w_.str(36, (*message)); } }});
+inline _rt::Result<void> stopped(std::int32_t errnum, std::string_view file, std::uint32_t line, std::uint64_t n1, std::uint64_t n2, std::optional<std::string_view> msg) noexcept {
+    auto [result_, data_] = _rt::call(HANDLE, STOPPED, _rt::Packet{48, [&](_rt::Lower &w_) { w_.put<std::int32_t>(0, errnum); w_.str(4, file); w_.put<std::uint32_t>(12, line); w_.put<std::uint64_t>(16, n1); w_.put<std::uint64_t>(24, n2); if (msg) { w_.put<std::uint8_t>(32, 1); w_.str(36, (*msg)); } }});
     return _rt::answer(result_);
 }
 

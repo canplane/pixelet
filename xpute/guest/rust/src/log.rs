@@ -7,9 +7,9 @@
 
 use crate::abi::log::{self, Level};
 
-/// Tells the host `message`, at `level`, about `context`. A host that hears
+/// Tells the host `msg`, at `level`, about `context`. A host that hears
 /// nothing more, the link trapped among them, has nothing to answer, so the
 /// answer is not read.
-pub fn log(level: Level, context: &str, message: &str) {
-    let _ = log::log(level, context, message);
+pub fn log(level: Level, context: &str, msg: &str) {
+    let _ = log::log(level, context, msg);
 }

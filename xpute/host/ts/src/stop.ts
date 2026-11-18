@@ -12,8 +12,8 @@ import { runtime } from "./runtime.ts";
 
 export function mount_stop(side: Pick<Side, "mount_named">): void {
   stop.mount(side, {
-    stopped(errnum, file, line, n1, n2, message) {
-      runtime().stopped({ errnum, file, line, n1, n2, message });
+    stopped(errnum, file, line, n1, n2, msg) {
+      runtime().stopped({ errnum, file, line, n1, n2, msg });
     },
   });
 }

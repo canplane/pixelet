@@ -24,7 +24,7 @@ impl abi::stop::Host for Report {
         line: u32,
         n1: u64,
         n2: u64,
-        message: Option<String>,
+        msg: Option<String>,
     ) -> Result<(), Errno> {
         (runtime().stopped)(Stop {
             errnum,
@@ -32,7 +32,7 @@ impl abi::stop::Host for Report {
             line,
             n1,
             n2,
-            message,
+            msg,
         });
         Ok(())
     }

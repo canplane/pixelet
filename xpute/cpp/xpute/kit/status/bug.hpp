@@ -1,10 +1,16 @@
 // cpp/xpute/kit/status/bug.hpp
 
 // A broken invariant stops the program. A bug is an errno, its place in the
-// source and at most two numbers. It is handed to the report that `set_report`
-// installed, and then the program stops: a WebAssembly module traps, and a
-// native build returns from the innermost `caught` it runs in, as Rust's
-// panic unwinds to its `catch_unwind`, or aborts where it runs in none.
+// source, at most two numbers and an optional message. It is handed to the
+// report that `set_report` installed, and then the program stops: a
+// WebAssembly module traps, and a native build returns from the innermost
+// `caught` it runs in, as Rust's panic unwinds to its `catch_unwind`, or
+// aborts where it runs in none. The message is a static string, never one
+// built at the bug, as `std::bad_alloc::what()` is: a full heap is itself a
+// bug, so reporting one allocates nothing, and what varies goes in the two
+// numbers. A failed check of libc++'s own is told with libc++'s message,
+// written into static storage at the stop (bug.cpp `abort_bug`), as a Rust
+// panic `bug` did not raise is told with its own.
 
 #pragma once
 
@@ -22,20 +28,21 @@
 
 namespace xpute {
 
-using Report = void (*)(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b);
+using Report = void (*)(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b, const char *msg);
 
 // Installs the function a bug is reported to. Only the first call takes
 // effect.
 void set_report(Report report) noexcept;
 
-[[noreturn]] void bug(Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, std::source_location at = std::source_location::current()) noexcept;
+// `msg` is what a person reads of the bug, or null.
+[[noreturn]] void bug(Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, const char *msg = nullptr, std::source_location at = std::source_location::current()) noexcept;
 
 inline void ensure(bool cond, Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, std::source_location at = std::source_location::current()) noexcept {
-    if (!cond) bug(errnum, a, b, at);
+    if (!cond) bug(errnum, a, b, nullptr, at);
 }
 
 template <class T> T or_bug(std::optional<T> v, Errno errnum, std::source_location at = std::source_location::current()) noexcept {
-    if (!v) bug(errnum, 0, 0, at);
+    if (!v) bug(errnum, 0, 0, nullptr, at);
     return *v;
 }
 

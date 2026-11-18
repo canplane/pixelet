@@ -23,7 +23,7 @@ import { GpuHost } from "./host.ts";
 function same(
   seen: ArrayLike<unknown>,
   want: ArrayLike<unknown>,
-  message: string,
+  msg: string,
 ): void {
   const at =
     seen.length === want.length
@@ -31,7 +31,7 @@ function same(
       : Math.min(seen.length, want.length);
   if (at !== -1)
     throw new Error(
-      `${message}: they part at ${at} of ${seen.length} and ${want.length}`,
+      `${msg}: they part at ${at} of ${seen.length} and ${want.length}`,
     );
 }
 

@@ -26,15 +26,15 @@ pub type Timer = (Instant, u64);
 /// The report of a broken invariant before the guest stops: the guest's
 /// (wit/stop/stop.wit), which the host that implements the stop hands its
 /// runtime (stop.rs), or the host's own failure, which its runtime
-/// reports itself. A panic the language raised carries its own message; a
-/// bug carries none.
+/// reports itself. Its message is a panic's own, or the bug's where it has
+/// one.
 pub struct Stop {
     pub errnum: i32,
     pub file: String,
     pub line: u32,
     pub n1: u64,
     pub n2: u64,
-    pub message: Option<String>,
+    pub msg: Option<String>,
 }
 
 pub struct Runtime {

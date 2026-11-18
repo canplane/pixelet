@@ -27,7 +27,7 @@ export function load_Level(r: Lift, at: number): Level {
 }
 
 export interface Host {
-  log(level: Level, context: string, message: string): void;
+  log(level: Level, context: string, msg: string): void;
 }
 
 /** The object over `implementation`. */
