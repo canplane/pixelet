@@ -1,0 +1,66 @@
+7.9 PXLRUN t 3544 shown 1 boot 2 unanswered_ms 0
+8.9 PXLRUN t 4545 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+10.0 PXLRUN t 5545 shown 1 boot 2 unanswered_ms 0 frame_cnt 6 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+11.0 PXLRUN t 6547 shown 1 boot 2 unanswered_ms 0 frame_cnt 24 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+12.0 PXLRUN t 7548 shown 1 boot 3 unanswered_ms 0 frame_cnt 48 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+13.0 PXLRUN t 8549 shown 1 boot 3 unanswered_ms 0 frame_cnt 75 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+14.0 PXLRUN t 9550 shown 1 boot 3 unanswered_ms 0 frame_cnt 101 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+15.4 PXLRUN t 10554 shown 1 boot 3 unanswered_ms 0 frame_cnt 123 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+15.4 PXLRUN t 11558 shown 1 boot 3 unanswered_ms 0 frame_cnt 149 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+15.4 shot shots/0015.png
+15.4 state gpu_util None
+16.5 PXLRUN t 12562 shown 1 boot 3 unanswered_ms 0 frame_cnt 173 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+17.5 PXLRUN t 13567 shown 1 boot 3 unanswered_ms 0 frame_cnt 201 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+18.5 PXLRUN t 14570 shown 1 boot 3 unanswered_ms 0 frame_cnt 223 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+19.5 PXLRUN t 15574 shown 1 boot 3 unanswered_ms 0 frame_cnt 248 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+20.6 PXLRUN t 16579 shown 1 boot 3 unanswered_ms 0 frame_cnt 311 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+21.6 PXLRUN t 17582 shown 1 boot 3 unanswered_ms 0 frame_cnt 374 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+22.6 PXLRUN t 18586 shown 1 boot 3 unanswered_ms 0 frame_cnt 438 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+23.6 PXLRUN t 19590 shown 1 boot 3 unanswered_ms 0 frame_cnt 502 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+24.6 PXLRUN t 20594 shown 1 boot 3 unanswered_ms 0 frame_cnt 567 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+25.8 shot failed: RuntimeError('{"value":{"error":"unknown error","message":"","stacktrace":""}}')
+25.8 state gpu_util None
+35.8 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+35.8 state gpu_util None
+45.8 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+45.8 state gpu_util None
+55.8 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+55.8 state gpu_util None
+65.8 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+65.8 state gpu_util None
+75.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+75.9 state gpu_util None
+85.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+85.9 state gpu_util None
+95.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+95.9 state gpu_util None
+105.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+105.9 state gpu_util None
+115.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+115.9 state gpu_util None
+125.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+125.9 state gpu_util None
+135.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+135.9 state gpu_util None
+145.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+145.9 state gpu_util None
+155.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+155.9 state gpu_util None
+165.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+165.9 state gpu_util None
+175.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+175.9 state gpu_util None
+185.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+185.9 state gpu_util None
+195.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+195.9 state gpu_util None
+205.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+205.9 state gpu_util None
+215.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+215.9 state gpu_util None
+225.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+225.9 state gpu_util None
+235.9 shot failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')
+235.9 state gpu_util None
+239.8 ended: Expired('no result in 240 s')
+239.8 close failed: RuntimeError('{"value":{"error":"invalid session id","message":"","stacktrace":""}}')

@@ -1,0 +1,53 @@
+=== perf @ t=63225.0ms  build #102-57e0fdc072-dirty 57e0fdc072-dirty (2026-11-18T13:26:26.360Z) ===
+frames n=825  over 20.0s  fps 41.3  moving 825  still 0   refresh 23.0 ms   paced 23.0 ms   scale 1.00
+  kinds   cast 824  px 1
+  interval p50 24.0  p95 34.0  max 42.0 ms
+  tick    p50 2.0  p95 3.0  max 4.0 ms   overran 0   budget 19.6   phase p95 interaction 1.0  visible 3.0
+  effects p50 0.0  p95 0.0  max 1.0 ms   p95 -
+  invalidations method 1962  view 2115  scene 179  completion 3827  pending 1370  animation 1032
+  pump    p50 0.0  p95 0.0  max 1.0 ms   (the requests', after the tick)
+  stage   p50 0.0  p95 1.0  max 1.0 ms   p95 assemble 0.0  upload 0.0  encode 1.0  judge 0.0
+  fill    p50 0.0  p95 2.0  max 5.0 ms   bricks 265   (the ground's, after the frame)
+  perf p50 0.0  p95 0.0  max 1.0 ms   (its own record and the UI's reads)
+  gpu     p50 15.7  p95 26.2  max 30.5 ms busy   (over the 825 frames a read timed)
+  busy by kind  cast p50 15.7 p95 26.2 (824)  px p50 6.1 p95 6.1 (1) ms   (n: the kind's frames a read timed)
+  spans   p95 air 0.4 (700)  exposure 0.7 (822)  world 1.3 (825)  resolve 0.5 (825)  finish 0.2 (825)  cast 2.5 (825)  beam_hit 1.5 (824)  beam 1.9 (824)  grid_cell 0.1 (824)  sample_hit 3.5 (824)  sample 1.1 (824)  raster_box 0.5 (825)  sraster 0.6 (825)  px 0.5 (825)  hole 2.2 (825)  light_world_receivers 0.1 (825)  light_draws 1.0 (825)  light_slide 0.1 (825)  light_propagate 0.2 (825)  light_damage 0.4 (825)  light_beam_hit 1.5 (825)  light_beam 1.2 (825)  light_sample 3.1 (825)  light_raster 0.8 (825)  light_slot 0.2 (825)  light_hit 1.6 (825)  light_walk 0.8 (825)  generate 0.2 (824)  shadow 0.7 (825)  face 0.2 (824)  damage 0.1 (824) ms   (n: the frames a read timed that ran each)
+  view    pivot 38.11930°, 128.46560° 1692.3 m  distance 167.3 u  polar 81.6°  azimuth 9.2°   drawn 2.0 Mpx
+  steps   visible/scene 1.5/3.0  visible/demand 0.4/2.0  interaction/companion 0.2/1.0  interaction/camera 0.0/1.0  interaction/location 0.0/1.0  interaction/environment 0.0/1.0  interaction/input 0.0/1.0  interaction/edit 0.0/1.0  interaction/controller 0.0/0.0  interaction/ghost 0.0/0.0   (ms a run and max, since the recording started)
+  heap used Δ +0 MiB   (the high-water mark)
+  since   heap max live 26.2 MiB  run 1.1 MiB  slot 0.9 MiB  range 361.4 MiB   largest free min 2 MiB   refusals 0   body slots peak 6   tiles refused -   (over the 826 frames since the recording started)
+tasks n=201
+  terrain  net      n=201   p50 1002.0  p95 2221.0 ms   ok 123  ab 78  err 0
+                    mean net 736.3  bytes 795650  decode 0.0
+long frames n=0 (none reported here)
+--- last 20 tasks ---
+[  60584.0] terrain:0103                      ok        880.0ms  q 56.0 + run 824.0 p0  [net 823.0 bytes 1051392 decode 0.0]
+[  60530.0] terrain:0103321                   ok        934.0ms  q 168.0 + run 766.0 p3256.29296875  [net 766.0 bytes 1051392 decode 0.0]
+[  59860.0] terrain:01033213030330            ok       1638.0ms  q 115.0 + run 1523.0 p0  [net 1521.0 bytes 1051448 decode 0.0]
+[  56725.0] terrain:01033                     ok       4952.0ms  q 3478.0 + run 1474.0 p5022.04296875  [net 1473.0 bytes 1051392 decode 0.0]
+[  61118.0] terrain:010332130303320           ok        559.0ms  q 318.0 + run 241.0 p0  [net 241.0 bytes 264960 decode 0.0]
+[  60987.0] terrain:01033213030332            ok        980.0ms  q 28.0 + run 952.0 p0  [net 952.0 bytes 1051448 decode 0.0]
+[  60696.0] terrain:010332130                 aborted  1443.0ms  q 984.0 + run 459.0 p487.96875
+[  60565.0] terrain:01033213                  aborted  1574.0ms  q 1115.0 + run 459.0 p487.96875
+[  61067.0] terrain:010332130303321           ok       1093.0ms  q 399.0 + run 694.0 p0  [net 692.0 bytes 264960 decode 0.0]
+[  61708.0] terrain:010332130303302           ok        452.0ms  q 261.0 + run 191.0 p0  [net 191.0 bytes 264960 decode 0.0]
+[  61169.0] terrain:01033213030331            ok       1013.0ms  q 297.0 + run 716.0 p0  [net 715.0 bytes 1051392 decode 0.0]
+[  62116.0] terrain:010332121                 aborted    89.0ms  q 68.0 + run 21.0 p11369.054339542492
+[  62183.0] terrain:010332120                 aborted    84.0ms  q 44.0 + run 40.0 p13364.0234375
+[  62091.0] terrain:01033212                  aborted   195.0ms  q 71.0 + run 124.0 p7614.03515625
+[  60478.0] terrain:010332                    ok       1826.0ms  q 1022.0 + run 804.0 p414.40234375  [net 802.0 bytes 1051392 decode 0.0]
+[  62042.0] terrain:0103321                   aborted   300.0ms  q 120.0 + run 180.0 p7497.03515625
+[  62225.0] terrain:010332031                 aborted   209.0ms  q 137.0 + run 72.0 p17573.69140625
+[  62225.0] terrain:01033203                  aborted   209.0ms  q 81.0 + run 128.0 p16904.421875
+[  62204.0] terrain:0103320                   aborted   268.0ms  q 102.0 + run 166.0 p16715.421875
+[  61708.0] terrain:010332130303320           ok        963.0ms  q 454.0 + run 509.0 p0  [net 509.0 bytes 264960 decode 0.0]
+--- worst 9 moving frames since recording ---
+[  51623.0] frame 2406 cast  interval 42.0  asked by view 1 completion 6 pending 1 animation 1  effects 0.0  tick 2.0  deadline 20.4 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 5.0 (6 bricks)  perf 0.0  gpu busy 28.5  light cast by content slide receivers world  draws 40 tris 51k  tiles terrain 1  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  55474.0] frame 2565 cast  interval 42.0  asked by method 2 view 3 completion 2 pending 2 animation 1  effects 0.0  tick 2.0  deadline 20.4 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 5.0 (5 bricks)  perf 0.0  gpu busy 28.9  light cast by content slide receivers world  draws 46 tris 51k  tiles -  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  55517.0] frame 2566 cast  interval 42.0  asked by method 4 view 3 scene 1 completion 12 pending 1 animation 1  effects 0.0  tick 3.0  deadline 20.4 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 5.0 (5 bricks)  perf 0.0  gpu busy 27.5  light cast by slide receivers world  draws 45 tris 52k  tiles terrain 1  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  49747.0] frame 2328 cast  interval 41.0  asked by method 4 view 3 scene 1 completion 2 pending 1 animation 1  effects 0.0  tick 3.0  deadline 20.4 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 5.0 (11 bricks)  perf 0.0  gpu busy 28.0  light cast by slide receivers world  draws 42 tris 60k  tiles -  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  59345.0] frame 2724 cast  interval 40.0  asked by method 8 view 3 scene 2 completion 7 pending 1 animation 2  effects 0.0  tick 3.0  deadline 19.6 from the entry's start  pump 0.0  stage 1.0 (judge 1.0)  fill 3.0 (5 bricks)  perf 0.0  gpu busy 27.5  light cast by slide receivers world  draws 48 tris 52k  tiles -  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  59420.0] frame 2726 cast  interval 40.0  asked by method 4 view 2 completion 2 pending 1 animation 1  effects 0.0  tick 3.0  deadline 19.6 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 4.0 (4 bricks)  perf 0.0  gpu busy 26.8  light cast by content slide receivers world  draws 46 tris 52k  tiles -  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  54012.0] frame 2500 cast  interval 39.0  asked by method 6 view 3 completion 6 pending 2  effects 0.0  tick 3.0  deadline 23.8 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 0.0 (0 bricks)  perf 0.0  gpu busy 29.6  light cast by content slide receivers  draws 42 tris 60k  tiles -  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  54078.0] frame 2502 cast  interval 38.0  asked by method 4 view 3 completion 7 pending 1 animation 1  effects 0.0  tick 1.0  deadline 23.8 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 0.0 (0 bricks)  perf 0.0  gpu busy 30.5  light cast by content slide receivers  draws 40 tris 59k  tiles terrain 1  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  57893.0] frame 2660 cast  interval 38.0  asked by method 6 view 3 scene 1 completion 5 pending 2 animation 1  effects 0.0  tick 2.0  deadline 23.8 from the entry's start  pump 0.0  stage 1.0 (encode 1.0)  fill 0.0 (0 bricks)  perf 0.0  gpu busy 29.8  light cast by content slide receivers  draws 40 tris 59k  tiles -  uploads 73 (2.7 MiB)  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB

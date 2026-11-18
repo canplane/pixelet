@@ -1,0 +1,79 @@
+3.4 PXLRUN t 1358.3999998569489 shown 1 boot 2 unanswered_ms 0
+4.4 PXLRUN t 2358.199999809265 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+5.4 PXLRUN t 3358.399999856949 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+6.5 PXLRUN t 4358.299999952316 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+7.5 PXLRUN t 5358.299999952316 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+8.5 PXLRUN t 6358.399999856949 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+9.5 PXLRUN t 7358.299999952316 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+10.5 PXLRUN t 8358.299999952316 shown 1 boot 2 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+11.5 PXLRUN t 9358.399999856949 shown 1 boot 3 unanswered_ms 0 frame_cnt 0 refused_admit 0 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+12.1 shot shots/0011.png
+12.4 state gpu_util 70% gpu_hz 680000000 ap 50.9
+12.5 PXLRUN t 10358.399999856949 shown 1 boot 3 unanswered_ms 0 frame_cnt 4 refused_admit 7 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+13.5 PXLRUN t 11358.399999856949 shown 1 boot 3 unanswered_ms 0 frame_cnt 25 refused_admit 17 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+14.5 PXLRUN t 12358.399999856949 shown 1 boot 3 unanswered_ms 0 frame_cnt 54 refused_admit 17 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+15.5 PXLRUN t 13358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 81 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+16.5 PXLRUN t 14358.399999856949 shown 1 boot 3 unanswered_ms 0 frame_cnt 139 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+17.5 PXLRUN t 15358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 199 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+18.6 PXLRUN t 16358.399999856949 shown 1 boot 3 unanswered_ms 0 frame_cnt 259 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+19.6 PXLRUN t 17358.299999952316 shown 1 boot 3 unanswered_ms 0 frame_cnt 319 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+20.6 PXLRUN t 18358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 379 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+21.6 PXLRUN t 19358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 439 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+23.0 PXLRUN t 20358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 499 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+23.0 PXLRUN t 21358.299999952316 shown 1 boot 3 unanswered_ms 0 frame_cnt 559 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+23.0 shot shots/0022.png
+23.2 state gpu_util 40% gpu_hz 220000000 ap 37.6
+24.0 PXLRUN t 22358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 611 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+25.1 PXLRUN t 23358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 647 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+26.1 PXLRUN t 24358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 685 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+27.1 PXLRUN t 25358.699999809265 shown 1 boot 3 unanswered_ms 0 frame_cnt 723 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+28.1 PXLRUN t 26358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 760 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+29.1 PXLRUN t 27358.599999904633 shown 1 boot 3 unanswered_ms 0 frame_cnt 798 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+30.1 PXLRUN t 28358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 835 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+31.1 PXLRUN t 29358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 875 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+32.1 PXLRUN t 30358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 914 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+33.1 PXLRUN t 31358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 951 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+33.9 shot shots/0033.png
+34.1 state gpu_util 23% gpu_hz 220000000 ap 33.3
+34.1 PXLRUN t 32358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 988 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+35.2 PXLRUN t 33358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1026 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+36.2 PXLRUN t 34358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1065 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+37.2 PXLRUN t 35358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1101 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+38.2 PXLRUN t 36358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1139 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+39.2 PXLRUN t 37358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1179 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+40.2 PXLRUN t 38358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1216 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+41.2 PXLRUN t 39358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1254 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+42.2 PXLRUN t 40358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1291 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+43.2 PXLRUN t 41358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1329 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 0
+44.8 PXLRUN t 42358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1366 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+44.8 shot shots/0044.png
+45.0 state gpu_util 24% gpu_hz 295000000 ap 32.2
+45.8 PXLRUN t 43358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1405 refused_admit 18 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+45.8 PXLRUN t 44366.09999990463 shown 1 boot 3 unanswered_ms 0 frame_cnt 1443 refused_admit 19 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+46.8 PXLRUN t 45358.199999809265 shown 1 boot 3 unanswered_ms 0 frame_cnt 1465 refused_admit 32 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+47.8 PXLRUN t 46358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1502 refused_admit 52 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+48.8 PXLRUN t 47358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1540 refused_admit 74 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+49.8 PXLRUN t 48358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1578 refused_admit 96 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+50.8 PXLRUN t 49360.299999952316 shown 1 boot 3 unanswered_ms 0 frame_cnt 1603 refused_admit 119 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+51.9 PXLRUN t 50363.09999990463 shown 1 boot 3 unanswered_ms 0 frame_cnt 1615 refused_admit 138 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+52.9 PXLRUN t 51360 shown 1 boot 3 unanswered_ms 0 frame_cnt 1637 refused_admit 163 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+53.9 PXLRUN t 52361.09999990463 shown 1 boot 3 unanswered_ms 0 frame_cnt 1647 refused_admit 175 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+54.9 PXLRUN t 53361.699999809265 shown 1 boot 3 unanswered_ms 0 frame_cnt 1667 refused_admit 196 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+55.7 shot shots/0055.png
+55.9 state gpu_util 86% gpu_hz 719000000 ap 33.4
+55.9 PXLRUN t 54358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1679 refused_admit 217 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+56.9 PXLRUN t 55365.59999990463 shown 1 boot 3 unanswered_ms 0 frame_cnt 1699 refused_admit 240 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+57.9 PXLRUN t 56358.299999952316 shown 1 boot 3 unanswered_ms 0 frame_cnt 1710 refused_admit 252 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+58.9 PXLRUN t 57368 shown 1 boot 3 unanswered_ms 0 frame_cnt 1729 refused_admit 274 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+59.9 PXLRUN t 58358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1741 refused_admit 286 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+60.9 PXLRUN t 59360.09999990463 shown 1 boot 3 unanswered_ms 0 frame_cnt 1760 refused_admit 310 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+61.9 PXLRUN t 60358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1774 refused_admit 329 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
+63.0 PXLRUN t 61371.699999809265 shown 1 boot 3 unanswered_ms 0 frame_cnt 1790 refused_admit 351 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+64.0 PXLRUN t 62358.299999952316 shown 1 boot 3 unanswered_ms 0 frame_cnt 1807 refused_admit 369 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+65.0 PXLRUN t 63360.699999809265 shown 1 boot 3 unanswered_ms 0 frame_cnt 1821 refused_admit 389 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+66.0 PXLRUN t 64358.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1837 refused_admit 406 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+66.7 shot shots/0066.png
+66.9 state gpu_util 84% gpu_hz 719000000 ap 39.0
+67.0 PXLRUN t 65362.39999985695 shown 1 boot 3 unanswered_ms 0 frame_cnt 1851 refused_admit 422 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+68.0 PXLRUN t 66358.5 shown 1 boot 3 unanswered_ms 0 frame_cnt 1874 refused_admit 444 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 2
+69.0 PXLRUN t 67359.79999995232 shown 1 boot 3 unanswered_ms 0 frame_cnt 1886 refused_admit 460 refused_stream 0 generation 0 status 1 err_cnt 0 unfinished 1
