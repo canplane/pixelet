@@ -2,7 +2,7 @@
 
 import { View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
-import Archive32 from "@carbon/icons/es/archive/32.js";
+import Box32 from "@carbon/icons/es/box/32.js";
 import ArrowUp32 from "@carbon/icons/es/arrow--up/32.js";
 import Car32 from "@carbon/icons/es/car/32.js";
 import Chat32 from "@carbon/icons/es/chat/32.js";
@@ -15,6 +15,7 @@ import CircleDash32 from "@carbon/icons/es/circle-dash/32.js";
 import Close32 from "@carbon/icons/es/close/32.js";
 import Compass32 from "@carbon/icons/es/compass/32.js";
 import Cube32 from "@carbon/icons/es/cube/32.js";
+import Cursor_132 from "@carbon/icons/es/cursor--1/32.js";
 import Debug32 from "@carbon/icons/es/debug/32.js";
 import Earth32 from "@carbon/icons/es/earth/32.js";
 import Erase32 from "@carbon/icons/es/erase/32.js";
@@ -27,9 +28,8 @@ import SailboatCoastal32 from "@carbon/icons/es/sailboat--coastal/32.js";
 import Search32 from "@carbon/icons/es/search/32.js";
 import SendAlt32 from "@carbon/icons/es/send--alt/32.js";
 import Sun32 from "@carbon/icons/es/sun/32.js";
-import Touch_132 from "@carbon/icons/es/touch--1/32.js";
 import Train32 from "@carbon/icons/es/train/32.js";
-import Tree32 from "@carbon/icons/es/tree/32.js";
+import Sprout32 from "@carbon/icons/es/sprout/32.js";
 import View32 from "@carbon/icons/es/view/32.js";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -42,10 +42,10 @@ import { Spin } from "@/ui/shared/component/motion/motion.tsx";
  * in degrees clockwise. Carbon draws one weight, so an SF weight is Apple's
  * alone, and a `.fill` name takes Carbon's filled icon where it has one.
  */
-type CarbonIcon = typeof Archive32;
+type CarbonIcon = typeof Box32;
 
 const CARBON = {
-  archivebox: [Archive32, 0],
+  archivebox: [Box32, 0],
   "arrow.up": [ArrowUp32, 0],
   "bubble.left": [Chat32, 0],
   car: [Car32, 0],
@@ -53,7 +53,7 @@ const CARBON = {
   "checkmark.square": [CheckboxChecked32, 0],
   "chevron.down": [ChevronDown32, 0],
   "chevron.up": [ChevronUp32, 0],
-  "hand.point.up.left": [Touch_132, 0],
+  cursorarrow: [Cursor_132, 0],
   eraser: [Erase32, 0],
   eye: [View32, 0],
   "figure.stand": [Person32, 0],
@@ -72,7 +72,7 @@ const CARBON = {
   square: [Checkbox32, 0],
   "sun.max": [Sun32, 0],
   "train.side.front.car": [Train32, 0],
-  tree: [Tree32, 0],
+  tree: [Sprout32, 0],
   xmark: [Close32, 0],
 } as const satisfies Record<string, readonly [CarbonIcon, f64]>;
 

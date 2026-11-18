@@ -276,7 +276,7 @@ export function Strip({
       <View style={STYLE.group}>
         <ToolButton
           label={t("world.dock.pointer")}
-          glyph="hand.point.up.left"
+          glyph="cursorarrow"
           active={activeTool === TOOL_POINTER}
           onPress={() => selectTool(TOOL_POINTER)}
         />
