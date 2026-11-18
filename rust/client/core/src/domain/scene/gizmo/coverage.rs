@@ -13,12 +13,12 @@ use crate::spec::step::InvalidationReason;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::brick;
 
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::Tile as _;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::color::Rgb;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::cell_zoom_at;

@@ -152,7 +152,8 @@ export async function perfTrace(): Promise<object> {
       // A frame's record is taken as its stage ends, at `t`. So the stage
       // ends at `t`, the pump ends where the stage starts, the tick where the
       // pump starts, and the effects where the tick starts; the ground's fill
-      // starts where the stage ends.
+      // runs in the entry after the frame's and has no start of its own in the
+      // record, so it is drawn from where the stage ends.
       const span = (name: string, endMs: f64, ms: f64) =>
         events.push(
           event(name, "frame", "X", ts - us(endMs + ms), us(ms), TID_FRAMES),

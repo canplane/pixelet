@@ -77,16 +77,37 @@ effects of what the UI sent, then the tick, then the draw (`frame.rs`). A vsync
 answers its frame's start on the host's monotonic clock and its gap since the
 frame before, from which the display is measured (`sched/display.rs`).
 
-Each entry has a deadline, by one rule (`sched.rs` `Budget`): a frame's budget
-is its target interval less `MARGIN_SHARE` (`param.rs`), and an entry ends at
-that budget from the last frame's start, and no sooner than `CONTENT_SHARE` of
-it from its own start. A frame takes the deadline again from its own start,
-the visible phase leaves the content's share unspent, and once the frame has
-run, the entry's tasks get that share from then on, however far the frame ran
-past its deadline. The tick runs the phases the core declares, in their order,
-within it (`sched/tick.rs`), and a list of work stops once the budget is spent
-and one item has done work, so the list always moves (`run`). A task yields
-where the budget is spent and comes back in a later entry (`yield_if_spent`).
+Each entry has an end, by one rule (`sched.rs` `Budget`): the margin,
+`MARGIN_SHARE` of the frame's target interval (`param.rs`), before the next
+frame's start where the core knows that start, and one slice, `SLICE_SHARE`,
+from the entry's own start where it does not. A frame is due from when it is
+asked for until it has run. The core knows the next frame's start only while
+one is due, and only as one target interval after the last frame's start,
+where the display ticks while frames follow one another; a frame's own entry
+so ends the margin before one target from the frame's start. A vsync comes
+within half a display interval of that start (`rate.rs` `due_at`). Past that
+with no frame started, the frame starts at
+a tick the core cannot place: after a view stood still, after a frame ran
+past its target, before any frame, and on a page whose display does not tick
+while it is hidden. The entry then has its slice, as where no frame is due.
+An entry that starts past its end has no budget, and none has one before the
+frame task first asks for a frame, the pace being unknown until then.
+
+The tick runs the phases the core declares, in their order, within the budget
+(`sched/tick.rs`), and a list of work stops once the budget is spent and one
+item has done work, so the list always moves (`run`). A spent entry still
+moves each task by one part, so a part may end past the next frame's start;
+and a frame whose start the core did not know may wait a slice and a part.
+
+An entry that draws a frame does nothing else. A vsync's answer wakes the
+frame task alone, and once the frame has run its entry is spent: the task asks
+for the next frame's vsync, the entry ends, and the frame's stream leaves for
+the GPU at that end. Every other task, the ground's fill and a model's parse
+among them, yields before its first work and between its units where the
+budget is spent, and comes back in a later entry (`yield_if_spent`). So a task
+the frame readied leaves the frame's entry with no work done, and works in an
+entry that draws no frame, which has its end by the same rule, however
+far the frame ran past its own.
 An entry ends once no task is ready, and a core with nothing to do is not
 entered.
 

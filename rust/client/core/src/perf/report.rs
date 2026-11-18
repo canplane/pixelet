@@ -4,6 +4,7 @@
 //! it belongs to that one frame: what the frame measured of itself, what the
 //! renderer made of its frame, and the tiles each base layer took in.
 
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::sys::sched::tick::TickReport;
 use pxl_global::Global;
 use pxl_render::renderer::GpuRead;
@@ -11,7 +12,6 @@ use pxl_render::spec::span::FrameKind;
 use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;

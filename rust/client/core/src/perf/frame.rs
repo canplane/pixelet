@@ -76,8 +76,8 @@ pub(crate) struct FrameSample {
     pub paced_ms: f64,
     /// 1 when the frame asked for no next one.
     pub settled: f64,
-    /// The frame's entry's deadline, in ms from the entry's start
-    /// (sys/sched.rs `deadline_ms`), and 1 when the scheduler found it spent
+    /// The frame's entry's budget, from the entry's start to its end
+    /// (sys/sched.rs `budget_ms`), and 1 when the scheduler found it spent
     /// as the tick ended (`spent`).
     pub budget_ms: f64,
     pub overran: f64,
@@ -88,7 +88,7 @@ pub(crate) struct FrameSample {
     pub phases: [f64; Phase::ALL.len()],
     pub pump_ms: f64,
     pub stage_parts: [f64; STAGE_PART_CNT],
-    /// What the ground's fill took after the frame (record.rs
+    /// What the ground's fill took in the entry after the frame's (record.rs
     /// `perf_record_fill`).
     pub fill_ms: f64,
     /// What the profiler itself cost the interval: recording the frame, and

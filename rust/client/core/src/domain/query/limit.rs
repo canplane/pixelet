@@ -10,8 +10,8 @@
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 
 use crate::domain::layer::Base as _;
+use crate::domain::layer::terrain::tile::TerrainTile;
 use pxl_content::strata::{bedrock, top};
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{point, wrap_idx};
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};

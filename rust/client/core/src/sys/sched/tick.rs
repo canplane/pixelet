@@ -1,8 +1,7 @@
 // pxl-core/sys/sched/tick.rs
 
 //! The core's tick: each phase's steps run in order, within the entry's
-//! budget (sys/sched.rs `spent`), the visible phase leaving the content's
-//! share of it unspent (`reserve`), and each phase's time is kept for the
+//! budget (sys/sched.rs `spent`), and each phase's time is kept for the
 //! profiler (spec/phase.spec.rs). The frame runs the steps (frame.rs
 //! `frame::tick`).
 
@@ -38,16 +37,14 @@ impl TickContext {
     /// Runs `phase`'s steps, and keeps their time.
     pub(crate) fn phase(&mut self, phase: Phase, steps: impl FnOnce(&mut TickContext)) {
         let start = now();
-        sched::reserve(phase == Phase::Visible);
         steps(self);
-        sched::reserve(false);
         self.phase_ms[phase as usize] = now() - start;
     }
 
     /// What the tick that began at `start` came to.
     pub(crate) fn report(&self, start: f64) -> TickReport {
         TickReport {
-            budget_ms: sched::deadline_ms(),
+            budget_ms: sched::budget_ms(),
             overran: sched::spent(),
             phase_ms: self.phase_ms,
             total_ms: now() - start,

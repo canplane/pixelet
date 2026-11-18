@@ -8,8 +8,8 @@
 //!
 //! A brick is filled here from its tile in two stages. Its folds, four
 //! asset ids per cell, are cut from the tile's packet in the entry the packet
-//! lands, and the packet is then freed (`cut`). Later, after the frame and
-//! as far as the entry's budget leaves room (`fill_share`), its cells
+//! lands, and the packet is then freed (`cut`). Later, in an entry after a
+//! frame's and as far as that entry's budget leaves room (`fill_share`), its cells
 //! are filled from those folds and the tile's samples and lines into
 //! the terrain's fixed range, and the spans its cells were filled by into a run of the
 //! ways' pool (pool.rs).
@@ -21,7 +21,9 @@
 //! tile's slot is a room in the terrain's fixed range for the part read of
 //! the tile as a whole, its elevation samples, decoded into it straight from
 //! the packet; its separation lines, sized by the tile, are vectors of its
-//! own on the heap and go with it. A tile's cells belong to the clip levels:
+//! own on the heap and go with it, and so do those lines divided among its
+//! bricks, once as it lands (tile.rs), which each brick's fill reads
+//! its own of. A tile's cells belong to the clip levels:
 //! they cut what they want of them from the packet in the entry it lands, and
 //! the packet is then dropped. A tile the bake left without an
 //! object is drawn from the tile over it, whose cells there are open water;
@@ -32,6 +34,7 @@ use crate::domain::layer::terrain::fixed::{
     CELLS_ARR_SZ, FOLDS_ARR_SZ, RANGE, cells_off, ele_off, fill_off, folds_off,
 };
 use crate::domain::layer::terrain::pool::{PoolRefusal, Run, way_pool};
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::spec::step::InvalidationReason;
 use crate::sys::io::body::Body;
@@ -52,9 +55,8 @@ use pxl_engine::ground::Extent;
 use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
-use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    ELE_COLUMN, FOLD_COLUMN, TerrainTile, brick_lines, brick_pairs, cells_of, decode_into,
+    ELE_COLUMN, FOLD_COLUMN, brick_lines, cells_of, decode_into, segment_cnt,
 };
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
@@ -956,12 +958,19 @@ enum Poll {
     Done,
 }
 
-/// Fills the due bricks one part at a time (`fill_stage`), after the frame.
-/// It runs as far as the entry's budget holds (sys/sched.rs `spent`), and
-/// always at least one part, so an entry that spent its budget before this
-/// point still moves the fill. What is left, and a filled brick waiting to be
-/// handed over, ask for the next frame. It answers how many bricks it filled,
-/// for the profiler.
+/// Whether a brick may be due a fill: one is going on, one is listed, or the
+/// list no longer matches the slots.
+pub(crate) fn fill_due() -> bool {
+    let w = clipmap();
+    w.due_stale || w.filling.is_some() || !w.due.is_empty()
+}
+
+/// Fills the due bricks one part at a time (`fill_stage`), in an entry after
+/// a frame's (frame.rs `fill`). It runs as far as the entry's budget
+/// holds (sys/sched.rs `spent`), and always at least one part, so an entry
+/// that spent its budget before this point still moves the fill. What is
+/// left, and a filled brick waiting to be handed over, ask for the next
+/// frame. It answers how many bricks it filled, for the profiler.
 pub(crate) fn fill_share() -> u32 {
     let w = clipmap();
     if core::mem::take(&mut w.due_stale) {
@@ -1047,8 +1056,8 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
 }
 
 /// Begins the next due brick. What a fill reads of its tile, its samples and
-/// its lines, is copied into the room, since the tile may be let go before the
-/// fill ends. A void tile has no packet, so its brick's folds are cut here. A
+/// the brick's own of its lines, is copied into the room, since the tile may be
+/// let go before the fill ends. A void tile has no packet, so its brick's folds are cut here. A
 /// brick whose tile was let go becomes absent, and its tile is asked for again.
 fn begin(w: &mut Clipmap) -> Poll {
     let terrain = TerrainTile::tile_cache();
@@ -1062,7 +1071,7 @@ fn begin(w: &mut Clipmap) -> Poll {
             continue;
         }
         let (t, place) = tile_of(slot.cell_zoom, slot.brick);
-        let Some(tile) = terrain.get(t) else {
+        let Some(held) = terrain.get(t) else {
             w.slots[b as usize].fill = Fill::Idle;
             w.went_absent = true;
             continue;
@@ -1073,14 +1082,14 @@ fn begin(w: &mut Clipmap) -> Poll {
         }
         let f = fill_scratch();
         if void {
-            let cells = &tile.cells;
+            let cells = &held.tile.cells;
             cut_into(b, place, &|c: usize| word([u32::from(cells[c]); 4]));
             w.slots[b as usize].fill = Fill::Cut;
             f.ele.fill(0);
         } else {
-            f.ele.copy_from_slice(&tile.ele);
+            f.ele.copy_from_slice(&held.tile.ele);
         }
-        if !take_lines(w, b, t, &tile.separation, place) {
+        if !take_lines(w, b, t, held, place) {
             continue;
         }
         w.filling = Some(BrickFill {
@@ -1100,33 +1109,26 @@ fn begin(w: &mut Clipmap) -> Poll {
     Poll::Done
 }
 
-/// Lays brick `b`'s lines out for its fill, on the heap and refused without a panic. Its
-/// `pairs` go back when this returns and its lines when the fill ends (`end`); none are taken for
-/// a brick with no line. It says whether the fill may go on, the brick waiting where the heap
-/// refused (`Fill::Waiting`).
-fn take_lines(
-    w: &mut Clipmap,
-    b: u32,
-    t: Quadrant,
-    separation: &Separation,
-    place: [u32; 2],
-) -> bool {
+/// Lays brick `b`'s lines out for its fill from its entries among the tile's (`BrickPairs`),
+/// on the heap and refused without a panic. The copy of its entries it works in goes back when
+/// this returns and its lines when the fill ends (`end`); none are taken for a brick with no
+/// line. It says whether the fill may go on, the brick waiting where the heap refused
+/// (`Fill::Waiting`).
+fn take_lines(w: &mut Clipmap, b: u32, t: Quadrant, held: &TerrainTile, place: [u32; 2]) -> bool {
     let f = fill_scratch();
     f.lines = Vec::new();
-    let mut pairs = Vec::new();
-    let Some(segments) = brick_pairs(separation, place, &mut pairs) else {
-        return wait_heap(w, b);
-    };
-    if pairs.is_empty() {
+    let entries = held.pairs.at(place);
+    if entries.is_empty() {
         return true;
     }
-    let words = brick::lines_words(pairs.len() as u32, segments) as usize;
-    let mut lines = Vec::new();
-    if lines.try_reserve_exact(words).is_err() {
+    let words = brick::lines_words(entries.len() as u32, segment_cnt(entries)) as usize;
+    let (mut pairs, mut lines) = (Vec::new(), Vec::new());
+    if pairs.try_reserve_exact(entries.len()).is_err() || lines.try_reserve_exact(words).is_err() {
         return wait_heap(w, b);
     }
+    pairs.extend_from_slice(entries);
     lines.resize(words, 0);
-    brick_lines(t, separation, &mut pairs, &mut lines);
+    brick_lines(t, &held.tile.separation, &mut pairs, &mut lines);
     f.lines = lines;
     true
 }
@@ -1315,9 +1317,10 @@ impl Base for TerrainTile {
     }
 
     /// Decodes the packet into the slot in one pass, so no tile-sized copy
-    /// stands between arrival and drawing, and has the clip levels cut what
-    /// they want from it before it is dropped. No terrain packet is kept
-    /// past its frame. A heap that refuses its lines waits on the heap.
+    /// stands between arrival and drawing, divides its lines among its
+    /// bricks, and has the clip levels cut what they want from it before it
+    /// is dropped. No terrain packet is kept past its frame. A heap that
+    /// refuses its lines, or them by brick, waits on the heap.
     fn receive(
         tile: Quadrant,
         slot: u32,
@@ -1327,9 +1330,10 @@ impl Base for TerrainTile {
         let t0 = now();
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
         let decoded = decode_into::<Exit>(&pkt, unsafe { ele_of(slot) })?;
+        let held = TerrainTile::of(decoded)?;
         phases.push(TaskPhaseName::DecodeMs, now() - t0);
         cut(tile, &pkt);
-        Ok(decoded)
+        Ok(held)
     }
 
     fn empty() -> Option<TerrainTile> {

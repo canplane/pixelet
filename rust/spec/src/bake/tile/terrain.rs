@@ -24,7 +24,7 @@ pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::Sentinel;
 use crate::brick::{
-    BRICK, Brick, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BIN_CNT, WAYS_SHIFT,
+    BRICK, Brick, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BIN_ACROSS, WAYS_BIN_CNT,
     lines_words, of_idx,
 };
 use crate::ground;
@@ -61,41 +61,83 @@ pub struct TerrainTile {
     pub occupancy: Occupancy, // Which children are tiles; a child that is not one is never asked for.
 }
 
-/// Gathers into `pairs`, walking the tile's ways once (`Separation::reaches`), each of the
-/// brick at `place`'s entries (a bin and the point its segment starts at), and returns how many
-/// segments they reach, as `brick_lines` lays them; none where the heap refuses `pairs` the room,
-/// which is left as far as it got.
-pub fn brick_pairs(
-    separation: &Separation,
-    place: [u32; 2],
-    pairs: &mut Vec<(u32, u32)>,
-) -> Option<u32> {
-    let bins = BRICK >> WAYS_SHIFT;
-    let mut room = true;
-    // Each bin of the brick a segment's footprint reaches, and the point it starts at.
-    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
-        let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
-        if room && [x / bins, y / bins] == place {
-            room = pairs.try_reserve(1).is_ok();
-            if room {
-                pairs.push((
-                    (y % bins) * bins + x % bins,
-                    separation.starts[d] + s as u32,
-                ));
-            }
-        }
-    });
-    if !room {
-        return None;
-    }
-    // The segments, each once in their points' order.
-    pairs.sort_unstable_by_key(|&(b, p)| (p, b));
-    Some(pairs.chunk_by(|a, b| a.1 == b.1).count() as u32)
+/// How many of a clip level's bricks a tile is cut into, a side and in all.
+const BRICKS_ACROSS: u32 = TILE_CELLS / BRICK;
+const BRICK_CNT: usize = (BRICKS_ACROSS * BRICKS_ACROSS) as usize;
+
+/// A tile's lines by the clip level's bricks they reach: each brick's entries, a bin of the
+/// brick and the point its segment starts at, in their points' order and a point's in its
+/// bins', as `brick_lines` takes them. They are the tile's, worked out from its ways once
+/// (`of`) and read by each brick that lays its lines.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BrickPairs {
+    /// Brick `k`'s entries are `pairs[firsts[k]..firsts[k + 1]]`, the bricks row by row.
+    firsts: [u32; BRICK_CNT + 1],
+    pairs: Vec<(u32, u32)>,
 }
 
-/// Lays the lines of the clip level's brick at `place` (in bricks) of `tile` into `out`, exactly
-/// `brick::lines_words` of `pairs.len()` entries and the segments they reach long
-/// (`brick_pairs`), as its fill asks them (brick.rs `LINES_*`): the tile's header,
+impl Default for BrickPairs {
+    /// A tile with no line's.
+    fn default() -> BrickPairs {
+        BrickPairs {
+            firsts: [0; BRICK_CNT + 1],
+            pairs: Vec::new(),
+        }
+    }
+}
+
+impl BrickPairs {
+    /// Divides `separation`'s segments among the bricks: one walk of the tile's ways
+    /// (`Separation::reaches`) counts each brick's entries and a second lays them, in one
+    /// vector taken whole, which a heap may refuse. The walk goes by points and, for a
+    /// point, by bins row by row, so each brick's entries come in the order they are kept.
+    pub fn of(separation: &Separation) -> Result<BrickPairs, TryReserveError> {
+        // Each bin a segment's footprint reaches: its brick, then its bin of the brick and
+        // the point the segment starts at.
+        let walk = |each: &mut dyn FnMut(usize, (u32, u32))| {
+            separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
+                let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
+                let brick = y / WAYS_BIN_ACROSS * BRICKS_ACROSS + x / WAYS_BIN_ACROSS;
+                let bin = (y % WAYS_BIN_ACROSS) * WAYS_BIN_ACROSS + x % WAYS_BIN_ACROSS;
+                each(brick as usize, (bin, separation.starts[d] + s as u32));
+            });
+        };
+        let mut firsts = [0; BRICK_CNT + 1];
+        walk(&mut |k, _| firsts[k + 1] += 1);
+        for k in 0..BRICK_CNT {
+            firsts[k + 1] += firsts[k];
+        }
+        let cnt = firsts[BRICK_CNT] as usize;
+        let mut pairs = Vec::new();
+        pairs.try_reserve_exact(cnt)?;
+        pairs.resize(cnt, (0, 0));
+        let mut next = firsts;
+        walk(&mut |k, pair| {
+            pairs[next[k] as usize] = pair;
+            next[k] += 1;
+        });
+        Ok(BrickPairs { firsts, pairs })
+    }
+
+    /// The entries of the brick at `place` (in bricks), none for a place outside the tile.
+    pub fn at(&self, place: [u32; 2]) -> &[(u32, u32)] {
+        if place.iter().any(|&p| p >= BRICKS_ACROSS) {
+            return &[];
+        }
+        let k = (place[1] * BRICKS_ACROSS + place[0]) as usize;
+        &self.pairs[self.firsts[k] as usize..self.firsts[k + 1] as usize]
+    }
+}
+
+/// How many segments a brick's entries reach (`BrickPairs::at`), as `brick_lines` lays them.
+pub fn segment_cnt(pairs: &[(u32, u32)]) -> u32 {
+    pairs.chunk_by(|a, b| a.1 == b.1).count() as u32
+}
+
+/// Lays the lines of a clip level's brick of `tile` into `out` from `pairs`, a copy of the
+/// brick's entries (`BrickPairs::at`), which it works in: exactly `brick::lines_words` of
+/// `pairs.len()` entries and the segments they reach long (`segment_cnt`), as its fill asks
+/// them (brick.rs `LINES_*`): the tile's header,
 /// each bin's first entry, the entries, and the segments the bins reach, each once, in their
 /// lines' order.
 pub fn brick_lines(
@@ -222,7 +264,6 @@ pub fn first_cell(tile: Quadrant, cell_zoom: Zoom, place: [u32; 2]) -> [i32; 2] 
 /// (`way::fills_any`) is none at that zoom and is not stored.
 pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
     let lines = &terrain.separation;
-    let bricks = TILE_CELLS / BRICK;
     let (mut pairs, mut words) = (Vec::new(), Vec::new());
     let mut separation = separation::Builder::default();
     for line in lines.iter() {
@@ -241,14 +282,15 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
             let first = ((lo[k] - footprint) / f64::from(BRICK)).floor().max(0.0) as u32;
             let last = ((hi[k] + footprint) / f64::from(BRICK))
                 .floor()
-                .min(f64::from(bricks - 1)) as u32;
+                .min(f64::from(BRICKS_ACROSS - 1)) as u32;
             first..=last
         };
+        let by_brick = BrickPairs::of(&one).expect("a bake's heap does not refuse");
         let seen = span(1).any(|qy| {
             span(0).any(|qx| {
                 pairs.clear();
-                let segments =
-                    brick_pairs(&one, [qx, qy], &mut pairs).expect("a bake's heap does not refuse");
+                pairs.extend_from_slice(by_brick.at([qx, qy]));
+                let segments = segment_cnt(&pairs);
                 let cnt = pairs.len();
                 words.clear();
                 words.resize(lines_words(cnt as u32, segments) as usize, 0);

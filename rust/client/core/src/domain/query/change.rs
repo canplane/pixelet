@@ -10,9 +10,9 @@
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
+use crate::domain::layer::terrain::tile::TerrainTile;
 use crate::domain::observer;
 use pxl_global::Global;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;

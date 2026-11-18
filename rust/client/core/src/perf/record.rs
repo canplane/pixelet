@@ -406,8 +406,8 @@ pub(crate) fn perf_record_read(ms: f64) {
     }
 }
 
-/// Records the ground's fill after the frame whose interval is in progress:
-/// it took `ms` and filled `cnt` bricks.
+/// Records the ground's fill, in the entry after the frame whose interval is
+/// in progress: it took `ms` and filled `cnt` bricks.
 pub(crate) fn perf_record_fill(ms: f64, cnt: u32) {
     let l = perf();
     if let Some(f) = l.open.as_mut().filter(|_| l.recording) {

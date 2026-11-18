@@ -9,7 +9,7 @@ use crate::domain::layer::terrain::pool::{WayPool, exhaust, set_way_pool};
 use pxl_engine::fill;
 use pxl_engine::way::way_cell;
 use pxl_spec::bake::separation::{self, Separation};
-use pxl_spec::bake::tile::terrain;
+use pxl_spec::bake::tile::terrain::{self, BrickPairs};
 use pxl_spec::brick;
 use pxl_spec::ground::GroundId;
 use pxl_spec::ground::word;
@@ -148,9 +148,8 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             let [x, y] = brick::of_idx(k);
             ((place[1] * BRICK + y) * side + place[0] * BRICK + x) as usize
         };
-        let mut pairs = Vec::new();
-        let segments = brick_pairs(separation, place, &mut pairs).unwrap();
-        let cnt = pairs.len();
+        let mut pairs = BrickPairs::of(separation).unwrap().at(place).to_vec();
+        let (cnt, segments) = (pairs.len(), segment_cnt(&pairs));
         let mut lines = vec![0; brick::lines_words(cnt as u32, segments) as usize];
         if cnt != 0 {
             brick_lines(t, separation, &mut pairs, &mut lines);
@@ -289,7 +288,7 @@ fn fill_room() -> &'static mut Clipmap {
 
 /// The tile at `CENTER_TILE` and its packet: rolling ground with a bridge
 /// crossing it from west to east, high enough to stand clear of the ground.
-fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
+fn hilly_tile() -> (Quadrant, terrain::TerrainTile, Vec<u8>) {
     let ele: Vec<i16> = (0..ELE_COLUMN as i32)
         .map(|i| ((i * 37) % 11 + (i / 36) % 5) as i16)
         .collect();
@@ -306,16 +305,17 @@ fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
         .map(|c| 1 + (c % 7) as GroundId)
         .collect::<Vec<_>>();
     let t = Quadrant::new(LEAF_ZOOM, CENTER_TILE);
-    let tile = TerrainTile::leaf(ele, cells.into(), builder.finish());
+    let tile = terrain::TerrainTile::leaf(ele, cells.into(), builder.finish());
     let pkt = terrain::encode(&tile).unwrap();
     (t, tile, pkt)
 }
 
 /// `t` held in the tile cache as `tile`, the only tile asked for.
-fn cache_tile(t: Quadrant, tile: TerrainTile) {
+fn cache_tile(t: Quadrant, tile: terrain::TerrainTile) {
     let cache = TerrainTile::tile_cache();
     *cache = Default::default();
-    cache.admit(t, |_| None, |_| Ok::<_, ()>(tile)).unwrap();
+    let held = TerrainTile::of(tile).unwrap();
+    cache.admit(t, |_| None, |_| Ok::<_, ()>(held)).unwrap();
     let asks: fnv::FnvHashMap<Quadrant, ()> = [(t, ())].into_iter().collect();
     cache.ask(&asks);
 }
@@ -349,9 +349,8 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         assert!(slot.fill == Fill::Filled, "filled, not yet handed");
         assert!(!slot.present, "not present before a frame hands it");
         let (cell_zoom, place) = (slot.cell_zoom, tile_of(slot.cell_zoom, slot.brick).1);
-        let mut pairs = Vec::new();
-        let segments = brick_pairs(&tile.separation, place, &mut pairs).unwrap();
-        let cnt = pairs.len();
+        let mut pairs = BrickPairs::of(&tile.separation).unwrap().at(place).to_vec();
+        let (cnt, segments) = (pairs.len(), segment_cnt(&pairs));
         let mut lines = vec![0; brick::lines_words(cnt as u32, segments) as usize];
         brick_lines(t, &tile.separation, &mut pairs, &mut lines);
         let site = fill::Site {

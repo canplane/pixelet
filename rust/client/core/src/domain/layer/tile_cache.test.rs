@@ -1,7 +1,7 @@
 // pxl-core/domain/layer/tile_cache.test.rs
 
 use super::*;
-use pxl_spec::bake::tile::terrain::TerrainTile;
+use crate::domain::layer::terrain::tile::TerrainTile;
 
 fn asks(tiles: &[Quadrant]) -> FnvHashMap<Quadrant, ()> {
     tiles.iter().map(|&p| (p, ())).collect()
