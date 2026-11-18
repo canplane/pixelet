@@ -410,6 +410,23 @@ fn a_ray_into_ground_not_held_lacks() {
     assert!(matches!(past, Answer::Lack(_)), "{past:?}");
 }
 
+/// A ray that asks the leaves' zoom over ground a coarser tile stands in for
+/// answers coarser, whatever the size of the node it passes there, and one
+/// that stays over the leaf held answers exactly.
+#[test]
+fn a_ray_over_ground_stood_in_for_answers_coarser() {
+    let [x, y] = flat_at_five();
+    let world = placed(Store::default());
+    let west = |reach: f64| Ray {
+        origin: [x + 0.5, y + 0.5, 100.5],
+        dir: [-1.0, 0.0, 0.0],
+        t_max: reach,
+    };
+    assert_eq!(world.first_hit(&west(8.0)), Answer::Exact(None));
+    let past = world.first_hit(&west(300.0));
+    assert!(matches!(past, Answer::Coarser(None, _)), "{past:?}");
+}
+
 /// The climb reads ground stood in for and ground not held apart: over
 /// ground a coarser tile stands in for it answers the floor, and where no
 /// tile holds the ground nothing fills, so it answers no floor; either way
