@@ -24,22 +24,27 @@ meant to do and where it is, not why its author thinks it is right.
   could break it: a caller with other inputs, an edge case (zero, negative,
   wrap-around, a bound's last value), a path still doing it the old way.
 - **The question.** Read the change against the contract of each part it
-  touches (AGENTS.md; `ARCHITECTURE.md`, "The question"):
+  touches (AGENTS.md; `ARCHITECTURE.md`, "The question").
+
+  What is seen is sampled:
   - the eye: anything but the camera's eye that sets the size a place is asked
     at, an eye passed as a parameter, a fallback where there is none, a
     reader's own place or a destination's taken for it; a reader that is
-    neither the eye's ray nor a read at one size; a kept answer keyed by
+    neither the eye's ray nor a read at one size; a cached answer keyed by
     anything but its cube, its size and the world's changes; a word that calls
     something else an eye or an observer;
+  - the screen: a frame drawn for a difference that cannot be told apart, a
+    thing gone before what replaces it is ready.
+
+  The world answers at every size, and falls back until the finer and the
+  newer are ready:
   - the query: a read of a layer's storage that goes around it, an answer
-    that hides what it lacked, a query that fetches or holds;
-  - the pyramid: a kind of tile handled apart in anything but what its tile
-    holds, how it folds and what it asks for (its ask scope and what its
-    readers pin);
+    that hides what it lacked, a query that fetches or has state;
   - the asset: a reader that tells what the base made from what someone
     placed, an id that says more than its kind and its index;
-  - the screen: a frame drawn for a difference no sampler can tell, a thing
-    gone before what replaces it is ready.
+  - the pyramid: a kind of tile handled apart in anything but what its tile
+    holds, how it folds and what it asks for (its ask scope and what its
+    readers pin).
 
   A new base layer, ask scope or asset kind with no decision of the user's
   behind it is a finding.
