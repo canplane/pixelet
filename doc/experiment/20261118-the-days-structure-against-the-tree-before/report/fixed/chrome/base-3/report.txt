@@ -1,0 +1,54 @@
+=== perf @ t=61611.1ms  build #102-630c31c8f2-dirty 630c31c8f2-dirty (2026-11-18T04:00:21.905Z) ===
+frames n=693  over 19.9s  fps 34.7  moving 692  still 1   refresh 15.8 ms   paced 15.8 ms   scale 1.00
+  kinds   cast 691  unchanged 2
+  interval p50 32.9  p95 50.0  max 66.8 ms
+  tick    p50 2.1  p95 3.3  max 5.0 ms   overran 0   budget 13.2   phase p95 interaction 0.4  visible 3.1
+  effects p50 0.0  p95 0.1  max 0.2 ms   p95 -
+  invalidations method 2492  view 1968  scene 0  completion 3319  pending 1555  animation 930
+  stage   p50 0.4  p95 0.6  max 0.8 ms   (the pump and the render)
+  perf p50 0.0  p95 0.1  max 0.5 ms   (its own record and the UI's reads)
+  gpu     p50 26.0  p95 38.4  max 44.4 ms busy   (over the 690 frames a read timed)
+  busy by kind  cast p50 26.0 p95 38.4 (690) ms   (n: the kind's frames a read timed)
+  spans   p95 air 1.2 (601)  exposure 1.4 (689)  world 6.7 (690)  resolve 1.7 (690)  finish 0.9 (690)  cast 3.1 (690)  beam_hit 1.9 (690)  beam 3.0 (690)  grid_cell 0.1 (479)  sample_hit 4.5 (690)  sample 1.8 (682)  raster_box 0.7 (690)  sraster 1.3 (690)  px 1.8 (690)  hole 3.4 (690)  light_world_receivers 0.1 (331)  light_draws 1.1 (481)  light_slide 0.1 (157)  light_propagate 0.1 (487)  light_damage 0.4 (462)  light_beam_hit 1.8 (523)  light_beam 1.9 (554)  light_sample 3.9 (610)  light_raster 0.6 (690)  light_slot 0.3 (449)  light_hit 2.5 (527)  light_walk 1.2 (576)  generate 1.2 (672)  shadow 0.4 (667)  face 0.8 (690)  damage 0.3 (186) ms   (n: the frames a read timed that ran each)
+  view    pivot 38.11930°, 128.46560° 1692.3 m  distance 188.7 u  polar 81.6°  azimuth 10.3°   drawn 8.3 Mpx
+  steps   visible/scene 1.5/4.1  visible/demand 0.5/1.0  interaction/companion 0.1/0.5  interaction/camera 0.0/0.2  interaction/environment 0.0/0.1  interaction/location 0.0/0.1  interaction/input 0.0/0.1  interaction/controller 0.0/0.1  interaction/ghost 0.0/0.1  interaction/edit 0.0/0.1   (ms a run and max, since the recording started)
+  heap used Δ +0 MiB   (the high-water mark)
+  since   heap max live 26.3 MiB  run 1.1 MiB  slot 0.9 MiB  range 361.4 MiB   largest free min 2 MiB   refusals 0   body slots peak 11   terrain refused 0   (over the 694 frames since the recording started)
+tasks n=582
+  terrain  network  n=582   p50 383.4  p95 867.8 ms   ok 257  ab 323  err 2 (EACCES x2)
+                    mean net 294.6  bytes 885402  decode 0.0
+long frames n=0
+--- last 20 tasks ---
+[  60490.2] terrain:010332120                 aborted    84.4ms  q 16.5 + run 67.9 p9631.0625
+[  60405.4] terrain:01033212                  aborted   217.4ms  q 52.4 + run 165.0 p4778.28125
+[  60555.4] terrain:010332031                 aborted   184.9ms  q 67.4 + run 117.5 p16786.66015625
+[  60555.4] terrain:01033203                  aborted   218.5ms  q 1.2 + run 217.3 p13370.853092560044
+[  60522.3] terrain:0103320                   aborted   268.2ms  q 52.3 + run 215.9 p14498.0234375
+[  60456.7] terrain:010332                    ok        350.2ms  q 1.1 + run 349.1 p4815.28125  [net 340.4 bytes 1051392 decode 0.0]
+[  60573.6] terrain:0103                      ok        266.5ms  q 1.0 + run 265.5 p0  [net 252.3 bytes 1051392 decode 0.0]
+[  60840.4] terrain:0103321211                aborted    84.2ms  q 1.1 + run 83.1 p6989.82421875
+[  60707.1] terrain:01033210                  aborted   217.5ms  q 83.4 + run 134.1 p9771.228421908267
+[  60789.3] terrain:010332121                 aborted   168.0ms  q 18.9 + run 149.1 p8741.67578125
+[  60707.1] terrain:01033212                  aborted   267.9ms  q 66.8 + run 201.1 p10867.547270366957
+[  60373.4] terrain:0103321                   ok        683.7ms  q 1.2 + run 682.5 p1665.7890625  [net 664.6 bytes 1051392 decode 0.0]
+[  60888.8] terrain:0103321300                aborted   169.7ms  q 68.5 + run 101.2 p2874.5859375
+[  60956.0] terrain:01033213003               aborted   102.5ms  q 19.0 + run 83.5 p2545.28515625
+[  60690.4] terrain:01033                     ok        416.2ms  q 49.9 + run 366.3 p13276.23828125  [net 342.8 bytes 1051392 decode 0.1]
+[  61057.3] terrain:0103321303003             aborted    82.8ms  q 1.2 + run 81.6 p1411.72265625
+[  61023.5] terrain:010332130300              aborted   116.6ms  q 35.0 + run 81.6 p1411.72265625
+[  61106.8] terrain:0103321303030             aborted   166.5ms  q 1.1 + run 165.4 p1020.00390625
+[  60888.8] terrain:010332130                 ok        418.2ms  q 35.8 + run 382.4 p3614.734375  [net 381.4 bytes 1051392 decode 0.0]
+[  60872.0] terrain:01033213                  ok        483.5ms  q 52.6 + run 430.9 p3614.734375  [net 427.6 bytes 1051392 decode 0.0]
+--- worst 12 moving frames since recording ---
+[  41977.2] cast  interval 66.8  effects 0.1  worst dst 0.1  tick 2.6/13.8  stage 0.4  perf 0.0  gpu busy 31.2  draws 35 tris 46k  uploads 73  heap used 32 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  46914.5] cast  interval 66.8  effects 0.0  tick 2.4/13.0  stage 0.5  perf 0.0  gpu busy 23.9  draws 36 tris 54k  uploads 75  heap used 32 MiB  Δuploads +1 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  45629.8] cast  interval 66.5  effects 0.0  tick 2.1/13.7  stage 0.4  perf 0.0  gpu busy 25.1  draws 44 tris 54k  uploads 71  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  51567.6] cast  interval 66.1  effects 0.1  worst navigation 0.0  tick 1.7/14.0  stage 0.4  perf 0.0  gpu busy 30.2  draws 38 tris 59k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  44895.3] cast  interval 65.3  effects 0.0  tick 1.6/13.7  stage 0.4  perf 0.0  gpu busy 25.6  draws 34 tris 51k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  46180.1] cast  interval 51.3  effects 0.0  tick 3.3/13.5  stage 0.5  perf 0.0  gpu busy 36.8  draws 42 tris 52k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  46299.8] cast  interval 51.3  effects 0.1  worst bootstrap 0.1  tick 1.7/9.1  stage 0.4  perf 0.0  gpu busy 32.5  draws 48 tris 57k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  51901.8] cast  interval 51.2  effects 0.0  tick 3.5/14.0  stage 0.5  perf 0.0  gpu busy 37.0  draws 42 tris 60k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  50465.6] cast  interval 51.2  effects 0.0  tick 1.7/13.8  stage 0.5  perf 0.0  gpu busy 39.1  draws 37 tris 54k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  48917.5] cast  interval 50.5  effects 0.1  worst bootstrap 0.1  tick 4.0/13.6  stage 0.6  perf 0.0  gpu busy 19.9  draws 38 tris 43k  uploads 70  heap used 32 MiB  Δuploads -1 Δuploads bytes 0 MiB Δheap used +0 MiB
+[  42508.6] cast  interval 50.4  effects 0.0  tick 1.9/13.2  stage 0.6  perf 0.0  gpu busy 39.2  draws 38 tris 54k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  44494.8] cast  interval 50.2  effects 0.0  tick 1.6/13.9  stage 0.4  perf 0.0  gpu busy 23.3  draws 41 tris 60k  uploads 73  heap used 32 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
