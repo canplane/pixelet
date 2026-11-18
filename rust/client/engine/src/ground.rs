@@ -126,7 +126,8 @@ pub trait Resident: Area {
     /// over them, kept apart (`Extent`), read from the finest held tile over every zoom from
     /// `cell_range`'s coarsest to its finest (`clipmap::bound_over`). Where no brick it reads is
     /// held, the bounds are no tighter than the elevations' whole range (`UNBOUNDED`), which only
-    /// splits more; where no tile over the node is held, it returns false. `place` is where the
+    /// splits more, and a reader that says what its answer is read from returns that too for a
+    /// node bounded through a stand-in (`clipmap::stood_in`); where no tile over the node is held, it returns false. `place` is where the
     /// cells at `cell_range`'s finest zoom of a node over it were found, or `NOWHERE`, and becomes
     /// where the node's own are found (`clipmap::step`).
     fn relief(

@@ -64,7 +64,7 @@ use super::change;
 use super::detail::coarsest;
 use super::world::World;
 use crate::domain::layer::Answer;
-use crate::domain::layer::terrain::clipmap::clip_read;
+use crate::domain::layer::terrain::clipmap::{self as terrain_clipmap, clip_read};
 use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
 use crate::sys::io::source;
@@ -251,7 +251,7 @@ impl ground::Resident for GroundRead<'_> {
             TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cell_range[1]);
         let node = (zoom, [c[0], c[1]]);
         self.relief = match TerrainTile::tile_cache().relief(&line, place, node, cell_range) {
-            Answer::Coarser(..) if clipmap::stood_in(&clip_read(), cell_range, node) => {
+            Answer::Coarser(..) if terrain_clipmap::stood_in(cell_range, node) => {
                 Some([ground::UNBOUNDED; 2])
             }
             answer => self.take(answer),
