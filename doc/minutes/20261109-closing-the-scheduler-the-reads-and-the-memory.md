@@ -10,15 +10,15 @@ the agent working on it against the code.
 Whether the cooperative scheduler, the fetches and the memory's limits and
 budgets are closed, and whether the memory is described correctly; then to close
 them structurally, with nothing ad hoc. The user's frame for it: memory is fixed
-at 512 MiB on a handheld and 1 GiB on a desktop, and a heap that fills stops the
+at 512 MiB on every platform, and a heap that fills stops the
 core, nothing cleans up because it is full, and each owner lets go of what it
 holds. The problem was to be closed, not grown.
 
 ## What was found
 
 The design of the memory and the scheduler stood. What was wrong were small
-faults and records, listed below. The one thing whose size follows its data
-without a bound is the objects.
+faults and records, listed below. The object store is temporary and was not
+judged.
 
 - The scheduler: every unit is bounded, yields at a boundary and advances each
   turn. Outside the turn's budget run the location indicator, the glTF parse and
@@ -133,4 +133,4 @@ of symmetry.
 
 ## Open
 
-Waiting on other work: the objects (server tiles) and the GPU's cost.
+Nothing.
