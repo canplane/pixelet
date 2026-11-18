@@ -1,11 +1,11 @@
 // @pxl/client/ui/feature/debug/accordion.tsx
 
-import { CaretDownIcon, CaretUpIcon } from "phosphor-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
 
 import { CORNER_PANEL } from "@/ui/shared/component/corner-card.ts";
+import { Icon } from "@/ui/shared/component/icon.tsx";
 import { alpha, COLOR } from "@/ui/shared/component/theme.ts";
 import { GAUGE } from "./perf/gauge.tsx";
 import type { SettingName } from "@/ui/shared/setting.ts";
@@ -55,11 +55,11 @@ export function Accordion({
           </Text>
           <View style={STYLE.end}>
             {open && end}
-            {open ? (
-              <CaretUpIcon size={12} color={HINT_INK} />
-            ) : (
-              <CaretDownIcon size={12} color={HINT_INK} />
-            )}
+            <Icon
+              glyph={open ? "chevron.up" : "chevron.down"}
+              size={12}
+              color={HINT_INK}
+            />
           </View>
         </View>
       </Pressable>

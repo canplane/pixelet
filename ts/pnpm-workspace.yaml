@@ -16,6 +16,8 @@ packages:
   - ../xpute/golden/ts
 
 # Only webgpu may run its install script, which installs the binary of Dawn,
-# the WebGPU implementation the shader test compiles shaders on.
+# the WebGPU implementation the shader test compiles shaders on. Carbon's icons
+# may not: theirs only sends IBM a report of the install.
 allowBuilds:
   webgpu: true
+  "@carbon/icons": false

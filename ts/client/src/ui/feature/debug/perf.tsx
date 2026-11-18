@@ -4,10 +4,10 @@
  * that setting is on the core records from the frame its settings are read, a
  * few frames after it boots (pxl-core perf/window.rs). */
 
-import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { Icon } from "@/ui/shared/component/icon.tsx";
 import { alpha, COLOR, DISABLED_CONTENT } from "@/ui/shared/component/theme.ts";
 import { GAUGE, PerfGauge, PerfRecording } from "./perf/gauge.tsx";
 import { Accordion, HINT_INK } from "./accordion.tsx";
@@ -147,7 +147,6 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
   const { key } = SETTING[name];
   const on = useCore((s) => s.settings[key] === 1);
   const own = OWN[name];
-  const Box = on ? CheckSquareIcon : SquareIcon;
   return (
     <Pressable
       onPress={() => setting.set(key, on ? 0 : 1)}
@@ -161,10 +160,10 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
       ]}
     >
       <View style={STYLE.checkLabel}>
-        <Box
+        <Icon
+          glyph={on ? "checkmark.square" : "square"}
           size={18}
           color={GAUGE.text.color}
-          weight={on ? "fill" : "regular"}
         />
         <Text style={GAUGE.text}>{own.label}</Text>
       </View>

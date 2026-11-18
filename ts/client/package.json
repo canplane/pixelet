@@ -19,6 +19,7 @@
     "preview": "pnpm build:web && node script/web.ts serve"
   },
   "dependencies": {
+    "@carbon/icons": "11.92.0",
     "@expo/metro-runtime": "58.0.17",
     "@expo/ui": "~58.0.28",
     "@pxl/gpu": "workspace:*",
@@ -36,7 +37,6 @@
     "expo-symbols": "~58.0.5",
     "expo-system-ui": "~58.0.7",
     "i18next": "^27.1.1",
-    "phosphor-react-native": "^3.0.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-i18next": "^18.0.1",
