@@ -84,7 +84,7 @@ const _: () = assert!(
     "a clip level spans two tiles a side"
 );
 
-// The coarsest zoom a cell is asked at (domain/query/node.rs `coarsest`) is the coarsest clip
+// The coarsest zoom a cell is asked at (domain/query/detail.rs `coarsest`) is the coarsest clip
 // level's cells, so a cell is never asked coarser than the brick it reads
 // (pxl-engine `clipmap::way_at`).
 const _: () = assert!(
@@ -1246,6 +1246,13 @@ impl Area for ClipRead<'_> {
 /// `clipmap::bound_over`).
 pub(in crate::domain::layer) fn clip_read() -> ClipRead<'static> {
     ClipRead(clipmap(), Center::Eye)
+}
+
+/// Whether a clip level about the eye wants a brick under `node` at the
+/// zooms in `range` that it does not hold present yet (pxl-engine
+/// `clipmap::stood_in`).
+pub(in crate::domain::layer) fn stood_in(range: [Zoom; 2], node: (Zoom, [i32; 2])) -> bool {
+    clipmap::stood_in(&clip_read(), range, node)
 }
 
 /// What the clip levels hold of the node `(zoom, c)` at the cells from

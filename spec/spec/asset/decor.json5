@@ -64,7 +64,7 @@
     },
     boat: {
       label: { $value: "Boat" },
-      $description: "Boats on open water: rivers, lakes and the sea near a coast; wetland is\ntoo shallow. The sea is the same `water` ground, and boats stand on it\nnear a coast alone: a tile of open sea is left out of the bake and drawn\nfrom a coarser one, at whose cells no boat stands (pxl-content\n`scatter::shows_at`), so the clip levels a boat stands at hold sea only in\nthe tiles a coast crosses. Rivers are a few cells wide, so the same per-cell\nrate reads far denser than on land.",
+      $description: "Boats on open water: rivers, lakes and the sea near a coast; wetland is\ntoo shallow. The sea is the same `water` ground, and boats stand on it\nnear a coast alone: a tile of open sea is left out of the bake and drawn\nfrom a coarser one, at whose cells no boat shows (pxl-content\n`scatter::shows_at`), so the clip levels a boat shows at hold sea only in\nthe tiles a coast crosses. Rivers are a few cells wide, so the same per-cell\nrate reads far denser than on land.",
       seed: { $value: 0xb0a5802d, $type: "u32" },
       density: { $value: 0.001, $type: "f64" },
       orient: { $value: "random" },

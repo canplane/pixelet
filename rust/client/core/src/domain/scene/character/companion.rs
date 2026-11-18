@@ -17,8 +17,8 @@ use crate::domain::query::World;
 use crate::domain::query::change::Memo;
 use crate::domain::query::{floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
-    BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF, SETTLE_DELAY_S,
-    WALK_EPS,
+    BODY_HALF_WIDTH_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF,
+    SETTLE_DELAY_S, WALK_EPS,
 };
 use crate::domain::scene::character::{Character, Group};
 use crate::domain::scene::frame::Frame;
@@ -265,7 +265,7 @@ impl Character {
         if self.transform.is_none() {
             *walk = Walk::new(target);
         }
-        let half = BODY_SHARE * self.height_u();
+        let half = BODY_HALF_WIDTH_SHARE * self.height_u();
         let (at, rot, walking) = walk.step(ctx, target, arrive_floor, half, camera);
         // Scale 1 draws the model as registered, which is the character's
         // height.

@@ -232,12 +232,11 @@ Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`).
 So there is no collision mesh beside a drawing mesh to drift apart: what you
 see is what you stand on and what you click. Control's rays read the world as
 an eye's do, by their distance from where they start, the same in every
-direction, and what one meets far off it reads again from near
-(`domain/query/ray.rs` `World::near`): a body stands on what is met at its
-own cell's zoom, the orbit camera keeps clear of what its way meets, and the
+direction, each from where its asker stands: a body stands on what its own
+rays meet, the orbit camera keeps clear of what its way meets, and the
 pointer strikes what is held, judging it by the zoom the eye's rays draw there
 (`domain/control/edit/pick.rs`). Whether a body is there at all is the
-eye's: it fills a leaf cell, and it stands, its character drawn and its walk
+eye's: it fills a leaf cell, and it shows, its character drawn and its walk
 walked, at the zooms at which a cube of that cell is drawn, as a decor of
 that box is; past them it goes where it is sent (`domain/query/support.rs`
 `body_shown`).

@@ -64,7 +64,7 @@ fn queries_report_the_columns_they_read() {
     let from = point(at[0], at[1], over(5.0));
     world.step_slide(&from, &point(at[0] + 3.0 * cell, at[1], 0.0), &from, true);
     assert_eq!(read_rect().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
-    // A body of known height that does not stand reads nothing, however
+    // A body of known height that does not show reads nothing, however
     // far it goes.
     *read_rect() = ReadRect::default();
     let high = point(at[0], at[1], 1000.0);

@@ -3,14 +3,14 @@
 //! Where the world ends for what moves in it. A body does not leave the
 //! service area, the shards the source serves (sys/io/source.rs). An asset
 //! may be placed or taken out only over ground the world knows, between its
-//! bedrock and its ceiling, in shards whose objects are read. Every body's
-//! walk, of its cells or of its two ends where it does not stand, and every
+//! bedrock and its top, in shards whose objects are read. Every body's
+//! walk, of its cells or of its two ends where it does not show, and every
 //! edit asks these limits, and nothing else decides them. The
 //! camera is not a body and asks none of them (query/support.rs
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 
 use crate::domain::layer::Base as _;
-use pxl_content::strata::{bedrock, ceiling};
+use pxl_content::strata::{bedrock, top};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{point, wrap_idx};
@@ -52,11 +52,11 @@ impl World {
     ///   held (domain/layer/object/repository.rs `holds`);
     /// - none of its leaf columns is the wall (pxl-spec `area::walls_in`),
     ///   as `within` requires of a body;
-    /// - `space` lies over the bedrock and under the ceiling of ground the
+    /// - `space` lies over the bedrock and under the top of ground the
     ///   world knows exactly, with no tile still missing (pxl-content strata.rs).
     ///
-    /// The bedrock and the ceiling rise with the ground's face, so every
-    /// column's limits hold where the lowest ceiling and the highest bedrock
+    /// The bedrock and the top rise with the ground's face, so every
+    /// column's limits hold where the lowest top and the highest bedrock
     /// do. Those come from the ground's bound over the nodes that hold
     /// `space` at its leaf cells: the fewest nodes at the zoom of its widest
     /// side, at most two a side (`TileCache::relief`). An aligned cube is one
@@ -95,7 +95,7 @@ impl World {
                     .exact()
                     .is_some_and(|[[lo, hi], _]| {
                         f64::from(bedrock(hi)) * unit <= space.min[2]
-                            && space.max[2] <= f64::from(ceiling(lo)) * unit
+                            && space.max[2] <= f64::from(top(lo)) * unit
                     })
             })
         })

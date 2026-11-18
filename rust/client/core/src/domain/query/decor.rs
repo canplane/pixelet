@@ -104,7 +104,7 @@ impl World {
     /// `i`, what the layers answer of `at`'s node asked down to `near`
     /// (`World::layer_node`), with the decor standing in it. `relief` is the
     /// ground's bound the layers read over the node. Where `near` is coarser
-    /// than a leaf cell, no decor stands. A cell at the leaves' zoom or finer
+    /// than a leaf cell, no decor shows. A cell at the leaves' zoom or finer
     /// that the layers leave void is the decor whose box claims it, if any
     /// (`decor_at`) and that the asker sees (`sees`), and carries `PLACED_ASSET`
     /// where it is placed. A node a

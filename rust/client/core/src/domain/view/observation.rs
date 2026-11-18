@@ -7,7 +7,7 @@
 //! asked for, and the order a tile is read in.
 
 use crate::sys::io::demand::Order;
-use pxl_content::scatter::COARSEST_SHOWN;
+use pxl_content::scatter::DECOR_FIRST_CELL_ZOOM;
 use pxl_global::Global;
 use pxl_spec::space::layer::lattice::{GROUND, Lattice, demand_dist, draw_dist};
 
@@ -151,7 +151,7 @@ pub(crate) fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 /// layer/demand.rs `band`), and None when that band lies past the far edge.
 /// A decor at a clip level is judged on the finest cells held under it
 /// (pxl-content `DecorQuery::finest`), so the ground's zooms finer than the
-/// coarsest a decor stands at are asked as far as their clip level holds them.
+/// coarsest a decor shows at are asked as far as their clip level holds them.
 pub(crate) fn demand_radius(
     o: &Observation,
     lattice: Lattice,
@@ -161,7 +161,7 @@ pub(crate) fn demand_radius(
     if zoom == top {
         return floor::ring(o);
     }
-    let under_decor = lattice == GROUND && GROUND.grid_zoom(zoom) > COARSEST_SHOWN;
+    let under_decor = lattice == GROUND && GROUND.grid_zoom(zoom) > DECOR_FIRST_CELL_ZOOM;
     band(o, lattice, top, zoom).map(|(_, to)| {
         if under_decor {
             demand_dist(lattice, zoom)

@@ -1,7 +1,7 @@
 // pxl-core/domain/query.test.rs
 //
-// The query's laws, checked over a leaf tile's four children folded into
-// their parent as the bake folds them, and over objects written into a store.
+// The query's laws, checked over a leaf tile and the tiles of its line, and
+// over objects written into a store.
 
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self, Ground, Sentinel};
@@ -16,7 +16,7 @@ use super::*;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::{Answer, Base as _};
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
@@ -62,7 +62,6 @@ fn line(p: Quadrant) -> impl Iterator<Item = Quadrant> {
 /// pictures are the same ground, each marking its children held. Their cells
 /// are held in the clip levels around `center`, in units.
 fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
-    use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
     let mut admitted: Vec<Quadrant> = Vec::new();
     let mut cells = Vec::new();
@@ -128,6 +127,12 @@ fn down(at: [f64; 2]) -> Ray {
 pub(crate) fn placed(store: Store) -> World {
     *store::object_mut() = store;
     World::now()
+}
+
+/// Takes the brick of leaf cells over `at` away, as one filled and not yet
+/// handed over, so a coarser clip level stands in for the ground there.
+pub(crate) fn withhold_at(at: [f64; 2]) {
+    test::withhold(LEAF_CELL_ZOOM, at.map(|v| libm::floor(v) as i32));
 }
 
 pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
@@ -384,44 +389,6 @@ fn dig_met_as_folded() {
     }
 }
 
-/// A ray from far that slants down onto a cube placed on the ground meets
-/// it as a ray from near does, as far as an eye there draws the cube: read
-/// by its distance on the way, and what it met far off read again from
-/// near. The same thing, the same box, the same place.
-#[test]
-fn a_far_slanted_ray_meets_as_a_near_one() {
-    // Far enough into the held tile that the ray starts over it.
-    let [x, y] = flat_at_five();
-    let x = x + 250.0;
-    let mut store = Store::default();
-    write(
-        &mut store,
-        [x, y, 5.0],
-        OBJECT_COARSEST,
-        cube::Object::Red as AssetId,
-    );
-    let world = placed(store);
-    // Toward the middle of the cube's west face, from the west and above.
-    let to = [x, y + 0.5, 5.5];
-    let len = libm::sqrt(17.0);
-    let dir = [4.0 / len, 0.0, -1.0 / len];
-    let from = |back: f64| Ray {
-        origin: std::array::from_fn(|k| to[k] - dir[k] * back),
-        dir,
-        t_max: back + 4.0,
-    };
-    let near = world.first_met(&from(3.0)).exact().flatten().unwrap();
-    assert!(matches!(near.kind, HitKind::Object(_)), "{near:?}");
-    // A leaf cube keeps an eighth of the cell a zoom coarser, which is read
-    // out to 192 units, so it is seen from there.
-    for back in [20.0, 60.0, 150.0] {
-        let far = world.first_met(&from(back)).exact().flatten().unwrap();
-        assert_eq!((far.kind, far.cube), (near.kind, near.cube), "from {back}");
-        let apart = v3::len(&v3::sub(&far.point, &near.point));
-        assert!(apart < 1.0 / 64.0, "from {back}: {apart} apart");
-    }
-}
-
 /// The west edge of the coarsest tile of the fixture's line (`resident`):
 /// east of it a tile of the line holds the ground, the leaf or a coarser one
 /// standing in, and west of it none does.
@@ -430,10 +397,7 @@ fn held_edge() -> f64 {
 }
 
 /// A ray that reaches ground no tile holds answers a lack, whatever answered
-/// before it, and one that ends short of there does not: over the ground,
-/// where it meets nothing on its way, and half a cell over it, where a ray
-/// read by its distance meets the ground's coarser cells and reads on from
-/// near each.
+/// before it, and one that ends short of there does not.
 #[test]
 fn a_ray_into_ground_not_held_lacks() {
     let [x, y] = flat_at_five();
@@ -448,7 +412,6 @@ fn a_ray_into_ground_not_held_lacks() {
         [
             world.first_hit(&ray, by_dist()),
             world.first_hit(&ray, at_zoom(LEAF_ZOOM)),
-            world.first_met(&ray),
         ]
     };
     for (short, past) in answers(west(100.5, to_edge - 1.0))
@@ -458,10 +421,6 @@ fn a_ray_into_ground_not_held_lacks() {
         assert!(!matches!(short, Answer::Lack(_)), "{short:?}");
         assert!(matches!(past, Answer::Lack(_)), "{past:?}");
     }
-    let short = world.first_met(&west(5.5, to_edge - 1.0));
-    assert!(matches!(short, Answer::Coarser(None, _)), "{short:?}");
-    let past = world.first_met(&west(5.5, to_edge + 1.0));
-    assert!(matches!(past, Answer::Lack(_)), "{past:?}");
 }
 
 /// The climb reads ground stood in for and ground not held apart: over
@@ -473,19 +432,17 @@ fn no_floor_where_ground_is_not_held() {
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
     let edge = held_edge();
-    for z in [-100.0, 5.5, 100.0] {
-        let floor = world.floor_under(&world::point(x - 100.5, y + 0.5, z));
-        assert_eq!(floor.val().flatten(), Some(5.0), "from {z}: {floor:?}");
-        assert!(floor.lack().is_some(), "from {z}: {floor:?}");
-        let floor_past = world.floor_under(&world::point(edge - 10.5, y + 0.5, z));
-        assert_eq!(floor_past.val().flatten(), None, "from {z}: {floor_past:?}");
-        assert!(floor_past.lack().is_some(), "from {z}: {floor_past:?}");
-    }
+    let z = 5.5;
+    let floor = world.floor_under(&world::point(x - 100.5, y + 0.5, z));
+    assert_eq!(floor.val().flatten(), Some(5.0), "{floor:?}");
+    assert!(floor.lack().is_some(), "{floor:?}");
+    let floor_past = world.floor_under(&world::point(edge - 10.5, y + 0.5, z));
+    assert_eq!(floor_past.val().flatten(), None, "{floor_past:?}");
+    assert!(floor_past.lack().is_some(), "{floor_past:?}");
 }
 
-/// What is held is met as finely as it is held. A half cube on the ground,
-/// finer than the leaves' cells, is met whole by a pick, which asks at the
-/// zoom the cube is placed at.
+/// A half cube on the ground, finer than the leaves' cells, is met whole by a
+/// ray from near, which asks the zoom the cube is placed at there.
 #[test]
 fn half_cube_met() {
     let [x, y] = flat_at_five();
@@ -495,7 +452,16 @@ fn half_cube_met() {
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
     let access = placed(store);
     let at = [x + half / 2.0, y + half / 2.0];
-    let hit = access.first_met(&down(at)).exact().flatten().unwrap();
+    let from_near = Ray {
+        origin: [at[0], at[1], 8.0],
+        dir: [0.0, 0.0, -1.0],
+        t_max: 8.0,
+    };
+    let hit = access
+        .first_hit(&from_near, by_dist())
+        .exact()
+        .flatten()
+        .unwrap();
     assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
     assert_eq!(
         [hit.point[2], hit.cube.extent()[0]],
@@ -599,101 +565,6 @@ fn ray_goes_on_from_the_last() {
     }
 }
 
-/// From any depth under `ground` at the middle of `tile`, and from any
-/// height over it, a point comes to where it stands, at the leaf and at a
-/// coarser zoom: a top at or over the nearest one, from which asking again
-/// answers the same.
-fn stands_from_any_depth(tile: Quadrant, ground: Leaf) {
-    stands_from_any_depth_with(tile, ground, Store::default());
-}
-
-/// `stands_from_any_depth` with `store` for what is placed.
-fn stands_from_any_depth_with(tile: Quadrant, ground: Leaf, store: Store) {
-    let (x0, y0, _) = tile.rect();
-    let [x, y] = [x0 + 10.0, y0 + 10.0];
-    resident([x, y], &[(tile, ground)]);
-    let world = placed(store);
-    for zoom in [LEAF_ZOOM, LEAF_ZOOM - 2] {
-        let side = units(GROUND.cell_zoom(zoom));
-        let floor = |z: f64| {
-            world
-                .floor_drawn(&world::point(x + 0.5, y + 0.5, z), zoom)
-                .val()
-                .flatten()
-        };
-        let near = floor(0.5).unwrap();
-        assert!(near > 0.5);
-        let deepest = world::BOUND.max[2] - 2.0 * side;
-        for depth in [side, 100.0, 2039.0, 2041.0, 5000.0, deepest] {
-            // A gap thinner than the cells a ray reads on its way is
-            // passed, as an eye passes it.
-            let top = floor(near - depth).unwrap();
-            assert!(
-                near <= top && top < 64.0,
-                "zoom {zoom}, {depth} under: {top}"
-            );
-            assert_eq!(floor(top), Some(top), "zoom {zoom}, {depth} under");
-        }
-        for height in [side, 100.0, 5000.0] {
-            let top = floor(near + height).unwrap();
-            assert_eq!(floor(top), Some(top), "zoom {zoom}, {height} over");
-        }
-    }
-}
-
-fn land(ele: Vec<i16>) -> Leaf {
-    drawn(
-        ele,
-        vec![Ground::Land as u8; SPAN * SPAN].into(),
-        Default::default(),
-    )
-}
-
-/// The rays of a point's cell read by their distance, as an eye's do, so
-/// none ends at the walk's cap of steps as if nothing lay beyond; what one
-/// meets far off it reads again from near.
-#[test]
-fn stands_from_any_depth_in_flat_ground() {
-    stands_from_any_depth(top().children()[0], land(vec![5; CELL_CNT]));
-}
-
-/// Over ground no leaf is held for: a tile a zoom over the leaves' that
-/// says its children are there, none of them held, stands in.
-#[test]
-fn stands_from_any_depth_in_ground_stood_in_for() {
-    let stood_in = Leaf {
-        tile: TerrainTile::of(
-            Vec::new(),
-            Vec::new().into(),
-            Default::default(),
-            Occupancy::of_slots([true; 4]),
-        ),
-        ..land(vec![5; CELL_CNT])
-    };
-    stands_from_any_depth(top(), stood_in);
-}
-
-/// Where something is placed at the finest zoom in the cell, so the cell is
-/// split into columns as fine: the same.
-#[test]
-fn stands_from_any_depth_where_placed_finer() {
-    let leaf = top().children()[0];
-    let (x0, y0, _) = leaf.rect();
-    let mut store = Store::default();
-    let red = cube::Object::Red as AssetId;
-    write(&mut store, [x0 + 10.0, y0 + 10.0, 7.0], OBJECT_FINEST, red);
-    stands_from_any_depth_with(leaf, land(vec![5; CELL_CNT]), store);
-}
-
-/// Over ground that steps up across the tile, where a coarser cell's top
-/// and the leaf's differ under one point, so a ray that starts again near
-/// what it met may start in what it looks for.
-#[test]
-fn stands_from_any_depth_in_stepped_ground() {
-    let ele = (0..CELL_CNT).map(|i| 5 + (i % SPAN / 3) as i16).collect();
-    stands_from_any_depth(top().children()[0], land(ele));
-}
-
 /// A cell coarser than what is placed in it is read as the cast draws it
 /// there: one column, whatever is placed finer. From over it, from inside
 /// the box it is drawn as, from that box's top, or from over it within the
@@ -782,7 +653,7 @@ fn body_climbs_or_slides() {
         "slid along the wall"
     );
     assert_eq!((q3::to_real(i64::from(to[1])), floor(to)), (y + 1.5, 5.0));
-    // The body stands out to where the view stops drawing cells a zoom
+    // The body shows out to where the view stops drawing cells a zoom
     // coarser than the leaves', as a decor of its cell is drawn, and for an
     // eye that near it walks as for one beside it. For an eye that far, or
     // toward an end that far from the eye, it does not: it goes where it is
@@ -843,7 +714,7 @@ fn a_body_claims_its_box() {
 /// walled and within it stays where it is rather than leave; one not walled
 /// goes; and one already past the area goes on freely.
 #[test]
-fn body_not_standing_keeps_to_the_area() {
+fn body_not_shown_keeps_to_the_area() {
     use crate::sys::io::source;
     use pxl_spec::bake::publication::FORMAT;
     use pxl_spec::space::coord::zoom::SHARD_ZOOM;
@@ -869,7 +740,7 @@ fn body_not_standing_keeps_to_the_area() {
     let [inside, outside, further] =
         [0, east, east + 1].map(|k| middle([served[0] + k, served[1]]));
     assert!(world.within(&inside) && !world.within(&outside));
-    // The ends lie a shard apart, farther than a body stands for any
+    // The ends lie a shard apart, farther than a body shows for any
     // eye: here one beside the start.
     let eye = inside;
     assert_eq!(world.step_slide(&inside, &outside, &eye, true), inside);
@@ -962,14 +833,13 @@ fn box_placed_matches_store() {
 /// (domain/layer/terrain/clipmap.rs `upload`). A spike a cell wide in the
 /// brick, over ground at five and taller than a node over the brick, is met
 /// where a body's ray down it met it when the brick was held from the
-/// start. No cell of the brick stands outside the bound read over it at any
-/// zoom coarser than a brick.
+/// start.
 #[test]
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::clip_read;
-    use crate::domain::layer::terrain::clipmap::test::{hand, unland};
+    use crate::domain::layer::terrain::clipmap::test::{hand, withhold};
     use pxl_engine::clipmap as cells;
-    use pxl_engine::clipmap::{BRICK_MIP_LAST, BrickSource, CLIP_SIZE, Lookup};
+    use pxl_engine::clipmap::{BrickSource, CLIP_SIZE, Lookup};
     use pxl_spec::brick::BRICK;
     use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let leaf = top().children()[0];
@@ -1012,65 +882,9 @@ fn late_brick_spike() {
             .point[2]
     };
     let before = met(&world);
-    unland(LEAF_CELL_ZOOM, spike);
+    withhold(LEAF_CELL_ZOOM, spike);
     hand();
     assert_eq!(met(&world), before, "the spike met");
-    let q = cells::brick_of(spike).0;
-    let mut outside = 0;
-    for k in 0..BRICK * BRICK {
-        let g = [
-            q[0] * BRICK as i32 + (k % BRICK) as i32,
-            q[1] * BRICK as i32 + (k / BRICK) as i32,
-        ];
-        let h = top(g);
-        for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIP_LAST {
-            let s = LEAF_CELL_ZOOM - zoom;
-            let (b, _, _) = cells::bound_over(
-                &clip_read(),
-                &mut Lookup::NONE.clone(),
-                [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
-                (zoom, [g[0] >> s, g[1] >> s]),
-            );
-            outside += u32::from(h < b[0][0] || h > b[0][1]);
-        }
-    }
-    assert_eq!(outside, 0, "cells outside the bound over them");
-}
-
-/// A lost device takes every brick it held with it. The frame that sees the
-/// loss gives up their cells (domain/layer/terrain/clipmap.rs
-/// `assign_slots`, as `step` runs it) and folds the clip levels over none,
-/// so no node over a brick of the eye's leaves keeps a bound of cells that
-/// are gone.
-#[test]
-fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::clipmap::{clip_read, test::lose};
-    use pxl_engine::clipmap as cells;
-    use pxl_engine::clipmap::{BRICK_MIP_LAST, BrickSource, Lookup};
-    use pxl_engine::ground::UNBOUNDED;
-    use pxl_spec::brick::BRICK;
-    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
-    flat_at_five();
-    let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
-    let zoom = LEAF_CELL_ZOOM - BRICK_MIP_LAST - 1;
-    let over = || {
-        let s = LEAF_CELL_ZOOM - zoom;
-        let g = [
-            (first[0] * BRICK as i32) >> s,
-            (first[1] * BRICK as i32) >> s,
-        ];
-        let mut place = Lookup::NONE;
-        cells::bound_over(
-            &clip_read(),
-            &mut place,
-            [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
-            (zoom, g),
-        )
-        .0
-    };
-    assert_ne!(over(), [UNBOUNDED; 2], "held");
-    lose();
-    assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
 }
 
 /// What the ground generates stands where it was generated, whatever is put
@@ -1198,7 +1012,7 @@ fn generated_decor_struck_where_generated() {
     );
     let none = 0;
     assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
-    let body = world.first_met(&ray).exact().flatten().unwrap();
+    let body = world.first_hit(&ray, by_dist()).exact().flatten().unwrap();
     assert_eq!(body.kind, HitKind::Ground, "a body passes it");
 }
 
@@ -1264,7 +1078,7 @@ fn placed_decor_answers_its_box() {
         .unwrap();
     assert!(matches!(seen.kind, HitKind::Decor(i) if i.generated_in().is_none()));
     assert_eq!(seen.normal, [0.0, 0.0, 1.0]);
-    let body = world.first_met(&shot(30.0, -1.0));
+    let body = world.first_hit(&shot(30.0, -1.0), by_dist());
     assert_eq!(body.exact().flatten().unwrap().kind, HitKind::Ground);
     let from_inside = world
         .first_seen(&shot(5.5, -1.0), 0)

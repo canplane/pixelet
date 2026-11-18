@@ -75,13 +75,13 @@ fn idle_asks_nothing_between_steps() {
         !still.is_empty() && still.iter().all(|&k| by_turn(k)),
         "near, the ticks {still:?} did not step, where they stand by no turn"
     );
-    let far = idle(150.0);
+    let far = idle(40.0);
     assert!(
         far.iter().all(|&(asks, _)| !asks),
         "a far step asked a frame"
     );
     let stepped = far.iter().filter(|&&(_, s)| s).count();
-    let most = 2 * clip_steps(150.0) + 1;
+    let most = 2 * clip_steps(40.0) + 1;
     assert!(
         stepped > 2 && stepped <= most,
         "far, it stepped {stepped} of 120 ticks, its clip {most} steps over two loops at most"
@@ -167,7 +167,7 @@ fn drawn(dist: f64) -> (bool, bool) {
 /// not from there on, however large its model; and a line hangs over its
 /// head only while it is drawn.
 #[test]
-fn a_character_is_drawn_where_it_stands() {
+fn a_character_is_drawn_where_it_shows() {
     use pxl_spec::space::coord::zoom::LEAF_ZOOM;
     use pxl_spec::space::layer::lattice::{GROUND, draw_dist};
     let edge = draw_dist(GROUND, LEAF_ZOOM - 1);
@@ -175,10 +175,10 @@ fn a_character_is_drawn_where_it_stands() {
     assert_eq!(drawn(edge), (false, false));
 }
 
-/// A companion's step is walked only where the body stands at both its
+/// A companion's step is walked only where the body shows at both its
 /// ends for the camera's eye, a height not known taken where it stands.
 #[test]
-fn a_step_is_walked_where_the_walker_stands_at_both_its_ends() {
+fn a_step_is_walked_where_a_body_shows_at_both_its_ends() {
     use crate::domain::layer::object::store::Store;
     use crate::domain::query::test::{flat_at_five, placed};
     use crate::domain::query::{is_unknown, over, unknown};
@@ -206,7 +206,7 @@ fn a_step_is_walked_where_the_walker_stands_at_both_its_ends() {
         world::point(near[0], near[1], over(5.0)),
         "walked"
     );
-    // The far end lies past where the body stands.
+    // The far end lies past where the body shows.
     let far = [x + 0.5 + edge, y + 0.5];
     assert!(is_unknown(&walk_to(world, &from, far, &beside)));
     // A body of unknown height is measured where it stands, not at its

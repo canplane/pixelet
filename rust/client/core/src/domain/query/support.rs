@@ -12,10 +12,8 @@
 //! size. At a coarser zoom the cell is one column of that zoom's cells, with
 //! what is placed finer folded into it. A column's ray reads the world by
 //! its distance from where it starts, as an eye's ray does, no finer than the
-//! cell's own zoom: what it meets far off is a coarser cell, and it reads
-//! again from near that (`World::near`), so what it answers is read at
-//! the cell's own zoom, and what a coarser cell folds away on the way is
-//! passed, as an eye passes it. Either way, a cell filled short of its cube
+//! cell's own zoom: a body reads from where it stands, and what its ray meets
+//! far off is the coarser cell an eye there sees. Either way, a cell filled short of its cube
 //! stands to the top of the box it is drawn as (pxl-engine `cast::top`).
 
 use pxl_spec::space::camera::grid::cell_zoom_at;
@@ -28,17 +26,18 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{Descent, Ray, Until, at_zoom, zoom_range};
+use super::ray::{Descent, Ray, Until, at_zoom, by_dist, zoom_range};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
 use pxl_content::scatter::box_shows_at;
+use pxl_engine::cast::Detail;
 use pxl_engine::cast::fill_bound;
 use pxl_spec::asset::character::BODY_BOX;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-/// Whether a body stands `dist` units from the eye. A body claims its box
-/// (pxl-spec `BODY_BOX`) and stands as a decor of that box placed there is
+/// Whether a body shows `dist` units from the eye. A body claims its box
+/// (pxl-spec `BODY_BOX`) and shows as a decor of that box placed there is
 /// drawn (pxl-content `generation::drawn_at`, `scatter::box_shows_at`):
 /// where the eye's rays ask the leaves' zoom, or a coarser one whose cell a
 /// cube of its box keeps an eighth of. The zoom asked is the camera grid's at
@@ -190,9 +189,10 @@ impl<'w> SplitCell<'w> {
             .filter_map(move |k| self.meet(k, z, to, until).val().flatten())
     }
 
-    /// What column `k`'s ray meets, with what the world held along the way:
-    /// read by its distance and met at the cell's own zoom (`World::near`).
-    /// A ray that meets nothing before a lack tells nothing past it.
+    /// What column `k`'s ray meets, with what the world held along the way,
+    /// read by its distance from where it starts, no finer than the cell's
+    /// own zoom. A ray that meets nothing before a lack tells nothing past
+    /// it.
     fn meet(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
         let [x, y] = self.middle(k);
         let ray = Ray {
@@ -200,14 +200,13 @@ impl<'w> SplitCell<'w> {
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
-        let answer = self.world.near(
-            &ray,
-            self.own,
-            until,
-            None,
-            &mut self.path,
-            &mut self.descent,
-        );
+        let detail = Detail {
+            range: [by_dist().range[0].min(self.own), self.own],
+            ..by_dist()
+        };
+        let answer = self
+            .world
+            .along(&ray, detail, until, None, &mut self.path, &mut self.descent);
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -415,14 +414,6 @@ impl World {
         c.answer(stands)
     }
 
-    /// The top of the highest solid in `at`'s column, whatever `at`'s height.
-    /// None where nothing stands there.
-    pub(crate) fn column_top(&self, at: &Q3) -> Answer<Option<f64>> {
-        let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
-        let top = c.highest();
-        c.answer(top)
-    }
-
     /// The floor nearest `at`'s height: the top of a solid with room over
     /// it, under `at` or over it, or the cell's surface. None where nothing
     /// stands.
@@ -458,7 +449,7 @@ impl World {
     /// walled and goes anywhere a position can be, past the area over the
     /// Earth, which holds nothing above sea level.
     ///
-    /// The walk is walked only where a body stands for `eye` at both its
+    /// The walk is walked only where a body shows for `eye` at both its
     /// ends (`body_shown`), so it is no longer than the eye draws a body
     /// across; a `from` of unknown height is stood first, the one read such
     /// a move makes. Otherwise, and where `from` cannot be stood or a leaf on

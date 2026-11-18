@@ -254,8 +254,8 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 }
 
 /// A record's first word: its decor and variant, a byte each, its turn in quarters, and the
-/// clip level zoom it was generated at, or for placed decor the coarsest it stands at
-/// (`scatter::coarsest_shown`); above them, once sized, its region (`drawing::REGION_SHIFT`).
+/// clip level zoom it was generated at, or for placed decor the coarsest it shows at
+/// (`scatter::variant_first_cell_zoom`); above them, once sized, its region (`drawing::REGION_SHIFT`).
 pub const fn rec_word(decor: u32, variant: u32, turn: u32, cell_zoom: Zoom) -> u32 {
     decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell_zoom << CELL_ZOOM_SHIFT
 }
@@ -369,7 +369,7 @@ pub trait DecorQuery {
         g: [i32; 2],
     ) -> (Self::ColumnSurface, (i32, f32), bool);
     /// The finest zoom, `cell_zoom` or finer, at which this side holds the ground's leaf column
-    /// `g`: where a candidate there is asked whether it stands and which way it faces
+    /// `g`: where a candidate there is asked whether it generates and which way it faces
     /// (`placement`), the same whatever clip level asks.
     fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom;
     /// What is in the cell `c` of `zoom`: the base's answer near the column surface `f`
@@ -405,9 +405,9 @@ pub struct Prop {
 /// stands at its clip level's column surface, while the vote and its box are asked at the
 /// finest zoom at which the world holds its leaf column (`DecorQuery::finest`), around that
 /// zoom's column surface, so a candidate faces and generates alike at every clip level it is
-/// generated at. Its pose stands as itself only at a clip level its size stands at
+/// generated at. Its pose shows as itself only at a clip level its size shows at
 /// (`shows_at`). It returns where it stands and whether it generates there, which where not
-/// `boxed` is that it stands and no read of its vote lacks; none where its column surface is
+/// `boxed` is that it shows at `cell_zoom` and no read of its vote lacks; none where its column surface is
 /// not found.
 pub fn placement(
     q: &mut impl DecorQuery,
@@ -534,10 +534,10 @@ pub fn dist2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// `dist2`), given its record's zoom `cell_zoom` (`rec_of`). One generated at a coarser
 /// clip level is drawn where `at` is that clip level's zoom, so each distance draws one clip
 /// level's decor; one generated at the leaves' is drawn where `at` is the leaf cell's zoom or
-/// finer; and one `placed` is drawn where `at` is the coarsest zoom it stands at or finer, so
-/// it stands where one of its size that the ground generates would. A generated one is asked
+/// finer; and one `placed` is drawn where `at` is the coarsest zoom it shows at or finer, so
+/// it shows where one of its size that the ground generates would. A generated one is asked
 /// at the zoom held where it stands (`ray_zoom`), as a ray there draws. Each clip level
-/// generates what stands as itself at it (pxl-core domain/view/lens.rs `decor_zooms`,
+/// generates what shows as itself at it (pxl-core domain/view/lens.rs `decor_zooms`,
 /// `shows_at`).
 pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
     if placed {

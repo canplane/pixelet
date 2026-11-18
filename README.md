@@ -36,7 +36,7 @@ never made up: a coarser tile answers until the finer one lands, so the picture
 only ever gets sharper.
 
 ```text
-  a pixel's ray      a walker's step      the pointer      an edit
+  a pixel's ray       a body's step       the pointer      an edit
    (the GPU)           (the CPU)          (the CPU)       (the CPU)
        └──────────────────┴──────────┬──────┴───────────────┘
                                      ▼

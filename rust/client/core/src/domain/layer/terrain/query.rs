@@ -102,7 +102,9 @@ impl TileCache<TerrainTile> {
     /// (pxl-engine `clipmap::step`). The cells are read at the cell zooms in
     /// `range`, coarsest and finest, as the GPU reads them (pxl-engine
     /// `clipmap::bound_over`). `line` names the tile and says whether the
-    /// clip level read gives the tile's own ground.
+    /// clip level read gives the tile's own ground. Where a coarser clip
+    /// level's cells stand in for a brick under the node (`clipmap::stood_in`),
+    /// the answer is coarser.
     pub(in crate::domain::layer) fn relief(
         &self,
         line: &Line,
@@ -111,7 +113,10 @@ impl TileCache<TerrainTile> {
         range: [Zoom; 2],
     ) -> Answer<Extent> {
         let (r, from, here) = clipmap::bound_over(place, range, node);
-        answer_at(line, from, here, r)
+        match here && clipmap::stood_in(range, node) {
+            true => Answer::Coarser(r, line.tile),
+            false => answer_at(line, from, here, r),
+        }
     }
 
     /// Column `node` as read from the clip levels, or the wall where the
