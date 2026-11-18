@@ -22,6 +22,8 @@ import { GPU_STATE, setGpu } from "@/service/sys/gpu.ts";
 import { mountFiles } from "@/service/sys/fs/file.ts";
 import { mountObjects } from "@/service/sys/fs/object.ts";
 import { declareSource } from "@/service/sys/fs/source.ts";
+import { setStorage } from "@/service/sys/fs/storage.ts";
+import * as storage from "@/service/platform/storage.ts";
 import { mountUi, startClient, trapped } from "@/runtime/ui.ts";
 
 export function boot(): void {
@@ -30,6 +32,7 @@ export function boot(): void {
   trap_on(trapped);
   state_on((state) => setGpu(GPU_STATE[state]));
   mountUi(ui);
+  setStorage(storage);
   mountFiles(ui, ui);
   mountObjects(ui, ui);
   start();

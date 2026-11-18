@@ -111,26 +111,32 @@ export function declarationOf(parsed: unknown): Declaration | null {
   return parsed as Declaration;
 }
 
-let state: Source = SOURCE_ASKING;
-let currentDeclaration: Declaration | null = null;
+/** The declaration the core took, which is the source declared, or the state
+ * the source stands in without one. */
+export type DeclarationOrState =
+  Declaration | Exclude<Source, typeof SOURCE_DECLARED>;
+
+let current: DeclarationOrState = SOURCE_ASKING;
 const listeners = new ListenerSet();
 
-function set(next: Source): void {
-  state = next;
+/** Sets the declaration the core took or the state the source stands in
+ * without one. The asking sets it (`declareSource`), and a thread that holds
+ * no files is told it by the one that asks. */
+export function setSource(next: DeclarationOrState): void {
+  current = next;
   listeners.notify();
 }
 
-export function sourceState(): Source {
-  return state;
+export function currentSource(): DeclarationOrState {
+  return current;
 }
 
-/** The declaration the core took, or null before it took one. */
-export function sourceDeclaration(): Declaration | null {
-  return currentDeclaration;
+export function sourceState(): Source {
+  return typeof current === "number" ? current : SOURCE_DECLARED;
 }
 
 export function sourceVersions(): Declaration["version"] | null {
-  return currentDeclaration?.version ?? null;
+  return typeof current === "number" ? null : current.version;
 }
 
 export const watchSource = listeners.watch;
@@ -143,8 +149,8 @@ export const watchSource = listeners.watch;
 export function whenSourceDeclared(signal: AbortSignal): Promise<Declaration> {
   return new Promise((resolve, reject) => {
     const settle = (): boolean => {
-      if (currentDeclaration !== null) resolve(currentDeclaration);
-      else if (state === SOURCE_REFUSED)
+      if (typeof current !== "number") resolve(current);
+      else if (current === SOURCE_REFUSED)
         reject(new Error("[source] the tile source is refused"));
       else if (signal.aborted) reject(signal.reason);
       else return false;
@@ -159,17 +165,6 @@ export function whenSourceDeclared(signal: AbortSignal): Promise<Declaration> {
     const stop = watchSource(onChange);
     signal.addEventListener("abort", onChange);
   });
-}
-
-/** On the web, the core and the asking for the declaration run in a worker.
- * The page's thread holds no files, so the UI learns the source's state and
- * declaration through this (runtime/worker.ts). */
-export function mirrorSource(
-  next: Source,
-  declaration: Declaration | null,
-): void {
-  currentDeclaration = declaration;
-  set(next);
 }
 
 /** After a failed ask, the next one waits a random time below a bound. The
@@ -211,7 +206,7 @@ export async function declareSource(link: Sender): Promise<void> {
   let waitMs = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
-      set(SOURCE_FAILING);
+      setSource(SOURCE_FAILING);
       await new Promise((resolve) =>
         setTimeout(resolve, Math.random() * waitMs),
       );
@@ -224,7 +219,7 @@ export async function declareSource(link: Sender): Promise<void> {
     console.error(
       "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
     );
-    set(SOURCE_REFUSED);
+    setSource(SOURCE_REFUSED);
     return;
   }
   const shards = Object.keys(read.shard);
@@ -235,9 +230,8 @@ export async function declareSource(link: Sender): Promise<void> {
     console.error(
       `[source] the core took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
-    set(SOURCE_REFUSED);
+    setSource(SOURCE_REFUSED);
     return;
   }
-  currentDeclaration = read;
-  set(SOURCE_DECLARED);
+  setSource(read);
 }
