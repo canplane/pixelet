@@ -108,13 +108,20 @@
     "disclaimer": {
       "section_title": "注意事項",
       "demo_notice": "本服務為示範版本，資料可能被刪除，服務也可能中止，恕不另行通知。",
-      "coverage_notice": "目前僅支援韓國，其他地區顯示為海洋。",
+      "coverage_notice": "目前僅支援部分地區。尚未支援的地區以衛星影像顯示。",
       "storage_notice": "你放置的物件不會儲存到伺服器，只保留在目前的裝置上。",
-      "location_notice": "我們不會收集或儲存你的位置資訊。",
-      "character_notice": "角色和裝飾使用 CC0 授權的 Kenney 素材包。"
+      "location_notice": "我們不會收集或儲存你的位置資訊。"
     },
     "attribution": {
-      "section_title": "來源"
+      "section_title": "來源",
+      "map": "地圖",
+      "assets": "素材",
+      "graphics": "圖形",
+      "system": "系統",
+      "font": "字型",
+      "dependencies": "相依套件",
+      "show": "顯示 {{count}} 項",
+      "hide": "收起"
     },
     "about": {
       "section_title": "關於",

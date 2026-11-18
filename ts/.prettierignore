@@ -10,3 +10,4 @@ gpu/expo/android/build/
 client/public/brand/
 client/public/index.html
 *.md
+client/src/ui/feature/setting/info/licenses.json

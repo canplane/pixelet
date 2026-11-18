@@ -108,13 +108,20 @@
     "disclaimer": {
       "section_title": "ご注意",
       "demo_notice": "本サービスはデモとして提供されており、予告なくデータの削除やサービスの中止が行われる場合があります。",
-      "coverage_notice": "現在は韓国のみに対応しており、それ以外の地域は海として表示されます。",
+      "coverage_notice": "一部の地域のみ対応しています。まだ対応していない地域は衛星画像で表示されます。",
       "storage_notice": "自分で置いたオブジェクトはサーバーに保存されず、このデバイスにのみ保管されます。",
-      "location_notice": "位置情報の収集や保存は行いません。",
-      "character_notice": "キャラクターとデコには CC0 ライセンスの Kenney アセットパックを使用しています。"
+      "location_notice": "位置情報の収集や保存は行いません。"
     },
     "attribution": {
-      "section_title": "出典"
+      "section_title": "出典",
+      "map": "地図",
+      "assets": "アセット",
+      "graphics": "グラフィックス",
+      "system": "システム",
+      "font": "フォント",
+      "dependencies": "依存関係",
+      "show": "{{count}}件を表示",
+      "hide": "閉じる"
     },
     "about": {
       "section_title": "情報",

@@ -3,7 +3,12 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { Prose, Section, SETTING_TEXT } from "@/ui/feature/setting/row.tsx";
+import {
+  Link,
+  Prose,
+  Section,
+  SETTING_TEXT,
+} from "@/ui/feature/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
 import { TEXT_STYLE } from "@/ui/shared/component/theme.ts";
 import { BUILD_NUMBER, BUILD_TIME, TILE_SOURCE } from "@/build.ts";
@@ -52,7 +57,8 @@ export function AboutSection() {
         <Text style={SETTING_TEXT.small}>{t("settings.about.tagline")}</Text>
 
         <Text style={SETTING_TEXT.small}>
-          © 2025 pixelet. All rights reserved.
+          © 2025 <Link href="https://github.com/canplane">canplane</Link>. All
+          rights reserved.
         </Text>
 
         <View>

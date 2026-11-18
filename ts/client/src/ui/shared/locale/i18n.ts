@@ -34,25 +34,29 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
   return out;
 }
 
-/** The dev catalogs are merged behind `__DEV__` tested at the top level, so
- * that a release bundle drops them. Tree shaking does not drop an argument
- * passed to a helper that tests the flag. */
+/** The languages in the order the settings list them: English first, the one
+ * every missing word falls back to, and the rest by their language codes
+ * (ja, ko, zh-Hans, zh-Hant), so that a language added has its place by the
+ * one rule. The dev catalogs are merged behind `__DEV__` tested at the top
+ * level, so that a release bundle drops them. Tree shaking does not drop an
+ * argument passed to a helper that tests the flag. */
 const CATALOGS = __DEV__
   ? {
       en: deepMerge(en, enDev) as typeof en,
-      ko: deepMerge(ko, koDev) as typeof ko,
       ja: deepMerge(ja, jaDev) as typeof ja,
+      ko: deepMerge(ko, koDev) as typeof ko,
       "zh-Hans": deepMerge(zhHans, zhHansDev) as typeof zhHans,
       "zh-Hant": deepMerge(zhHant, zhHantDev) as typeof zhHant,
     }
-  : { en, ko, ja, "zh-Hans": zhHans, "zh-Hant": zhHant };
+  : { en, ja, ko, "zh-Hans": zhHans, "zh-Hant": zhHant };
 
 export type Language = keyof typeof CATALOGS;
 
+/** Each language by its own name, in `CATALOGS`' order. */
 export const LANGUAGE_NAMES: Record<Language, string> = {
   en: "English",
-  ko: "한국어",
   ja: "日本語",
+  ko: "한국어",
   "zh-Hans": "简体中文",
   "zh-Hant": "繁體中文",
 };
