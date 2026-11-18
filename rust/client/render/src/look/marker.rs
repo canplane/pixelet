@@ -49,14 +49,17 @@ pub const DOT_BORDER: f32 = 1.0;
 pub const PILL_H: f32 = PILL_INNER + PAD_Y;
 pub const PILL_R: f32 = PILL_H / 2.0;
 pub const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
+/// Carbon's gray 100, the markers' dark.
+const DARK: u32 = 0x161616;
+
 /// The pill is dark, and its words are white.
-pub const PILL_FILL: u32 = 0x14141ab8;
+pub const PILL_FILL: u32 = DARK << 8 | 0xb8;
 pub const PILL_INK: u32 = WHITE;
 pub const DOT_FILL: u32 = 0xffffff99;
 pub const DOT_RING: u32 = 0xffffff40;
 /// These are the pill's colors turned over: a light pill with dark words.
 pub const CNT_FILL: u32 = 0xffffffe6;
-pub const CNT_INK: u32 = 0x14141aff;
+pub const CNT_INK: u32 = DARK << 8 | 0xff;
 
 /// A pill's sprite for words `text_w` wide: its width, its height down to the foot of the dot,
 /// and how far below its top the marked point is, at the dot's center.

@@ -154,7 +154,8 @@ pub(crate) fn publication_outputs() -> Result<Vec<Output>, String> {
 }
 
 // The Rust reads a place's look by its category number: for each category, in lists the
-// core indexes, what Carto draws for it, with 0 for a zoom at which it never shows.
+// core indexes, when Carto draws it and its group's colors, with 0 for a zoom at which it
+// never shows.
 
 pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let (cat_json, theme_json) = (
@@ -179,6 +180,9 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let rows = theme
         .get("THEME")
         .ok_or(format!("{theme_json}: no THEME"))?;
+    let groups = theme
+        .get("GROUPS")
+        .ok_or(format!("{theme_json}: no GROUPS"))?;
     if let Some((k, _)) = rows.named().find(|(k, _)| !categories.contains(k)) {
         return Err(format!("{theme_json}: {k} is no category of {cat_json}"));
     }
@@ -191,24 +195,30 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
                 .ok_or(format!("{theme_json}: {k}.{f} is not a zoom")),
         }
     };
-    let color = |k: &str, f: &str| -> Result<String, String> {
-        match rows.get(k).and_then(|r| r.get(f)) {
-            None => Ok("0".into()),
-            Some(c) => u32_of(c)
-                .map(|c| format!("{:#010x}", c << 8 | 0xff))
-                .ok_or(format!("{theme_json}: {k}.{f} is no color")),
-        }
+    // A category's color `f`, its group's; none for a category with no row.
+    let color = |k: &str, f: &str| -> Result<Option<u32>, String> {
+        let Some(row) = rows.get(k) else {
+            return Ok(None);
+        };
+        let g = row
+            .str_at("group")
+            .ok_or(format!("{theme_json}: {k} has no group"))?;
+        groups
+            .get(g)
+            .ok_or(format!("{theme_json}: {k}.group {g} is no group of GROUPS"))?
+            .get(f)
+            .and_then(u32_of)
+            .map(Some)
+            .ok_or(format!("{theme_json}: GROUPS.{g}.{f} is no color"))
     };
+    let rgba = |k: &str, f: &str| -> Result<String, String> {
+        Ok(color(k, f)?.map_or("0".into(), |c| format!("{:#010x}", c << 8 | 0xff)))
+    };
+    let sources = format!("{cat_json} and {theme_json}");
     let mut rs = vec![
         "// pxl-spec/bake/place_theme.spec.rs".to_string(),
         "//".into(),
-        format!(
-            "// {}",
-            mark(
-                "spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5",
-                "pxl-tool spec/bake.rs"
-            )
-        ),
+        format!("// {}", mark(&sources, "pxl-tool spec/bake.rs")),
         "//".into(),
     ];
     rs.extend(line_comments(&cat.doc().unwrap_or_default(), ""));
@@ -256,10 +266,10 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
         &|k| zoom(k, "label"),
     )?;
     list("A category's icon or dot fill", "Rgba", "FILL", &|k| {
-        color(k, "fill")
+        rgba(k, "fill")
     })?;
     list("A category's label fill, its ink", "Rgba", "INK", &|k| {
-        color(k, "text")
+        rgba(k, "ink")
     })?;
     let symbol = |k: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at("symbol")) {
@@ -277,23 +287,12 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec![
         "// @pxl/client/ui/feature/search/place_theme.spec.ts".to_string(),
         "//".into(),
-        format!(
-            "// {}",
-            mark(
-                "spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5",
-                "pxl-tool spec/bake.rs"
-            )
-        ),
+        format!("// {}", mark(&sources, "pxl-tool spec/bake.rs")),
         "//".into(),
     ];
     ts.extend(line_comments(&theme.doc().unwrap_or_default(), ""));
     let fill = |k: &str| -> Result<String, String> {
-        match rows.get(k).and_then(|r| r.get("fill")) {
-            None => Ok("null".into()),
-            Some(c) => u32_of(c)
-                .map(|c| format!("{c}"))
-                .ok_or(format!("{theme_json}: {k}.fill is no color")),
-        }
+        Ok(color(k, "fill")?.map_or("null".into(), |c| c.to_string()))
     };
     for (doc, name, ty, each) in [
         (

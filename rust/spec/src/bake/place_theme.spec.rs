@@ -9,16 +9,16 @@
 // ingested from. A release whose taxonomy moved takes a purge by command, and a
 // category missing here is a place with no kind, which no theme row draws.
 //
-// What OpenStreetMap Carto draws for a place of each category: the tags Carto
-// styles it under (`carto`, the attributes `style/amenity-points.mss` reads,
-// anything else null as a point's are), the web zoom from which it shows as a
-// dot (`marker-width` with no file) and as its icon, the zoom from which its
-// name shows (`#text-point`'s `text-name: [name]`), the icon's fill and the
-// label's, and the icon (`symbol`), Maki's file of it under
-// asset/raw/place/symbol/. Each value but `symbol` is the one Carto's rules
-// give for those tags at that zoom, colors computed from its variables
-// (`darken` as LESS does). A category with no row is one Carto draws no point
-// for, so it is neither carried in a tile nor drawn.
+// What a place of each category is drawn as: the tags OpenStreetMap
+// Carto styles it under (`carto`, the attributes `style/amenity-points.mss`
+// reads, anything else null as a point's are), the web zoom from which it
+// shows as a dot (`marker-width` with no file) and as its icon, the zoom from
+// which its name shows (`#text-point`'s `text-name: [name]`), its group, and
+// the icon (`symbol`), Maki's file of it under asset/raw/place/symbol/. Each
+// zoom is the one Carto's rules give for those tags. A group's colors are
+// two of IBM Carbon's color tokens (`@carbon/colors` 11.62.0), a hue at its
+// steps 60 and 70: `fill` the icon's disc and the dot, `ink` the name. A category with no row is one
+// Carto draws no point for, so it is neither carried in a tile nor drawn.
 
 use crate::color::Rgba;
 
@@ -325,50 +325,50 @@ pub const LABEL_ZOOM: [u8; 256] = [
 
 /// A category's icon or dot fill, category k at `FILL[k - 1]`.
 pub const FILL: [Rgba; 256] = [
-    0, 0, 0, 0x8461c4ff, 0, 0xc77400ff, 0, 0, 0xac39acff, 0, 0, 0x0092daff, 0, 0x0c8416ff,
-    0x734a08ff, 0, 0, 0xac39acff, 0, 0x734a08ff, 0x4863a0ff, 0xac39acff, 0xac39acff, 0, 0, 0, 0, 0,
-    0, 0x734a08ff, 0xc77400ff, 0, 0x0092daff, 0xbf0000ff, 0xac39acff, 0, 0, 0x000000ff, 0, 0, 0,
-    0xc77400ff, 0x0092daff, 0, 0, 0x734a08ff, 0x734a08ff, 0xc77400ff, 0, 0x000000ff, 0x734a08ff, 0,
-    0xc77400ff, 0, 0, 0, 0x734a08ff, 0, 0, 0xac39acff, 0x4863a0ff, 0x734a08ff, 0x734a08ff,
-    0x734a08ff, 0xbf0000ff, 0xac39acff, 0, 0, 0xac39acff, 0, 0x0c8416ff, 0, 0, 0, 0, 0xac39acff, 0,
-    0x4863a0ff, 0xbf0000ff, 0xbf0000ff, 0, 0x0092daff, 0, 0, 0, 0, 0, 0xac39acff, 0xac39acff,
-    0xc77400ff, 0, 0x734a08ff, 0x0c8416ff, 0xac39acff, 0xac39acff, 0, 0, 0xc77400ff, 0, 0xc77400ff,
-    0, 0x734a08ff, 0x0092daff, 0, 0, 0x0092daff, 0, 0x0c8416ff, 0x4863a0ff, 0x4863a0ff, 0x0c8416ff,
-    0xac39acff, 0, 0, 0x000000ff, 0, 0, 0xbf0000ff, 0x0092daff, 0, 0, 0, 0x0092daff, 0, 0x734a08ff,
-    0x000000ff, 0, 0, 0, 0xac39acff, 0, 0x734a08ff, 0x666666ff, 0, 0xc77400ff, 0, 0, 0xac39acff, 0,
-    0, 0x734a08ff, 0, 0, 0, 0x734a08ff, 0xd08f55ff, 0x734a08ff, 0x734a08ff, 0xac39acff, 0,
-    0x000000ff, 0, 0, 0x734a08ff, 0xc77400ff, 0xac39acff, 0xbf0000ff, 0, 0x0092daff, 0xbf0000ff,
-    0x734a08ff, 0xac39acff, 0xac39acff, 0xbf0000ff, 0, 0, 0, 0x000000ff, 0, 0x0c8416ff, 0x734a08ff,
-    0, 0, 0xbf0000ff, 0xac39acff, 0x0092daff, 0, 0, 0xaad3dfff, 0, 0x734a08ff, 0, 0, 0, 0, 0, 0,
-    0x000000ff, 0, 0, 0xbf0000ff, 0, 0, 0xc77400ff, 0, 0, 0x0092daff, 0, 0x734a08ff, 0xac39acff, 0,
-    0x4c4c00ff, 0, 0xac39acff, 0, 0, 0, 0xc77400ff, 0, 0x734a08ff, 0, 0, 0xbf0000ff, 0, 0xac39acff,
-    0, 0, 0, 0xac39acff, 0, 0, 0, 0, 0, 0, 0, 0x734a08ff, 0xac39acff, 0xac39acff, 0, 0, 0x0092daff,
-    0, 0, 0, 0x734a08ff, 0, 0x0092daff, 0xac39acff, 0, 0, 0xac39acff, 0, 0xac39acff, 0xac39acff,
-    0xac39acff, 0xbf0000ff, 0xbf0000ff, 0xac39acff, 0x4d80b3ff, 0, 0, 0xac39acff, 0, 0, 0,
+    0, 0, 0, 0x0f62feff, 0, 0xba4e00ff, 0, 0, 0xd02670ff, 0, 0, 0x0f62feff, 0, 0x198038ff,
+    0x007d79ff, 0, 0, 0xd02670ff, 0, 0x007d79ff, 0x8a3ffcff, 0xd02670ff, 0xd02670ff, 0, 0, 0, 0, 0,
+    0, 0x007d79ff, 0xba4e00ff, 0, 0x0f62feff, 0xda1e28ff, 0xd02670ff, 0, 0, 0x697077ff, 0, 0, 0,
+    0xba4e00ff, 0x0f62feff, 0, 0, 0x007d79ff, 0x007d79ff, 0xba4e00ff, 0, 0x697077ff, 0x007d79ff, 0,
+    0xba4e00ff, 0, 0, 0, 0x007d79ff, 0, 0, 0xd02670ff, 0x8a3ffcff, 0x007d79ff, 0x007d79ff,
+    0x007d79ff, 0xda1e28ff, 0xd02670ff, 0, 0, 0xd02670ff, 0, 0x198038ff, 0, 0, 0, 0, 0xd02670ff, 0,
+    0x8a3ffcff, 0xda1e28ff, 0xda1e28ff, 0, 0x0f62feff, 0, 0, 0, 0, 0, 0xd02670ff, 0xd02670ff,
+    0xba4e00ff, 0, 0x007d79ff, 0x198038ff, 0xd02670ff, 0xd02670ff, 0, 0, 0xba4e00ff, 0, 0xba4e00ff,
+    0, 0x007d79ff, 0x0f62feff, 0, 0, 0x0f62feff, 0, 0x198038ff, 0x8a3ffcff, 0x8a3ffcff, 0x198038ff,
+    0xd02670ff, 0, 0, 0x697077ff, 0, 0, 0xda1e28ff, 0x0f62feff, 0, 0, 0, 0x0f62feff, 0, 0x007d79ff,
+    0x697077ff, 0, 0, 0, 0xd02670ff, 0, 0x007d79ff, 0x007d79ff, 0, 0xba4e00ff, 0, 0, 0xd02670ff, 0,
+    0, 0x007d79ff, 0, 0, 0, 0x007d79ff, 0x198038ff, 0x007d79ff, 0x007d79ff, 0xd02670ff, 0,
+    0x697077ff, 0, 0, 0x007d79ff, 0xba4e00ff, 0xd02670ff, 0xda1e28ff, 0, 0x0f62feff, 0xda1e28ff,
+    0x007d79ff, 0xd02670ff, 0xd02670ff, 0xda1e28ff, 0, 0, 0, 0x697077ff, 0, 0x198038ff, 0x007d79ff,
+    0, 0, 0xda1e28ff, 0xd02670ff, 0x0f62feff, 0, 0, 0x198038ff, 0, 0x007d79ff, 0, 0, 0, 0, 0, 0,
+    0x697077ff, 0, 0, 0xda1e28ff, 0, 0, 0xba4e00ff, 0, 0, 0x0f62feff, 0, 0x007d79ff, 0xd02670ff, 0,
+    0xda1e28ff, 0, 0xd02670ff, 0, 0, 0, 0xba4e00ff, 0, 0x007d79ff, 0, 0, 0xda1e28ff, 0, 0xd02670ff,
+    0, 0, 0, 0xd02670ff, 0, 0, 0, 0, 0, 0, 0, 0x007d79ff, 0xd02670ff, 0xd02670ff, 0, 0, 0x0f62feff,
+    0, 0, 0, 0x007d79ff, 0, 0x0f62feff, 0xd02670ff, 0, 0, 0xd02670ff, 0, 0xd02670ff, 0xd02670ff,
+    0xd02670ff, 0xda1e28ff, 0xda1e28ff, 0xd02670ff, 0x198038ff, 0, 0, 0xd02670ff, 0, 0, 0,
 ];
 
 /// A category's label fill, its ink, category k at `INK[k - 1]`.
 pub const INK: [Rgba; 256] = [
-    0, 0, 0, 0x5e3b9eff, 0, 0xae6500ff, 0, 0, 0x993399ff, 0, 0, 0x0066ffff, 0, 0x0c8416ff,
-    0x734a08ff, 0, 0, 0x993399ff, 0, 0, 0x4863a0ff, 0x993399ff, 0x993399ff, 0, 0, 0, 0, 0, 0,
-    0x734a08ff, 0xae6500ff, 0, 0x0066ffff, 0xbf0000ff, 0x993399ff, 0, 0, 0x000033ff, 0, 0, 0,
-    0xae6500ff, 0x0066ffff, 0, 0, 0x734a08ff, 0x734a08ff, 0xae6500ff, 0, 0x000033ff, 0x734a08ff, 0,
-    0xae6500ff, 0, 0, 0, 0x734a08ff, 0, 0, 0x993399ff, 0x4863a0ff, 0x734a08ff, 0x734a08ff,
-    0x734a08ff, 0xbf0000ff, 0x993399ff, 0, 0, 0x993399ff, 0, 0x0c8416ff, 0, 0, 0, 0, 0x993399ff, 0,
-    0x4863a0ff, 0xbf0000ff, 0xbf0000ff, 0, 0, 0, 0, 0, 0, 0, 0x993399ff, 0x993399ff, 0xae6500ff, 0,
-    0x734a08ff, 0x0c8416ff, 0x993399ff, 0x993399ff, 0, 0, 0xae6500ff, 0, 0xae6500ff, 0, 0x734a08ff,
-    0x0066ffff, 0, 0, 0x0066ffff, 0, 0x0c8416ff, 0x4863a0ff, 0x4863a0ff, 0x0c8416ff, 0x993399ff, 0,
-    0, 0x000033ff, 0, 0, 0xbf0000ff, 0x0066ffff, 0, 0, 0, 0x0066ffff, 0, 0x734a08ff, 0x000033ff, 0,
-    0, 0, 0x993399ff, 0, 0x734a08ff, 0x333333ff, 0, 0xae6500ff, 0, 0, 0x993399ff, 0, 0, 0x734a08ff,
-    0, 0, 0, 0x734a08ff, 0x6e441eff, 0x734a08ff, 0x734a08ff, 0x993399ff, 0, 0x000033ff, 0, 0,
-    0x734a08ff, 0xae6500ff, 0x993399ff, 0xbf0000ff, 0, 0x0066ffff, 0xbf0000ff, 0x734a08ff,
-    0x993399ff, 0x993399ff, 0xbf0000ff, 0, 0, 0, 0x000033ff, 0, 0x0c8416ff, 0x734a08ff, 0, 0,
-    0xbf0000ff, 0x993399ff, 0x0066ffff, 0, 0, 0x576ddfff, 0, 0, 0, 0, 0, 0, 0, 0, 0x000033ff, 0, 0,
-    0xbf0000ff, 0, 0, 0xae6500ff, 0, 0, 0x0066ffff, 0, 0x734a08ff, 0x993399ff, 0, 0x4c4c00ff, 0,
-    0x993399ff, 0, 0, 0, 0xae6500ff, 0, 0x734a08ff, 0, 0, 0xbf0000ff, 0, 0x993399ff, 0, 0, 0,
-    0x993399ff, 0, 0, 0, 0, 0, 0, 0, 0x734a08ff, 0x993399ff, 0x993399ff, 0, 0, 0x0066ffff, 0, 0, 0,
-    0x734a08ff, 0, 0x0066ffff, 0x993399ff, 0, 0, 0x993399ff, 0, 0x993399ff, 0x993399ff, 0x993399ff,
-    0xbf0000ff, 0xbf0000ff, 0x993399ff, 0x4d80b3ff, 0, 0, 0x993399ff, 0, 0, 0,
+    0, 0, 0, 0x0043ceff, 0, 0x8a3800ff, 0, 0, 0x9f1853ff, 0, 0, 0x0043ceff, 0, 0x0e6027ff,
+    0x005d5dff, 0, 0, 0x9f1853ff, 0, 0x005d5dff, 0x6929c4ff, 0x9f1853ff, 0x9f1853ff, 0, 0, 0, 0, 0,
+    0, 0x005d5dff, 0x8a3800ff, 0, 0x0043ceff, 0xa2191fff, 0x9f1853ff, 0, 0, 0x4d5358ff, 0, 0, 0,
+    0x8a3800ff, 0x0043ceff, 0, 0, 0x005d5dff, 0x005d5dff, 0x8a3800ff, 0, 0x4d5358ff, 0x005d5dff, 0,
+    0x8a3800ff, 0, 0, 0, 0x005d5dff, 0, 0, 0x9f1853ff, 0x6929c4ff, 0x005d5dff, 0x005d5dff,
+    0x005d5dff, 0xa2191fff, 0x9f1853ff, 0, 0, 0x9f1853ff, 0, 0x0e6027ff, 0, 0, 0, 0, 0x9f1853ff, 0,
+    0x6929c4ff, 0xa2191fff, 0xa2191fff, 0, 0x0043ceff, 0, 0, 0, 0, 0, 0x9f1853ff, 0x9f1853ff,
+    0x8a3800ff, 0, 0x005d5dff, 0x0e6027ff, 0x9f1853ff, 0x9f1853ff, 0, 0, 0x8a3800ff, 0, 0x8a3800ff,
+    0, 0x005d5dff, 0x0043ceff, 0, 0, 0x0043ceff, 0, 0x0e6027ff, 0x6929c4ff, 0x6929c4ff, 0x0e6027ff,
+    0x9f1853ff, 0, 0, 0x4d5358ff, 0, 0, 0xa2191fff, 0x0043ceff, 0, 0, 0, 0x0043ceff, 0, 0x005d5dff,
+    0x4d5358ff, 0, 0, 0, 0x9f1853ff, 0, 0x005d5dff, 0x005d5dff, 0, 0x8a3800ff, 0, 0, 0x9f1853ff, 0,
+    0, 0x005d5dff, 0, 0, 0, 0x005d5dff, 0x0e6027ff, 0x005d5dff, 0x005d5dff, 0x9f1853ff, 0,
+    0x4d5358ff, 0, 0, 0x005d5dff, 0x8a3800ff, 0x9f1853ff, 0xa2191fff, 0, 0x0043ceff, 0xa2191fff,
+    0x005d5dff, 0x9f1853ff, 0x9f1853ff, 0xa2191fff, 0, 0, 0, 0x4d5358ff, 0, 0x0e6027ff, 0x005d5dff,
+    0, 0, 0xa2191fff, 0x9f1853ff, 0x0043ceff, 0, 0, 0x0e6027ff, 0, 0x005d5dff, 0, 0, 0, 0, 0, 0,
+    0x4d5358ff, 0, 0, 0xa2191fff, 0, 0, 0x8a3800ff, 0, 0, 0x0043ceff, 0, 0x005d5dff, 0x9f1853ff, 0,
+    0xa2191fff, 0, 0x9f1853ff, 0, 0, 0, 0x8a3800ff, 0, 0x005d5dff, 0, 0, 0xa2191fff, 0, 0x9f1853ff,
+    0, 0, 0, 0x9f1853ff, 0, 0, 0, 0, 0, 0, 0, 0x005d5dff, 0x9f1853ff, 0x9f1853ff, 0, 0, 0x0043ceff,
+    0, 0, 0, 0x005d5dff, 0, 0x0043ceff, 0x9f1853ff, 0, 0, 0x9f1853ff, 0, 0x9f1853ff, 0x9f1853ff,
+    0x9f1853ff, 0xa2191fff, 0xa2191fff, 0x9f1853ff, 0x0e6027ff, 0, 0, 0x9f1853ff, 0, 0, 0,
 ];
 
 /// A category's icon, its symbol's number (asset/symbol.spec.rs), 0 for none, category k at `SYMBOL[k - 1]`.
