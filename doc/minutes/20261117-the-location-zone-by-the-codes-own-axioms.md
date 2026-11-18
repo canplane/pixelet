@@ -394,3 +394,11 @@ These are carried into `AGENTS.md`, the code skill and `doc/README.md`.
 > Since 2026-11-18 (this note's commit): the experiment the notes above name is
 > `doc/experiment/20261118-the-days-structure-against-the-tree-before`, renamed for what
 > it holds.
+
+> Since 2026-11-18 (this note's commit): the note above says a pan's eye is gone, and
+> it is back. The eye a walk takes decides only whether there is a body to walk
+> (`body_shown`), and for the camera's own pivot it is the eye the camera keeps over
+> that pivot, the drawn eye moved by as far as the pan's start leads the drawn pivot,
+> as item 5 settled it; a body in the world takes the observer's. What a walk reads
+> it reads by the observer's eye. A column has one cell for an eye, the one drawn at
+> its ground's surface, whatever height in it is asked.

@@ -30,11 +30,12 @@ use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::domain::observer;
 use crate::domain::query::change;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::marker::param::SPACING_PX;
 use crate::domain::scene::model;
-use crate::domain::view::frame::{coord, pose};
+use crate::domain::view::frame::coord;
 use crate::domain::view::observation;
 use crate::sys::sched;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -158,7 +159,7 @@ pub(crate) fn on_changed(places: &[Quadrant]) {
 /// the frame hands it (frame.rs `scene_tick`).
 pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
-    if pose::eye().is_none() {
+    if observer::eye().is_none() {
         if p.set.free(model::draw_list()) {
             sched::invalidate(InvalidationReason::Scene);
         }

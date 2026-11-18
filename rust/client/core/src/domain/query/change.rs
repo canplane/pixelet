@@ -5,14 +5,17 @@
 //! contents, and the boxes where objects were written. A reader that keeps an answer asks again
 //! only when one of these touches the columns it read, which its queries
 //! report (`ReadRect`). A change so reaches only the readers of the ground
-//! it touches.
+//! it touches. An answer is the eye's too: the world is read by its distance
+//! from the eye, so a kept answer is kept for the eye it was asked under.
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
+use crate::domain::observer;
 use pxl_global::Global;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{BOUND, nearest, nearest_box};
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -130,12 +133,13 @@ fn join(cells: [[f64; 2]; 2]) {
     });
 }
 
-/// An answer a step got from the world, kept with the key it was asked for
-/// and the columns it read (`ReadRect`), their corners in units. It is
-/// asked again only when the key changes, or when a change to the ground or
-/// the objects touched those columns (`forget_touched`). An answer that read
-/// nothing is not kept, since no change would ever tell it to go.
-pub(crate) struct Memo<K, A>(Option<(K, [[f64; 2]; 2], A)>);
+/// An answer a step got from the world, kept with the key it was asked for,
+/// the eye it was asked under and the columns it read (`ReadRect`), their
+/// corners in units. It is asked again only when the key changes, when the
+/// eye has moved, or when a change to the ground or the objects touched
+/// those columns (`forget_touched`). An answer that read nothing is not
+/// kept, since no change would ever tell it to go.
+pub(crate) struct Memo<K, A>(Option<(K, Option<V3>, [[f64; 2]; 2], A)>);
 
 impl<K, A> Default for Memo<K, A> {
     fn default() -> Self {
@@ -152,7 +156,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         if self
             .0
             .as_ref()
-            .is_some_and(|&(_, columns, _)| within(columns, &[]))
+            .is_some_and(|&(_, _, columns, _)| within(columns, &[]))
         {
             self.0 = None;
         }
@@ -168,7 +172,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         if self
             .0
             .as_ref()
-            .is_some_and(|(_, columns, a)| match exact(a) {
+            .is_some_and(|(_, _, columns, a)| match exact(a) {
                 true => touched(*columns, &[], at_leaf),
                 false => within(*columns, &[]),
             })
@@ -182,8 +186,10 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     /// as read here too, so a memo kept inside another memo's ask lets that
     /// one go with it.
     pub(crate) fn of(&mut self, of: K, ask: impl FnOnce() -> A) -> A {
-        if let Some((k, columns, a)) = &self.0
+        let eye = observer::eye();
+        if let Some((k, under, columns, a)) = &self.0
             && *k == of
+            && *under == eye
         {
             join(*columns);
             return *a;
@@ -193,7 +199,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         let read = core::mem::replace(read_rect(), outer);
         self.0 = read.0.map(|columns| {
             join(columns);
-            (of, columns, a)
+            (of, eye, columns, a)
         });
         a
     }

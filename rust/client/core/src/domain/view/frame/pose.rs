@@ -1,8 +1,9 @@
 // pxl-core/domain/view/frame/pose.rs
 
-//! The view as drawn: the observer's pose and the matrices made from it,
-//! all in the world's doubles (`domain/view/frame/coord.rs`). A camera
-//! controller supplies the pose, and nothing here depends on which one.
+//! The view as drawn: the matrices made from the observer's pose
+//! (`domain/observer.rs`), all in the world's doubles
+//! (`domain/view/frame/coord.rs`). A camera controller supplies the pose,
+//! which is taken here, and nothing here depends on which one.
 
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::adapter::epsg3857;
@@ -12,27 +13,14 @@ use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
+use crate::domain::observer::{self, ObserverPose};
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_global::Global;
 use pxl_spec::space::camera::grid::{HALF_TAN, fov};
 use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
 
-/// `rot` is a pure rotation: it turns the world's axes into the camera's
-/// right, up and back.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct ObserverPose {
-    pub eye: V3,
-    pub rot: Mat4,
-}
-
 pub(crate) struct View {
-    /// The pose the view is seen from: the camera's as it was last taken
-    /// (`view_compose`), which the camera's own may differ from by less than
-    /// can be told apart on the screen. None until the camera stands
-    /// somewhere.
-    pub pose: Option<ObserverPose>,
-
     /// The view's size in CSS pixels. Code outside the frame reads it only
     /// through the screen (`domain/view/frame/screen.rs`).
     pub(super) width: f64,
@@ -49,7 +37,6 @@ pub(crate) struct View {
 impl View {
     fn new() -> View {
         View {
-            pose: None,
             width: 1.0,
             height: 1.0,
             view_mat: mat4::new(),
@@ -67,7 +54,7 @@ impl View {
     /// somewhere, this is a rest pose one unit over the origin, and nothing
     /// is drawn from it.
     pub(crate) fn at(&self) -> ObserverPose {
-        self.pose.unwrap_or(ObserverPose {
+        observer::pose().unwrap_or(ObserverPose {
             eye: [0.0, 0.0, 1.0],
             rot: mat4::new(),
         })
@@ -94,18 +81,12 @@ pub(crate) fn view_mut() -> &'static mut View {
     VIEW.get(View::new)
 }
 
-/// Where the eye stands as the frame composed the view. None until the camera
-/// stands somewhere.
-pub(crate) fn eye() -> Option<V3> {
-    Some(view().pose?.eye)
-}
-
 /// The view's heading: radians about Z from north toward east, read off
 /// its right, which lies level at any pitch for a camera that does not roll
 /// (the orbit and first person; a tracked pose may roll, and has no heading
 /// by this). None until the camera stands somewhere.
 pub(crate) fn azimuth() -> Option<f64> {
-    let rot = view().pose?.rot;
+    let rot = observer::pose()?.rot;
     Some(libm::atan2(-rot[4], rot[0]))
 }
 
@@ -120,7 +101,7 @@ pub(crate) fn sea_under_eye() -> V3 {
 /// would hold an eye past the north or south edge at that edge. None until
 /// the camera stands somewhere.
 pub(crate) fn globe_anchor() -> Option<G4326> {
-    let [x, y, _] = view().pose?.eye;
+    let [x, y, _] = observer::eye()?;
     Some(epsg4326::from_mercator(&[
         epsg3857::merc_from_u(nearest(x, 0.0)),
         epsg3857::merc_from_u(y),
@@ -158,29 +139,29 @@ pub(crate) fn view_resize(width: f64, height: f64) {
     compose();
 }
 
-/// Takes the pose the controllers hold where it differs from the view's by
-/// what can be told apart, and composes the matrices from it. Returns
-/// whether the view moved. The camera moves in reals; the view is what is
-/// seen from it, and everything that looks reads the view.
+/// Takes the pose the controllers hold where it differs from the observer's
+/// by what can be told apart, and composes the matrices from it. Returns
+/// whether the view moved. The camera moves in reals; the observer's pose is
+/// what the world is seen from, and everything that looks reads it.
 ///
 /// The eye is snapped to the lattice steps the cast's rays start from
 /// (pxl-spec `world::origin`). The world the rays draw and what is
 /// rasterized on its faces (the location indicator's zone, the ghosts, the
 /// markers' anchors) are then seen from the same eye. The view moves when
-/// the camera's pose, its eye snapped, can be told apart from the view's
+/// the camera's pose, its eye snapped, can be told apart from the observer's
 /// (`distinct`); a smaller turn is not taken, so it adds up against the
-/// pose the view keeps until it passes.
+/// pose the observer keeps until it passes.
 pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
     let pose = pose.map(|p| ObserverPose {
         eye: p.eye.map(|v| to_real(from_real(v))),
         ..p
     });
-    let moved = match (view().pose, pose) {
+    let moved = match (observer::pose(), pose) {
         (Some(cur), Some(p)) => distinct(&cur, &p),
         (cur, p) => cur.is_some() != p.is_some(),
     };
     if moved {
-        view_mut().pose = pose;
+        observer::set_pose(pose);
         compose();
     }
     moved

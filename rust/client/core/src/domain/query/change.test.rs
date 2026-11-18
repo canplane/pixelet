@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, placed};
+use crate::domain::query::test::{flat_at_five, placed, step_slide_from};
 use pxl_spec::brick;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -15,7 +15,7 @@ const COLUMNS: [[f64; 2]; 2] = [[0.5, 0.5], [1.5, 1.5]];
 fn kept(exact: bool, zoom: Zoom) -> bool {
     changes().ground = vec![Quadrant::new(zoom, [0, 0])];
     changes().damage.clear();
-    let mut memo = Memo(Some((0u32, COLUMNS, exact)));
+    let mut memo = Memo(Some((0u32, None, COLUMNS, exact)));
     memo.forget_touched_at_leaf(|&exact| exact);
     memo.0.is_some()
 }
@@ -43,7 +43,7 @@ fn what_objects_wrote_drops_an_exact_answer() {
         min: [1.0, 1.0, BOUND.min[2]],
         max: [2.0, 2.0, BOUND.max[2]],
     }];
-    let mut memo = Memo(Some((0u32, COLUMNS, true)));
+    let mut memo = Memo(Some((0u32, None, COLUMNS, true)));
     memo.forget_touched_at_leaf(|&exact| exact);
     assert!(memo.0.is_none());
     changes().damage.clear();
@@ -62,13 +62,22 @@ fn queries_report_the_columns_they_read() {
     world.surface_support(&point(at[0], at[1], 0.0));
     assert_eq!(read_rect().0, Some([c, c.map(|v| v + cell)]));
     let from = point(at[0], at[1], over(5.0));
-    world.step_slide(&from, &point(at[0] + 3.0 * cell, at[1], 0.0), &from, true);
+    // The eye stands where it draws the leaves' cells.
+    let eye = point(at[0], at[1], 64.0);
+    step_slide_from(
+        &world,
+        &from,
+        &point(at[0] + 3.0 * cell, at[1], 0.0),
+        &eye,
+        true,
+    );
     assert_eq!(read_rect().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
     // A body of known height that does not show reads nothing, however
     // far it goes.
     *read_rect() = ReadRect::default();
     let high = point(at[0], at[1], 1000.0);
-    world.step_slide(
+    step_slide_from(
+        &world,
         &from,
         &point(at[0] + 3000.0 * cell, at[1], 0.0),
         &high,

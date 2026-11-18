@@ -82,7 +82,7 @@ struct Order {
 /// specs hold (`spec`), which name nothing of the core, stand under everything that reads
 /// them.
 const CORE: &str = "rust/client/core/src/";
-const CORE_ORDER: [(&str, u8); 16] = [
+const CORE_ORDER: [(&str, u8); 17] = [
     ("frame", 7),
     ("link", 7),
     ("ui", 7),
@@ -96,6 +96,7 @@ const CORE_ORDER: [(&str, u8); 16] = [
     ("view", 4),
     ("query", 3),
     ("layer", 2),
+    ("observer", 2),
     ("sys", 1),
     ("abi", 0),
     ("spec", 0),

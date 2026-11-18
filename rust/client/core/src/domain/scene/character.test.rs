@@ -112,28 +112,19 @@ fn a_body_is_drawn_clear_of_the_wall_beside_it() {
 fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     use crate::domain::layer::object::store::Store;
     use crate::domain::query::change::Memo;
-    use crate::domain::query::test::{flat_at_five, placed, write};
-    use crate::domain::scene::character::companion::{Camera, drawn_at};
+    use crate::domain::query::test::{flat_at_five, look_from, placed, write};
+    use crate::domain::scene::character::companion::drawn_at;
     use pxl_spec::asset::{AssetId, cube};
     use pxl_spec::bake::constant::OBJECT_COARSEST;
-    use pxl_spec::space::coord::world;
     let [x, y] = flat_at_five();
     let mut store = Store::default();
     let wall = cube::Object::Red as AssetId;
     write(&mut store, [x + 1.0, y, 5.0], OBJECT_COARSEST, wall);
     placed(store);
     let at = [x + 0.9, y + 0.5];
-    let camera = Camera {
-        pivot: at,
-        floor: Some(5.0),
-        azimuth: 0.0,
-        dragging: false,
-        steered: false,
-        following: false,
-        eye: world::point(at[0], at[1] - 3.0, 8.0),
-    };
+    look_from([at[0], at[1] - 3.0, 8.0]);
     let mut memo = Memo::NONE;
-    let [drawn_x, drawn_y, _] = drawn_at(&mut memo, at, 5.0, 0.25, &camera);
+    let [drawn_x, drawn_y, _] = drawn_at(&mut memo, at, 5.0, 0.25);
     assert_eq!([drawn_x, drawn_y], [x + 0.75, y + 0.5]);
 }
 
@@ -176,43 +167,34 @@ fn a_character_is_drawn_where_it_shows() {
 }
 
 /// A companion's step is walked only where the body shows at both its
-/// ends for the camera's eye, a height not known taken where it stands.
+/// ends for the eye, a height not known taken where it stands.
 #[test]
 fn a_step_is_walked_where_a_body_shows_at_both_its_ends() {
     use crate::domain::layer::object::store::Store;
-    use crate::domain::query::test::{flat_at_five, placed};
+    use crate::domain::query::test::{flat_at_five, look_from, placed};
     use crate::domain::query::{is_unknown, over, unknown};
-    use crate::domain::scene::character::companion::{Camera, walk_to};
+    use crate::domain::scene::character::companion::walk_to;
     use pxl_spec::space::coord::world;
     use pxl_spec::space::coord::zoom::LEAF_ZOOM;
     use pxl_spec::space::layer::lattice::{GROUND, draw_dist};
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
     let edge = draw_dist(GROUND, LEAF_ZOOM - 1);
-    let camera = |eye: [f64; 3]| Camera {
-        pivot: [x + 0.5, y + 0.5],
-        floor: Some(5.0),
-        azimuth: 0.0,
-        dragging: false,
-        steered: false,
-        following: false,
-        eye: world::point(eye[0], eye[1], eye[2]),
-    };
     let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    let beside = camera([x + 0.5, y - 3.0, 8.0]);
+    look_from([x + 0.5, y - 3.0, 8.0]);
     let near = [x + 3.5, y + 0.5];
     assert_eq!(
-        walk_to(world, &from, near, &beside),
+        walk_to(world, &from, near),
         world::point(near[0], near[1], over(5.0)),
         "walked"
     );
     // The far end lies past where the body shows.
     let far = [x + 0.5 + edge, y + 0.5];
-    assert!(is_unknown(&walk_to(world, &from, far, &beside)));
+    assert!(is_unknown(&walk_to(world, &from, far)));
     // A body of unknown height is measured where it stands, not at its
     // unknown height's mark.
     assert_eq!(
-        walk_to(world, &unknown(&from), near, &beside),
+        walk_to(world, &unknown(&from), near),
         world::point(near[0], near[1], over(5.0)),
         "walked from a height not known"
     );

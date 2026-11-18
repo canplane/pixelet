@@ -64,15 +64,15 @@ fn view_takes_turn_past_step() {
     assert!(view_compose(Some(pose_at(eye, 0.0))));
     // Half a CSS pixel at this screen's corner is about 3.4e-4 rad.
     assert!(!view_compose(Some(pose_at(eye, 1e-4))));
-    assert_eq!(view().pose, Some(pose_at(eye, 0.0)));
+    assert_eq!(observer::pose(), Some(pose_at(eye, 0.0)));
     assert!(!view_compose(Some(pose_at(eye, 2e-4))));
     assert!(!view_compose(Some(pose_at(eye, 3e-4))));
     assert!(view_compose(Some(pose_at(eye, 4e-4))));
-    assert_eq!(view().pose, Some(pose_at(eye, 4e-4)));
+    assert_eq!(observer::pose(), Some(pose_at(eye, 4e-4)));
     assert!(!view_compose(Some(pose_at(eye, 5e-4))));
     let eye_to = [eye[0] + 1.0, eye[1], eye[2]];
     assert!(view_compose(Some(pose_at(eye_to, 5e-4))));
-    assert_eq!(view().pose, Some(pose_at(eye_to, 5e-4)));
+    assert_eq!(observer::pose(), Some(pose_at(eye_to, 5e-4)));
     assert!(view_compose(None));
     assert!(!view_compose(None));
 }

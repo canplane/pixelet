@@ -146,6 +146,7 @@ fn slot_ray(c: &Case, s: &Light, starts: &StartGrid, slot: [u32; 2]) -> ([i32; 3
         o,
         r,
         Detail {
+            eye: [0.0; 3],
             range: [band, band],
             spacing: s.spacing(),
         },

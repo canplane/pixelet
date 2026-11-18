@@ -7,6 +7,7 @@
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
+use crate::domain::observer;
 use crate::domain::query;
 use crate::domain::query::HitKind;
 use crate::domain::query::Ray;
@@ -287,14 +288,10 @@ fn view() -> ViewSection {
             dir,
             t_max: observation::eye_draw_dist().unwrap_or(0.0),
         };
-        let detail = query::by_dist();
-        let hit = query::World::now()
-            .first_hit(&ray, detail)
-            .val()
-            .flatten()?;
+        let hit = query::World::now().first_hit(&ray).val().flatten()?;
         Some((
             coord::world_to_canonical(&hit.point),
-            detail.at((hit.t * hit.t) as f32),
+            query::cell_zoom_read(observer::eye()?, hit.point),
         ))
     });
     let (hover, cell_zoom) = (met.map(|m| m.0), met.map(|m| m.1));

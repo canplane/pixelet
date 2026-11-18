@@ -231,8 +231,8 @@ a cell at the zoom its distance asks for
 Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`).
 So there is no collision mesh beside a drawing mesh to drift apart: what you
 see is what you stand on and what you click. Control's rays read the world as
-an eye's do, by their distance from where they start, the same in every
-direction, each from where its asker stands: a body stands on what its own
+an eye's do, each cell by its distance from the eye, the same in every
+direction, wherever the ray starts: a body stands on what its own
 rays meet, the orbit camera keeps clear of what its way meets, and the
 pointer strikes what is held, judging it by the zoom the eye's rays draw there
 (`domain/control/edit/pick.rs`). Whether a body is there at all is the
@@ -497,8 +497,9 @@ up, and the folders are that order. The check-rules tool holds it.
     scene/       what this frame draws          ┐ two heads; neither
     control/     moves the eye, asks the query  ┘ names the other
     setting      the settings both heads read
-    view/        the pose, the lens, demand     ┐
+    view/        the lens, demand               ┐
     query/       the only seam                  ├ the trunk
+    observer     the pose the world is seen from│
     layer/       the base and the objects       ┘
   ────────────────────────────────────────────────────────────────────
   sys/                   what all of it stands on

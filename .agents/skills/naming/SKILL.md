@@ -125,7 +125,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a point moved out of what it overlaps | `depenetrate` | lift |
   | the camera brought before what stands in a zoom's way | `pull_forward` | dive |
   | a decor or a body being there at a zoom | it `shows_at` it (`box_shows_at`) | stands |
-  | the floor under a point as the world is held, and as an eye draws it at a zoom | `floor_under`, `floor_drawn` | |
+  | the floor under a point as the eye draws the world there | `floor_under` | |
+  | the cell zoom at a point by its distance from the eye, as the eye's rays draw it, and as a walk reads it | `cell_zoom_drawn`, `cell_zoom_read` | |
 
   `at` is where a thing is, `to` where it is going.
 - xpute's names are the mechanism's, as the component model has them: the guest,

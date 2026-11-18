@@ -9,9 +9,9 @@
   there: what the one rule costs in its place is no regression. A fault is
   closed by the rule the rest already follows, never by a piece laid beside it.
 - Everything that reads the world reads it by perspective, the same in every
-  direction: the farther from where a ray starts, the coarser its cells, for
-  the camera, the light, the shadows and what collides alike; what a ray does
-  not find within its cap of steps is not there.
+  direction: the farther from the eye, the coarser its cells, for the camera,
+  the light, the shadows and what collides alike, wherever a ray starts; what
+  a ray does not find within its cap of steps is not there.
 - The project is a study, not a product and not a team's: the clean form is
   chosen over the expedient one, whatever it takes to rewrite. The code that
   is there is read as an adversary's: where it departs from the rule it is

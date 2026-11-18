@@ -244,6 +244,7 @@ fn near(o: [i32; 3], n: &Node, range: [Zoom; 2]) -> Zoom {
         o,
         n,
         Detail {
+            eye: [0.0; 3],
             range,
             spacing: Spacing::NONE,
         },

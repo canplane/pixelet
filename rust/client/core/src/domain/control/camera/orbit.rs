@@ -55,7 +55,7 @@ use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP}
 use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
-use crate::domain::query::{Hit, Ray, World, by_dist};
+use crate::domain::query::{Hit, Ray, World};
 use crate::domain::setting::{OrbitObstacleMode, settings};
 use crate::domain::smooth::smooth_vec;
 use crate::domain::view::frame::coord::world_to_canonical;
@@ -316,9 +316,8 @@ fn climb_step(to: &ViewPose, from: &ViewPose, world: &World) -> ViewPose {
 /// something, as a fraction from 0 to 1: the last sample short of the hit.
 /// None where it hits nothing. `draw` turns a pose into the pose as it is
 /// drawn. The way is clear when the straight line from the drawn eye to
-/// where it ends is clear and the eye ends in nothing solid, as it reads
-/// from there: a line reads the world from its start, where what a coarser
-/// cell folds away far off is not met. Otherwise the way follows the
+/// where it ends is clear and the eye ends in nothing solid, both as the
+/// observer's eye reads the world. Otherwise the way follows the
 /// straight line in control space, as the easing does, and between samples
 /// the eye goes up its own column and across (`rise_clear`). An eye that
 /// starts in something solid has hit it where it stands. The exception is
@@ -336,8 +335,8 @@ fn way_hit(
         let no_deeper = eye(&draw(to)).0[2] >= eye(&last).0[2];
         return (!(under_nearest && no_deeper)).then_some(0.0);
     }
-    // Clear where the straight line is, as an eye at its start reads it, and
-    // the eye is in nothing solid where it arrives, as it reads from there.
+    // Clear where the straight line is, and the eye is in nothing solid
+    // where it arrives.
     let arrives = draw(to);
     if line_clear(eye(&last).0, eye(&arrives).0, world) && !in_solid(&arrives, world) {
         return None;
@@ -369,7 +368,7 @@ fn rise_clear(from: &ViewPose, to: &ViewPose, world: &World) -> bool {
 }
 
 /// Whether the line from `a` to `b` meets nothing a ray cannot see through,
-/// read as an eye at `a` reads the world (`World::first_hit`). The cell at `a` does not count, and
+/// read as the eye reads the world (`World::first_hit`). The cell at `a` does not count, and
 /// decor never blocks the line.
 fn line_clear(a: V3, b: V3, world: &World) -> bool {
     let d = v3::sub(&b, &a);
@@ -382,7 +381,7 @@ fn line_clear(a: V3, b: V3, world: &World) -> bool {
         dir: d.map(|v| v / t_max),
         t_max,
     };
-    world.first_hit(&ray, by_dist()).val().flatten().is_none()
+    world.first_hit(&ray).val().flatten().is_none()
 }
 
 /// The first thing met on the ray from the pivot of `at` toward its eye,
@@ -396,7 +395,7 @@ fn toward_eye(at: &ViewPose, t_max: f64, world: &World) -> Option<Hit> {
         dir: orbit_eye_off(1.0, at.polar, at.azimuth),
         t_max,
     };
-    world.first_hit(&ray, by_dist()).val().flatten()
+    world.first_hit(&ray).val().flatten()
 }
 
 /// The intent the orbit can take on its way from `from` toward `to`. Before
@@ -429,9 +428,15 @@ pub(crate) fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64
         at,
         pivot: world_to_canonical(&at.pivot),
     };
-    let last = CLIMB_PITCH.get(|| Memo::NONE);
-    last.forget_touched();
-    last.of(key, || climb_pose(at, &World::now()).polar)
+    CLIMB_PITCH
+        .get(|| Memo::NONE)
+        .of(key, || climb_pose(at, &World::now()).polar)
+}
+
+/// Drops the kept pitch where a change touched the columns it read. It runs
+/// on every frame, so each change is seen exactly once (`change::within`).
+pub(crate) fn forget_climb() {
+    CLIMB_PITCH.get(|| Memo::NONE).forget_touched();
 }
 
 /// What a climb is computed from, compared by value: the pose and where its
@@ -442,8 +447,8 @@ struct MemoKey {
     pivot: Q3,
 }
 
-/// The pitch of the last climb. It is kept while its `MemoKey` stays the
-/// same and no change touches what it read (`change::Memo`).
+/// The pitch of the last climb. It is kept while its `MemoKey` and the eye
+/// stay the same and no change touches what it read (`change::Memo`).
 static CLIMB_PITCH: Global<Memo<MemoKey, f64>> = Global::new();
 
 /// `at` as the climb draws it. At the nearest (`NEAREST_DIST`), it is drawn

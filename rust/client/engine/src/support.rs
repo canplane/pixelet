@@ -75,6 +75,7 @@ fn down(cell_zoom: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
         o,
         ray,
         Detail {
+            eye: [0.0; 3],
             range: [cell_zoom, cell_zoom],
             spacing: cast::Spacing::NONE,
         },
@@ -337,6 +338,7 @@ mod tests {
         let s = FINEST_ZOOM - UNIT_ZOOM;
         let o = [(6 << s) + 17, (3 << s) + 90, 9 << s];
         let detail = Detail {
+            eye: [0.0; 3],
             range: [UNIT_ZOOM, UNIT_ZOOM],
             spacing: cast::Spacing::NONE,
         };

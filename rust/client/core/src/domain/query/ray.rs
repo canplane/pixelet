@@ -1,6 +1,6 @@
 // pxl-core/domain/query/ray.rs
 
-//! The first cell a ray meets, at the zoom its distance asks. The descent is
+//! The first cell a ray meets, at the zoom its distance from the eye asks. The descent is
 //! pxl-engine's (`cast::first`), the same one the GPU's cast runs. Here the
 //! world answers it from everything it holds, each node handed what its
 //! parent found (`CastWorld`). A viewer's walk answers the decor it sees too
@@ -8,69 +8,28 @@
 
 use super::change;
 use super::decor::claim;
-use super::node::{At, coarsest};
+use super::detail::{cell_zoom_read, detail, leaf_over};
+use super::node::At;
 use super::world::World;
+use crate::domain::layer::Answer;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
-use crate::domain::layer::{Answer, Base};
+use crate::domain::observer;
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
-use pxl_engine::cast::{self, DEPTH, Detail, End, Keep, Line, Query, Spacing, Trace};
+use pxl_engine::cast::{self, DEPTH, End, Keep, Line, Query, Trace};
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::ColumnSurface;
 use pxl_spec::asset::id::{self, kind_of};
-use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{nearest_box, origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::hierarchy::tree::child_idx;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::Quadrant;
-
-/// The zooms a cell is asked at: no coarser than the cells a tile draws, and
-/// no finer than what is placed is held.
-pub(crate) fn zoom_range() -> [Zoom; 2] {
-    [coarsest(), OBJECT_FINEST]
-}
-
-/// The level of detail (pxl-engine `cast::Detail`) that reads the cells of
-/// tiles at zoom `tile` at every distance: a range of that one cell zoom,
-/// held within `zoom_range`.
-pub(crate) fn at_zoom(tile: Zoom) -> Detail {
-    let [lo, hi] = zoom_range();
-    let z = GROUND.cell_zoom(tile).clamp(lo, hi);
-    Detail {
-        range: [z, z],
-        spacing: Spacing::NONE,
-    }
-}
-
-/// The camera grid's level of detail: at each distance from the ray's
-/// origin, the cell zoom whose cell, drawn whole, spans at least one grid
-/// cell from any direction (pxl-spec space/camera/grid.rs `cell_zoom_at`).
-/// This is the rule that sizes every drawn cell.
-pub(crate) fn by_dist() -> Detail {
-    Detail {
-        range: zoom_range(),
-        spacing: Spacing::NONE,
-    }
-}
-
-/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
-/// distance from `eye` (pxl-spec space/camera/grid.rs `cell_zoom_at`), no
-/// finer than the ground's leaf cells and, once the source declares its top,
-/// no coarser than the cells a tile draws.
-pub(crate) fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
-    let v = v3::sub(&at, &eye);
-    let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v) as f32).min(GROUND.leaf_cell_zoom());
-    TerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Ray {
@@ -269,35 +228,29 @@ impl Query for CastWorld<'_> {
 
 impl World {
     /// The first cell that stops a body along `ray` within its `t_max`, at
-    /// the zoom `detail` asks where it meets it: the layers alone, so
+    /// the zoom its distance from the eye asks (`detail`): the layers alone, so
     /// no decor is met. What the ray starts inside is not met, so an eye under
     /// the ground is not stopped where it stands. A cell met coarser than it
     /// is held comes with the tile lacked. A cell not held at all is lacked
     /// too, and past it the ray tells nothing.
-    pub(crate) fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
+    pub(crate) fn first_hit(&self, ray: &Ray) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
+        self.along(ray, Until::Opaque, None, &mut path, &mut None)
     }
 
-    /// The first thing a viewer sees along `ray`, read by its distance from
-    /// where the ray starts: everything placed and, of what the ground
-    /// generates at the leaves, `decors` (`lens::leaf_decors`).
+    /// The first thing a viewer sees along `ray`: everything placed and, of
+    /// what the ground generates at the leaves, `decors`
+    /// (`lens::leaf_decors`).
     pub(crate) fn first_seen(&self, ray: &Ray, decors: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        self.along(
-            ray,
-            by_dist(),
-            Until::Opaque,
-            Some(decors),
-            &mut path,
-            &mut None,
-        )
+        self.along(ray, Until::Opaque, Some(decors), &mut path, &mut None)
     }
 
-    /// The first cell along `ray` that `until` stops at, at the zoom `detail`
-    /// asks where it meets it (pxl-engine `cast::first`). The ray starts at
+    /// The first cell along `ray` that `until` stops at, at the zoom its
+    /// distance from the eye asks (`detail`, pxl-engine `cast::first`). The ray starts at
     /// its origin, which may stand off the world, as an eye over it does
-    /// (pxl-spec `world::origin`). With `decors` it is a viewer's (`Viewer`), and
+    /// (pxl-spec `world::origin`). Until the camera stands somewhere nothing
+    /// is observed, and the answer is a lack. With `decors` it is a viewer's (`Viewer`), and
     /// without them a body's. The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
     /// cache, and are left there for the next ray. A walk from the origin
@@ -306,12 +259,16 @@ impl World {
     pub(super) fn along(
         &self,
         ray: &Ray,
-        detail: Detail,
         until: Until,
         decors: Option<u32>,
         path: &mut Path,
         descent: &mut Option<Descent>,
     ) -> Answer<Option<Hit>> {
+        let o = ray.origin;
+        let Some(eye) = observer::eye() else {
+            return Answer::Lack(leaf_over(&origin(o[0], o[1], o[2])));
+        };
+        let detail = detail(eye, o);
         let mut query = CastWorld {
             viewer: decors.map(|decors| Viewer {
                 ray,
@@ -321,7 +278,6 @@ impl World {
             path: *path,
             ..self.cast_world()
         };
-        let o = ray.origin;
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let on = descent
@@ -336,9 +292,10 @@ impl World {
         };
         *path = query.path;
         // What the walk read: the cells on its way as far as it went and the
-        // one it ended in, the coarsest of them the one its detail asks there.
+        // one it ended in, the coarsest of them the one its detail asks at
+        // the end of its way farther from the eye.
         let went = f64::from(trace.hit.t).clamp(0.0, ray.t_max);
-        let coarsest = detail.at((went * went) as f32);
+        let coarsest = cell_zoom_read(eye, o).min(cell_zoom_read(eye, ray.at(went)));
         let end = ray.at(went + units(coarsest) / 2.0);
         change::report_read([o[0], o[1]], [end[0], end[1]], coarsest);
         let met = query.viewer.as_ref().and_then(|v| v.met);

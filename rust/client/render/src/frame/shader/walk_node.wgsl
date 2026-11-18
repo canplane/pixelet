@@ -215,8 +215,8 @@ fn squared(v: vec3<f32>) -> f32 {
 
 /// The zooms at which a node whose planes lie at `lo` and `hi` from the origin is asked: the
 /// zoom at its farthest corner, and `ZOOM_BITS` above it the zoom at its nearest point
-/// (pxl-engine `cast::ask_range`, `node_dist_sq`). A range of one zoom, as the light's is, gives
-/// that zoom for both.
+/// (pxl-engine `cast::ask_range`, `node_dist_sq`, with no `Detail::eye`: a walk here starts at
+/// the eye or asks one zoom). A range of one zoom, as the light's is, gives that zoom for both.
 fn ask_range(lo: vec3<f32>, hi: vec3<f32>, range: vec2<u32>) -> u32 {
   if (range.x == range.y) {
     return range.x | (range.x << ZOOM_BITS);
