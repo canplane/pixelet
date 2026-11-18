@@ -24,8 +24,8 @@ import * as visibility from "@/service/platform/visibility.ts";
 import * as overlay from "@/service/core/overlay.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import { DRIVE_SETTINGS, perfDrive } from "./drive.ts";
+import { perfReportText } from "./report.ts";
 import { perfTrace } from "./trace.ts";
-import { perfReportRead } from "./view.ts";
 
 /** What a load is given to settle before the drive. */
 const SETTLE_MS = 35_000;
@@ -131,16 +131,16 @@ export async function measure(): Promise<void> {
   }
 }
 
-/** The drive's values, its report and its trace, as the text told. The drive
- * waits for the world to be made and the load to settle. */
+/** The drive's values, its report and its trace, as the text told, the
+ * values and the report from the drive's one read. The drive waits for the
+ * world to be made and the load to settle. */
 async function run(): Promise<string> {
   await started();
   await new Promise((done) => setTimeout(done, SETTLE_MS));
   const before = DRIVE_SETTINGS.map(
     ([key]) => [key, overlay.currentSnapshot().settings[key]] as const,
   );
-  const report = await perfDrive();
-  const perfReport = await perfReportRead();
+  const perfReport = await perfDrive();
   const trace = await perfTrace();
   for (const [key, value] of before) setting.set(key, value);
   const [lat, lon] = [perfReport.view.pivot_lat, perfReport.view.pivot_lon];
@@ -155,7 +155,7 @@ async function run(): Promise<string> {
       ? [frames.gpuBusy.p50, frames.gpuBusy.p95, frames.n, frames.gpuTimed]
       : [null, null, 0, 0],
     tick: frames ? [frames.tick.p50, frames.tick.p95] : [null, null],
-    report,
+    report: perfReportText(perfReport),
     trace,
   });
 }

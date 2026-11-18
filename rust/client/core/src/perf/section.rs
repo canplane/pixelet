@@ -6,17 +6,18 @@
 use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{
-    EFFECT_CNT, FrameSample, GPU_SPAN_CNT, INVALIDATION_REASON_CNT, RaySample,
+    EFFECT_CNT, FrameSample, GPU_SPAN_CNT, INVALIDATION_REASON_CNT, LAYER_CNT, RaySample,
+    STAGE_PART_CNT,
 };
 use crate::perf::word::{AsWords, words, zeroed};
 use crate::spec::demand::{StreamName, TaskPhaseName};
 use crate::spec::perf::{frame, limit, now, percentile, stat, step_stat, stream_stat};
 use crate::spec::phase::Phase;
+use crate::spec::step::StepName;
 use pxl_render::spec::span::FrameKind;
 
 const REASON_CAP: usize = limit::REASON_CAP as usize;
 const REASON_WORDS: usize = limit::REASON_WORDS as usize;
-const STEP_CAP: usize = limit::STEP_CAP as usize;
 pub(crate) const TASK_PHASE_CNT: usize = TaskPhaseName::ALL.len();
 const CATEGORY_CNT: usize = StreamName::ALL.len();
 
@@ -82,7 +83,14 @@ pub(crate) struct FrameSection {
     pub interval: Percentile,
     pub tick: Percentile,
     pub effect: Percentile,
+    pub pump: Percentile,
     pub stage: Percentile,
+    /// Each part of the stage's p95, indexed by `StagePartName`.
+    pub stage_parts_p95: [f64; STAGE_PART_CNT],
+    /// The ground's fill after a frame, and the bricks it filled over the
+    /// window.
+    pub fill: Percentile,
+    pub fill_cnt: f64,
     pub perf: Percentile,
     /// Each effect's p95, indexed by `EffectName`.
     pub effects_p95: [f64; EFFECT_CNT],
@@ -106,8 +114,10 @@ pub(crate) struct FrameSection {
     pub gpu_px: f64,
     /// The ray counts of the window's frames, summed field by field.
     pub ray_sample: RaySample,
-    /// The window's first frame and its last.
-    pub first: FrameSample,
+    /// How far the heap's high-water mark rose over the window: the last
+    /// frame's less the first's.
+    pub heap_used_delta_bytes: f64,
+    /// The window's last frame.
     pub last: FrameSample,
 }
 
@@ -127,16 +137,18 @@ words!(FrameSection, stat::frames::WORDS,
     moving => stat::frames::MOVING, moving_ms => stat::frames::MOVING_MS,
     overran => stat::frames::OVERRAN, gpu_timed => stat::frames::GPU_TIMED,
     interval => stat::frames::INTERVAL,
-    tick => stat::frames::TICK, effect => stat::frames::EFFECT,
-    stage => stat::frames::STAGE,
+    tick => stat::frames::TICK, effect => stat::frames::EFFECT, pump => stat::frames::PUMP,
+    stage => stat::frames::STAGE, stage_parts_p95 => stat::frames::STAGE_PARTS_P95,
+    fill => stat::frames::FILL, fill_cnt => stat::frames::FILL_CNT,
     perf => stat::frames::PERF,
     effects_p95 => stat::frames::EFFECTS_P95, invalidations => stat::frames::INVALIDATIONS, gpu_busy => stat::frames::GPU_BUSY,
     gpu_busy_kinds => stat::frames::GPU_BUSY_KINDS,
     phases_p95 => stat::frames::PHASES_P95, gpu_spans_p95 => stat::frames::GPU_SPANS_P95,
     gpu_spans_cnt => stat::frames::GPU_SPANS_CNT,
     kinds => stat::frames::KINDS,
-    gpu_px => stat::frames::GPU_PX, ray_sample => stat::frames::RAYS,
-    first => stat::frames::FIRST, last => stat::frames::LAST,
+    gpu_px => stat::frames::GPU_PX,
+    ray_sample => stat::frames::RAYS,
+    heap_used_delta_bytes => stat::frames::HEAP_USED_DELTA_BYTES, last => stat::frames::LAST,
 );
 
 #[repr(C)]
@@ -214,8 +226,7 @@ words!(ViewSection, now::view::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct StepStat {
-    /// Indices into `Phase::ALL` and `StepName::ALL`.
-    pub phase: f64,
+    /// An index into `StepName::ALL`.
     pub name: f64,
     pub ms: f64,
     pub cnt: f64,
@@ -223,14 +234,14 @@ pub(crate) struct StepStat {
 }
 
 words!(StepStat, step_stat::WORDS,
-    phase => step_stat::PHASE, name => step_stat::NAME, ms => step_stat::MS, cnt => step_stat::CNT, max_ms => step_stat::MAX_MS,
+    name => step_stat::NAME, ms => step_stat::MS, cnt => step_stat::CNT, max_ms => step_stat::MAX_MS,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct StepSection {
     pub cnt: f64,
-    pub slots: [StepStat; STEP_CAP],
+    pub slots: [StepStat; StepName::ALL.len()],
 }
 
 words!(StepSection, stat::steps::WORDS, cnt => stat::steps::CNT, slots => stat::steps::SLOTS);
@@ -249,7 +260,9 @@ pub(crate) struct RecordingSection {
     pub heap_largest_free_min_bytes: f64,
     pub heap_refusal_cnt: f64,
     pub body_slots_peak: f64,
-    pub terrain_refusal_cnt: f64,
+    /// The tiles each base layer's tile cache refused a slot, indexed by
+    /// `BaseKind`.
+    pub refusals: [f64; LAYER_CNT],
 }
 
 impl RecordingSection {
@@ -274,7 +287,7 @@ impl RecordingSection {
             },
             heap_refusal_cnt: h.heap_refusal_cnt,
             body_slots_peak: max(self.body_slots_peak, h.body_slots_peak),
-            terrain_refusal_cnt: self.terrain_refusal_cnt + h.terrain_refusal_cnt,
+            refusals: core::array::from_fn(|k| self.refusals[k] + h.refusals[k]),
         };
     }
 }
@@ -284,5 +297,5 @@ words!(RecordingSection, stat::recording::WORDS,
     heap_run_max_bytes => stat::recording::HEAP_RUN_MAX_BYTES, heap_slot_max_bytes => stat::recording::HEAP_SLOT_MAX_BYTES,
     heap_range_max_bytes => stat::recording::HEAP_RANGE_MAX_BYTES,
     heap_largest_free_min_bytes => stat::recording::HEAP_LARGEST_FREE_MIN_BYTES,
-    heap_refusal_cnt => stat::recording::HEAP_REFUSAL_CNT, body_slots_peak => stat::recording::BODY_SLOTS_PEAK, terrain_refusal_cnt => stat::recording::TERRAIN_REFUSAL_CNT,
+    heap_refusal_cnt => stat::recording::HEAP_REFUSAL_CNT, body_slots_peak => stat::recording::BODY_SLOTS_PEAK, refusals => stat::recording::REFUSALS,
 );

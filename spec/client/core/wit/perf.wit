@@ -3,13 +3,31 @@ package pxl:core@0.1.0;
 interface perf {
   use types.{error-code};
 
+  // Rows of a table, oldest first, as their bytes. A row's sequence is how
+  // many rows its table landed before it, counted since the core started and
+  // never again from 0: `first` is the sequence of the first of these rows,
+  // `end` the one past the table's newest row.
+  record rows {
+    first: u64,
+    end: u64,
+    bytes: list<u8>,
+  }
+
   start: func() -> result<_, error-code>;
   stop: func();
   // `STAT`'s words over `window-ms`, and `NOW`'s (`perf.json5`).
   stats: func(window-ms: option<f64>) -> list<u8>;
-  // The records of table `table`, in `TABLE_NAMES`' order, from its record
-  // `from`, as many as a page holds (`perf.json5` `LIMIT.PAGE_SZ`).
-  table: func(table: u32, %from: u32) -> list<u8>;
+  // The rows of table `table`, in `TABLE_NAMES`' order, from the sequence
+  // `from` on: `cnt` of them at most, and no more than a page holds
+  // (`perf.json5` `LIMIT.PAGE_SZ`). `first` is `from`, or the table's oldest
+  // row where the table has dropped the row at `from`, so `first - from`
+  // rows are lost to the reader that asks from where its last read ended; it
+  // is `end` where `from` is `end`. A `from` past `end` names no row, and
+  // asks for the table's newest `cnt` rows: the reply starts `cnt` rows
+  // before `end`.
+  table: func(table: u32, %from: u64, cnt: u32) -> rows;
+  // The worst frames (`perf.json5` `WORST`), longest first, all of them.
+  worst: func() -> list<u8>;
   // The string table the tasks' `at_file` names point into.
   strtab: func() -> list<u8>;
 }

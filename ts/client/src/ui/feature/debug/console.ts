@@ -22,7 +22,7 @@ export function installConsole(): void {
       report: async () => perfReportText(await perfReportRead()),
       read: perfReportRead,
       trace: perfTraceSave,
-      drive: perfDrive,
+      drive: async () => perfReportText(await perfDrive()),
     },
   };
 }

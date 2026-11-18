@@ -10,9 +10,10 @@ use pxl_engine::count;
 
 use crate::perf::word::{AsWords, as_words, as_words_mut, words, zeroed};
 use crate::spec::perf::{frame, frame_group, worst};
-use crate::spec::step::{EffectName, InvalidationReason};
+use crate::spec::step::{EffectName, InvalidationReason, StagePartName};
 use pxl_render::ray;
 use pxl_render::spec::span::GpuSpanName;
+use pxl_spec::bake::publication::BaseKind;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,11 +41,8 @@ pub(crate) struct GpuSample {
     /// the read finds its frame. It is 0 when the renderer drew no frame.
     pub frame: f64,
     /// What changed that cast the light's map, one bit each in
-    /// `LIGHT_CHANGED`'s order, and 0 when it was not cast. `decor_rect_cnt`
-    /// counts the rects that marked decor's slots to be generated again
-    /// (pxl-render renderer.rs `FrameStat`).
+    /// `LIGHT_CHANGED`'s order, and 0 when it was not cast.
     pub light_changed: f64,
-    pub decor_rect_cnt: f64,
 }
 
 impl Default for GpuSample {
@@ -53,15 +51,13 @@ impl Default for GpuSample {
     }
 }
 
-/// The renderer's upload table: how many uploads it holds, their bytes, and
-/// the bytes of its texture layers, as the renderer counts them (pxl-render
-/// renderer.rs `FrameStat`).
+/// The renderer's upload table: how many uploads it holds and their bytes,
+/// as the renderer counts them (pxl-render renderer.rs `FrameStat`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct DeviceSample {
     pub upload_cnt: f64,
     pub upload_bytes: f64,
-    pub pack_bytes: f64,
 }
 
 /// One frame and the interval it opened (perf.json5 FRAME). The record
@@ -81,13 +77,20 @@ pub(crate) struct FrameSample {
     /// 1 when the frame asked for no next one.
     pub settled: f64,
     /// The frame's entry's deadline, in ms from the entry's start
-    /// (sys/sched.rs `deadline_ms`).
+    /// (sys/sched.rs `deadline_ms`), and 1 when the scheduler found it spent
+    /// as the tick ended (`spent`).
     pub budget_ms: f64,
-    /// The frame's measured parts.
-    pub effects_ms: f64,
+    pub overran: f64,
+    /// The frame's measured parts: the tick and each of its phases, the
+    /// requests' pump, and each part of the stage, indexed by
+    /// `StagePartName`.
     pub tick_ms: f64,
     pub phases: [f64; Phase::ALL.len()],
-    pub stage_ms: f64,
+    pub pump_ms: f64,
+    pub stage_parts: [f64; STAGE_PART_CNT],
+    /// What the ground's fill took after the frame (record.rs
+    /// `perf_record_fill`).
+    pub fill_ms: f64,
     /// What the profiler itself cost the interval: recording the frame, and
     /// the UI's reads of the records.
     pub perf_ms: f64,
@@ -102,8 +105,11 @@ pub(crate) struct FrameSample {
     /// This frame's ray counts, written back when they land (record.rs
     /// `perf_record_rays`).
     pub ray_sample: RaySample,
-    /// The terrain tiles the tile cache took in during the frame.
-    pub terrain_load_cnt: f64,
+    /// The tiles each base layer's tile cache took in during the frame,
+    /// indexed by `BaseKind`.
+    pub loads: [f64; LAYER_CNT],
+    /// The bricks the ground's fill filled after the frame.
+    pub fill_cnt: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (sys/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
@@ -213,16 +219,16 @@ impl WorstFrame {
 
 words!(FrameSample, frame::WORDS,
     t => frame::T, interval_ms => frame::INTERVAL_MS, refresh_ms => frame::REFRESH_MS, paced_ms => frame::PACED_MS, settled => frame::SETTLED,
-    budget_ms => frame::BUDGET_MS, effects_ms => frame::EFFECTS_MS, tick_ms => frame::TICK_MS,
-    phases => frame::PHASES, stage_ms => frame::STAGE_MS,
+    budget_ms => frame::BUDGET_MS, overran => frame::OVERRAN, tick_ms => frame::TICK_MS,
+    phases => frame::PHASES, pump_ms => frame::PUMP_MS, stage_parts => frame::STAGE_PARTS, fill_ms => frame::FILL_MS,
     perf_ms => frame::PERF_MS, effects => frame::EFFECTS, invalidations => frame::INVALIDATIONS,
     kind => frame::KIND_NAME,
     gpu.timed => frame::GPU_TIMED, gpu.spans => frame::GPU_SPANS, gpu.busy_ms => frame::GPU_BUSY_MS, gpu.px => frame::GPU_PX, gpu.scale => frame::SCALE,
     gpu.draw_cnt => frame::DRAW_CNT, gpu.triangle_cnt => frame::TRIANGLE_CNT, gpu.frame => frame::GPU_FRAME,
-    gpu.light_changed => frame::LIGHT_CHANGED, gpu.decor_rect_cnt => frame::DECOR_RECT_CNT,
+    gpu.light_changed => frame::LIGHT_CHANGED,
     ray_sample => frame::EYE_CAST,
-    terrain_load_cnt => frame::TERRAIN_LOAD_CNT,
-    device.upload_cnt => frame::UPLOAD_CNT, device.upload_bytes => frame::UPLOAD_BYTES, device.pack_bytes => frame::PACK_BYTES,
+    loads => frame::LOADS, fill_cnt => frame::FILL_CNT,
+    device.upload_cnt => frame::UPLOAD_CNT, device.upload_bytes => frame::UPLOAD_BYTES,
     heap_used_bytes => frame::HEAP_USED_BYTES,
 );
 
@@ -248,9 +254,18 @@ words!(WorstFrame, worst::WORDS,
 
 pub(crate) const GPU_SPAN_CNT: usize = GpuSpanName::ALL.len();
 pub(crate) const EFFECT_CNT: usize = EffectName::ALL.len();
+pub(crate) const STAGE_PART_CNT: usize = StagePartName::ALL.len();
 pub(crate) const INVALIDATION_REASON_CNT: usize = InvalidationReason::ALL.len();
+pub(crate) const LAYER_CNT: usize = BaseKind::ALL.len();
 
-/// Whether the tick ran past its entry's deadline.
-pub(crate) fn overran(f: &FrameSample) -> bool {
-    f.tick_ms > f.budget_ms
+impl FrameSample {
+    /// The effects' time, the sum of each effect's.
+    pub(crate) fn effects_ms(&self) -> f64 {
+        self.effects.iter().sum()
+    }
+
+    /// The stage's time, the sum of its parts'.
+    pub(crate) fn stage_ms(&self) -> f64 {
+        self.stage_parts.iter().sum()
+    }
 }

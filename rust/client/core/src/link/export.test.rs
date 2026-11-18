@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::abi::edit::Tool;
+use crate::abi::perf::Rows;
 use crate::abi::scene::SceneContent;
 use crate::abi::sensor::Position;
 use crate::abi::types::ErrorCode;
@@ -38,12 +39,77 @@ fn a_refused_argument_answers_its_errno() {
         scene::draw(1, SceneContent::World, Some(0), None).map(drop),
         scene::draw(1, SceneContent::Character, None, Some(0)).map(drop),
         scene::draw(1, SceneContent::Character, Some(u8::MAX), Some(0)).map(drop),
-        perf::table(TABLE_NAMES.len() as u32, 0).map(drop),
-        perf::table(0, 1).map(drop),
+        perf::table(TABLE_NAMES.len() as u32, 0, 0).map(drop),
     ];
     for (k, r) in refused.into_iter().enumerate() {
         assert_eq!(r, Err(Errno::EINVAL), "refusal {k}");
     }
+}
+
+/// A table's read answers the rows from a sequence on, no more than asked
+/// for or than a page holds, and says where they start: past the sequence
+/// asked from where the table dropped that row, at the table's end where the
+/// sequence is its end, and as many rows before its end as asked for where
+/// the sequence is past it.
+#[test]
+fn a_table_is_read_by_sequence() {
+    use crate::perf::frame::FrameSample;
+    use crate::perf::record::{perf_record_frame, perf_recording_start};
+    use crate::spec::perf::{frame, limit};
+    use crate::sys::host::set_clock;
+    const FRAMES: u32 = 0;
+    let row_sz = size_of::<FrameSample>();
+    let page = limit::PAGE_SZ as usize / row_sz;
+    set_clock(0.0);
+    assert!(perf_recording_start());
+    let start = perf::table(FRAMES, u64::MAX, 0).unwrap().end;
+    // A frame's record lands when the next frame closes its interval; the
+    // row of sequence `start + k` holds `k` as its time.
+    let land = |range: core::ops::Range<u32>| {
+        for k in range {
+            let s = FrameSample {
+                t: f64::from(k),
+                ..FrameSample::default()
+            };
+            perf_record_frame(s, 0.0);
+        }
+    };
+    let times = |r: &Rows| -> Vec<f64> {
+        r.bytes
+            .chunks(row_sz)
+            .map(|row| {
+                let at = 8 * frame::T;
+                f64::from_ne_bytes(row[at..at + 8].try_into().unwrap())
+            })
+            .collect()
+    };
+    land(0..6);
+    let r = perf::table(FRAMES, start, 2).unwrap();
+    assert_eq!(
+        (r.first, r.end, times(&r)),
+        (start, start + 5, vec![0.0, 1.0])
+    );
+    let r = perf::table(FRAMES, start + 2, u32::MAX).unwrap();
+    assert_eq!((r.first, times(&r)), (start + 2, vec![2.0, 3.0, 4.0]));
+    let r = perf::table(FRAMES, start + 5, u32::MAX).unwrap();
+    assert_eq!((r.first, r.end, times(&r)), (start + 5, start + 5, vec![]));
+    let r = perf::table(FRAMES, u64::MAX, 2).unwrap();
+    assert_eq!((r.first, times(&r)), (start + 3, vec![3.0, 4.0]));
+    let r = perf::table(FRAMES, start + 9, u32::MAX).unwrap();
+    assert_eq!((r.first, times(&r).len()), (start, 5), "every row it has");
+
+    // A full table drops its oldest rows as the next lands, and a read from a
+    // row dropped starts at the oldest the table has.
+    let mut next = 6;
+    while perf::table(FRAMES, start, 0).unwrap().first == start {
+        land(next..next + 1);
+        next += 1;
+    }
+    let r = perf::table(FRAMES, start + 5, u32::MAX).unwrap();
+    assert!(r.first > start + 5, "the row asked from was dropped");
+    assert_eq!(r.end, start + u64::from(next) - 1);
+    assert_eq!(r.bytes.len(), page * row_sz, "a page at most");
+    assert_eq!(times(&r)[0], (r.first - start) as f64);
 }
 
 fn goto(from: f64) -> Intent {

@@ -26,8 +26,8 @@
     $description: "The steps a pixel's ray took on its way from the eye, on a log scale.",
     most: {
       $type: "f32",
-      $value: 1024,
-      $description: "The steps the ramp runs up to, the same on every screen so two compare.",
+      $value: 4096,
+      $description: "The steps the ramp runs up to: the most a ray takes (pxl-engine cast.rs `STEPS_CAP`), the same on every screen so two compare.",
     },
     none: {
       $value: 0x808080,

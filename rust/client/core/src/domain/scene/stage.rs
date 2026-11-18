@@ -5,17 +5,19 @@
 //! handed to it here.
 
 use crate::domain::scene::frame::Frame;
-use crate::spec::step::InvalidationReason;
+use crate::spec::step::{InvalidationReason, StagePartName};
 use crate::sys::sched::tick::TickContext;
+use core::cell::Cell;
 use pxl_global::Global;
 use pxl_render::frame::shader::word::{DECOR_GROUP_CNT, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
 use pxl_render::gpu::surface::SURFACE_CAP;
 use pxl_render::pass::atmosphere::EARTH_LAYER_CNT;
-use pxl_render::ray::{Cast, GroundInput};
+use pxl_render::ray::{Cast, GroundInput, TerrainWrite};
 use pxl_render::renderer::{EarthLayer, FrameInput, FrameStat, render_frame};
 use pxl_render::spec::span::FrameKind;
 use pxl_spec::space::coord::{q3, v3};
+use xpute_guest::clock::now;
 
 use crate::domain::layer::earth::{self, EARTH_SLOT_CNT, EarthTile};
 use crate::domain::scene::character::companion::companion_skins;
@@ -80,17 +82,22 @@ const _: () = assert!(
 /// What the renderer made of the frame, for the profiler to record
 /// (perf/report.rs `set_renderer_frame`). `scale` is the scale the world was
 /// drawn at, read before the resolution's judge can change it for the next
-/// frame.
+/// frame. `parts` is the time of each part of the stage, by `StagePartName`,
+/// in milliseconds, each 0 where the stage was not timed.
 pub(crate) struct FrameReport {
     pub kind: FrameKind,
     pub stat: Option<FrameStat>,
     pub scale: f64,
+    pub parts: [f64; StagePartName::ALL.len()],
 }
 
 /// `pace` is how this frame was paced, and the drawn resolution is
 /// judged by it (domain/scene/resolution.rs `load`). `edit` is the pointer's
-/// preview, by which the GPU's rays cut the world.
-pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
+/// preview, by which the GPU's rays cut the world. The stage's parts are
+/// timed while `timed`.
+pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit, timed: bool) -> FrameReport {
+    let clock = || if timed { now() } else { 0.0 };
+    let t0 = clock();
     let v = view();
     let settings = settings();
     // The matrices are relative to the eye, as the draws' positions are, so
@@ -129,14 +136,25 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     }
     let on = api::device_generation();
     let (window, layers) = earth::window(EarthTile::demand().floor(), on);
-    let mut earth_upload =
-        move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth::upload(write, on);
+    // The renderer asks for the uploads as it encodes, so their time is taken
+    // out of its own.
+    let upload_ms = Cell::new(0.0);
+    let timed_upload = |upload: &mut dyn FnMut()| {
+        let at = clock();
+        upload();
+        upload_ms.set(upload_ms.get() + clock() - at);
+    };
+    let mut earth_upload = |write: &mut dyn FnMut(u32, &[u8]) -> bool| {
+        timed_upload(&mut || earth::upload(write, on));
+    };
     let o = observation::observation();
     let eye = o
         .as_ref()
         .and_then(|o| cast::eye(o, edit, settings.ray_step));
-    let mut terrain_upload = clipmap::upload;
+    let mut terrain_upload =
+        |write: &mut TerrainWrite<'_>| timed_upload(&mut || clipmap::upload(write));
     let animated = animation::take();
+    let after_assemble = clock();
     let out = render_frame(FrameInput {
         view: rot,
         proj: v.proj,
@@ -201,6 +219,8 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         counted: settings.perf,
         animated,
     });
+    let after_encode = clock();
+    let upload_ms = upload_ms.get();
     if out.redraw {
         invalidate(InvalidationReason::Pending);
     }
@@ -213,10 +233,16 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     if out.stat.is_some() {
         SCREEN_DEVICE.set(Some(api::device_generation()));
     }
+    let mut parts = [0.0; StagePartName::ALL.len()];
+    parts[StagePartName::Assemble as usize] = after_assemble - t0;
+    parts[StagePartName::Upload as usize] = upload_ms;
+    parts[StagePartName::Encode as usize] = after_encode - after_assemble - upload_ms;
+    parts[StagePartName::Judge as usize] = clock() - after_encode;
     FrameReport {
         kind: out.kind,
         stat: out.stat,
         scale,
+        parts,
     }
 }
 

@@ -17,10 +17,11 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Body;
-use crate::sys::io::demand::PhaseList;
+use crate::sys::io::demand::{PhaseList, TaskPhaseName};
 use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CNT};
 use pxl_spec::space::coord::zoom::Zoom;
+use xpute_guest::clock::now;
 
 /// A held Earth tile: its packet until the GPU has its texels, whose words
 /// then live in the GPU layer of its slot.
@@ -56,9 +57,11 @@ impl Base for EarthTile {
         _tile: Quadrant,
         _slot: u32,
         pkt: Body,
-        _phases: &mut PhaseList,
+        phases: &mut PhaseList,
     ) -> Result<EarthTile, Exit> {
+        let at = now();
         earth::decode(&pkt)?;
+        phases.push(TaskPhaseName::DecodeMs, now() - at);
         Ok(EarthTile::Waiting(pkt))
     }
 }

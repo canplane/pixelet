@@ -1,13 +1,22 @@
 // pxl-core/perf/record.rs
 
 //! Records where the core's time and work go. Each record is laid out word
-//! for word as perf.json5 says, in tables a read copies into its reply
-//! (link/export/perf.rs `read_timed`). The tables, the percentiles' scratch
-//! and the failures' string table are blocks held on the heap while the
-//! profiler's setting is on: they are taken whole when recording starts and
-//! given back when the setting is turned off (`perf_release`). The heap
-//! figures include them throughout, so they never show up in a frame's heap
-//! delta.
+//! for word as perf.json5 says, in tables. A read is one call that keeps
+//! nothing: it copies what it answers, a page at most (`limit::PAGE_SZ`),
+//! into its reply (link/export/perf.rs `read_timed`). The frames and the
+//! tasks are read by sequence: each table counts the rows it has landed
+//! (`frame_seq`, `task_seq`), a row's sequence is that count as the row
+//! landed, and a read answers the rows from a sequence on with the sequence
+//! of the first of them, so a reader that asks from where its last read ended
+//! learns how many rows the table dropped before it came to them. A frame's
+//! row is written again a frame or two after it lands (`at_frame`), so a
+//! reader of the frames reads them from the oldest to the end in one pass.
+//! The worst frames are one page, read together. The tables, the
+//! percentiles' scratch and the failures' string table are blocks held on the
+//! heap while the profiler's setting is on: they are taken whole when
+//! recording starts and given back when the setting is turned off
+//! (`perf_release`). The heap figures include them throughout, so they never
+//! show up in a frame's heap delta.
 
 use core::mem::size_of;
 
@@ -19,7 +28,6 @@ use crate::perf::frame::{FrameSample, RaySample, WorstFrame};
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::task::TaskRecord;
 use crate::spec::perf::limit;
-use crate::spec::phase::Phase;
 use crate::spec::step::StepName;
 use crate::sys::sched::tick::TickContext;
 
@@ -30,7 +38,9 @@ use crate::sys::sched::tick::TickContext;
 const WINDOW_MS: f64 = limit::WINDOW_MS as f64;
 const TASK_CAP: usize = 2_048;
 const FRAME_CAP: usize = 4_096;
-const WORST_CAP: usize = 12;
+/// The worst frames the profiler keeps, which one read answers in one page.
+const WORST_CAP: usize = 9;
+const _: () = assert!(WORST_CAP * size_of::<WorstFrame>() <= limit::PAGE_SZ as usize);
 /// The bytes of the failures' file names, which are few.
 pub(crate) const STRTAB_CAP: usize = 8_192;
 pub(crate) const PERCENTILE_CAP: usize = if FRAME_CAP > TASK_CAP {
@@ -53,10 +63,17 @@ fn trim<T>(table: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) ->
     }
 }
 
-/// Appends `rec` to the table. A full table first drops its oldest
-/// quarter, so it shifts once a quarter of the table rather than once a
-/// record, and the call then returns false.
-fn land_row<T: Copy>(table: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
+/// Appends `rec` to the table, as the row of sequence `*seq`, which it
+/// advances. A full table first drops its oldest quarter, so it shifts once a
+/// quarter of the table rather than once a record, and the call then returns
+/// false.
+fn land_row<T: Copy>(
+    table: &mut [T],
+    len: &mut usize,
+    head: &mut usize,
+    seq: &mut u64,
+    rec: T,
+) -> bool {
     let full = *len == table.len() && *head == 0;
     if *len == table.len() {
         let n = if full {
@@ -68,6 +85,7 @@ fn land_row<T: Copy>(table: &mut [T], len: &mut usize, head: &mut usize, rec: T)
     }
     table[*len] = rec;
     *len += 1;
+    *seq += 1;
     !full
 }
 
@@ -115,6 +133,12 @@ struct Perf {
     frame_len: usize,
     task_head: usize,
     frame_head: usize,
+    /// The rows each table has landed since the core started, the sequence
+    /// its next row takes. Neither is set back, by a recording's start or by
+    /// the blocks' release, so a sequence names one row for as long as the
+    /// core runs.
+    task_seq: u64,
+    frame_seq: u64,
     truncated: bool,
     /// Off until the UI asks, so a client without the profiler on records
     /// nothing. Stopping freezes the data so an export is stable.
@@ -149,6 +173,8 @@ fn perf() -> &'static mut Perf {
         frame_len: 0,
         task_head: 0,
         frame_head: 0,
+        task_seq: 0,
+        frame_seq: 0,
         truncated: false,
         recording: false,
         started_at: now(),
@@ -270,9 +296,14 @@ pub(crate) fn perf_record(
         |r| r.end_ms,
     );
     drop_front(&mut l.task_table, &mut l.task_len, dropped);
-    if !land_row(&mut l.task_table, &mut l.task_len, &mut l.task_head, row) {
-        l.truncated = true;
-    }
+    let landed = land_row(
+        &mut l.task_table,
+        &mut l.task_len,
+        &mut l.task_head,
+        &mut l.task_seq,
+        row,
+    );
+    l.truncated |= !landed;
 }
 
 /// Records a frame whose record is `s`. It closes the interval in progress
@@ -375,6 +406,16 @@ pub(crate) fn perf_record_read(ms: f64) {
     }
 }
 
+/// Records the ground's fill after the frame whose interval is in progress:
+/// it took `ms` and filled `cnt` bricks.
+pub(crate) fn perf_record_fill(ms: f64, cnt: u32) {
+    let l = perf();
+    if let Some(f) = l.open.as_mut().filter(|_| l.recording) {
+        f.fill_ms += ms;
+        f.fill_cnt += f64::from(cnt);
+    }
+}
+
 /// Lands a closed interval's record. A settled interval is long on purpose,
 /// so only a moving frame can be among the worst.
 fn land(l: &mut Perf, s: FrameSample) {
@@ -393,9 +434,14 @@ fn land(l: &mut Perf, s: FrameSample) {
         |f| f.t,
     );
     drop_front(&mut l.frame_table, &mut l.frame_len, dropped);
-    if !land_row(&mut l.frame_table, &mut l.frame_len, &mut l.frame_head, s) {
-        l.truncated = true;
-    }
+    let landed = land_row(
+        &mut l.frame_table,
+        &mut l.frame_len,
+        &mut l.frame_head,
+        &mut l.frame_seq,
+        s,
+    );
+    l.truncated |= !landed;
 }
 
 /// The offset of `file` in the string table `t`, whose first `*len` bytes are
@@ -439,6 +485,16 @@ pub(crate) fn perf_tasks() -> &'static [TaskRecord] {
     &l.task_table[l.task_head..l.task_len]
 }
 
+/// The sequence past the newest frame's row, and past the newest task's.
+pub(crate) fn perf_frame_seq() -> u64 {
+    perf().frame_seq
+}
+
+pub(crate) fn perf_task_seq() -> u64 {
+    perf().task_seq
+}
+
+/// The worst frames, longest first.
 pub(crate) fn perf_worst() -> &'static [WorstFrame] {
     let l = perf();
     &l.worst[..l.worst_len]
@@ -461,14 +517,12 @@ mod test;
 /// A step's time, summed while the profiler records.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct StepStat {
-    pub phase: Phase,
     pub ms: f64,
     pub cnt: u32,
     pub max_ms: f64,
 }
 
 const STAT_NONE: StepStat = StepStat {
-    phase: Phase::ALL[0],
     ms: 0.0,
     cnt: 0,
     max_ms: 0.0,
@@ -483,13 +537,8 @@ fn step_stats_mut() -> &'static mut [StepStat; StepName::ALL.len()] {
     STEP_STATS.get(|| [STAT_NONE; StepName::ALL.len()])
 }
 
-/// Runs the step `name` of `phase`, timed while the profiler records.
-pub(crate) fn timed(
-    ctx: &mut TickContext,
-    phase: Phase,
-    name: StepName,
-    step: fn(&mut TickContext),
-) {
+/// Runs the step `name`, timed while the profiler records.
+pub(crate) fn timed(ctx: &mut TickContext, name: StepName, step: fn(&mut TickContext)) {
     if !*STEP_TIMING.get(|| false) {
         return step(ctx);
     }
@@ -497,7 +546,7 @@ pub(crate) fn timed(
     step(ctx);
     let ms = now() - at;
     let s = &mut step_stats_mut()[name as usize];
-    (s.phase, s.ms, s.cnt, s.max_ms) = (phase, s.ms + ms, s.cnt + 1, s.max_ms.max(ms));
+    (s.ms, s.cnt, s.max_ms) = (s.ms + ms, s.cnt + 1, s.max_ms.max(ms));
 }
 
 /// Starts summing each step's time from zero, or stops summing it; what was

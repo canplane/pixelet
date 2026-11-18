@@ -11,13 +11,9 @@
     $extensions: { xpute: { names: true } },
   },
   TASK_PHASE_NAME: {
+    $description: "What a run reports of itself, each at most once.",
     $type: "enum",
     $value: ["net_ms", "bytes", "decode_ms"],
     $extensions: { xpute: { names: true } },
-  },
-  TASK_PHASE_CAP: {
-    $value: 6,
-    $type: "u32",
-    $description: "A run's timings past this many are dropped.",
   },
 }

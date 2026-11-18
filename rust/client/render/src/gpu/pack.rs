@@ -71,7 +71,6 @@ pub struct Pack {
     pub view: u32,
     pub table: u32,
     pub sampler: u32,
-    pub bytes: u32,
     slot_cnt: u32,
     mip_cnt: u32,
     loaded: bool,
@@ -111,15 +110,11 @@ impl Pack {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(table, 0, bytes(&blank));
-        let bytes = (0..mip_cnt)
-            .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slot_cnt)
-            .sum();
         Pack {
             tex,
             view,
             table,
             sampler,
-            bytes,
             slot_cnt,
             mip_cnt,
             loaded: false,

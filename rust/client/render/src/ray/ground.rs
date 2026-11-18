@@ -18,7 +18,7 @@ use crate::gpu::api::{Gpu, buffer_usage, bytes, need, note_retry, release, room}
 /// the core filled, and `pool` is how many words the ways' pool must hold
 /// (`GroundBuffer::grow`).
 pub struct GroundInput<'a> {
-    pub upload: &'a mut TerrainUpload,
+    pub upload: &'a mut TerrainUpload<'a>,
     pub pool: u32,
 }
 
@@ -41,7 +41,7 @@ pub struct BrickWrite<'a> {
 /// room left, and the core offers the brick again the next frame.
 pub type TerrainWrite<'a> = dyn FnMut(BrickWrite<'_>) -> bool + 'a;
 
-pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
+pub type TerrainUpload<'a> = dyn for<'w> FnMut(&mut TerrainWrite<'w>) + 'a;
 
 /// The bytes `words` words take in the ways' pool, which is also where the
 /// next one starts (pxl-core domain/layer/terrain/pool.rs).

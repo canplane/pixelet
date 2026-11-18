@@ -1,5 +1,8 @@
 {
-  $description: "The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs\nregisters them, the effects a frame runs around them, and the reasons a frame is asked for. The profiler records and\nreports them by these names (spec/client/core/perf/perf.json5).",
+  $description: "The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs\nregisters them, and the phase each runs in, the effects a frame runs before them, the parts of the stage it runs after them and the requests' pump, and the reasons a frame is asked for. The profiler records and\nreports them by these names (spec/client/core/perf/perf.json5).",
+  $extensions: {
+    xpute: { uses: ["spec/client/core/sys/sched/phase.json5"] },
+  },
   STEP_NAME: {
     $type: "enum",
     $value: [
@@ -16,6 +19,22 @@
     ],
     $extensions: { xpute: { names: true } },
   },
+  STEP_PHASE: {
+    $description: "The phase each step runs in, in STEP_NAME's order (pxl-core frame.rs `tick`).",
+    $type: "Phase",
+    $value: [
+      "interaction",
+      "interaction",
+      "interaction",
+      "interaction",
+      "interaction",
+      "interaction",
+      "interaction",
+      "interaction",
+      "visible",
+      "visible",
+    ],
+  },
   EFFECT_NAME: {
     $type: "enum",
     $value: [
@@ -27,6 +46,12 @@
       "object",
       "setting",
     ],
+    $extensions: { xpute: { names: true } },
+  },
+  STAGE_PART_NAME: {
+    $description: "The parts of a frame's stage, in the order they start (pxl-core domain/scene/stage.rs `stage_render`): `assemble` what the renderer's frame is made from, the eye's cast among it; `upload` the ground's bricks and the earth's tiles handed to the renderer, which asks for them as it encodes; `encode` the renderer's frame, less those uploads; `judge` what the frame leaves, the images it took given back and the drawn resolution judged.",
+    $type: "enum",
+    $value: ["assemble", "upload", "encode", "judge"],
     $extensions: { xpute: { names: true } },
   },
   INVALIDATION_REASON: {

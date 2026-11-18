@@ -90,6 +90,7 @@ export function name_OutcomeName(val: OutcomeName): string {
   }
 }
 
+/** What a run reports of itself, each at most once. */
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms"] as const;
 
 export type TaskPhaseName =
@@ -120,6 +121,3 @@ export function name_TaskPhaseName(val: TaskPhaseName): string {
       return "decode_ms";
   }
 }
-
-/** A run's timings past this many are dropped. */
-export const TASK_PHASE_CAP = 6 as number;

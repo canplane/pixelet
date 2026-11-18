@@ -35,8 +35,8 @@ export const share = {
 
 /** The steps a pixel's ray took on its way from the eye, on a log scale. */
 export const steps = {
-  /** The steps the ramp runs up to, the same on every screen so two compare. */
-  most: 1024 as number,
+  /** The steps the ramp runs up to: the most a ray takes (pxl-engine cast.rs `STEPS_CAP`), the same on every screen so two compare. */
+  most: 4096 as number,
   /** A pixel that walked nothing, apart from the ramp's every color. */
   none: 8421504 as number,
   /** Google's Turbo, dark blue at none through green and yellow to dark red at

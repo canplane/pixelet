@@ -9,14 +9,13 @@
  * it, the camera is zoomed to its farthest and tilted to just over the
  * horizon. Then, for the whole window, the view turns a full circle every
  * `TURN_S` seconds while the wheel sweeps the zoom in and out, both paced by
- * the clock. The result is the window's report.
+ * the clock. The result is the window's report, as read once.
  * Two runs of one build give two matching windows, so a change shows as the
  * difference between their reports.
  */
 
 import { SETTING } from "@/abi/schema.spec.ts";
-import { perfReportText } from "./report.ts";
-import { perfReportRead, perfWindowStart } from "./view.ts";
+import { type PerfReport, perfReportRead, perfWindowStart } from "./view.ts";
 import * as input from "@/service/core/input.ts";
 import * as setting from "@/service/core/setting.ts";
 import { surfaceBox } from "@/service/platform/surface.tsx";
@@ -50,11 +49,8 @@ export const DRIVE_SETTINGS: readonly (readonly [number, number])[] = [
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
-export async function perfDrive(): Promise<string> {
-  const box = surfaceBox();
-  if (!box) {
-    return "no canvas";
-  }
+export async function perfDrive(): Promise<PerfReport> {
+  if (!surfaceBox()) throw new Error("no canvas");
   for (const [key, value] of DRIVE_SETTINGS) setting.set(key, value);
   for (let n = 0; n < RUN; n++) {
     input.wheel(WHEEL);
@@ -89,5 +85,5 @@ export async function perfDrive(): Promise<string> {
   await wait(DRIVE_S * 1000);
   clearInterval(step);
   input.setDragMode("none");
-  return perfReportText(await perfReportRead());
+  return perfReportRead();
 }

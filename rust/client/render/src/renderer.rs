@@ -316,7 +316,7 @@ impl FramePlan {
 pub struct EarthLayer<'a> {
     pub window: [i32; 2],
     pub layers: &'a [u32],
-    pub upload: &'a mut Upload,
+    pub upload: &'a mut Upload<'a>,
 }
 
 pub struct FrameOutput {
@@ -361,20 +361,17 @@ pub struct FrameStat {
     /// This frame's number, counting from 1 every frame the renderer encoded,
     /// or 0 where the frame stood and drew nothing.
     pub frame: f64,
-    /// The count of the upload table's uploads (`upload_cnt`), their bytes
-    /// (`upload_bytes`) and the texture pack's bytes (`pack_bytes`).
+    /// The count of the upload table's uploads (`upload_cnt`) and their bytes
+    /// (`upload_bytes`).
     pub upload_cnt: f64,
     pub upload_bytes: f64,
-    pub pack_bytes: f64,
     /// The draws and the triangles of each pipeline, counted only while
     /// `FrameInput::counted`. Their sums are the frame's draws and triangles.
     pub draw_stat: DrawStat,
     /// What changed that cast the light's map this frame, a bit each in
     /// `LIGHT_CHANGED`'s order (ray/cast.rs `light_changed`), or 0 where it
-    /// cast none. `decor_rect_cnt` counts the rects that marked decor's slots to
-    /// generate again (gpu/generator.rs `rect_cnt`), or 0 where none did.
+    /// cast none.
     pub light_changed: f64,
-    pub decor_rect_cnt: f64,
     /// The ray counts of the eye's cast and of the light's from an earlier
     /// frame, which landed with this one, named by that frame's number
     /// (ray/count.rs `RayCount`).
@@ -1682,10 +1679,8 @@ impl Renderer {
             frame: *DRAWN_FRAME_CNT.get(|| 0.0),
             upload_cnt: b.cnt as f64,
             upload_bytes: b.bytes as f64,
-            pack_bytes: self.pack.bytes as f64,
             draw_stat: stat,
             light_changed: f64::from(self.screen.light_changed()),
-            decor_rect_cnt: f64::from(self.screen.decor_rect_cnt()),
             ray_cnt: None,
         }
     }

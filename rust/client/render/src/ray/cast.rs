@@ -1906,12 +1906,6 @@ impl RayPass {
             .map_or(0, |l| l.changed)
     }
 
-    /// How many rects mark decor's slots to generate again this frame (gpu/generator.rs
-    /// `rect_cnt`).
-    pub fn decor_rect_cnt(&self) -> u32 {
-        self.cast.as_ref().map_or(0, |c| c.generator.rect_cnt())
-    }
-
     pub fn generates(&self) -> bool {
         self.cast.as_ref().is_some_and(|c| c.generator.works())
     }

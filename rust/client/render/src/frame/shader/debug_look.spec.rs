@@ -35,8 +35,8 @@ pub mod share {
 
 /// The steps a pixel's ray took on its way from the eye, on a log scale.
 pub mod steps {
-    /// The steps the ramp runs up to, the same on every screen so two compare.
-    pub const MOST: f32 = 1024.0;
+    /// The steps the ramp runs up to: the most a ray takes (pxl-engine cast.rs `STEPS_CAP`), the same on every screen so two compare.
+    pub const MOST: f32 = 4096.0;
     /// A pixel that walked nothing, apart from the ramp's every color.
     pub const NONE: u32 = 8421504;
     /// Google's Turbo, dark blue at none through green and yellow to dark red at
