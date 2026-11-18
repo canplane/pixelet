@@ -13,7 +13,7 @@
 //! what is drawn there; it is asked only whether anything under it fills, at
 //! any zoom.
 //!
-//! The query is the only reader of the terrain and the objects
+//! The query is the only reader of the terrain and the object layer
 //! (ARCHITECTURE.md, "The query, the only seam"). It is a child of `layer` in
 //! the module tree, its files beside the layers' (domain/layer.rs), and
 //! callers name it `crate::domain::query`.

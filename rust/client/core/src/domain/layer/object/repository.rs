@@ -3,12 +3,12 @@
 //! The object layer's repository: where placed objects are kept and where
 //! they come from. It is the one way the layer's records are read and
 //! written. What the view asks for arrives here, and each edit leaves from
-//! here, every write as `<key, asset_id, ext>`. The objects are kept by their
+//! here, every write as `<key, asset_id, ext>`. The object layer is kept by its
 //! source, a mock or a server (ts/client/src/service/sys/fs/object.ts), after OBJECT
 //! (file.json5 `path`); this file reads what the source serves and sends it
 //! the edits.
 //!
-//! The source keeps the objects one shard at a time (pxl-spec
+//! The source keeps the object layer one shard at a time (pxl-spec
 //! `SHARD_ZOOM`), in one file for each shard named by the shard's quadkey,
 //! as a baked tile is named by its own. It also keeps the top of their tree
 //! (file.json5 `path`, (OBJECT, TOP)): the fold of each node at `SHARD_ZOOM` that holds

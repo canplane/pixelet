@@ -77,7 +77,7 @@ thing addressed is stored.
   column (layer/object/store.rs). A band adds one axis to what is there.
 - **Empty is an answer, not a slot.** A block the ground's surface does not
   cross and no object fills is found empty by the lookup — the footprint's
-  height range against the band, the objects' reach against it — and is never
+  height range against the band, the object reach against it — and is never
   split, counted, fetched for or drawn. The 2.5D ground is the case of a
   footprint whose one crossed band is all there is.
 - **A 2.5D path lives inside the lookup.** Where the answer is known to be the

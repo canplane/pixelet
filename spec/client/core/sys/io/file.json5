@@ -80,7 +80,7 @@
     },
     FOLD: {
       $value: 1,
-      $description: "A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree\n(pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.",
+      $description: "A `u32[]` column holding what each row's leaves fold to, its word in the object tree\n(pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.",
     },
   },
   format: {

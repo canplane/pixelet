@@ -7,7 +7,7 @@ on what a zoom names.
 A zoom used to name a cell's resolution: terrain's 1u cell was z16, and a page
 of 512 of them was named z16 too, though it is the standard's z15 tile. The same
 number then meant a cell in one place and a page in the next, and three readers
-of the fold's tie (the terrain bake, the objects' store, the ray) each carried a
+of the fold's tie (the terrain bake, the object store, the ray) each carried a
 different number that agreed only in parity. Bake, globe and render are to share
 one unit system, so the word goes to one thing.
 

@@ -82,19 +82,19 @@ pub(crate) const KEY_SZ: usize = LEAF_ZOOM as usize;
 
 const _: () = assert!(spec::file::LEAF_ZOOM == LEAF_ZOOM);
 
-/// The id that names the objects' top among the object stream's ids. Every
+/// The id that names the object top among the object stream's ids. Every
 /// other id is a tile's, and no tile's id is 0.
 pub(crate) const TOP_ID: u64 = 0;
 
 /// A refused file, which the core sets aside: the storage file, or an
-/// objects' file by its want's id.
+/// object file by its want's id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Refused {
     Storage,
     Object(u64),
 }
 
-/// The refused files set aside at once: the storage file, and an objects'
+/// The refused files set aside at once: the storage file, and an object
 /// file for each tile of the ground's demand, the most wanted at once
 /// (domain/layer/object/repository.rs `WANT_CAP`).
 pub(crate) const SET_ASIDE_CAP: usize = 1 + GROUND_DEMAND_TILE_CAP as usize;
@@ -288,7 +288,7 @@ impl Refused {
 
 /// Sets the refused file `r` aside, out of its path; then its owner takes it
 /// back (`take_set_aside`): the settings write it from their next keep on,
-/// the objects' repository reads it again. A set-aside that ended aborted is
+/// the object repository reads it again. A set-aside that ended aborted is
 /// made again (`redo`); one its backend cannot set aside, or one past the set-asides
 /// that can wait at once, stays refused this session.
 pub(crate) fn set_aside(r: Refused) {
@@ -311,7 +311,7 @@ async fn setting_aside(r: Refused) {
 }
 
 /// A refused file set aside since, for its owner to take back: the settings
-/// for the storage file, the objects' repository for theirs.
+/// for the storage file, the object repository for theirs.
 pub(crate) fn take_set_aside() -> Option<Refused> {
     files().set_aside.pop_front()
 }
@@ -349,7 +349,7 @@ impl<const N: usize> fmt::Write for Text<N> {
 
 /// The path that `stream`'s want `id` opens (file.json5 `path`): a layer's
 /// tile by its quadkey after the layer's node, numbered as the layer is
-/// (`BASE`), a shard by its quadkey after OBJECT, the objects' top as
+/// (`BASE`), a shard by its quadkey after OBJECT, the object top as
 /// (OBJECT, TOP). A load opens through the loader (sys/io/loader.rs), so its
 /// stream has no path here.
 pub(crate) fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
@@ -362,7 +362,7 @@ pub(crate) fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
 }
 
 /// The path of the tile or shard `id` after `head`: its quadkey, or, for
-/// `TOP_ID`, the objects' top.
+/// `TOP_ID`, the object top.
 fn quadrant_path(mut head: Vec<Token>, id: u64) -> Vec<Token> {
     if id == TOP_ID {
         head.push(Token::Int(path::object::top::ID));

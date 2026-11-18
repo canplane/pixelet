@@ -101,7 +101,7 @@ pub mod write {
 pub mod top {
     /// A `strs` column holding each row's shard by its quadkey.
     pub const SHARD: u32 = 0;
-    /// A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree
+    /// A `u32[]` column holding what each row's leaves fold to, its word in the object tree
     /// (pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
     pub const FOLD: u32 = 1;
 }

@@ -57,7 +57,7 @@ pub struct DecorFrame<'a> {
     /// positions are about it, and from it they are drawn against the frame's eye (word.rs
     /// `frame::EYE`).
     pub anchor: Q3,
-    /// The damage: the boxes of leaf cells the objects wrote since the last frame,
+    /// The damage: the boxes of leaf cells the object layer wrote since the last frame,
     /// `object::WRITE_DAMAGE_CAP` at most (pxl-content `generation::meets`). The entries whose
     /// decor they reach generate again.
     pub damage: &'a [[i32; 4]],
@@ -69,8 +69,8 @@ pub struct DecorFrame<'a> {
 /// is another. Otherwise it generates again only the records that a box reaches by what the
 /// record's own candidate reads (`generation::reaches`): a box of damage, a cut as it was or as
 /// it is, or a brick filled at any clip level zoom, which may answer a read that a finer clip
-/// level does not hold. Neither the objects nor the service area's index make an entry
-/// generate by themselves: every write of the objects names its box (the frame's `damage`),
+/// level does not hold. Neither the object layer nor the service area's index makes an entry
+/// generate by themselves: every write of the object layer names its box (the frame's `damage`),
 /// and the index is made once, before any brick is held. Each cell a candidate reads comes
 /// from the finest clip level that holds it (pxl-content `generation::asks`).
 pub struct Generation<'a> {
@@ -155,7 +155,7 @@ pub struct Generator {
 }
 
 /// The buffers of the world `decor_pose_cs` asks, as the cast binds them: the cast's eye, the clip
-/// levels' table, the bricks' words, the service area's index, the objects, and the ways'
+/// levels' table, the bricks' words, the service area's index, the object tree, and the ways'
 /// pool.
 pub type World = [u32; 6];
 

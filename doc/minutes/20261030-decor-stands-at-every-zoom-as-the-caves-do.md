@@ -231,7 +231,7 @@ they had asked gone, goes.
   holds as many as a hash draws about its mean, and each column hands its
   count to its four a hash each, down to a leaf cell's one or none
   (pxl-spec-core `scatter::count`). A count of none asks no hash under it.
-- **Folded as a cube.** A placed decor's leaf fills its cell in the objects'
+- **Folded as a cube.** A placed decor's leaf fills its cell in the object
   tree and folds up by the tree's rule, the mean its share and the kind most
   of it its kind (`overwrite::share`); the generated decor folds the same off
   its column's count into the column's top cell (`scatter::folded`). A cell
@@ -245,7 +245,7 @@ they had asked gone, goes.
   from small tables (`SEEDS`, `CHANCES`, `FOLDS`, `LOOK_DECORS`), not the
   catalog's rows: a row read by a decor's place copied the whole catalog into
   every lane, which was most of the cost. A decor's value is told by its
-  range, so the objects' tree's fold, which a barrier follows, reads none.
+  range, so the object tree's fold, which a barrier follows, reads none.
 - **Measured** over the same city at 20 m a division, orbiting 30 s: GPU p50
   23.4 ms and p95 30.1 against 16.3 and 20.6 before the scatter changed, the
   cars, which stand by their size, drawn far where the zoom a candidate was
@@ -267,7 +267,7 @@ its look; "8 becomes 1" meant the decor's size counted in a coarser zoom's
 cells, not a cube. The user agreed that a decor stands by the rule a folded
 cube is drawn by.
 
-- **No fold.** The objects' tree counts no decor leaf (`overwrite::share`), the
+- **No fold.** The object tree counts no decor leaf (`overwrite::share`), the
   node folds no decor (`scatter::folded` gone, `world::node` and `ground::slab`
   as before the fold), and no look is named for a folded decor (`FOLDS`,
   `LOOK_DECORS` gone).

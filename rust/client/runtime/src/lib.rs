@@ -9,7 +9,7 @@
 //! core's life (xpute-runtime-native native.rs `Boot`). The text is pixelet's
 //! own, implemented on the host's side as ts/client/src/service implements it
 //! on the web (text.rs); the UI implements the files, the settings among them,
-//! and the objects, which the web worker implements. Beside them is the
+//! and the object source, which the web worker implements. Beside them is the
 //! decoder the app's fetch calls (unpack.rs).
 
 #![cfg(not(target_arch = "wasm32"))]

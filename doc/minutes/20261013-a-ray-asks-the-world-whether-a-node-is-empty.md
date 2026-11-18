@@ -74,7 +74,7 @@ out:
 - **Separation**: the ways folded in 3D by volume, as the objects are, a
   tunnel's bore and a deck alike: the ways are 3D, so they fold as the objects
   do and not as the ground's 2D surface.
-- **Objects**: the objects' pyramid record at that zoom, folded by their
+- **Objects**: the object pyramid record at that zoom, folded by their
   majority.
 
 These are composed in the order the layers overwrite one another: an empty cave
@@ -94,7 +94,7 @@ fills, from what each source already keeps, with nothing new stored:
   (pxl-spec-core `way::slab`). What a node is comes from a tree of the placed
   tree's shape, built on the GPU a square at a time (pxl-spec-core
   `way/tree.rs`).
-- **Objects**: no record of the objects' pyramid at the node.
+- **Objects**: no record of the object pyramid at the node.
 
 ## What goes
 

@@ -1,11 +1,11 @@
 package pxl:core@0.1.0;
 
-// The placed objects' source, which the host implements and the core calls.
+// The object source, which the host implements and the core calls.
 interface object {
   use xpute:link/types@0.1.0.{lent};
   use xpute:fs/types@0.1.0.{error-code};
 
-  // Applies a batch of edits to the objects (pxl-core
+  // Applies a batch of edits to the object layer (pxl-core
   // `domain/layer/object/repository.rs` `save`), all or none, in the edit
   // format of the object source. The batch is the core's memory, lent for
   // the call.

@@ -7,7 +7,7 @@
  * UI opens its end of the runtime and starts the runtime here (@xpute/expo
  * `open_ui`, `start`), and implements for the core, on its own thread, what the
  * web worker implements (worker.ts): the files, the settings among them in
- * the platform's storage (storage.native.ts), and the objects, over the
+ * the platform's storage (storage.native.ts), and the object source, over the
  * core's memory, where the guest lends their buffers, and the source's
  * declaration, whose state is the UI's here. The GPU's host tells the UI what
  * it has of a GPU through its own module, as the web worker does. Where the

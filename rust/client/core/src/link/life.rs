@@ -11,7 +11,7 @@ use pxl_global::Global;
 
 use crate::domain::layer::object::repository;
 
-/// The objects are written.
+/// The object layer is written.
 pub(super) fn on_hidden() {
     repository::save();
 }

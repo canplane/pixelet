@@ -162,7 +162,7 @@ subtype, so a bunker there is sand and a military one nothing.
 The terrain format changes and every page is baked again. A page's ground lane
 halves, and so does the ground's share of the memory a device holds pages in,
 the larger part of it. Placements stored with the old numbers are not carried
-over: the objects' stored file moves to a new path, and what was placed before
+over: the object stored file moves to a new path, and what was placed before
 starts empty.
 
 POI and reverse geocode keep Overture's own keys; that their icons and labels

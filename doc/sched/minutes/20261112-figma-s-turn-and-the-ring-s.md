@@ -279,7 +279,7 @@ the quota, and says nothing of `HEAD`.
   outside the budget, places' `show` at 125 to 140 ms among them
   ([the turn holds](../../minutes/20261028-the-turn-holds-and-what-runs-outside-it.md)).
   It runs under the budget now. The steps still run whole in a frame are the location
-  indicator's recompute, the objects' shard apply, the pointer's hover ray, the
+  indicator's recompute, the object shard apply, the pointer's hover ray, the
   companion and the renderer's recording. The shard apply grows with its data and
   is not measured; it is the nearest to Figma's 1,172 ms task.
 - **A phone's page would share the thread unevenly.** Half the core's intervals
@@ -355,7 +355,7 @@ Worth comparing, not queued:
   a timer or an invalidation that repeats.
 - **The core's steps at `HEAD`, in the worker.** Measure tick, effects and stage
   again, since every figure above predates the link. Measure for the first time
-  the renderer's recording alone and the objects' shard apply with its spread.
+  the renderer's recording alone and the object shard apply with its spread.
 - **The main thread against the worker at `HEAD`**, if the worker's 3.6 to 4 ms
   proves to matter. Read Long Animation Frames, INP and React's commits during
   drags and loads, on a desktop and on a phone.

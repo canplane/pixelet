@@ -36,7 +36,7 @@ the CDP sampling profiler with the Long Animation Frames.
   load was 83 ms, its three over 50 ms (191 ms in all) the start's script
   evaluation. The JS inside `createShaderModule` and the pipeline calls is
   below the profiler's 250 µs samples (another session: about 5 ms in all).
-- **The GPU process's main thread is.** The objects' making took 878 ms there
+- **The GPU process's main thread is.** The object making took 878 ms there
   (`APICreateShaderModule` 520 ms over 134 calls, `APICreateComputePipeline`
   240 ms over 37, `APICreateRenderPipeline` 118 ms over 46), 844 ms of it in
   tasks over 50 ms, all between 8.7 and 9.8 s after navigation: WebGPU flushes

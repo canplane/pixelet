@@ -85,7 +85,7 @@ impl DemandedBase for EarthTile {
 pub(crate) struct Layer {
     pub stream: Stream,
     /// The most tiles the layer asks for at once: a base layer's tile cache
-    /// slots, or for the objects the shards around the eye or their top.
+    /// slots, or for the object layer the shards around the eye or its top.
     pub slot_cnt: u32,
     /// Called when a want's file arrives, with the want's id and the file, or
     /// with None when the source has nothing for it.
@@ -549,7 +549,7 @@ impl<L: DemandedBase> Demand<L> {
     }
 
     /// Marks that what the layer reads moved: its own tiles, the ground or
-    /// the objects.
+    /// the object layer.
     pub(crate) fn on_changed(&mut self) {
         self.changed = true;
     }
@@ -582,12 +582,12 @@ fn names(was: &[Quadrant], name: impl FnOnce(&mut dyn FnMut(Quadrant))) -> bool 
     same && k == was.len()
 }
 
-/// What the objects' shards are asked from (`object_step`): the
+/// What the object shards are asked from (`object_step`): the
 /// observation, the source's top and the repository's revision. Two frames
 /// agreeing on all three ask for the same shards in the same order.
 type ObjectKey = (Option<Observation>, Option<Zoom>, u32);
 
-/// The key the objects' shards were last asked from.
+/// The key the object shards were last asked from.
 static OBJECT: Global<Option<ObjectKey>> = Global::new();
 
 /// Asks for the object layer's tiles, its shards, from the eye: every
@@ -615,7 +615,7 @@ pub(crate) fn object_step() {
     );
 }
 
-/// Admits the tiles that arrived, the pyramid's and the objects' shards
+/// Admits the tiles that arrived, the pyramid's and the object shards
 /// (`LAYERS`), within the entry's budget, and at least one where any has
 /// arrived. Each fetch settles here. What the budget leaves stays queued, and
 /// a frame is asked for it.

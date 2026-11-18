@@ -22,7 +22,7 @@ judged.
 
 - The scheduler: every unit is bounded, yields at a boundary and advances each
   turn. Outside the turn's budget run the location indicator, the glTF parse and
-  the objects' apply, the last alone growing with a shard. A CPU ray ends at
+  the object apply, the last alone growing with a shard. A CPU ray ends at
   `STEPS_CAP`, 4096 steps. The render passes loop over fixed counts or the turn's
   draw lists, and a frame that no longer fits the GPU's stream is dropped.
 
@@ -54,7 +54,7 @@ judged.
 | The clipmap reports a change per brick | A coarse tile's report threw away the location indicator's memo every frame ([measured](../experiment/20261109-the-location-recomputed-less.md)) | `ef2298f898` |
 | `script/perf/measure.py` reads the results in batches | The script hung on a large result | `ef2298f898` |
 | The tiles' columns and rows take one set of names, plural columns and singular rows, `XxxTile` and `Xxx` | The user's discipline: tiles may differ in structure, but a field that is the same thing has the same name | `a4620890f8` |
-| The location indicator's answer, when exact at the leaf cells, is dropped only by a ground node that holds those cells and by what objects wrote (`Memo::forget_touched_at_leaf`) | Counted on the S23, a coarser tile or brick over the zone recomputed it in most frames, and such a node cannot move an answer the leaf gave. An answer not exact keeps the old rule, since a coarser node does move that. Frames recomputing fell from 76% to 34% ([measured](../experiment/20261109-the-location-recomputed-less.md)) | not yet committed |
+| The location indicator's answer, when exact at the leaf cells, is dropped only by a ground node that holds those cells and by what the object layer wrote (`Memo::forget_touched_at_leaf`) | Counted on the S23, a coarser tile or brick over the zone recomputed it in most frames, and such a node cannot move an answer the leaf gave. An answer not exact keeps the old rule, since a coarser node does move that. Frames recomputing fell from 76% to 34% ([measured](../experiment/20261109-the-location-recomputed-less.md)) | not yet committed |
 | A ray from the point the last ray of a cell left goes on from where that one ended (`World::along`, `Descent`), with `cast::walk` and `Line`, which the engine already had | Layer README's cursor: each step answered from its parent, never again from the top. `lift` and `below` both descended from the root from one point. No new query and the same answers; `below` fell from 5.0 to 1.2 ms | not yet committed |
 | The place and division decoders build their rows without `Option`, and `tile_of` returns a tile | `StrList::get` fails only past the list's length, and each decoder has already held every column to one length and, for the divisions, every kind to a known one, so the failure branches could not be taken | not yet committed |
 
@@ -114,9 +114,9 @@ of symmetry.
   > own and yields, as it did before `2bd5ddc08b`. The 0.1 ms was read over the
   > drive, after the models had loaded. Parsing all 61 takes 124 ms on the Mac
   > and the largest 4 ms, and whatever landed in a turn parsed in that effect.
-- **The objects' apply moved into the budget** (`apply_held`). A shard is applied
+- **The object apply moved into the budget** (`apply_held`). A shard is applied
   whole wherever it runs, and server tiles rewrite this.
-- **Extending the objects.** The user's word. Their structure is temporary and
+- **Extending the object layer.** The user's word. Their structure is temporary and
   server tiles close its bound, its release and its apply.
 - **`SupportWalk`, a second ground query for the location indicator.** It had one
   caller and no measured effect. The measured waste was how often it recomputes.

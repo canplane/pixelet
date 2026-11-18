@@ -108,8 +108,8 @@ pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
 
 static DAMAGE: Global<Vec<Aabb>> = Global::new();
 
-/// Keeps the damage, the regions where the objects changed, for the frame to
-/// pass on to what draws the objects and what is derived from them
+/// Keeps the damage, the regions where the object layer changed, for the frame to
+/// pass on to what draws the object layer and what is derived from it
 /// (`take_damage`).
 pub(super) fn note_damage(regions: &[Aabb]) {
     DAMAGE.get(Vec::new).extend_from_slice(regions);

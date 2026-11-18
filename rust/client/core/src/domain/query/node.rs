@@ -17,7 +17,7 @@
 //!   and are read as the GPU reads them (pxl-engine `clipmap::ground`,
 //!   `clipmap::way_at`);
 //! - the caves: the share of the cell they take (pxl-content `cave::hollow`);
-//! - what is placed: the objects' pyramid record at that zoom, folded by
+//! - what is placed: the object pyramid record at that zoom, folded by
 //!   majority (domain/layer/object/store.rs, through the store's query).
 //!
 //! At a coarser zoom, the answer is whether anything under the node fills at
@@ -41,7 +41,7 @@
 //!   detail does;
 //! - the caves: nothing; a node a cave takes all of still splits, and its
 //!   cells say so (pxl-engine `ground::node`);
-//! - what is placed: whether the objects' pyramid has no record at the node.
+//! - what is placed: whether the object pyramid has no record at the node.
 //!
 //! A source that does not hold the node answers that it lacks it, never air
 //! and never that nothing fills.
