@@ -33,8 +33,8 @@ infra/
 
 pxl-api owns db-main and probes it at boot, but no route reads it yet. pxl-geo
 reads db-geo through `DB_GEO_URL`. All spatial data is in EPSG:3857. Locally the
-passwords come from `infra/local/.env` and `ADMIN_TOKEN` from `rust/server/common/.env`;
-production keeps its own in `infra/prod/.env`.
+passwords come from `infra/local/.env` and `ADMIN_TOKEN` from
+`rust/server/common/.env`; production keeps its own in `infra/prod/.env`.
 
 db-geo's volume is the only copy of hours of ingest, so it is never removed
 with `down -v` ([geo/README.md](./geo/README.md)). Moving the image's
@@ -47,7 +47,8 @@ project carries no data across.
 run each ingest. One rule holds for all of them: a table is never emptied first.
 A table made anew is built as `<table>_next` while readers keep using the old
 one; then one short transaction drops the old and renames the new, so a fill
-needs room for both at once. Nothing is dropped or truncated by hand.
+needs room for both at once. The one thing dropped by hand is a `_next` table
+an ingest refuses to go on from, where it holds another version.
 
 ## 3. Production (Hetzner Cloud)
 
@@ -66,7 +67,8 @@ only what search reads: `overture_places`, `overture_division_areas` and
    ```
 2. **The firewall.** Ports 80 and 443 are open to Cloudflare's IP ranges alone
    (`cloudflare.com/ips-v4`, `-v6`), so the origin cannot be reached around the
-   edge. SSH takes keys only.
+   edge. SSH takes keys only. `fw_rules.json` is those rules, written for
+   the run.
    ```sh
    hcloud firewall create --name pixelet-prod-fw
    hcloud firewall replace-rules pixelet-prod-fw --rules-file fw_rules.json
@@ -76,13 +78,14 @@ only what search reads: `overture_places`, `overture_division_areas` and
 4. **DNS.** An A record for the origin's host (`spec/spec/route.json5`
    `origins`) points at the VM and is **proxied** through Cloudflare. DNS-only
    would bypass the edge that the firewall relies on.
-5. **The tree.** The repository is cloned whole onto the VM. Both servers'
-   Dockerfiles (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`)
-   build from the repository root, because their dependencies are path
-   dependencies across `rust/`.
+5. **The tree.** The repository is cloned whole onto the VM at
+   `/opt/pixelet`, where `deploy.sh` works. Both servers' Dockerfiles
+   (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`) build from
+   the repository root, because their dependencies are path dependencies
+   across `rust/` and `xpute/`.
 6. **Up.**
    ```sh
-   cd infra/prod
+   cd /opt/pixelet/infra/prod
    cp .env.example .env     # fill in, then chmod 600
    # bounds on the disk: container logs, BuildKit's cache by last use, and the
    # journal by size and age; a server deploy reinstalls them when they change
@@ -239,8 +242,8 @@ answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`ts/client/src/ui/feature/setting/info/attribution.tsx`). Check the provider's source
-before shortening, rewording or dropping one.
+(`ts/client/src/ui/feature/setting/info/attribution.tsx`). Check the provider's
+source before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |
 | :-------------------------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

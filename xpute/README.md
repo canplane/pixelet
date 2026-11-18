@@ -52,10 +52,8 @@ of its own. Each method is declared in WIT and its bindings are generated, so no
 binding is written by hand for any one piece of work.
 [ARCHITECTURE.md](./ARCHITECTURE.md) lays out the frame and the crossings.
 
-The host gives the guest only its entries, the clocks, the stop and the log.
-The guest's memory is its own, and the guest decides everything else. Because
-that is all the host gives, the same guest runs unchanged on the web, on a
-phone and in a test.
+The host gives the guest only its entries, the clocks, the stop and the log, so
+the same guest runs unchanged on the web, on a phone and in a test.
 
 ## Beside WASI and the component model
 
@@ -76,9 +74,8 @@ five places.
 | What the host gives | a standard set of interfaces, files, sockets and HTTP among them, which a browser has to imitate | its entries, the clocks, the stop and the log; the rest is the program's own WIT |
 | Isolation | components share no memory | the host reads the guest's memory, and nothing is isolated: both are one program's |
 
-What that costs is what the standard gives. A guest written for xpute runs on
-no WASI host and composes with no component, and what a host must keep for it
-is the program's own to declare. What of WIT the link takes and what it reads
+A guest written for xpute runs on no WASI host and composes with no component,
+and what a host must keep for it is the program's own to declare. What of WIT the link takes and what it reads
 its own way, and how xpute's packages stand to WASI's, is in
 [link/gen](./link/gen/README.md).
 
@@ -152,26 +149,21 @@ as the program's are, over xpute's, and which the program's package may take
 types of and its world import or export. Its guest's end, its hosts and its UI
 ends are the program's, under the plugin's name.
 
-In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/host`,
-`@xpute/runtime-web` and `@xpute/expo`, and in Rust they are the crates
-`xpute-kit`, `xpute-link`, `xpute-guest`, `xpute-host` and
-`xpute-runtime-native`, with the generators `xpute-gen` and `xpute-link-gen`.
-Each carries what a registry asks. A program beside this tree lists the
-packages in its pnpm workspace and depends on them as `workspace:*`, and it
-names the crates by `path`. React Native and Expo are peers of the native
-module alone, so a program that runs only on the web installs neither. Each
-TypeScript package is its own source: its `package.json` maps a path under the
-package's name to the file under `src/`, and the files use only syntax that
-strips to JavaScript, so a bundler or Node's type stripping takes them with no
-build.
+The packages and crates are named in [ARCHITECTURE.md](./ARCHITECTURE.md)'s
+codemap, those a program takes carrying what a registry asks, and
+[USAGE.md](./USAGE.md) shows a program depending on them. React
+Native and Expo are peers of the native module alone, so a program that runs
+only on the web installs neither. Each TypeScript package is its own source:
+its `package.json` maps a path under the package's name to the file under
+`src/`, and the files use only syntax that strips to JavaScript, so a bundler
+or Node's type stripping takes them with no build.
 
 ## Where to read next
 
 - [USAGE.md](./USAGE.md) builds a program on xpute step by step, from its WIT
   to a call that crosses.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through the
-  link, its sides, how a failure ends and the languages, and ends with
-  xpute's boundaries, what it took from earlier work and a map of the code.
+  link, its sides, how a failure ends and the languages, to a map of the code.
 - Each part's `spec/` is the contract itself: the link's frame (`link/spec/`)
   and the errno table (`kit/spec/`), from which every language's numbers are
   generated. The interfaces are WIT, under `link/wit/` and `wit/`.

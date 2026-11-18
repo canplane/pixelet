@@ -9,10 +9,8 @@ instead (`runtime/web/README.md`).
 
 ## The app's crate
 
-A native app links one Rust crate: its guest, and the function that starts it,
-which the crate exports the runtime over (`native_abi!`). An app installs the
-module, which Expo autolinks, and names the crate in its `package.json`, under
-`xpute.guest`:
+An app installs the module, which Expo autolinks, and names its native crate
+(`runtime/native/README.md`) in its `package.json`, under `xpute.guest`:
 
 ```json
 "xpute": { "guest": {

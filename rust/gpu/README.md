@@ -1,12 +1,12 @@
 # The GPU
 
 The GPU is pixelet's plugin of xpute: the one device whose work holds the
-guest's memory past an answer. A frame is complete in itself, and once its
-answer is in, the caller may write over everything it lent. A buffer the GPU
-uploads from, or a word it writes when a request finishes, is still read or
-written long after it was asked for, so the GPU needs a rule of its own for
-who owns which bytes and when they come back. Its stream covers what pixelet
-draws with, not all of WebGPU.
+guest's memory past an answer. A call across xpute's link is complete in
+itself: once its answer is in, the caller may write over everything it lent. A
+buffer the GPU uploads from, or a word it writes when a request finishes, is
+still read or written long after it was asked for, so the GPU has a rule of its
+own for who owns which bytes and when they come back. Its stream covers what
+pixelet draws with, not all of WebGPU.
 
 ## Its interfaces
 

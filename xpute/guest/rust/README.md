@@ -11,8 +11,8 @@ The first is a frame's cap in bytes, a multiple of 8 that holds a frame's words
 boot, which mounts what it implements and opens what it calls. The last two are
 the program's start and end of every entry: `enter` runs as each entry begins,
 and `end` as it ends, answering whether it left work, in which case the entry
-runs it again. A module exports the three by name; a library exports them as C
-symbols, which catch the guest's panic and answer a trap.
+runs it again. A library exports the three as C symbols, which catch the
+guest's panic and answer a trap.
 
 A module is the guest's crate built as a `cdylib`, which exports its memory
 and the three by name and imports `link_out` from `env`:

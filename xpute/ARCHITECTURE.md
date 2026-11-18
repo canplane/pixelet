@@ -12,10 +12,9 @@ carries a UI on another thread to the guest's end. A failure is its call's to
 judge, and a bug ends in a stop, after which the link answers what was owed, so
 that no side waits on an answer that will not come. And the three languages hold
 the same facts: a spec or WIT owns each one and a generator writes it into each,
-and frozen records hold the rest of their code to each other. The document ends
-with what xpute does not know, what it took from earlier work and a map of the
-code. The layouts are written once in `spec/` and the interfaces in WIT, and
-this document points there.
+and frozen records hold the rest of their code to each other. The layouts are
+written once in `spec/` and the interfaces in WIT, and this document points
+there.
 
 ---
 
@@ -74,9 +73,10 @@ host's end of the link, the bindings mounted there, and xpute's own
 implementations, the clocks, the stop and the log. It varies by language, as the
 guest does, and names no runtime. The **runtime** is the platform's environment,
 the web worker or the native guest thread. It instantiates or links the guest,
-makes the host's `Side`, injects into the host what the host needs of it (the
-way back to the guest's thread, where a report goes, the log) and runs the loop
-that enters the guest. Nothing names a runtime but its own UI end and the
+makes the host's `Side`, injects into the host what the host needs of it (where
+a stop is reported and where a log record is written, and natively the way back
+to the guest's thread and the timers there) and runs the loop that enters the
+guest. Nothing names a runtime but its own UI end and the
 program's assembly. A program may bring plugins of its own, a GPU for one, each
 beside the runtime as its own guest's end and host, and neither names the other.
 The program starts its guest with a `Boot`, which lists its mounts, the host's
@@ -86,10 +86,9 @@ runs the steps in their order, on both platforms alike: it runs each mount,
 stands in for the UI, enters the guest only once every interface the guest's
 world imports is mounted, and natively runs the loop.
 
-An end of the link is one machine whatever carries its frames, as a link
-layer knows its two ends and not the wire. What carries them is the
-**transport**, which the runtime plugs in: the guest's boxes and the crossing
-into it, in the guest's memory, which both ends share.
+An end of the link is one machine whatever carries its frames. What carries
+them is the **transport**, which the runtime plugs in: the guest's boxes and
+the crossing into it, in the guest's memory, which both ends share.
 
 The UI calls the guest's exports and implements some of its imports by the same
 WIT and the same generated bindings as any end, which call by a `Sender` and
@@ -135,17 +134,16 @@ that is the call's. A caller that holds a failure impossible makes it a
 stops.
 
 Between xpute's parts a failure moves as an `XputeError` with its optional
-message, an end as a stop or a trap report, the stop with the bug's optional
-message (a panic the language raises, the panic's own), and what is worth
-telling and is neither as a log record, a level, a context and a message
-(`wit/log`, in `wasi:logging`'s shape). Each end has its `log`: the guest's
-calls the import, and the host implements it and hands the records, with its
-own, to the log its runtime injects. The runtime alone writes them to the
-platform's output, its error stream, Android's log or the browser's console, and
-alone decides by level which it writes; no other part drops a record. The
-native UI end hands it the UI's records to write the same way (`log`); the web
-worker tells the page each record it writes, which the page does not write
-again.
+message, an end as a stop or a trap report, the stop with the message of a
+panic the language raised, which a bug has none of, and what is worth telling
+and is neither as a log record, a level, a context and a message (`wit/log`, in
+`wasi:logging`'s shape). Each end has its `log`: the guest's calls the import,
+and the host implements it and hands the records, with its own, to the log its
+runtime injects. The runtime alone writes them, every one, to the platform's
+output: its error stream, Android's log at the level's priority, or the
+browser's console by the level's method. The native UI end hands it the UI's
+records to write the same way (`log`); the web worker tells the page each
+record it writes, which the page does not write again.
 
 A guest's bug is reported through `stop`, and the guest traps. A host's own
 failure is a stop on both platforms too, reported the same way, and then the
@@ -160,10 +158,11 @@ with no implementation among them where the runtime refused to start the guest.
 ## The languages, held to each other
 
 xpute is written in TypeScript, Rust and C++. What the golden records hold is
-the same in each: the wire formats (TLV and XTP), the errno table, scalar math
-and the seeded streams, the deque and the heap, the JSON texts a reader accepts
-(TypeScript's being its runtime's `JSON.parse`), and the link's frame and packet
-layout; the link's `Side` is one machine in all three. The rest of the kit is
+the same in each: the wire formats (TLV and XTP), scalar math and the seeded
+streams, the deque and the heap, the JSON texts a reader accepts (TypeScript's
+being its runtime's `JSON.parse`), and the link's frame and packet layout. The
+errno table is the same by its spec, and the link's `Side` is one machine in
+all three. The rest of the kit is
 each language's own: TypeScript has no allocator, and Rust no text encoding or
 hash codec. The guest exists in Rust and in C++ from the same WIT; the hosts are
 TypeScript's on the web and Rust's natively. Where the C++ differs, the
@@ -178,12 +177,11 @@ tree packet, is the format of data a program stores and serves.
 
 What holds the languages to each other is data. Under a part's
 `spec/golden/` are records each language reads bit for bit, so a difference
-means one side moved. A record is frozen: its writer, a Rust test behind
-`XPUTE_GOLDEN_WRITE`, writes it again only when a contract changes on
-purpose. Every
-rounding in the tree is one rule, half to even as WGSL rounds (`math/scalar`),
-so the guest, the UI and a shader round alike; a call that rounds otherwise is
-refused by the tools.
+means one side moved. A record is frozen: it is written again only when a
+contract changes on purpose, the packets' by a Rust test behind
+`XPUTE_GOLDEN_WRITE`. Every rounding in the tree is one rule, half to even as
+WGSL rounds (`math/scalar`), so the guest, the UI and a shader round alike;
+clippy refuses Rust's `round`, which rounds half away from zero.
 
 A GPU's floats are held only as far as WGSL holds them. Its division may be
 2.5 ulps off, its square root and transcendentals have only bounds, a GPU may
@@ -238,7 +236,8 @@ word; and a rule the GPU alone decides is one function every pass calls.
   the second with the command a program writes its bindings with;
   `gen-targets` is the data specs `xpute-gen` writes of xpute's parts, and
   `tool` the `cargo spec` that checks and writes xpute's own.
-- `kit/rust`, `kit/ts` (`@xpute/kit`) and `cpp/xpute/kit` are the kit.
+- `kit/rust` (`xpute-kit`), `kit/ts` (`@xpute/kit`) and `cpp/xpute/kit` are
+  the kit.
 - `link/rust` (`xpute-link`), `link/ts` (`@xpute/link`) and `cpp/xpute/link`
   are the link; `guest/rust` (`xpute-guest`) and `cpp/xpute/guest` the
   guest's end.

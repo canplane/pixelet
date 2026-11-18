@@ -7,10 +7,9 @@ from. Data, not code — nothing in the repository imports a file from here.
   client fetches it from the bucket by the SHA-256 of its bytes, which where it
   lies does not change.
 - `raw/` is what came in, as it came: what a tool turns into `content/` or into
-  code. What can surely be fetched again is not kept:
-  `raw/sky/`, NASA's Moon and CDS's stars, fetched by running the tool that
-  reads them. The texture pack's originals are kept, since their URLs may not
-  last.
+  code. What can surely be fetched again is not kept: `raw/sky/`, NASA's Moon
+  and CDS's stars, fetched by `make download-moon` and `make download-star`. The
+  texture pack's originals are kept, since their URLs may not last.
 
 ```
 asset/
@@ -18,7 +17,7 @@ asset/
 │   ├── character/  the people and the pets a player can be (Kenney)
 │   ├── cube/       the texture pack's tiles: terrain/ and object/ at 256²
 │   ├── decor/      trees, boats, cars, trains (Kenney)
-│   └── sky/        the Moon's near side (NASA), cloud/: the cumulus (Quaternius, CC0)
+│   └── sky/        the Moon's near side (NASA), cloud/: the cumulus and stratus (Quaternius, CC0)
 └── raw/
     ├── cube/       the pack's manifest and its originals at source size
     ├── place/      symbol/: the place icons (openstreetmap-carto `symbols/`, CC0), drawn into code
@@ -35,7 +34,8 @@ Each is a binary of `pxl-tool` (`rust/tool`), run by make.
 make ingest-asset
 ```
 
-It copies every file to `./out/asset/<sha256>.<ext>`, composes the texture tiles
+It writes every file to `./out/asset/<sha256>.<ext>`, a ground cube's top
+drawn toward its Carto color first, composes the texture tiles
 into one WebP sheet, measures every model's extent out of its glTF, and writes
 the table that names them, `spec/spec/asset/ingest.json5`, and draws
 `raw/place/symbol/` into the code that carries the place icons. Then it writes

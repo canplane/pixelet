@@ -1,10 +1,11 @@
 # geo-bake
 
-The world the client draws is a set of files made ahead of time. geo-bake makes
-them. Every tile it writes is meant to be a function of two things only: what
-the geo database held and the code that baked it, so that the same inputs give
-the same bytes. That is what lets a published version be cached for good and a
-dev tile server answer as the bucket would.
+The world the client draws is a set of files made ahead of time, and geo-bake
+makes them. A tile is a function of two things only, what its source held and
+the code that baked it, so the same inputs give the same bytes, a published
+version is cached for good and a dev tile server answers as the bucket would.
+The source is the geo database for terrain, places and divisions, and NASA's
+pictures under `infra/earth/` for the earth (`bin/earth.rs`).
 
 ```text
  sources ─ingest─▶ db-geo ─bake─▶ a set ─publish─▶ the bucket ─▶ the Worker
@@ -24,8 +25,9 @@ Every step names its work by shards, the coarsest cubes of the world, each by
 its Morton key. A shard holds everything its leaves read, so a leaf can be baked
 from its shard alone, and baking shards one at a time gives the same result as
 baking them together. What a bake reads past a leaf stays within a fixed
-distance of it (pxl-geo-spec `BAKE_READ_DIST`); that distance is the shard's
-apron, the margin it holds past its edges. Which shards are published is the
+distance of it (pxl-geo-spec `BAKE_READ_DIST`); that distance and a ground
+cell more is the shard's apron, the margin it holds past its edges
+(`coverage.rs` `SHARD_APRON`). Which shards are published is the
 coverage, `infra/geo/coverage.json`.
 
 ## A leaf
@@ -33,7 +35,8 @@ coverage, `infra/geo/coverage.json`.
 A terrain leaf is baked from its shard's rows (`terrain/leaf.rs` `bake_leaf`).
 The rows become features by the OpenStreetMap tag each Overture class comes
 from, and they are painted in the order OpenStreetMap Carto stacks its layers,
-ties broken so that no row order decides a cell (`terrain/pipeline/feature.rs`).
+but buildings over roads, ties broken so that no row order decides a cell
+(`terrain/pipeline/feature.rs`).
 A cell takes what covers its center as seen from above, so a tunnel paints
 nothing. A leaf is baked only where land, a building or a way reaches it; the
 sea is wherever OSM's land polygons do not reach.
@@ -57,8 +60,7 @@ coarsest zoom the client reads each layer at.
 A tile with nothing drawn is no file at all. The client draws a missing tile
 from the one over it, so open sea costs nothing. When a parent is folded, a
 missing child stands for what it means (`terrain/absent.rs` `Absence`): sea
-inside the shards baked, and unknown past them, which has no surface, so the
-picture of the planet shows under it.
+inside the shards baked, and unknown past them, bedrock up to sea level.
 
 A bake folds again only what its shards changed: at each zoom, the parents
 whose folds read a changed tile, each staged only where its content differs,
@@ -86,10 +88,11 @@ of the client's octree, pool or memory.
 
 ## Publishing a version
 
-A version is a copy of a set uploaded under a new name made of its format and
-the day (`script/publish.py`). The format changes only when the way the client
-reads a tile changes. Kinds whose parents say a child holds nothing are pruned
-of those children on the way up.
+A version is a copy of a set, `out/<kind>.publish/`, uploaded under a new name
+made of its format, the day and a count (`script/publish.py`). The format
+changes when the way the client reads a tile changes, or what a tile
+guarantees it. Kinds whose parents say a child holds nothing are pruned of
+those children in the copy.
 
 Which version of each kind is served is said in one place, the bucket's
 declaration, which may also serve single shards from another version
@@ -100,4 +103,4 @@ older version again.
 
 In development the dev tile server (`bin/server.rs`) bakes a tile the
 first time it is asked for, by the same functions, and answers as the bucket
-does.
+does; the earth's tiles it serves from their offline bake.

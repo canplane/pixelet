@@ -8,16 +8,23 @@ in [ARCHITECTURE.md](./ARCHITECTURE.md).
 Development takes a Mac: the iPhone build needs Xcode, and Safari stands in for
 the iPhone's browser.
 
-You need GNU Make, Python 3.11 or newer, [Node](https://nodejs.org/) at the
-version `ts/.tool-versions` pins with pnpm, which runs the version
-`ts/package.json` names in `packageManager`, Rust through
-[rustup](https://rustup.rs/) (the toolchain is pinned in
-`rust/rust-toolchain.toml`), Binaryen's `wasm-opt`, Docker for the local
-databases. `make install` brings the package the Python scripts read the specs
-with (`script/requirements.txt`) and [cargo-nextest](https://nexte.st/), which
-runs pxl-core's unit tests one to a process, since each boots a core of its own.
-The checks and the tests also need what
-[xpute/CONTRIBUTING.md](./xpute/CONTRIBUTING.md) lists.
+You need:
+
+- GNU Make and Python 3.11 or newer;
+- [Node](https://nodejs.org/) at the version `ts/.tool-versions` pins, with
+  pnpm, which runs the version `ts/package.json` names in `packageManager`;
+- Rust through [rustup](https://rustup.rs/), which takes the toolchain
+  `rust/rust-toolchain.toml` pins;
+- Binaryen's `wasm-opt`;
+- Docker, for the local databases;
+- for the checks and the tests, what
+  [xpute/CONTRIBUTING.md](./xpute/CONTRIBUTING.md) lists.
+
+`make install` brings each tree's packages, the package the Python scripts read
+the specs with (`script/requirements.txt`) and
+[cargo-nextest](https://nexte.st/), which runs pxl-core's unit tests one to a
+process: the core keeps its state in the process's globals, and each test boots
+a core of its own.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -31,8 +38,8 @@ The page can take its tiles from three places, named the way a bakery's bread
 is.
 
 `make dev` has them **delivered**: every tile and every server route comes from
-the live site, so nothing else runs here. This is the right mode for work on the
-client and the core.
+the live site, so no server runs here. This is the mode for work on the client
+and the core.
 
 `make dev-oven` runs the whole stack here and bakes each tile the first time it
 is asked for, which is what you want when you change a bake or a server. It
@@ -51,10 +58,11 @@ what publishing them would show. `make preview`, `preview-oven` and
 `preview-shelf` do the same over the production bundle, which is the one to
 measure speed on.
 
-The make targets set everything a run needs. Point a run at another
-deployment or other ports only by the variables `ts/client/script/proxy.ts`
-reads, and run a server alone by its own target (`make serve-tile`). How the
-web and native builds are made is in
+Each dev target rebuilds the core's WebAssembly module when its Rust changes;
+reload the page to take it. The make targets set everything a run needs. Point
+a run at another deployment or other ports only by the variables
+`ts/client/script/proxy.ts` reads, and run a server alone by its own target
+(`make serve-tile`). How the web and native builds are made is in
 [ts/client/README.md](./ts/client/README.md), "Builds".
 
 A page leaves a helper in the browser console. `pxl.perf` is the profiler:
@@ -78,14 +86,16 @@ On iOS, generate the project with `--platform ios`, run `pod install` in
 `ts/client/ios`, and build `pixelet.xcworkspace` in Xcode. `make dev-native`
 starts Metro for a Debug build on either platform.
 
-The build compiles the core itself, as a step of xpute's native module, so a
-change under `rust/` needs only another build, and so does a change to a native
-module's `build.gradle`, which Gradle reads where it lies. A podspec's change
-reaches a build through `pod install`. A config plugin (`ts/client/plugin/`)
-writes into the generated project and leaves what it already wrote there, so
-its change takes the project generated again with `--clean`, which removes
-`ios/` or `android/` whole, anything put there by hand with it, and then `pod
-install`.
+What a change takes before it is in a build:
+
+- under `rust/`, or to a native module's `build.gradle`, another build: the
+  build compiles the core itself, as a step of xpute's native module, and
+  Gradle reads a module's script where it lies;
+- to a podspec, `pod install`;
+- to a config plugin (`ts/client/plugin/`), the project generated again with
+  `--clean` and then `pod install`: a plugin leaves what it already wrote.
+  `--clean` removes `ios/` or `android/` whole, anything put there by hand
+  with it.
 
 ## Making data
 
@@ -139,8 +149,8 @@ script/perf/mac.py pnpm --dir ts test:gpu:web
 (`script/env.sh`); `CC_aarch64_linux_android` and `AR_aarch64_linux_android`
 name another.
 
-Code generated from the JSON under `spec/` is never edited by hand: change the
-JSON and run `make spec`.
+Code generated from `spec/` is never edited by hand: change the spec and run
+`make spec`.
 
 ## Deploying
 

@@ -1,20 +1,18 @@
 # Filling db-geo
 
-Every tile is baked from one database, `db-geo`, and a bake reads nothing else.
-So the database has to say exactly what it holds: which version of each source,
-over which part of the world. `db-geo` is a local copy of three public sources,
-Overture Maps, GEDTM30's elevation and OpenStreetMap's land polygons, in one
-PostGIS instance. The bakes read it to make every tile, and forward search reads
-it live. Three ingests fill it, run by hand when a source or the coverage
-changes.
+`db-geo` is a local copy of three public sources, Overture Maps, GEDTM30's
+elevation and OpenStreetMap's land polygons, in one PostGIS instance. The
+terrain, place and division bakes read it and nothing else, and forward search
+reads it live, so the database says exactly what it holds: which version of
+each source, over which part of the world. Three ingests fill it, run by hand
+when a source or the coverage changes.
 
 Two files decide what it holds. Each source's `source.json` pins its version
 and the time it was taken, and the ingest writes both into the database, so the
 database can say what it holds without these files. The coverage,
 `coverage.json`, lists the shards: tiles at zoom 8, each named by its Morton
-key. A shard holds everything its leaves' bakes read, out to its apron, so each
-shard bakes from itself alone and shards taken one at a time give the same
-result as shards taken together. The coast belongs to no shard; it is taken
+key, each holding everything its leaves' bakes read, out to its apron
+(`rust/server/geo-bake/README.md`). The coast belongs to no shard; it is taken
 whole.
 
 Overture is the base. What it cannot supply sits beside it, named for the role
@@ -35,8 +33,8 @@ one row for each shard. Each row holds the `version`, the `accessed_at` and a
 count: of features for Overture, of blocks for the elevation. When a set is
 baked, these rows and the coast's pin are copied into its `manifest.json`, which
 records what the set was baked from. An Overture row is its GERS id, its
-properties as the release holds them, and its geometry; a column a reader
-filters on is generated from the properties.
+properties as the release holds them, its release and its geometry; a column a
+reader filters on is generated from the properties.
 
 ## Running the ingests
 
@@ -51,10 +49,10 @@ make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 Each reads `infra/local/.env`; no source needs a key. Every tool they run, GDAL,
 PostGIS's raster loader, psql and Overture's CLI, comes from the image in
 `tool/`, which `tool/run` builds before each call, so the host needs only
-Docker, cargo and `jq`. The image's PostgreSQL 18 is db-geo's own major, and
-its PostGIS 3.6 is one release behind db-geo's 3.7, since no Ubuntu release
-ships 3.7. Never `down -v`: the volume is the only copy, and filling it again
-takes hours.
+Docker, cargo, `jq`, `curl`, `unzip`, `shasum` and `awk`. The image's PostgreSQL
+18 is db-geo's own major, and its PostGIS 3.6 is one release behind db-geo's
+3.7, since no Ubuntu release ships 3.7. Never `down -v`: the volume is the only
+copy, and filling it again takes hours.
 
 **Overture.** A run takes the types it names, or all of them, and the shards it
 names, or the coverage's. It writes each type into its table in place: a
@@ -76,10 +74,11 @@ from the shards already beside, unless those hold another version, which it
 refuses rather than mix.
 
 **Coastline.** OSM's land polygons for the whole world come as one zip. osmdata
-names no version and serves only its latest, so the zip's SHA-256 is its
-version. The zip kept in `coastline/raw/` is used while it
-matches the pin, and once osmdata moves on it is the pin's only copy: deleting it
-makes the pinned coast unreachable. A newer coast is taken by changing the pin.
+names no version and serves only its latest, so the first 16 hex digits of the
+zip's SHA-256 are its version. The zip kept in `coastline/raw/` is used while it
+matches the pin, and once osmdata moves on it is the pin's only copy: deleting
+it makes the pinned coast unreachable. A newer coast is taken by changing the
+pin.
 
 ## Checking what it holds
 

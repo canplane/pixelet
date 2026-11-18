@@ -59,17 +59,17 @@ its height has no digit until the zoom below.
 The world is stored as **layers**, and they split on who changes them.
 
 The **base** is baked from the map sources and never changes within a version.
-Its main layer is **terrain**: a ground cell is one byte, its asset id, a
-ground cube of OpenStreetMap Carto's palette or pixelet's own, beside elevation
-samples from which the client works out each cell's elevation, so those are
-never sent. Bridges and tunnels come along as lines with a top and a width.
-Beside terrain are the **places** Carto would label, the administrative
+Its main layer is **terrain**: a ground cell is one byte, the id of its asset,
+a ground cube from OpenStreetMap Carto's palette or pixelet's own. Elevation
+comes as samples from which the client works out each cell's, so a cell's
+elevation is never sent, and bridges and tunnels come as lines with a top and a
+width. Beside terrain are the **places** Carto would label, the administrative
 **divisions**, and a picture of the **earth** seen from orbit. Every base layer
 but the earth is a **pyramid**: a tile at one zoom is the four under it folded
-into one, by the layer's own rule. A faraway region
-is drawn from a single coarse tile that already summarizes everything under it,
-the way a texture is drawn from its mipmap, so a view from orbit reads a handful
-of tiles, not the planet.
+into one, by the layer's own rule. A faraway region is drawn from a single
+coarse tile that already summarizes everything under it, the way a texture is
+drawn from its mipmap, so a view from orbit reads a handful of tiles, not the
+planet.
 
 The **object layer** is what people build. It is one sparse octree that keeps
 only the leaves people filled and, in each branch, its children folded into one
@@ -88,28 +88,28 @@ tree. Placing air erases what the ground would show.
   └──────────────┘                       └────────────────────────┘
 ```
 
-The object layer comes from the **object source**, which keeps a file for each shard
-that holds any, and a **top** that says what each of those shards looks like
-folded. The top is read first, so a view from afar draws people's buildings
-without reading one shard, and a shard the top does not list is known to be
-empty without asking. Edits go up in the order they were made, and the source
-applies them and rebuilds the top. Whether the source is a database on the
-device or a server, the core cannot tell.
+The object layer comes from the **object source**, which keeps a file for each
+shard that holds any, and a **top** that says what each of those shards looks
+like folded. The top is read first, so a view from afar draws people's
+buildings without reading one shard, and a shard the top does not list is known
+to be empty without asking. Edits go up in the order they were made, and the
+source applies them and rebuilds the top. Whether the source is a database on
+the device or a server, the core cannot tell.
 
 ### What fills a cell
 
 Whatever fills a cell is an **asset**, kept as its id. An asset has a kind,
 which is how it is drawn (a cube, a model such as a tree, or a marker that faces
-the viewer), and a source: the base made it, or someone placed it. The two are
+the camera), and a source: the base made it, or someone placed it. The two are
 independent, so a tree the ground grew and a tree someone planted are the same
 thing to everything that draws, walks or points.
 
-Trees and caves are never stored. Each is a function of the node it stands in
-and the world's one seed, evaluated wherever someone asks (`pxl-engine seed.rs`
-`node_seed`). A count of trees at a coarse node is handed down to its children
-by weights a hash draws, exactly (`pxl-content halve.rs` `halve`), so asking at
-any depth grows the same forest, and the CPU and the GPU grow the same tree in
-the same cell. A forest costs nothing to store and nothing to send.
+Trees and caves are never stored or sent. Each is a function of the node it
+stands in and the world's one seed, evaluated wherever someone asks
+(`pxl-engine seed.rs` `node_seed`). A count of trees at a coarse node is handed
+down to its children by weights a hash draws, exactly (`pxl-content halve.rs`
+`halve`), so asking at any depth grows the same forest, and the CPU and the GPU
+grow the same tree in the same cell.
 
 A cell coarser than a ground cube is a summary of what it folds. It remembers
 how much of its volume is filled, in eighths, and is drawn as a box shrunk to
@@ -136,8 +136,8 @@ still only a summary: nothing in it can be edited.
 
 One **camera** looks: an **eye**, the direction it faces, and the **pivot** it
 turns about, which is a point ahead of the eye for the orbit camera and, in
-first person, the point under the eye where the body stands: the eye is half a
-cell under the top of the body's box. The character stands at the pivot.
+first person, the point under the eye where a body stands. The player's
+character walks to the pivot.
 
 How finely each part of the view is drawn is set by the **camera grid**, a set
 of angular cells about the eye, each the least the eye promises to tell
@@ -159,10 +159,10 @@ eye ●───────────┬────────────�
   a node spans    2 cells … 1 cell    2 cells … 1 cell
 ```
 
-This is the rule the whole system leans on. Each band holds about the same
-number of tiles, and a ray crosses one more zoom for each doubling of distance,
-so the tiles held and the depth of a ray's descent grow with the logarithm of
-how far the view reaches, and what a frame draws is bound to the screen's cells.
+Each band holds about the same number of tiles, and a ray crosses one more zoom
+for each doubling of distance, so the tiles held and the depth of a ray's
+descent grow with the logarithm of how far the view reaches, and what a frame
+draws is bound to the screen's cells.
 
 The world itself stays in its own axes; what turns is the eye. A draw holds
 its position as a `Q3` and a small remainder in floating point, and the shader
@@ -171,39 +171,36 @@ spent where the eye is.
 
 ### What is seen holds until it can be told apart
 
-The camera moves in reals: its pose is control's, eased and turned by any
-amount. What is seen from it is an observation, and an observation is sampled:
-the world by the camera grid, a motion by its steps in time, the picture by the
-viewer's eye. A difference its sampler cannot tell apart is no change, so one
-rule decides what is drawn, how often something that moves on its own steps,
-and when the screen is drawn again: **the screen holds its last observation, and
-changes it only when a new one, different enough to tell apart, is ready.**
+**The screen holds its last observation, and changes it only when a new one,
+different enough to tell apart, is ready.** What is seen is sampled, the world
+by the camera grid, a motion by its steps in time and the picture by the CSS
+pixel, which is a visual angle, and a difference its sampler cannot tell apart
+is no change. That one rule decides what is drawn, how often something that
+moves on its own steps, and when the screen is drawn again.
 
-- The **view** is the camera's observation, taken at one place
-  (`pxl-core domain/view/frame/pose.rs`): the eye at the lattice step the rays
-  start from, and the turn once it moves the screen by half a CSS pixel, the
-  unit that stands for the eye's own grid. Everything that looks reads the view,
-  the screen's rays and the pointer's pick alike, never the camera.
+- The camera moves in reals: its pose is control's, eased and turned by any
+  amount. The **view** is that pose as the world is seen from it, taken in one
+  place (`pxl-core domain/view/frame/pose.rs`): the eye at the lattice step the
+  rays start from, and a turn once it moves the screen's corner by half a CSS
+  pixel, half the picture's sample. Everything that looks reads the view, the
+  screen's rays and the pointer's pick alike, never the camera.
 - Something that moves on its own, a character, the clouds, the location's
-  beacon, steps a clock by what its motion shows at its distance, wakes the
-  frame at its next step and draws its own region again, whatever the view did
-  (`pxl-core domain/scene/animation.rs`).
+  beacon, steps a clock by what its motion shows at its distance and wakes the
+  frame at its next step (`pxl-core domain/scene/animation.rs`); that frame
+  draws again only the screen's tiles the motion marked, whatever the view did.
 - Until the new is ready the old stands: a marker stays until the ground over
   it is read again, as a coarser tile answers until the finer one arrives.
 
-The barrier stands before the cast because the cast is what a frame costs and
-the drawing remembers what it found; a renderer that rasterizes anew each frame
-has no such place to stop.
-
 ### The query, the only seam
 
-Everything that looks at the world asks it the same question, and the **query**
-is the only place that knows how the terrain and the object layer, the layers it
-answers from, store their answers. Its files stand beside the layers'
-(`pxl-core domain/query.rs`), and in the module tree it is a child of theirs
-(`domain/layer.rs`): what those two store their answers in is visible within
-the layers alone, the query among them, and the compiler refuses any other
-reader. The **world** composes the layers into one answer for drawing and for
+Everything that looks at the world asks it the same question, what fills this
+cube of space at this size, and the answer is the world's alone. The eye's one
+part in it is the size: a place is asked at the size its distance from the eye
+sets, the same in every direction. So an answer belongs to its cube and its
+size, and whoever keeps one keeps it by those and asks again only when the
+world changes in what it read or the eye sets another size there.
+
+The **world** composes the layers into that one answer, for drawing and for
 control alike (`pxl-engine world.rs`), each written over the one below:
 
 ```text
@@ -214,12 +211,10 @@ control alike (`pxl-engine world.rs`), each written over the one below:
 ```
 
 A ray descends the octree by the same rule on the CPU and the GPU
-(`pxl-engine cast.rs`). The CPU's ray says what its answer is read from, as the
-GPU's does not, so where a node's bound is read through a coarser clip level
-standing in it asks the nodes under it (`pxl-engine clipmap.rs` `stood_in`). A node coarser than the zoom its distance asks
-for is not what is drawn there, so it is asked only whether anything under it
-might fill. If nothing can, the ray passes it whole; what a zoom folds away is
-not there to miss.
+(`pxl-engine cast.rs`). A node coarser than the zoom its distance asks for is
+not what is drawn there, so it is asked only whether anything under it might
+fill. If nothing can, the ray passes it whole; what a zoom folds away is not
+there to miss.
 
 ```text
 a node coarser than the zoom its distance asks for
@@ -231,25 +226,30 @@ a cell at the zoom its distance asks for
    └── it is not known ────────────────▶ the ray stops there
 ```
 
-Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`).
-So there is no collision mesh beside a drawing mesh to drift apart: what you
-see is what you stand on and what you click. The eye's part in every answer is
-the size: it sets the size a place is asked at by the place's distance from it,
-the same in every direction, and the answer at that size is the world's alone.
-A body asks its cell at the size the eye sets where it stands, and stands on
-what fills it. A ray across what the eye sees, the pointer's or the orbit
-camera's way, crosses many sizes and asks each node at its own, as a pixel's ray
-does, and the pointer judges what it strikes by the zoom the eye's rays draw
-there (`domain/control/edit/pick.rs`). Whether a body is there at all is the
-eye's: it fills a leaf cell, and it shows, its character drawn and its walk
-walked, at the zooms at which a cube of that cell is drawn, as a decor of
-that box is; past them it goes where it is sent (`domain/query/support.rs`
-`body_shown`).
+Control asks the same world, one ray at a time
+(`pxl-core domain/query/ray.rs`), so there is no collision mesh beside a
+drawing mesh to drift apart: what you see is what you stand on and what you
+click.
+
+A body asks its cell at the size the eye sets where it stands, no finer than
+what the world holds over the cell, and stands on what fills it. A ray across
+what the eye sees, the pointer's or the orbit camera's way, crosses many sizes
+and asks each node at its own, as a pixel's ray does, and the pointer judges
+what it strikes by the zoom the eye's rays draw there
+(`domain/control/edit/pick.rs`). A body shows, its character drawn and its walk
+walked, only where the eye would draw a decor of its box; past that it goes
+where it is sent (`domain/query/support.rs` `body_shown`).
 
 Decor is part of that answer on the CPU alone, since the GPU draws it as models
 and its rays never ask for it: a leaf cell the layers leave void is the decor
 whose box claims it, grown or placed (`pxl-core domain/query/decor.rs`). What
-an eye sees and the pointer strikes include it; a body reads the layers alone.
+the eye sees and the pointer strikes include it; a body reads the layers alone.
+
+The **query** is the seam: the only place that knows how the terrain and the
+object layer store their answers (`pxl-core domain/query.rs`). In the module
+tree it is a child of the layers (`domain/layer.rs`), what those two store
+their answers in is visible within the layers alone, and the compiler refuses
+any other reader.
 
 ### Honest answers, bounded holding
 
@@ -287,15 +287,15 @@ cell moves:
   brick 12 leaves, and 13 to 19 stay where they are
 ```
 
-The bricks are filled on the CPU as their tiles land, within each entry's
-budget, and uploaded whole, so the CPU's question and the GPU's ray meet the
-same ground, bridges included. Where a level holds no brick yet, the coarser
+The bricks are filled on the CPU once their tiles land, by a task of its own
+between frames, and uploaded whole, so the CPU's question and the GPU's ray
+meet the same ground, bridges included. Where a level holds no brick yet, the coarser
 level answers, and is drawn, in its place. The layers' README tells how each
 layer holds its tiles and how the clipmap is filled.
 
 Every bound in the view has an owner: the camera grid bounds what is drawn,
 demand bounds what is fetched, the slots bound what is held, and an entry's
-budget bounds the work done at once. The numbers a person would tune are none
+end bounds the work done at once. The numbers a person would tune are none
 of these. Set to their least, the view still converges, only coarser or later.
 
 ## Drawing
@@ -325,10 +325,9 @@ The rays **find**: a node a ray stops on is a **voxel**, the world's own answer.
 The raster **decides** what each covered pixel sees. Every box it draws is a
 voxel itself, and a face keeps a pixel only where the pixel's own ray enters the
 box, so the depth test keeps exactly the nearest voxel that ray meets. A walk
-**completes**: a pixel that no fresh voxel answers is a **hole** (a strip
-narrower than the samples' spacing, at the edge of whatever hides it, or a voxel
-whose data changed, or one the GPU does not hold yet), and its ray walks on to
-the first thing it meets. The last step has to be a ray, because a hole has no
+**completes**: a pixel that no fresh voxel answers is a **hole** (what the
+samples' spacing missed, or a voxel whose data changed), and its ray walks on
+to the first thing it meets. The last step has to be a ray, because a hole has no
 candidate to draw: a raster would need the cells that might lie there listed
 first, and a list cannot stop at the first thing it meets in a world that is
 solid below its surface.
@@ -344,7 +343,8 @@ drawn until its data changes or the eye's distance asks another zoom there. A
 frame whose view moved walks the eye's whole lattice of rays again, and a walk
 asks the world only where a node's answer is not held, so what such a frame
 pays for is what it newly asks. A still camera over a still world costs almost
-nothing, and a frame where nothing it reads moved submits no work at all. The renderer's README tells how the cache forgets and gives up room.
+nothing, and a frame where nothing it reads moved submits no work at all. The
+renderer's README tells how the cache forgets and gives up room.
 
 When the GPU runs out of time anyway, two knobs give it room: the **scale**
 draws fewer pixels, and the **rate** spaces the frames further apart. The `auto`
@@ -353,67 +353,71 @@ connection.
 
 ### The sun casts at the sizes the eye sets
 
-Shadows come from a **shadow map**, the depth of the world along the sun's rays in
-a square box about the eye. The sun's rays are walked through the same passes as
-the eye's, but the sun is no eye and sets no size. The eye's rays ask each node
-at its own size; a tile of the box asks its whole bundle of rays at one zoom,
-its **band**, the finest the eye sets anywhere along the bundle. The box looks
-down the sun's rays with the eye at its middle, so a tile's place in the box is
-its bundle's distance from the eye, and a band depends only on where the tile
-lies in the box. So when the eye moves, the box slides a tile at a time and
-every tile keeps what it cast; only a tile that slid on, or into another band,
-is cast again. And the sun casts
-only what something seen will read: a tile is cast only where it lies sunward of
-one that something seen stands on, within the reach of the effects. The
+Shadows come from a **shadow map**, the depth of the world along the sun's
+rays in a square box about the eye. The sun's rays are walked through the same
+passes as the eye's, at sizes the eye sets. The eye's rays ask each node at its
+own size; a tile of the box asks its whole bundle of rays at one zoom, its
+**band**, the finest the eye sets anywhere along the bundle. The box looks down
+the sun's rays with the eye at its middle, so a tile's place in the box is its
+bundle's distance from the eye, and a band depends only on where the tile lies
+in the box. When the eye moves, the box slides a tile at a
+time and every tile keeps what it cast; only a tile that slid on, or into
+another band, is cast again. And the sun casts only what something seen will
+read: what is seen within the reach of the effects marks the tiles it stands
+on, and a tile is cast only where it lies sunward of one of those. The
 renderer's README tells how the bands and the marks are worked out.
 
-The sun keeps its rays for the same reason the eye's holes do. A raster would
-need every cell under a tile listed, and the ground is solid as deep as the box
-reaches; a ray stops at the first thing it meets, so only what is seen costs.
+The sun keeps its rays for the same reason the eye's holes do: the ground is
+solid as deep as the box reaches, and a ray stops at the first thing it meets,
+so only what is seen costs.
 
 ### The GPU gives the CPU's answer
 
-The renderer is centred on rays, and what the CPU and the GPU both decide, a
-ray's walk and the decor the ground grows, is written twice: in Rust
-(pxl-engine, pxl-content), and again by hand in WGSL. The two have to decide
-alike, or the world would be drawn where it cannot be walked, so that part of
-them is coupled: tests hold the compute passes over the world to the engine's
-Rust over a real world's buffers (`rust/client/render/tests/`).
-Positions are integers on both sides, and any value a rule of the world's state
-would divide by or take the root of is rounded once on the CPU and handed to the
-GPU. A drawing's floats may still part, and nothing reads them back.
+What the CPU and the GPU both decide, a ray's walk and the decor the ground
+grows, is written twice: in Rust (pxl-engine, pxl-content) and again by hand in
+WGSL. The two have to decide alike, or the world would be drawn where it cannot
+be walked, so tests hold the compute passes over the world to the engine's
+Rust, word for word, over a real world's buffers
+(`rust/client/render/tests/`). Positions are integers on both sides, and any
+value a rule of the world's state would divide by or take the root of is
+rounded once on the CPU and handed to the GPU. A drawing's floats may still
+part, and nothing reads them back.
 
 ### What is not a layer
 
 The sky, the sun, the moon, the stars, the scattering of the air and the clouds
 are not stored either: each is evaluated from a few parameters, and drawn again
 only where a change would show on the screen. The sky is drawn only in pixels no
-ray met. Markers, the labels and pins that face the viewer, are drawn once into
-an atlas and kept there until what they show changes, and their text is laid out
-by the platform, so each platform shapes its own scripts and emoji.
+ray met. Markers, the labels and pins that face the camera, are drawn once into
+an atlas and kept there until what they show changes. Their text is measured
+and drawn by the platform, so each platform shapes its own scripts and emoji,
+and the core breaks its lines.
 
 ## The core and the host
 
 The world lives in one Rust **core**, `pxl-core`, which draws through
 `pxl-render`. It is a pure guest of xpute: linked with `xpute-guest` into one
 image, it owns no device and names no host, and what the app composes around it
-gives it a GPU, its files and its time, and nothing else reaches in. On the web
-the image is a WebAssembly module and its runtime a worker; natively it is
-linked into the app with `pxl-runtime`, the native counterpart of that worker,
-and xpute's native runtime runs it on a thread of its own. The world
-cannot tell which, and does not need to, so the same world runs everywhere.
-Every interface between the core and what implements its imports is declared in
-WIT, pixelet's own under `spec/client/core/wit/`; xpute's own documents describe
-the link it crosses, and this one is about what pixelet does over it. The GPU is
-pixelet's plugin of xpute, its own guest's end, hosts and UI ends beside xpute's
-(`rust/gpu/README.md`).
+implements what it imports: a GPU, its files, the clocks and the platform's
+text. On the web the image is a WebAssembly module and its runtime a worker;
+natively it is linked into the app with `pxl-runtime`, the native counterpart
+of that worker, and xpute's native runtime runs it on a thread of its own. The
+core cannot tell which, so the same world runs everywhere. Every interface
+between the core and what implements its imports is declared in WIT, pixelet's
+own under `spec/client/core/wit/`; xpute's own documents describe the link it
+crosses, and this one is about what pixelet does over it. The GPU is pixelet's
+plugin of xpute (`rust/gpu/README.md`).
 
-The core runs only when the link enters it. A frame is asked for only when
-something changed, and drawn at the display's next vsync as one task in one
-order: the effects of what the UI sent, the tick, then the draw, and none of it
-while the GPU cannot take a frame yet. Each entry spends a budget from its
-start, and what it leaves comes back in a later entry. The core's memory is
-laid out once, before its first entry, and never grown.
+The core runs only when the link enters it, and every entry has an end by one
+rule: the margin before the next frame's start where the core knows that start,
+and a slice from the entry's own start where it does not. A frame is asked for
+only when something changed, and drawn at the display's next vsync as one task
+in one order: the effects of what the UI sent, the tick, then the draw, and
+none of it while the GPU cannot take a frame yet. The entry that draws a frame
+does nothing else; other work, the ground's fill among it, is a task of its own
+that works a part at a time in the entries between and yields at an entry's
+end. The core's memory is laid out once, before its first entry, and never
+grown.
 
 Reads are asked for, never taken. Every frame each stream of reads declares
 everything it wants now, and one pump starts the best of them, ranked by what
@@ -453,18 +457,15 @@ noticing:
 
 - The ground is stored as 2.5D, but nothing behaves as 2.5D: every reader asks
   the 3D query, so caves, bores and placed objects are seen alike.
-- Only the query reads the terrain and the object layer, the layers it answers from.
-  Everything else asks the world, and the compiler refuses their reads anywhere
-  else: they are visible within `domain/layer` alone, and the query is its
-  child.
+- Only the query reads the terrain and the object layer. Everything else asks
+  the world, and the compiler refuses their reads anywhere else.
 - The core is a pure guest: it names no host.
 - The UI computes no coordinate and no tile, and reaches the core only through
   `service/core/` and the bindings generated from WIT.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.
 - The CPU and the GPU decide the world's state alike, held by tests word for
   word.
-- A tunable number is never a correctness bound: at its least the view still
-  converges, only coarser or later.
+- A tunable number is never a correctness bound.
 - Nothing is fetched on a guess, and nothing goes from fine back to coarse.
 - No decision reads the profiler, which sits beside the core and may read
   anything.
@@ -507,15 +508,16 @@ up, and the folders are that order. The check-rules tool holds it.
     scene/       what this frame draws          ┐ two heads; neither
     control/     moves the eye, asks the query  ┘ names the other
     setting      the settings both heads read
+    preview      an edit not yet made, which both may name
     view/        the lens, demand               ┐
     query/       the only seam                  ├ the trunk
-    eye          the pose the world is seen from│
-    layer/       the base and the object        ┘
+    eye          where the world is seen from   │
+    layer/       the base and the object layer  ┘
   ────────────────────────────────────────────────────────────────────
   sys/                   what all of it stands on
     io/          reads and their scheduler
     sched/       the frame's signal, an entry's budget, the tick
-    sensor       the device's heading, position and location status, as the UI tells them
+    sensor       the device's heading and location, as the UI tells them
     heap · range the memory, laid out once
     load         the files it loads
 
@@ -542,7 +544,7 @@ thing runs:
   ts/server/edge/       the Cloudflare Worker in front of everything
   spec/                 the specs and WIT both languages' code is
                         generated from
-  xpute/                the system under the core, its own repository
+  xpute/                the system under the core, a project of its own
 ```
 
 How a part works in detail is written beside its code:

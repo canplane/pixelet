@@ -23,32 +23,32 @@ it only calls the core and shows what the core tells it.
 ```
 
 The UI reaches the core only through `service/core/`, and beside it reads
-directly only the types and constants generated into `abi/` and xpute's kit.
-`service/core/` calls the core over the UI's own end of the runtime, which the
-boot opens (`open_ui`, from `@xpute/runtime-web` on the web and `@xpute/expo`
-natively) and `runtime/ui.ts` installs as a `Sender` in `service/core/core.ts`.
-The calls go by the bindings generated from the core's WIT, so a field cannot
-mean one thing on one side and another on the other. The bindings and the
-numbers both sides read, generated from `spec/`, are in `abi/`. A release build
-writes each exported literal where it is read (`babel.config.ts`), so the bundle
-holds a method's number and not its name.
+directly only the types and constants generated into `abi/`, the build's own
+(`build.ts`) and xpute's kit. `service/core/` calls the core over the UI's own
+end of the runtime, which the boot opens (`open_ui`, from `@xpute/runtime-web`
+on the web and `@xpute/expo` natively) and `runtime/ui.ts` installs as a
+`Sender` in `service/core/core.ts`. The bindings and the numbers both sides
+read, generated from `spec/`, are in `abi/`. A release build writes each
+exported literal where it is read (`babel.config.ts`), so the bundle holds a
+method's number and not its name.
 
 ## One app, two kinds of platform
 
 What differs between the web and native is a pair of files in
-`service/platform/`: `<x>.web.ts` is the web file and `<x>.native.ts` the
-native one, and the shapes both share are in `platform/types.ts`. An import
-names `<x>.ts`, and Metro and the type-checks pick the right one for each
-build. The pair that boots the core is in `runtime/` (`boot.web.ts`,
+`service/platform/`: `<x>.web.ts` is the web file and `<x>.native.ts` the native
+one, and the shapes both share are in `platform/types.ts`. An import names
+`<x>.ts`, and Metro and the type-checks pick the right one for each build. Two
+pairs stand outside it: the page's at the source's root (`page.web.ts`,
+`page.native.ts`), and the one that boots the core in `runtime/` (`boot.web.ts`,
 `boot.native.ts`). On the web it opens the worker (`worker.ts`), which
 instantiates the core's module and lists what xpute's runtime starts it with.
 Natively the core is linked into the app with `pxl-runtime`, the native
-counterpart of `worker.ts`, which lists the same for `xpute-runtime-native`,
-and that runtime runs the core on a thread of its own. The native runtime
-outlives a reload of the UI, which meets the same core as a new UI. A piece of
-the UI that the platforms draw differently is a file with its override beside
-it (`src/ui/shared/component/README.md`). `src/conform.ts` holds every
-platform file to its default's exports.
+counterpart of `worker.ts`, which lists the same for `xpute-runtime-native`, and
+that runtime runs the core on a thread of its own. The native runtime outlives a
+reload of the UI, which meets the same core as a new UI. A piece of the UI that
+the platforms draw differently is such a pair or a file with its override beside
+it (`src/ui/shared/component/README.md`). `src/conform.ts` holds each native
+file to its web file's exports and each override to its default's.
 
 ## The boot
 

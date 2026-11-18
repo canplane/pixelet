@@ -11,8 +11,7 @@ written here.
 A Quest runs Horizon OS, an Android without Google Play Services. The phone
 app reads its location through `expo-location`, which asks Play Services for
 it; a Quest needs `expo-horizon-location`, a fork that reads the location
-another way and that cannot raise the dialog that turns a phone's location
-on. Its build also comes in two flavors, `mobile` and `quest`, which
+another way. Its build also comes in two flavors, `mobile` and `quest`, which
 `expo-horizon-core` adds, and only the `quest` one is this app's.
 
 A Vision Pro runs the iPhone app unchanged, in a window, as the App Store
@@ -31,7 +30,8 @@ It takes the client's code whole and differs only where a headset does:
 
 - `app.config.ts` is the phone app's table with Horizon OS's plugins in
   place of `expo-location`'s.
-- `package.json` holds the libraries only a headset takes.
+- `package.json` names the headset's libraries, `expo-horizon-core` and
+  `expo-horizon-location`, beside Expo's own.
 - A file of the client that a headset must replace is replaced here, at the
   client's path under `src/`, as `<x>.quest.ts` (or `<x>.vision.ts`, once a
   Vision Pro has an app of its own), which this app's bundler takes before

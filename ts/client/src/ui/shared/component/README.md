@@ -1,35 +1,36 @@
 # Where the platforms part in the UI's pieces
 
 A piece the platforms draw differently is a pair of files, or one file and its
-overrides beside it, as React Native names them: `backdrop.web.ts` is the
-web's and `backdrop.native.ts` both iOS's and Android's;
-`segmented.tsx` is the web's and Android's, `segmented.ios.tsx` an iPhone's.
-Metro takes the file of the platform it builds for (`ts/build/path.ts`
-`platformFile`), and every import names the plain file (`backdrop.ts`,
-`segmented.tsx`). An override re-exports the default and replaces only what it
-draws itself, and `ts/client/src/conform.ts` holds each native file to the web
-file's exports and each override to its default's.
-What only the place gives — storage, the network, the sensors, the surfaces —
-is not here but in the client's services (`ts/client/src/service/platform/`), a
-web file beside a native one: the world's surface, for one, is a canvas on the
-web (`service/platform/surface.web.tsx`) and a native view on iOS and Android
-(`service/platform/surface.native.tsx`). This page says each piece's
-implementation side by side, so where the platforms part shows in one place, as
+overrides beside it, as React Native names them: `backdrop.web.ts` is the web's
+and `backdrop.native.ts` both iOS's and Android's; `segmented.tsx` is the web's
+and Android's, `segmented.ios.tsx` an iPhone's. Metro takes the file of the
+platform it builds for (`ts/build/path.ts` `platformFile`), and every import
+names the plain file (`backdrop.ts`, `segmented.tsx`). An override replaces what
+it draws itself and re-exports the rest of its default, and
+`ts/client/src/conform.ts` holds each native file to the web file's exports and
+each override to its default's.
+
+What only the place gives — storage, the network, the sensors, the surfaces — is
+not here but in the client's services (`ts/client/src/service/platform/`), a web
+file beside a native one: the world's surface, for one, is a canvas on the web
+(`service/platform/surface.web.tsx`) and a native view on iOS and Android
+(`service/platform/surface.native.tsx`). The table says the pieces'
+implementations side by side, so where the platforms part shows in one place, as
 the colors that part do in `theme.ts`.
 
 ## Which technology draws what
 
-| Piece            | iPhone                                                                            | Android            | Web                                                 |
-| ---------------- | --------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------- |
-| `panel`          | SwiftUI sheet (`@expo/ui` BottomSheet)                                            | the web's, + back  | React Native sheet                                  |
-| `segmented`      | UIKit (`SegmentedControl.swift`)                                                  | the web's          | React Native                                        |
-| `toggle-row`     | UIKit switch (React Native's Switch)                                              | the web's          | the row is the switch                               |
-| `backing`        | Liquid Glass (expo-glass-effect), else UIKit's blur (`Blur.swift`) under the fill | the fill, solid    | the fill, CSS backdrop blur under a see-through one |
-| `pill`           | UIKit glass (expo-glass-effect)                                                   | the web's fill     | fill                                                |
-| `text-field`     | system clear button                                                               | the web's          | its own clear button                                |
-| `icon`           | SF Symbols (expo-symbols)                                                         | the web's Phosphor | Phosphor                                            |
-| `palette`        | system colors                                                                     | the web's          | iOS's light values                                  |
-| `above-keyboard` | react-native-keyboard-controller                                                  | the iPhone's       | visual viewport                                     |
+| Piece            | iPhone                                                                                                                   | Android            | Web                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------ | --------------------------------------------------- |
+| `panel`          | SwiftUI sheet (`@expo/ui` BottomSheet)                                                                                   | the web's, + back  | React Native sheet                                  |
+| `segmented`      | UIKit (`SegmentedControl.swift`)                                                                                         | the web's          | React Native                                        |
+| `toggle-row`     | UIKit switch (React Native's Switch)                                                                                     | the web's          | the row is the switch                               |
+| `backing`        | UIKit's blur (`Blur.swift`) under the fill for a material; else Liquid Glass (expo-glass-effect), or the fill without it | the fill, solid    | the fill, CSS backdrop blur under a see-through one |
+| `pill`           | UIKit glass (expo-glass-effect)                                                                                          | the web's fill     | fill                                                |
+| `text-field`     | system clear button                                                                                                      | the web's          | its own clear button                                |
+| `icon`           | SF Symbols (expo-symbols)                                                                                                | the web's Phosphor | Phosphor                                            |
+| `palette`        | system colors                                                                                                            | the web's          | iOS's light values                                  |
+| `above-keyboard` | react-native-keyboard-controller                                                                                         | the iPhone's       | visual viewport                                     |
 
 Android takes the web's own drawing wherever Material's controls would read as
 any Android app's. Its backing is the fill made solid: it cannot blur the map,

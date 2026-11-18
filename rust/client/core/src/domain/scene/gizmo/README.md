@@ -9,10 +9,10 @@ the core sees the world, each behind its setting, where an indicator
 - `coverage.rs`, behind the same setting: the eye's clip levels' bricks by
   how they stand, their tiles and shards, as translucent lines over the ground.
 
-The lines are `debug_line.rs`'s, and their colors `crate::spec::gizmo`'s, generated
-from `spec/client/core/domain/scene/gizmo/gizmo.json5`.
+The lines are `debug_line.rs`'s, and their colors `crate::spec::gizmo`'s,
+generated from `spec/client/core/domain/scene/gizmo/gizmo.json5`.
 
-Two views the renderer draws itself, from a word the core hands it, in the
+Two views the renderer draws itself, from what the core hands it, in the
 looks of `spec/client/render/frame/shader/debug_look.json5`:
 
 - behind the `camera_gizmo` setting (`FrameInput::camera_gizmo`), the camera
@@ -21,4 +21,5 @@ looks of `spec/client/render/frame/shader/debug_look.json5`:
   `frame/shader/camera_grid.wgsl`, `screen_shade.wgsl` `cell_share`);
 - behind the `ray_step` setting (pxl-engine `eye::STEPS`, `../cast.rs` `eye`),
   each ray's pixel colored by the steps taken on its way from the eye
-  (pxl-render `frame/shader/cast.wgsl` `taken_word`, `queue.wgsl` `finish`).
+  (pxl-render `frame/shader/cast.wgsl` `taken_word`, `hole.eye.wgsl`
+  `hole_write`, painted by `screen_shade.wgsl`).
