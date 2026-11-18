@@ -20,7 +20,7 @@ use crate::domain::control::camera::{camera, eye_world, facing_rot};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
 use crate::domain::control::support::pan_to;
 use crate::domain::setting::{CameraMode, settings};
-use crate::domain::view::frame::coord::world_to_canonical;
+use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::sys::sched::invalidate;
@@ -110,8 +110,13 @@ pub(crate) fn pan_across(cx: f64, cy: f64) {
 
 fn pan_by(lx: f64, ly: f64) {
     let Some(from) = pivot_to() else { return };
-    // Before the camera has an eye, the pan's start stands for it.
-    let eye = eye_world().map_or(from, |eye| world_to_canonical(&eye));
+    // The eye that sees the pivot where the pan starts: the drawn eye as far
+    // from `from` as it is from the drawn pivot. Before the camera has an
+    // eye, the pan's start stands for it.
+    let lead = pivot_world().map(|drawn| v3::sub(&to_world(&from), &drawn));
+    let eye = eye_world().zip(lead).map_or(from, |(eye, lead)| {
+        world_to_canonical(&v3::add(&eye, &lead))
+    });
     put_pivot(
         pan_to(&from, lx, ly, camera().azimuth, &eye),
         Motion::Smooth,

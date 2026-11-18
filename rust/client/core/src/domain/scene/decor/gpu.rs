@@ -166,7 +166,7 @@ pub(crate) fn step(eye: V3, edit: &RenderEdit) {
                 id::idx_of(decor.id),
                 variant,
                 turn,
-                scatter::coarsest_shown(decor.row, variant),
+                scatter::variant_first_cell_zoom(decor.row, variant),
             ),
             wrap(x),
             y as u32,

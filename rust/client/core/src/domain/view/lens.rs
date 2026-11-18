@@ -94,7 +94,7 @@ pub(crate) fn decor_impostor_angle() -> f64 {
 /// (`CLIP_CELLS_A_RAD`). A clip level's cells are `CLIP_MARGIN` times finer
 /// than the view's, so this distance is `CLIP_MARGIN` times the one at which
 /// the view culls it (`decor_impostor_angle`), an upper bound.
-/// `is_decor_shown` scales its other side by the same margin, so the zooms it
+/// `spans_impostor_at` scales its other side by the same margin, so the zooms it
 /// picks are the ones the view would pick.
 pub(crate) const fn cull_dist_u(extent_u: f64) -> f64 {
     extent_u * CLIP_CELLS_A_RAD as f64 / param::DECOR_IMPOSTOR_CELLS
@@ -103,13 +103,13 @@ pub(crate) const fn cull_dist_u(extent_u: f64) -> f64 {
 /// Whether a decor `extent_u` wide is still large enough for an impostor
 /// somewhere cells of `cell_zoom` are drawn. The nearest such place is where
 /// that zoom begins, so the decor is measured there.
-fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+fn spans_impostor_at(extent_u: f64, cell_zoom: Zoom) -> bool {
     split_dist(cell_zoom) * f64::from(CLIP_MARGIN) <= cull_dist_u(extent_u)
 }
 
 /// The clip level zooms the ground generates each decor at, one bit for each
 /// zoom from `FIRST_CELL_ZOOM`. A decor is generated at the leaves' zoom, and
-/// at each coarser zoom where one of its variants stands as itself, by its
+/// at each coarser zoom where one of its variants shows as itself, by its
 /// own size rather than the clip level's cell (pxl-content
 /// `scatter::shows_at`), and is still large enough for an impostor. Every
 /// one of those zooms reads the decor of the same cells. No zoom finer than
@@ -145,8 +145,8 @@ fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
         let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
         (FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM)
             .filter(|&cell_zoom| {
-                let stands = cell_zoom >= scatter::first_cell_zoom(d.row);
-                stands && is_decor_shown(extent, cell_zoom)
+                let shows = cell_zoom >= scatter::first_cell_zoom(d.row);
+                shows && spans_impostor_at(extent, cell_zoom)
             })
             .fold(0, |bits, cell_zoom| {
                 bits | 1 << (cell_zoom - FIRST_CELL_ZOOM)

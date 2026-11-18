@@ -118,7 +118,7 @@ pub(crate) fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
 
 /// Where a pan moves the pivot from `from`, by `lx` units across the screen
 /// and `ly` units up it. The pivot slides over the world as a body steps
-/// (`World::step_slide`) where a body stands for `eye`, the drawn camera's,
+/// (`World::step_slide`) where a body shows for `eye`, the eye that sees `from`,
 /// and elsewhere goes where it is moved. There, and where a leaf on the way
 /// is not held, the pivot goes on with its Z unknown until a leaf gives it.
 pub(crate) fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {

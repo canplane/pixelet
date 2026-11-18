@@ -55,25 +55,19 @@ use pxl_engine::object::Cut;
 use pxl_engine::world;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::zoom::{MIN_ZOOM, Zoom, units};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::hierarchy::tree::{Node, child_at};
 use pxl_spec::space::layer::area::{Area, Shard};
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::change;
+use super::detail::coarsest;
 use super::world::World;
 use crate::domain::layer::Answer;
 use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
 use crate::sys::io::source;
-
-/// The coarsest zoom a cell is asked at: that of the coarsest cells a tile
-/// draws.
-pub(super) fn coarsest() -> Zoom {
-    GROUND.grid_zoom(MIN_ZOOM)
-}
 
 /// A node as a descent reaches it, with X on the asker's lap, and what its
 /// ancestors found, which it hands to its children (pxl-engine
@@ -242,7 +236,11 @@ impl ground::Resident for GroundRead<'_> {
     /// clip levels, stepped from `place` (pxl-engine
     /// `ground::Resident::relief`). The node's line names the tile that a
     /// lack or a coarser clip level stands for. Where the bound is lacking,
-    /// it is `EMPTY` with false.
+    /// it is `EMPTY` with false. Where a coarser clip level's cells stand in
+    /// for a brick under the node (pxl-engine `clipmap::stood_in`), a ray's
+    /// answer says what it read, so nothing bounds the node
+    /// (`ground::UNBOUNDED`): it splits, and the nodes under it answer each
+    /// for what it holds.
     fn relief(
         &mut self,
         place: &mut Lookup,
@@ -251,12 +249,13 @@ impl ground::Resident for GroundRead<'_> {
     ) -> (ground::Extent, bool) {
         let line =
             TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cell_range[1]);
-        self.relief = self.take(TerrainTile::tile_cache().relief(
-            &line,
-            place,
-            (zoom, [c[0], c[1]]),
-            cell_range,
-        ));
+        let node = (zoom, [c[0], c[1]]);
+        self.relief = match TerrainTile::tile_cache().relief(&line, place, node, cell_range) {
+            Answer::Coarser(..) if clipmap::stood_in(&clip_read(), cell_range, node) => {
+                Some([ground::UNBOUNDED; 2])
+            }
+            answer => self.take(answer),
+        };
         (
             self.relief.unwrap_or([ground::EMPTY; 2]),
             self.relief.is_some(),

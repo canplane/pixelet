@@ -5,7 +5,7 @@
 //! column hands its count down to its four children by weights near a half that one hash a
 //! column draws (`near_half`), to the leaf cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
 //! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
-//! lower gives way to it (`retained`). At a zoom, a decor stands as itself where its box keeps
+//! lower gives way to it (`retained`). At a zoom, a decor shows as itself where its box keeps
 //! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
 //! keeps none (`shows_at`), placed or generated alike. Every draw is a u32 (xpute-kit
 //! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so every reader, on
@@ -70,7 +70,7 @@ const fn mean(chance: u32, root: Zoom) -> u32 {
 }
 
 /// The most of `decor` any brick holds: its count's root (`root`) is the brick at the
-/// coarsest clip level it stands at, which holds its mean rounded (`cnt`), and a finer
+/// coarsest clip level it shows at, which holds its mean rounded (`cnt`), and a finer
 /// clip level's brick holds a share of that.
 pub const fn brick_cap(decor: &Row) -> u32 {
     (mean(decor.chance, root(decor)) + 0xffff) >> 16
@@ -177,11 +177,11 @@ pub fn scatter_at(k: usize, cell: [i32; 2]) -> Option<Candidate> {
         .filter(|c| retained(k, c))
 }
 
-/// Whether `variant` of `decor` stands as itself in a clip level at `cell_zoom`, judged by its
-/// own size, not the clip level's. It always stands at the leaves', the finest clip level
-/// there is. At a coarser one it stands where its box, in one of the clip level's cells, keeps
+/// Whether `variant` of `decor` shows as itself in a clip level at `cell_zoom`, judged by its
+/// own size, not the clip level's. It always shows at the leaves', the finest clip level
+/// there is. At a coarser one it shows where its box, in one of the clip level's cells, keeps
 /// an eighth of the cell or more, floored as a folded cube's share is (`share::eighths`), so
-/// a decor stands at the zooms at which a cube of its box is drawn (`box_shows_at`). Where it
+/// a decor shows at the zooms at which a cube of its box is drawn (`box_shows_at`). Where it
 /// keeps none, it is none there and at every coarser zoom.
 pub const fn shows_at(decor: &Row, variant: u32, cell_zoom: Zoom) -> bool {
     box_shows_at(decor.sizes[variant as usize], UNIT_ZOOM, cell_zoom)
@@ -194,8 +194,8 @@ pub const fn box_shows_at([x, y, z]: [u32; 3], own: Zoom, cell_zoom: Zoom) -> bo
     cell_zoom >= LEAF_CELL_ZOOM || (steps < u32::BITS && (EIGHTH_CNT * x * y * z) >> steps >= 1)
 }
 
-/// The coarsest clip level zoom `variant` of `decor` stands at (`shows_at`).
-pub const fn coarsest_shown(decor: &Row, variant: u32) -> Zoom {
+/// The coarsest clip level zoom `variant` of `decor` shows at (`shows_at`).
+pub const fn variant_first_cell_zoom(decor: &Row, variant: u32) -> Zoom {
     let mut cell_zoom = LEAF_CELL_ZOOM;
     while cell_zoom > 0 && shows_at(decor, variant, cell_zoom - 1) {
         cell_zoom -= 1;
@@ -203,19 +203,19 @@ pub const fn coarsest_shown(decor: &Row, variant: u32) -> Zoom {
     cell_zoom
 }
 
-/// The coarsest clip level zoom any variant of `decor` stands at (`coarsest_shown`): it stands
+/// The coarsest clip level zoom any variant of `decor` shows at (`variant_first_cell_zoom`): it shows
 /// at this zoom and every finer one.
 pub const fn first_cell_zoom(decor: &Row) -> Zoom {
     let (mut first, mut v) = (LEAF_CELL_ZOOM, 0);
     while v < decor.variant_cnt {
-        let z = coarsest_shown(decor, v);
+        let z = variant_first_cell_zoom(decor, v);
         first = if z < first { z } else { first };
         v += 1;
     }
     first
 }
 
-/// The zoom a decor's counts start at: that of a brick at the coarsest clip level it stands
+/// The zoom a decor's counts start at: that of a brick at the coarsest clip level it shows
 /// at (`first_cell_zoom`).
 pub const fn root(decor: &Row) -> Zoom {
     let root = first_cell_zoom(decor);
@@ -226,8 +226,8 @@ pub const fn root(decor: &Row) -> Zoom {
     }) - BRICK_SHIFT
 }
 
-/// The coarsest clip level zoom any decor stands at (`first_cell_zoom`).
-pub const COARSEST_SHOWN: Zoom = {
+/// The coarsest clip level zoom any decor shows at (`first_cell_zoom`).
+pub const DECOR_FIRST_CELL_ZOOM: Zoom = {
     let (mut coarsest, mut k) = (LEAF_CELL_ZOOM, 0);
     while k < ROWS.len() {
         let z = first_cell_zoom(&ROWS[k]);

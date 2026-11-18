@@ -10,7 +10,7 @@
 //! companion's walk gives it (`companion.rs`).
 //!
 //! Each view draws a character by its own eye. The world draws it where it
-//! stands, as a decor is drawn where it does (`query::body_shown`),
+//! shows, as a decor is drawn where it does (`query::body_shown`),
 //! and there chooses as it does for decor's lods (`view::lens`), by how many
 //! camera grid cells the character spans. Above the model's edge it is posed as it plays. Between
 //! the model's edge and the impostor's its pose is held. Below the impostor's
@@ -94,7 +94,7 @@ pub(crate) struct Character {
     /// character is posed again only when it moves where it is seen, or when
     /// the palette does not show its clips.
     posed: bool,
-    /// Whether the character stood and spanned the impostor's edge at the
+    /// Whether the character showed and spanned the impostor's edge at the
     /// last tick, which decides whether it is drawn at all.
     visible: bool,
     /// How long, in seconds, the clip has run while it moves the character
@@ -261,23 +261,23 @@ impl Character {
         let length = |p: &ClipTime| m.duration(p.clip).filter(|&d| d > 0.0);
         let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.prev.is_some();
-        // In the world, the character is there where it stands, where a
+        // In the world, the character is there where it shows, where a
         // decor of its cell is drawn (`body_shown`).
-        // There it is observed where it spans
-        // the model's edge at its distance, as a decor's model is, and
-        // drawn, posed or not, where it spans the impostor's edge, as a
-        // decor's impostor is.
+        // There it is observed where its height spans the model's edge at
+        // its distance, as a decor's longest side does, and drawn, posed or
+        // not, where it spans the impostor's edge, as a decor's impostor is.
         let (mut seen, mut world_moves, mut dist, mut scale) = (false, false, 0.0, 1.0);
         self.visible = false;
         if let Some(t) = self.transform {
             scale = t.scale * m.scale();
             let about = v3::sub(&t.at, &frame.anchor);
             let r = f64::from(m.pose_radius(self.cur.map(|p| p.clip)) * scale);
+            let extent = self.height_u() * f64::from(t.scale);
             dist = v3::len(&v3::sub(&about, &frame.camera));
             let cell_there = cell_there(dist);
-            let stands = body_shown(dist);
-            seen = stands && frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
-            self.visible = stands && 2.0 * r >= decor_impostor_angle() * dist;
+            let shows = body_shown(dist);
+            seen = shows && frame.frustum.sees(about, r) && extent >= decor_model_angle() * dist;
+            self.visible = shows && extent >= decor_impostor_angle() * dist;
             world_moves = seen
                 && (self.prev.is_some()
                     || playing.is_some_and(|p| f64::from(m.motion(p.clip) * scale) >= cell_there));

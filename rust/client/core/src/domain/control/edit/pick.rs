@@ -2,8 +2,7 @@
 
 //! The pointer's pick (`Pick`), and what it struck means for a placement or
 //! an erase. The pick's ray reads the world as an eye's does, by its
-//! distance, and what it meets it reads again from near, so what it struck is
-//! met as finely as it is held (`World::first_seen`). It then judges what it
+//! distance (`World::first_seen`). It then judges what it
 //! struck by the zoom the eye's rays draw there, since an edit takes only
 //! whole cells and a folded cell is a summary.
 

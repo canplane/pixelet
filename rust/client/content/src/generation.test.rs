@@ -6,7 +6,7 @@ use pxl_engine::cast::{Detail, Spacing};
 /// Decor of the leaves' clip level is drawn where the rays ask the leaf cell's
 /// zoom or finer at its distance, decor of a coarser clip level where they ask
 /// that clip level's zoom alone, so a distance draws one clip level's, and
-/// placed decor where they ask the coarsest zoom it stands at or finer.
+/// placed decor where they ask the coarsest zoom it shows at or finer.
 #[test]
 fn decor_at_its_clip_level() {
     let detail = Detail {

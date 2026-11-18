@@ -97,7 +97,7 @@ pub(crate) fn hold(center: [f64; 2], tiles: &[TileData]) {
 /// Marks the brick at `cell_zoom` that holds cell `g` as filled and not yet
 /// handed over, and folds the clip levels without it, as an entry's step leaves
 /// them before a frame hands the brick over.
-pub(crate) fn unland(cell_zoom: Zoom, g: [i32; 2]) {
+pub(crate) fn withhold(cell_zoom: Zoom, g: [i32; 2]) {
     let w = clipmap();
     let b = slot_of(w, cell_zoom, clipmap::brick_of(g).0).expect("held");
     (w.slots[b as usize].present, w.slots[b as usize].fill) = (false, Fill::Filled);
@@ -110,13 +110,6 @@ pub(crate) fn unland(cell_zoom: Zoom, g: [i32; 2]) {
 /// Hands every filled brick over, as a frame with room for all of them does.
 pub(crate) fn hand() {
     upload(&mut |_| true);
-}
-
-/// Loses the device, as a frame's step finds it lost: the GPU's copy of
-/// every brick is gone, and each present brick must be handed over again
-/// (`assign_slots`).
-pub(crate) fn lose() {
-    assign_slots(clipmap(), true);
 }
 
 /// Builds `hold`'s clip levels, laying each brick's lines into the store as a
@@ -249,7 +242,7 @@ fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
 /// Marks every held brick present, as if each had been handed over. Its
 /// cells are all zero unless a test held its own (`hold`). The clip levels
 /// fold over them wherever they are laid out again (`assign_slots`).
-fn land_all(w: &mut Clipmap) {
+fn present_all(w: &mut Clipmap) {
     own_planes();
     for b in w.slots.iter_mut().filter(|b| !b.is_free()) {
         b.present = true;
@@ -704,7 +697,7 @@ fn shared_brick_held_once() {
             );
         }
     }
-    land_all(w);
+    present_all(w);
     for pivot in EYE_CLIP_LEVEL_CNT..EYE_CLIP_LEVEL_CNT + 2 {
         for s in 0..ENTRY_CNT {
             let row = w.table.entries[(pivot * ENTRY_CNT + s) as usize];
@@ -723,7 +716,7 @@ fn left_brick_part() {
     let w = clipmap();
     let (eye, pivot) = (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM, EYE_CLIP_LEVEL_CNT + 1);
     lay(w, leaf(CENTER), leaf(CENTER));
-    land_all(w);
+    present_all(w);
     // Move the eye one brick along at the leaves. Its clip level there
     // leaves a column of bricks the pivot's still wants, and wants a column
     // the pivot's does not.
@@ -757,7 +750,7 @@ fn left_brick_part() {
         );
     }
     // Moved back, the eye finds the column it left still present.
-    land_all(w);
+    present_all(w);
     lay(w, leaf(CENTER), leaf(CENTER));
     for s in 0..ENTRY_CNT {
         assert!(

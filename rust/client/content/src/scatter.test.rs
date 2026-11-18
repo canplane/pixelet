@@ -50,9 +50,9 @@ fn standing_ones_never_meet() {
     }
 }
 
-/// A variant that stands as itself at a clip level stands at every finer one,
+/// A variant that shows as itself at a clip level shows at every finer one,
 /// so the coarser clip levels' decor is a subset of the finer's, and every one
-/// stands at the leaves'.
+/// shows at the leaves'.
 #[test]
 fn shows_finer() {
     for decor in &ROWS {
@@ -92,9 +92,9 @@ fn counts_hand_down_whole() {
     }
 }
 
-/// A decor stands where its box keeps an eighth of the clip level's cell, as a folded cube of
+/// A decor shows where its box keeps an eighth of the clip level's cell, as a folded cube of
 /// that box is drawn (`share::eighths`). This holds for every variant of every decor; a tree
-/// a unit wide and three high stands one zoom coarser than the leaves', and not two.
+/// a unit wide and three high shows one zoom coarser than the leaves', and not two.
 #[test]
 fn shows_as_a_cube_keeps() {
     for d in &ROWS {

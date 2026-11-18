@@ -19,8 +19,8 @@ frame in the interaction phase (`companion.rs` `Walk`, `../../../frame.rs`
 anchored to the other.
 
 Each view draws a character by its own eye. The world draws it where its walk
-stands it, while it stands as a decor of its cell does (`../../query/support.rs`
-`body_shown`), by the lens's decor tiers (`../../view/lens.rs`), by how much
+stands it, while it shows as a decor of its cell does (`../../query/support.rs`
+`body_shown`), by the lens's decor lods (`../../view/lens.rs`), by how much
 of a camera cell it spans: posed down to the model's edge, its pose held down to
 the impostor's, and none below (`../character.rs` `Character::tick`,
 `Character::draw`), and nothing in first person. A character surface,

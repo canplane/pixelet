@@ -10,7 +10,7 @@ pub(crate) const PET_OFF: [f64; 2] = [-0.6, -0.6];
 
 /// A body's half width with its arms out, as a share of its height. A body is
 /// drawn at least this far from a wall.
-pub(crate) const BODY_SHARE: f64 = 0.4;
+pub(crate) const BODY_HALF_WIDTH_SHARE: f64 = 0.4;
 
 /// How long a catch-up walk takes, in seconds. A catch-up takes a fixed time,
 /// not a fixed speed (domain/scene/character/companion.rs `WalkPlan`).
