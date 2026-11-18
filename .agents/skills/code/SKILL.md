@@ -12,8 +12,8 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   the rest of the system follows there and make the part follow it; a form
   that is faster in one case than the general rule is overfitting, and what
   the general rule costs there is its price, not a regression. A reader of
-  the world takes its detail from its distance alone (`query::by_dist`), from
-  where its asker stands.
+  the world takes its detail from its distance from the eye alone
+  (query/detail.rs), wherever its ray starts.
 - One owner. A fact has one definition; every other form derives from it. A
   fact held in several places is reviewed, and stays apart only where the CPU
   and the GPU each hold it or joining it would add branches. Where they each

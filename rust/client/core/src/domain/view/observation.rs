@@ -22,10 +22,11 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::floor;
+use crate::domain::observer::eye;
 use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::height_at;
-use crate::domain::view::frame::pose::{eye, view};
+use crate::domain::view::frame::pose::view;
 use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 

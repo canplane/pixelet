@@ -224,6 +224,7 @@ impl Light {
     /// texels (`band_texels2`) times `band_scale`, one product, which no device fuses or reorders.
     pub fn band(&self, size: u32, range: [Zoom; 2], tile: [i32; 2]) -> Zoom {
         let detail = cast::Detail {
+            eye: [0.0; 3],
             range,
             spacing: Spacing::NONE,
         };
@@ -1573,6 +1574,7 @@ mod tests {
     fn cast_tile(s: &Light, st: &StartGrid, range: [Zoom; 2], tile: [i32; 2]) -> Vec<u32> {
         let b = s.band(64, range, tile);
         let detail = cast::Detail {
+            eye: [0.0; 3],
             range: [b, b],
             spacing: s.spacing(),
         };

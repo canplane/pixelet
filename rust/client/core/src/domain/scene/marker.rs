@@ -31,7 +31,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::Cell;
 use pxl_spec::space::layer::octant::Octant;
 
-use crate::domain::query::{Ray, World, at_zoom};
+use crate::domain::query::{Ray, World};
 use design::Design;
 
 /// A brick of the eye's clip levels that markers are read over, named by its
@@ -82,17 +82,14 @@ pub(crate) enum MarkerHit {
 }
 
 /// The height at which a ray down over `at`, from `high`, first meets what is
-/// drawn at `zoom` above `low`, or None where nothing there is known.
-fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
+/// drawn above `low`, or None where nothing there is known.
+fn surface(at: &Q3, (high, low): (f64, f64)) -> Option<f64> {
     let xy = q3::unpack(at);
     let ray = Ray {
         origin: [xy[0], xy[1], high],
         dir: [0.0, 0.0, -1.0],
         t_max: high - low,
     };
-    let hit = World::now()
-        .first_hit(&ray, at_zoom(zoom))
-        .val()
-        .flatten()?;
+    let hit = World::now().first_hit(&ray).val().flatten()?;
     Some(high - hit.t)
 }

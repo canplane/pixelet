@@ -110,6 +110,7 @@ impl Observed {
                     *origin,
                     Ray::new(d, *far),
                     Detail {
+                        eye: [0.0; 3],
                         range: *range,
                         spacing: Spacing {
                             angle: CELL,
@@ -134,6 +135,7 @@ impl Observed {
                     o,
                     r,
                     Detail {
+                        eye: [0.0; 3],
                         range: [band, band],
                         spacing: l.spacing(),
                     },
@@ -1407,6 +1409,7 @@ fn px_aim(observed: &Observed, s: &Screen, p: [u32; 2]) -> (Ray, Detail) {
     let at = px_tan(s, grid.tan, p);
     let d = cast::through(axes[0], axes[1], axes[2], at[0], at[1]);
     let detail = Detail {
+        eye: [0.0; 3],
         range: *range,
         spacing: Spacing {
             angle: CELL,
@@ -3399,6 +3402,7 @@ fn hand_beam_rays_answer_as_cast_walk() {
             unreachable!()
         };
         let detail = Detail {
+            eye: [0.0; 3],
             range: *range,
             spacing: Spacing {
                 angle: CELL,
@@ -3553,6 +3557,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
                     .map(|v| v.div_euclid(light::TILE as i32));
                 let band = l.band(*size, *range, tile);
                 let detail = Detail {
+                    eye: [0.0; 3],
                     range: [band, band],
                     spacing: l.spacing(),
                 };

@@ -8,7 +8,7 @@ use super::*;
 use crate::domain::layer::Answer;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, placed, withhold_at, write};
+use crate::domain::query::test::{flat_at_five, look_from, placed, withhold_at, write};
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
@@ -304,10 +304,10 @@ fn stop_goes_straight() {
     assert_eq!(dist_at(2.3, 2.45), None);
 }
 
-/// A way ends short of an eye that would arrive in something solid, though
-/// the line there is clear as the eye at its start reads it: from far a
-/// lone cube in the air is folded away, and read from where the eye ends it
-/// is there. A way that ends short of the cube is clear.
+/// A way ends short of an eye that would arrive in something solid the eye
+/// sees: a lone cube in the air is there for an eye near it, and a way that
+/// ends short of the cube is clear. From far the cube is folded away, and the
+/// line through it is clear.
 #[test]
 fn a_way_ends_short_of_an_eye_in_something_solid() {
     let (mut store, pivot) = under_ceiling(None);
@@ -315,10 +315,12 @@ fn a_way_ends_short_of_an_eye_in_something_solid() {
     cube_at(&mut store, eye(&at_dist(40.0)).0.map(libm::floor));
     let world = placed(store);
     let from = at_dist(320.0);
-    assert!(line_clear(eye(&from).0, eye(&at_dist(40.0)).0, &world));
+    look_from(eye(&at_dist(43.0)).0);
     let hit = |to: f64| way_hit(&from, &at_dist(to), |at| *at, &world);
     assert!(hit(40.0).is_some());
     assert_eq!(hit(43.0), None);
+    look_from(eye(&from).0);
+    assert!(line_clear(eye(&from).0, eye(&at_dist(40.0)).0, &world));
 }
 
 /// What stands in a zoom's way is met where a coarser clip level stands in
@@ -335,7 +337,7 @@ fn pulls_forward_where_coarser_ground_stands_in() {
         dir: [0.0, 0.0, 1.0],
         t_max: 16.0,
     };
-    let met = world.first_hit(&up, by_dist());
+    let met = world.first_hit(&up);
     assert!(matches!(met, Answer::Coarser(Some(_), _)), "{met:?}");
     let dist = pull_forward(&to, &from, &world).map(|p| p.dist);
     assert_eq!(dist, Some(8.0 - over(5.0) - NEAR));

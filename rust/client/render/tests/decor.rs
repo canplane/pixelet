@@ -1980,6 +1980,7 @@ fn cnt_edges(w: &World, sizing: &Sizing, recs: &[u32], workgroups: u32) -> [Vec<
 /// Rust's (`EDGES`).
 fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32, ulps: [i32; 2]) {
     let detail = Detail {
+        eye: [0.0; 3],
         range: sizing.range,
         spacing: Spacing::NONE,
     };

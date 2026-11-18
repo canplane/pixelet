@@ -253,6 +253,7 @@ fn run_slots(
             let (o, r) = light::ray(&l, &starts, p);
             let b = band_of(p);
             let detail = Detail {
+                eye: [0.0; 3],
                 range: [b, b],
                 spacing: l.spacing(),
             };
@@ -963,6 +964,7 @@ fn run_marks(
         cuts: [Cut::NONE; 2],
     };
     let detail = Detail {
+        eye: [0.0; 3],
         range,
         spacing: Spacing {
             angle: 0.002,

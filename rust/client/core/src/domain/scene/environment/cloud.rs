@@ -28,6 +28,7 @@ use pxl_spec::space::coord::world::nearest;
 use xpute_link::abi::types::Lent;
 use xpute_link::mem;
 
+use crate::domain::observer::eye;
 use crate::domain::scene::column::{self, GroupRange};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
@@ -37,7 +38,7 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
 use crate::domain::setting::settings;
-use crate::domain::view::frame::pose::{eye, km_per_u};
+use crate::domain::view::frame::pose::km_per_u;
 use crate::domain::view::lens::{self, cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::view::observation;
 use crate::domain::view::param;

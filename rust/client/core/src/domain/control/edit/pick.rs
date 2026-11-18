@@ -9,17 +9,17 @@
 use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{Zoom, of_side, units};
 
 use crate::domain::control::edit::collision::object_aabb;
 use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query;
-use crate::domain::query::{Hit, HitKind, Ray, World};
+use crate::domain::observer::eye;
+use crate::domain::query::{Hit, HitKind, Ray, World, cell_zoom_read};
 use crate::domain::setting::settings;
 use crate::domain::view::frame::coord::world_to_canonical;
-use crate::domain::view::frame::pose::{eye, ray_of};
+use crate::domain::view::frame::pose::ray_of;
 use crate::domain::view::lens::{decor_zooms, leaf_decors};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::octant::Octant;
@@ -40,7 +40,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 }
 
 /// What the hover's pick struck, and the cell zoom at which the eye's rays
-/// draw the point it struck (domain/query/ray.rs `by_dist`). Near the eye
+/// draw the point it struck (domain/query/detail.rs `cell_zoom_read`). Near the eye
 /// that zoom is finer than the ground's cells, as placed objects may be.
 /// `ray_zoom` is None without an eye.
 pub(crate) struct Pick {
@@ -167,10 +167,7 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
         hit: ray_pick(origin, dir)?,
         ray_zoom: None,
     };
-    p.ray_zoom = eye().map(|eye| {
-        let v = v3::sub(&p.cell().center(), &eye);
-        query::by_dist().at(v3::dot(&v, &v) as f32)
-    });
+    p.ray_zoom = eye().map(|eye| cell_zoom_read(eye, p.cell().center()));
     Some(p)
 }
 

@@ -31,8 +31,9 @@ pub(crate) fn stand(at: &Q3) -> Q3 {
     }
 }
 
-/// The last answer of `standing`. It is kept until another point is asked
-/// or the world changes in the columns the answer read (`change::Memo`),
+/// The last answer of `standing`. It is kept until another point is asked,
+/// the eye moves or the world changes in the columns the answer read
+/// (`change::Memo`),
 /// because a camera's `to` and a destination ask for the same point on every
 /// tick until a leaf gives its Z, and `resolve_to` asks twice in one tick.
 static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
@@ -118,8 +119,8 @@ pub(crate) fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
 
 /// Where a pan moves the pivot from `from`, by `lx` units across the screen
 /// and `ly` units up it. The pivot slides over the world as a body steps
-/// (`World::step_slide`) where a body shows for `eye`, the eye that sees `from`,
-/// and elsewhere goes where it is moved. There, and where a leaf on the way
+/// (`World::step_slide`) where a body shows for `eye`, the eye the camera
+/// keeps over `from`, and elsewhere goes where it is moved. There, and where a leaf on the way
 /// is not held, the pivot goes on with its Z unknown until a leaf gives it.
 pub(crate) fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
     let (s, c) = libm::sincos(azimuth);

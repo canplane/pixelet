@@ -241,6 +241,7 @@ impl View {
     /// walk_node.wgsl `eye_aim`).
     fn detail(&self) -> Detail {
         Detail {
+            eye: [0.0; 3],
             range: self.range,
             spacing: Spacing {
                 angle: CELL,

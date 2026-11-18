@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, placed, write};
+use crate::domain::query::test::{flat_at_five, look_from, placed, write};
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self, Sentinel};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
@@ -60,7 +60,9 @@ fn a_pan_walks_only_where_a_body_shows() {
     let from = world::point(x + 0.5, y + 0.5, over(5.0));
     let near = world::point(x + 0.5, y - 3.0, 8.0);
     let far = world::point(x + 0.5, y + 0.5, over(5.0) + 500.0);
+    look_from(to_world(&near));
     let walked = pan_to(&from, 2.0, 0.0, 0.0, &near);
     assert_eq!(height(&walked), over(5.0));
+    look_from(to_world(&far));
     assert!(is_unknown(&pan_to(&from, 2.0, 0.0, 0.0, &far)));
 }

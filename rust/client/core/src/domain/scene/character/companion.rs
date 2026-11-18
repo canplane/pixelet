@@ -12,10 +12,11 @@
 //! (`clear_of_walls`). The models are Kenney's "Mini Characters" and "Cube
 //! Pets", CC0.
 
+use crate::domain::observer;
 use crate::domain::param;
 use crate::domain::query::World;
 use crate::domain::query::change::Memo;
-use crate::domain::query::{floor_of, is_unknown, over};
+use crate::domain::query::{floor_of, is_unknown, over, unknown};
 use crate::domain::scene::character::param::{
     BODY_HALF_WIDTH_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
@@ -36,8 +37,8 @@ use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::{Draw, DrawList};
 use pxl_spec::asset::character::IDLE_CLIP;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{Zoom, units};
-use pxl_spec::space::layer::lattice::{GROUND, Grid};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::clock;
 
 // The world's scroll rate. A character that glides at it cancels the scroll
@@ -135,9 +136,6 @@ pub(crate) struct Camera {
     pub steered: bool,
     /// Whether the map follows the device.
     pub following: bool,
-    /// The eye, which decides what a character is drawn standing on and
-    /// whether it walks (`walk_to`).
-    pub eye: Q3,
 }
 
 #[derive(Default)]
@@ -233,7 +231,7 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         let from = center(camera.pivot, floor);
         let world = World::now();
         pet_floor.of((camera.pivot, floor, target), || {
-            let end = walk_to(world, &from, target, &camera);
+            let end = walk_to(world, &from, target);
             match reached(to_world(&end)) && !is_unknown(&end) {
                 true => floor_of(&end),
                 false => floor,
@@ -279,9 +277,8 @@ impl Character {
     }
 }
 
-/// Where a walk is drawn, kept by where it stands, its floor there, and the
-/// zoom the eye draws it at.
-type FloorMemo = Memo<([f64; 2], f64, Zoom), ([f64; 2], f64)>;
+/// Where a walk is drawn, kept by where it stands and its floor there.
+type FloorMemo = Memo<([f64; 2], f64), ([f64; 2], f64)>;
 
 struct Walk {
     at: [f64; 2],
@@ -447,7 +444,7 @@ impl Walk {
         if arrived {
             *stands = center(at, arrive_floor);
         } else if moved {
-            let end = walk_to(World::now(), stands, at, camera);
+            let end = walk_to(World::now(), stands, at);
             let [x, y, _] = to_world(&end);
             (at, *stands) = if follows && gap([x, y], at) > WALK_EPS {
                 (target, center(target, arrive_floor))
@@ -458,7 +455,7 @@ impl Walk {
         self.at = at;
         let floor = self.floor(World::now()).unwrap_or(arrive_floor);
         (
-            drawn_at(&mut self.floor_memo, at, floor, half, camera),
+            drawn_at(&mut self.floor_memo, at, floor, half),
             self.heading as f32,
             is_walking,
         )
@@ -470,40 +467,36 @@ fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
     world_to_canonical(&[x, y, over(floor)])
 }
 
-/// Slides a step through `world` from `from` toward `to`, seen from the
-/// camera's eye (`World::step_slide`).
-pub(super) fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2], camera: &Camera) -> Q3 {
-    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), &camera.eye, true)
+/// Slides a step through `world` from `from` toward `to`, a body the
+/// observer's eye sees (`World::step_slide`). With no observer there is no
+/// body to walk.
+pub(super) fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
+    let to = world_to_canonical(&[x, y, 0.0]);
+    match observer::eye() {
+        Some(eye) => world.step_slide(from, &to, &world_to_canonical(&eye), true),
+        None => unknown(&to),
+    }
 }
 
 /// Where a body `half` wide on each side is drawn for `at`, on the floor the
-/// eye's rays draw there in place of `floor`. The world is asked at the zoom
-/// the camera grid takes at that distance from the eye, and the answer is
-/// kept in `memo` while none of its inputs moves. Where that zoom is not
-/// loaded a coarser answer is taken, as a ray draws whatever ground it has.
-pub(crate) fn drawn_at(
-    memo: &mut FloorMemo,
-    at: [f64; 2],
-    floor: f64,
-    half: f64,
-    camera: &Camera,
-) -> [f64; 3] {
+/// eye's rays draw there in place of `floor` (`World::floor_under`). The
+/// answer is kept in `memo` while none of its inputs moves. Where the zoom
+/// drawn there is not loaded a coarser answer is taken, as a ray draws
+/// whatever ground it has.
+pub(crate) fn drawn_at(memo: &mut FloorMemo, at: [f64; 2], floor: f64, half: f64) -> [f64; 3] {
     let pos = [at[0], at[1], over(floor)];
-    let eye = to_world(&camera.eye);
-    let r2 = (0..3).map(|k| (pos[k] - eye[k]) * (pos[k] - eye[k])).sum();
-    let zoom = GROUND.z_at(r2);
     let world = World::now();
-    let ([x, y], drawn) = memo.of((at, floor, zoom), || {
+    let ([x, y], drawn) = memo.of((at, floor), || {
         let floor_at = |[x, y]: [f64; 2]| {
             world
-                .floor_drawn(&world_to_canonical(&[x, y, pos[2]]), zoom)
+                .floor_under(&world_to_canonical(&[x, y, pos[2]]))
                 .val()
                 .flatten()
         };
         let drawn = floor_at(at).unwrap_or(floor);
         let rises = |p| floor_at(p).is_some_and(|top| top > drawn);
         (
-            clear_of_walls(at, half, units(GROUND.cell_zoom(zoom)), rises),
+            clear_of_walls(at, half, units(GROUND.leaf_cell_zoom()), rises),
             drawn,
         )
     });

@@ -29,6 +29,8 @@
 pub(crate) mod change;
 #[path = "query/decor.rs"]
 pub(crate) mod decor;
+#[path = "query/detail.rs"]
+mod detail;
 #[path = "query/entry.rs"]
 mod entry;
 #[path = "query/limit.rs"]
@@ -48,7 +50,8 @@ mod surface;
 #[path = "query/world.rs"]
 mod world;
 
-pub(crate) use ray::{Hit, HitKind, Ray, at_zoom, by_dist, cell_zoom_at, zoom_range};
+pub(crate) use detail::{cell_zoom_drawn, cell_zoom_read, zoom_range};
+pub(crate) use ray::{Hit, HitKind, Ray};
 pub(crate) use support::{
     body_room, body_shown, eye_over, floor_of, is_unknown, on_floor, over, unknown,
 };

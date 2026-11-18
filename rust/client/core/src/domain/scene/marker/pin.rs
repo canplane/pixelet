@@ -15,7 +15,7 @@ use core::hash::Hasher;
 use super::{Brick, Instance, Key, MarkerHit, surface};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Draft;
-use crate::domain::query::{World, cell_zoom_at};
+use crate::domain::query::{World, cell_zoom_drawn};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
@@ -24,7 +24,6 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{cube, point};
 use pxl_spec::space::coord::zoom::{Zoom, units};
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
 /// A pin's cell (`marker_cell_of`): its zoom and place.
@@ -33,7 +32,8 @@ type Cell = (Zoom, [i32; 3]);
 /// A pin read from a drawn brick: its pill, where it stands, and its base.
 /// It also keeps what the last run showed: the camera grid's cell zoom at its
 /// base (`grid`), its pin's cell or None where it did not show (`cell`), and
-/// where its cell's count stood, with the cell that was then (`crowd`).
+/// where its cell's count stood, with the cell and the eye that were then
+/// (`crowd`).
 #[derive(Clone)]
 pub(super) struct Pin {
     pub(super) brick: Brick,
@@ -43,7 +43,7 @@ pub(super) struct Pin {
     base: V3,
     grid: Zoom,
     cell: Option<Cell>,
-    crowd: Option<(Cell, Q3)>,
+    crowd: Option<(Cell, V3, Q3)>,
 }
 
 /// The longest a one-line pin's text runs and still reads as a name, a
@@ -128,7 +128,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
     let drafted = draft.map(|d| d.at);
     out.extend(draft.map(|d| one(d.at, pill(&d.text), pin_at(d.at).0)));
     for p in pins.iter_mut() {
-        p.grid = cell_zoom_at(eye, p.base);
+        p.grid = cell_zoom_drawn(eye, p.base);
         p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
     }
     pins.sort_unstable_by_key(|p| (p.brick, p.cell));
@@ -141,16 +141,19 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
             out.push(one(first.at, first.design.clone(), first.pos));
             continue;
         }
-        // Where the count stands is asked once for each cell it stands for,
-        // and kept with the cell's pins. It is asked here and not under the
+        // Where the count stands is asked once for each cell it stands for
+        // under an eye, and kept with the cell's pins. It is asked here and not under the
         // entry's budget, as a place's surface is: a count is named by its
         // cell, so nothing shown before could stand for it meanwhile, and
         // the ray ends within the cell.
-        let at = match run.iter().find_map(|p| p.crowd.filter(|c| c.0 == cell)) {
-            Some((_, at)) => at,
-            None => crowd_at(cell, run[0].at.zoom(), GROUND.read_zoom(run[0].grid)),
+        let at = match run
+            .iter()
+            .find_map(|p| p.crowd.filter(|c| c.0 == cell && c.1 == eye))
+        {
+            Some((_, _, at)) => at,
+            None => crowd_at(cell, run[0].at.zoom()),
         };
-        run.iter_mut().for_each(|p| p.crowd = Some((cell, at)));
+        run.iter_mut().for_each(|p| p.crowd = Some((cell, eye, at)));
         out.push(Instance {
             key: Key::PinCell(cell),
             design: cnt(n),
@@ -172,12 +175,11 @@ pub(super) fn draft_key(draft: Option<&Draft>) -> Option<(Octant, u64)> {
 
 /// Where the count of the pin's cell `(zoom, at)` stands: at the cell's
 /// middle, half a pin of zoom `pin` above the first thing a ray down meets
-/// within the cell at `detail`, or above the cell's floor where it meets
-/// nothing.
-fn crowd_at((zoom, at): Cell, pin: Zoom, detail: Zoom) -> Q3 {
+/// within the cell, or above the cell's floor where it meets nothing.
+fn crowd_at((zoom, at): Cell, pin: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
-    let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
+    let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2])).unwrap_or(c.min[2]);
     point(x, y, top + units(pin) / 2.0)
 }
 

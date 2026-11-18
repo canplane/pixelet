@@ -8,33 +8,30 @@
 //! the detail drawn there, and a tap on it goes there.
 
 use fnv::FnvHashMap;
-use pxl_spec::space::layer::lattice::{Cell, GROUND};
+use pxl_spec::space::layer::lattice::Cell;
 use pxl_spec::space::layer::quadrant::{Quadrant, quad_rows};
 use std::rc::Rc;
 
 use super::{Brick, Instance, Key, MarkerHit, cell_zoom, surface};
 use crate::domain::layer::place::carto_zoom;
-use crate::domain::query::{World, cell_zoom_at};
+use crate::domain::query::{World, cell_zoom_drawn};
 use crate::domain::scene::marker::design::Design;
 use crate::sys::sched;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{PLACE_FIRST, PLACE_LATTICE, stands, symbol_of};
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{BOUND, idx_of, wrap_idx};
 use pxl_spec::space::coord::zoom::{Zoom, idx_at};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
 /// cell it stands in, and the finest camera grid cell its brick draws, which
-/// its tile was read at (`finest`). The ground under it is asked two things.
-/// `ele` is where it is: the finest ground there, asked once when it is
-/// read, from which the camera grid's cell it is in is told. `top` is what it
-/// stands on: the surface at the detail `asked`, the one drawn in that cell,
-/// None where nothing was found. The one decides the other and is not decided
-/// by it. While `asked` is None both are still to ask, and they are those of
-/// the same place as it stood before (`hand_held`), for it to show by
-/// meanwhile.
+/// its tile was read at (`finest`). `top` is what it stands on: the surface
+/// the eye sees under it, None where nothing was found, from which the
+/// camera grid's cell it is in is told. `asked` is the eye it was asked
+/// under. While `asked` is None it is still to ask, and is that of the same
+/// place as it stood before (`hand_held`), for it to show by meanwhile.
 pub(super) struct Place {
     pub(super) brick: Brick,
     kind: u16,
@@ -42,9 +39,8 @@ pub(super) struct Place {
     name: Option<Rc<str>>,
     ground: Cell,
     finest: Zoom,
-    ele: Option<f64>,
     top: Option<f64>,
-    asked: Option<Zoom>,
+    asked: Option<V3>,
 }
 
 impl Place {
@@ -101,7 +97,6 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
             name: (!h.name.is_empty()).then(|| h.name.into()),
             ground,
             finest,
-            ele: None,
             top: None,
             asked: None,
         });
@@ -112,21 +107,20 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) -> bool {
     whole
 }
 
-/// Hands each place read now, those past the first `held`, where the same
-/// place was and what it stood on, so it shows as it did until its own are
-/// asked.
+/// Hands each place read now, those past the first `held`, what the same
+/// place stood on, so it shows as it did until its own is asked.
 pub(super) fn hand_held(read: &mut [Place], held: usize) {
     let (before, now) = read.split_at_mut(held);
     if before.is_empty() || now.is_empty() {
         return;
     }
-    let was: FnvHashMap<Cell, (Option<f64>, f64)> = before
+    let was: FnvHashMap<Cell, f64> = before
         .iter()
-        .filter_map(|p| Some((p.ground, (p.ele, p.top?))))
+        .filter_map(|p| Some((p.ground, p.top?)))
         .collect();
     for p in now {
-        if let Some(&(ele, top)) = was.get(&p.ground) {
-            (p.ele, p.top) = (ele, Some(top));
+        if let Some(&top) = was.get(&p.ground) {
+            p.top = Some(top);
         }
     }
 }
@@ -135,33 +129,21 @@ pub(super) fn hand_held(read: &mut [Place], held: usize) {
 /// read at.
 fn cell_zoom_of(p: &Place, eye: V3) -> Zoom {
     let [x, y, _] = q3::unpack(&p.ground.mid());
-    cell_zoom_at(eye, [x, y, p.ele.unwrap_or(0.0)]).min(p.finest)
+    cell_zoom_drawn(eye, [x, y, p.top.unwrap_or(0.0)]).min(p.finest)
 }
 
-/// Asks the surface under `p` at `detail`.
-fn ask(p: &mut Place, detail: Zoom) {
-    let top = surface(&p.ground.mid(), (BOUND.max[2], BOUND.min[2]), detail);
-    (p.top, p.asked) = (top, Some(detail));
+/// Asks the surface under `p`.
+fn ask(p: &mut Place) {
+    p.top = surface(&p.ground.mid(), (BOUND.max[2], BOUND.min[2]));
 }
 
-/// Asks the ground under `p`: where it is, for a place just read, at its
-/// brick's finest detail; then, where Carto shows it and the detail of the
-/// cell it is in is not the one last asked, what it stands on. Returns
-/// whether it asked.
-fn settle(p: &mut Place, eye: V3) -> bool {
-    let mut asked = false;
-    if p.asked.is_none() {
-        ask(p, GROUND.read_zoom(p.finest));
-        p.ele = p.top;
-        asked = true;
-    }
-    let zoom = cell_zoom_of(p, eye);
-    let detail = GROUND.read_zoom(zoom);
-    if p.asked != Some(detail) && point_of(p.kind, p.first_zoom, None, carto_zoom(zoom)).is_some() {
-        ask(p, detail);
-        asked = true;
-    }
-    asked
+/// How far the eye `p` was asked under is from `eye`, squared: without
+/// bound for one never asked.
+fn stale(p: &Place, eye: V3) -> f64 {
+    p.asked.map_or(f64::INFINITY, |a| {
+        let v = v3::sub(&a, &eye);
+        v3::dot(&v, &v)
+    })
 }
 
 /// Writes into `out` the places `read` read, seen from `eye`. Each shows as
@@ -173,7 +155,16 @@ fn settle(p: &mut Place, eye: V3) -> bool {
 /// showing by what it holds until its own are asked. Returns whether
 /// the budget stopped the asks before the list's end.
 pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) -> bool {
-    let run = sched::run(read.iter_mut(), |p| settle(p, eye));
+    // The places not asked under this eye are asked, the one asked under the
+    // eye farthest from it first: one never asked has nothing to show by,
+    // and while the eye moves each comes to its turn.
+    let mut due: Vec<_> = read.iter_mut().filter(|p| p.asked != Some(eye)).collect();
+    due.sort_by(|a, b| stale(b, eye).total_cmp(&stale(a, eye)));
+    let run = sched::run(due, |p| {
+        ask(p);
+        p.asked = Some(eye);
+        true
+    });
     for p in read {
         let Some(top) = p.top else { continue };
         let carto = carto_zoom(cell_zoom_of(p, eye));

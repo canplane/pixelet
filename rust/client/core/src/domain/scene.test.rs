@@ -1,9 +1,10 @@
 // pxl-core/domain/scene.test.rs
 
+use crate::domain::observer::{self, ObserverPose};
 use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::indicator::ghost::GhostDraw;
-use crate::domain::view::frame::pose::{ObserverPose, view, view_compose};
+use crate::domain::view::frame::pose::view_compose;
 use pxl_render::gpu::draw::{DRAW_PIPELINES, DrawList, lists_sz, set_lists};
 use pxl_spec::space::coord::mat4;
 
@@ -51,7 +52,7 @@ fn an_eye_moved_changes_no_draw() {
             rot: mat4::new(),
         })
     };
-    let before = view().pose;
+    let before = observer::pose();
     view_compose(pose([8_388_600.0, -1200.0, 40.0]));
     draw(&mut list);
     let was = list.take();

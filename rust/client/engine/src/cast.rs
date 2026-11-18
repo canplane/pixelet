@@ -66,13 +66,16 @@ impl Spacing {
     }
 }
 
-/// The zoom asked at each distance from the walk's origin: the camera grid's cells there
-/// (`cell_zoom_at`), held to `range`, asked of a squared distance (`at`). Asking one zoom's
+/// The zoom asked at each distance from the eye: the camera grid's cells there
+/// (`cell_zoom_at`), held to `range`, asked of a squared distance (`at`). `eye` is where the
+/// eye stands, in units from the walk's origin, none for a walk from the eye itself: a node is
+/// asked by how far it lies from the eye, wherever the walk's line starts. Asking one zoom's
 /// cells wherever they are is a range of that zoom alone, as the light's walks ask their band
 /// (pxl-engine `light::Light::band`). `spacing` is how far a beam ray lies from the next of
 /// its grid (`Spacing`, `Until::Beam`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
+    pub eye: [f32; 3],
     pub range: [Zoom; 2],
     pub spacing: Spacing,
 }
@@ -92,9 +95,12 @@ impl Detail {
 
     /// Whether a walk asking this detail may take what a walk asking `other` met: the cell it
     /// stopped at, the sky past it, the line it left. It may only where both asked the same zooms
-    /// at the same spacing.
+    /// from the same eye at the same spacing.
     pub fn alike(self, other: Detail) -> bool {
-        self.range[0] == other.range[0]
+        self.eye[0] == other.eye[0]
+            && self.eye[1] == other.eye[1]
+            && self.eye[2] == other.eye[2]
+            && self.range[0] == other.range[0]
             && self.range[1] == other.range[1]
             && self.spacing.angle == other.spacing.angle
             && self.spacing.across == other.spacing.across
@@ -665,9 +671,9 @@ pub const STEPS_CAP: u32 = 4096;
 /// that child follow from the node's place by the slab test, so no entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
-/// A node's farthest and nearest squared distances from the walk's origin, given its planes
-/// `lo` and `hi` units from the origin on each axis: from its corner farthest from the origin
-/// and from its point nearest it.
+/// A node's farthest and nearest squared distances from a point, given its planes `lo` and
+/// `hi` units from the point on each axis: from its corner farthest from the point and from
+/// its point nearest it.
 fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     let near = [
         lesser(greater(lo[0], 0.0), hi[0]),
@@ -682,20 +688,26 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     [squared(far), squared(near)]
 }
 
-/// The zooms at which every ray from the origin asks a node, from its farthest corner to its
-/// nearest point (`node_dist_sq`, `Detail::at`). They depend on the node and the origin
-/// alone, so a node has one answer for every ray through it. A ray asks no coarser within the
-/// node than at its farthest corner, so this only adds zooms coarser than the ray's own, which
-/// splits more and stops on the same cell.
-fn ask_range(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
+/// The zooms at which every ray asks a node whose planes lie `lo` and `hi` units from the
+/// walk's origin, from its corner farthest from the eye to its point nearest it
+/// (`node_dist_sq`, `Detail::at`). They depend on the node and the eye alone, so a node has
+/// one answer for every ray through it, wherever the ray starts. A ray asks no coarser within
+/// the node than at its farthest corner, so this only adds zooms coarser than the ray's own,
+/// which splits more and stops on the same cell.
+fn ask_range(detail: Detail, lo: [f32; 3], hi: [f32; 3]) -> [Zoom; 2] {
+    let e = detail.eye;
+    let [far, near] = node_dist_sq(
+        [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
+        [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
+    );
     [detail.at(far), detail.at(near)]
 }
 
-/// The zooms every ray from the origin `o` asks the node `n` at (`ask_range`), as the walk
-/// asks them: far, then near.
+/// The zooms every ray of a walk from the origin `o` asks the node `n` at (`ask_range`), as
+/// the walk asks them: far, then near.
 pub fn node_range(o: [i32; 3], n: &Node, detail: Detail) -> [Zoom; 2] {
     let (lo, hi) = bound(n, grid_of(o));
-    ask_range(detail, node_dist_sq(lo, hi))
+    ask_range(detail, lo, hi)
 }
 
 fn squared(v: [f32; 3]) -> f32 {
@@ -821,7 +833,7 @@ impl<A: Copy> Keep<A> for () {
 /// The walk holds its node, each axis an integer in its root (`Node`), and where the ray is,
 /// `t`; the planes, the span and the axis entered across are worked out from those where
 /// asked. A node is entered once and asked whether anything under it may stop the ray at
-/// the zooms every ray from the origin asks within it (`node_range`). A cell, the asset at that
+/// the zooms every ray asks within it (`node_range`). A cell, the asset at that
 /// zoom or air where everything under it is air, is where the walk stops or goes on past. For
 /// an eye or a body it stops where the cell is one `until` stops at, except in the cell it
 /// starts in, and where the ray enters the box of a cell keeping less than its cube
@@ -884,8 +896,7 @@ pub fn walk_at_most<Q: Query>(
         // Only touched, at a face or an edge: not entered, so nothing in it is met.
         let mut into = false;
         if t1 > t0 {
-            let dist_sq = node_dist_sq(lo, hi);
-            let i = q.node(&mut at, n.zoom, n.idx(o), ask_range(detail, dist_sq), t0);
+            let i = q.node(&mut at, n.zoom, n.idx(o), ask_range(detail, lo, hi), t0);
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
                 && lo[1] <= 0.0
@@ -979,7 +990,7 @@ pub fn walk_at_most<Q: Query>(
                     // The grid's rays' spacing at the node's far corner: a split narrower than `2√2` of it may
                     // lie between them (`narrow`).
                     let width = if beam {
-                        detail.spacing.width(libm::sqrtf(dist_sq[0]))
+                        detail.spacing.width(libm::sqrtf(node_dist_sq(lo, hi)[0]))
                     } else {
                         0.0
                     };
@@ -1283,6 +1294,7 @@ pub(crate) mod tests {
         let o = [steps(5.0), steps(y), steps(z)];
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
         let detail = Detail {
+            eye: [0.0; 3],
             range: [UNIT_ZOOM, UNIT_ZOOM],
             spacing: Spacing::NONE,
         };
@@ -1324,6 +1336,7 @@ pub(crate) mod tests {
     #[test]
     fn inverted_range_holds() {
         let detail = Detail {
+            eye: [0.0; 3],
             range: [UNIT_ZOOM, UNIT_ZOOM - 4],
             spacing: Spacing::NONE,
         };

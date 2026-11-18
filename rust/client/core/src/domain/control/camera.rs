@@ -20,8 +20,9 @@ use pxl_spec::space::coord::v3::V3;
 use xpute_kit::math::scalar::wrap;
 
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR, ROT_DAMP};
+use crate::domain::observer::ObserverPose;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
-use crate::domain::view::frame::pose::{self, ObserverPose};
+use crate::domain::view::frame::pose;
 
 // A facing is a direction in spherical coordinates about the world's Z
 // axis. The polar angle θ is measured from straight down and is clamped to

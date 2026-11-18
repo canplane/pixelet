@@ -111,6 +111,7 @@ fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f3
     let p = light::corner_at(c);
     let band = l.band(SIZE, range, p.map(|v| v.div_euclid(light::TILE as i32)));
     let detail = Detail {
+        eye: [0.0; 3],
         range: [band, band],
         spacing: l.spacing(),
     };
