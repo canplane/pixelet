@@ -36,7 +36,11 @@ function same(a: Required<Pose>, b: Required<Pose>): boolean {
   return CHANNELS.every((c) => a[c] === b[c]);
 }
 
-const STILL = { transitionProperty: "none" } as const;
+/** A pose taken at once: a transition of no property, not none at all, so
+ * that Reanimated keeps the pose as where the next transition starts from.
+ * Its duration is given because Reanimated's check of a transition asks for
+ * one beside its property. */
+const STILL = { transitionProperty: "none", transitionDuration: 0 } as const;
 
 export function Motion({
   to,
