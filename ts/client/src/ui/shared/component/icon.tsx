@@ -2,8 +2,8 @@
 
 import { View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
-import Box32 from "@carbon/icons/es/box/32.js";
 import ArrowUp32 from "@carbon/icons/es/arrow--up/32.js";
+import Box32 from "@carbon/icons/es/box/32.js";
 import Car32 from "@carbon/icons/es/car/32.js";
 import Chat32 from "@carbon/icons/es/chat/32.js";
 import Checkbox32 from "@carbon/icons/es/checkbox/32.js";
@@ -28,9 +28,9 @@ import Person32 from "@carbon/icons/es/person/32.js";
 import SailboatCoastal32 from "@carbon/icons/es/sailboat--coastal/32.js";
 import Search32 from "@carbon/icons/es/search/32.js";
 import SendAlt32 from "@carbon/icons/es/send--alt/32.js";
+import Sprout32 from "@carbon/icons/es/sprout/32.js";
 import Sun32 from "@carbon/icons/es/sun/32.js";
 import Train32 from "@carbon/icons/es/train/32.js";
-import Sprout32 from "@carbon/icons/es/sprout/32.js";
 import View32 from "@carbon/icons/es/view/32.js";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";

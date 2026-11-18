@@ -9,16 +9,17 @@
 // ingested from. A release whose taxonomy moved takes a purge by command, and a
 // category missing here is a place with no kind, which no theme row draws.
 //
-// What a place of each category is drawn as: the tags OpenStreetMap
-// Carto styles it under (`carto`, the attributes `style/amenity-points.mss`
-// reads, anything else null as a point's are), the web zoom from which it
-// shows as a dot (`marker-width` with no file) and as its icon, the zoom from
-// which its name shows (`#text-point`'s `text-name: [name]`), its group, and
-// the icon (`symbol`), Maki's file of it under asset/raw/place/symbol/. Each
+// What a place of each category is drawn as: the tags OpenStreetMap Carto
+// styles it under (`carto`, the attributes `style/amenity-points.mss` reads,
+// anything else null as a point's are), the web zoom from which it shows as
+// a dot (`marker-width` with no file) and as its icon, the zoom from which
+// its name shows (`#text-point`'s `text-name: [name]`), its group, and the
+// icon (`symbol`), Maki's file of it under asset/raw/place/symbol/. Each
 // zoom is the one Carto's rules give for those tags. A group's colors are
 // two of IBM Carbon's color tokens (`@carbon/colors` 11.62.0), a hue at its
-// steps 60 and 70: `fill` the icon's disc and the dot, `ink` the name. A category with no row is one
-// Carto draws no point for, so it is neither carried in a tile nor drawn.
+// steps 60 and 70: `fill` the icon's disc and the dot, `ink` the name. A
+// category with no row is one Carto draws no point for, so it is neither
+// carried in a tile nor drawn.
 
 use crate::color::Rgba;
 

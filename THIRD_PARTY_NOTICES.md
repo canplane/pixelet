@@ -65,9 +65,9 @@ that carries them. CC0 asks for no notice.
 
 ## carbon-design-system/carbon — `spec/spec/bake/place_theme.json5`, `rust/client/render/src/look/marker.rs`
 
-The places' colors and the markers' dark gray are IBM's [Carbon][carbon] color tokens, `@carbon/colors`
-11.62.0 (Apache-2.0), copied as values. The license's text is
-[LICENSES/Apache-2.0.txt](./LICENSES/Apache-2.0.txt).
+The places' colors and the markers' dark gray are IBM's [Carbon][carbon] color
+tokens, `@carbon/colors` 11.62.0 (Apache-2.0), copied as values. The license's
+text is [LICENSES/Apache-2.0.txt](./LICENSES/Apache-2.0.txt).
 
 ## gravitystorm/openstreetmap-carto — `spec/spec/asset/color.json5`, `cube.json5`, `spec/spec/bake/place_theme.json5`
 
