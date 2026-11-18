@@ -8,7 +8,7 @@ fixed, so the open part is not rediscovered.
 
 The working tree of the day, R3 (each candidate at its own record, grown again
 only where a box meets what it reads) and R2 (decor asking the world through
-the query's support). `GO_TO` 127.06026, 37.28820, zoomed out to about 1679,
+the query's support). `GO_TO` `<place>`, zoomed out to about 1679,
 polar not set; six left-drag pans of 800 px over about 13 s; dpr 2, 2056 ×
 1169, `resolution` fixed. Grow over the frames with a GPU read. The variants
 were compile-time builds, each reverted.

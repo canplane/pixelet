@@ -1,5 +1,5 @@
 import re,glob,os
-D='/Users/sanghoon/git/canplane/pixelet/tmp/cmp/s23/'
+D='~/git/canplane/pixelet/tmp/cmp/s23/'
 def rep(p):
     t=open(p,errors='replace').read()
     n=re.search(r'frames n=(\d+)\s+over ([\d.]+)s',t); k=re.search(r'kinds\s+(.*?)\s+wakes',t)

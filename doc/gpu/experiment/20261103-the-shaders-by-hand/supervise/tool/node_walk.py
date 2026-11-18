@@ -1,5 +1,5 @@
 import subprocess,glob,os,tempfile
-SP='/private/tmp/claude-501/-Users-sanghoon-git-tmaxoffice-cx/eff52c1d-b098-47ac-a575-b58a0e234362/scratchpad'; d='/private/tmp/claude-501/-Users-sanghoon-git-tmaxoffice-cx/eff52c1d-b098-47ac-a575-b58a0e234362/scratchpad/target/debug/build/pxl-render-8cfddf659c56f728/out/shader'
+SP='<scratch>'; d='<scratch>/target/debug/build/pxl-render-8cfddf659c56f728/out/shader'
 src=open(d+'/walk_node.wgsl').read().split('\n')
 b=max((f for f in glob.glob(SP+'/target/debug/deps/walk-*') if os.access(f,os.X_OK) and '.' not in os.path.basename(f)),key=os.path.getmtime)
 pkg=SP+'/copy/rust/client/render'

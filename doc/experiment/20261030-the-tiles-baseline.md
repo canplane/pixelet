@@ -395,7 +395,7 @@ not counted), main at `127a83946` with the change uncommitted:
   companion in the open.
 
 **What the claimed area is made of** (main at `3bfcdc7d0`, noon, a
-3840×2098 canvas, the browser profile `lof-mac`). A probe not kept counted,
+3840×2098 canvas, the browser profile `<host>`). A probe not kept counted,
 each frame, the screen tiles claimed, those changed this frame (the bound's
 pass, `tile_age` 0) and those the host's marks cover (on the host); the
 reach's share is the changed less the host's.

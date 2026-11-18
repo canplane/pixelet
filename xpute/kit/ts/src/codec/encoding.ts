@@ -74,7 +74,7 @@ export function b64url_to_bytes(b64url: Base64Url): ByteArray {
   // base64url → base64
   let b64: Base64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
 
-  // padding 복원
+  // The padding is put back.
   while (b64.length % 4) {
     b64 += "=";
   }

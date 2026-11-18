@@ -79,7 +79,7 @@ xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Debug \
   -destination 'id=<id>' -derivedDataPath build/derived -quiet
 ../../../script/perf/mac.py xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/pixelet.app
 xcrun simctl privacy booted grant location me.plei.pixelet
-xcrun simctl location booted set 37.2741,127.0437
+xcrun simctl location booted set 37.5665,126.9780
 ../../../script/perf/mac.py xcrun simctl launch booted me.plei.pixelet
 ```
 

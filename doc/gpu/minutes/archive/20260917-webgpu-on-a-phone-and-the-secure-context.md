@@ -7,7 +7,7 @@
 ```
 
 The device had WebGPU. The origin did not. The page was open at
-`http://192.168.0.2:5173` rather than `http://localhost:5173`, and
+`http://<lan-ip>:5173` rather than `http://localhost:5173`, and
 `navigator.gpu` is not exposed outside a secure context — same Chrome, same
 machine, same dev server, two addresses, one of which can draw.
 
@@ -22,7 +22,7 @@ the browser does not consider potentially trustworthy the attribute is simply
 absent — there is no adapter to refuse, no error to catch, nothing to
 feature-detect past `"gpu" in navigator`. The Secure Contexts rules treat
 `http://localhost` and `http://127.0.0.1` as trustworthy and a private LAN
-address as not; `192.168.0.2` is an ordinary insecure origin as far as the
+address as not; `<lan-ip>` is an ordinary insecure origin as far as the
 browser is concerned.
 
 `apps/web/vite.config.ts` sets `host: true`, so the dev server binds every

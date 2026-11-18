@@ -1000,7 +1000,7 @@ phases) beside another session's test drove the load average to 141, and the mac
 stalled until the Claude process went down, taking every background run with it.
 Since then one GPU job runs at a time, with one worker and no build beside a sweep,
 and every run that opens a GPU device, across sessions, holds
-`lockf -k /Users/sanghoon/git/canplane/.gpu.lock`, built first, one mutant a hold.
+`lockf -k ~/git/canplane/.gpu.lock`, built first, one mutant a hold.
 The kill goes on the test binary, inside the lock: a brief's
 `perl -e 'alarm 120; exec @ARGV' lockf … cargo test` killed `lockf` alone, and a
 mutant's test binary ran six minutes past it, outside the lock, beside a second sweep

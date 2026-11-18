@@ -1,6 +1,6 @@
 #!/bin/zsh
-S=/private/tmp/claude-501/-Users-sanghoon-git-canplane-pixelet/572d46ae-efea-42fb-a49d-2e5909f1eb71/scratchpad
-R=/Users/sanghoon/git/canplane/pixelet
+S=<scratch>
+R=~/git/canplane/pixelet
 A=~/Library/Android/sdk/platform-tools/adb
 export CARGO_TARGET_DIR="$R/rust/target/session/572d46ae-efea-42fb-a49d-2e5909f1eb71"
 cd $R

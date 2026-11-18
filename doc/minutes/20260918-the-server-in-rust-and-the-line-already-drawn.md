@@ -885,7 +885,7 @@ the edge and against the origin directly:
 
 ```
 /                                       200   3,193 B (the app)
-/geo/search?q=Bundang                    200   7,593 B
+/geo/search?q=<place>                    200   7,593 B
 /geo/tiles/{terrain,poi,geocode}/…      200
 /asset/e8d81b97…                        200  18,188 B  model/gltf-binary
 /geo/internal/x                         401  (pxl-geo's gate)

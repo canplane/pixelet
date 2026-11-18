@@ -52,8 +52,8 @@ def tile_object(version, name):
 # Any shipped asset's bucket key: the first ingest.json5 lists.
 ASSET_KEY = json5.loads((SPEC / "asset" / "ingest.json5").read_text())["files"]["$value"][0]["key"]
 
-# A land page in Bundang: the zoom-15 tile's name.
-PAGE = "010332102130223"
+# A land page by Seoul's city hall: the zoom-15 tile's name.
+PAGE = "010332102302303"
 # PAGE's divisions page at z5, its first five digits: one zoom under the
 # pyramid's top (pxl-spec zoom.rs `MIN_ZOOM`). Written out, since
 # computing it would copy pxl-spec's arithmetic here.

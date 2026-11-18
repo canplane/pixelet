@@ -158,7 +158,7 @@ hundred MB — plausibly 2–5 min, needs a spike to confirm it's not a blocker)
   `class`/`num_floors`, Base `land_use` `class`) carry enough populated
   attributes to bake against? Places density was ~5x OSM, but that's the
   non-OSM-derived theme — Buildings/Base inherit OSM Korea's known thinness.
-  Needs a Gangnam/Suwon spot-check like the one Places got.
+  Needs a Gangnam/`<place>` spot-check like the one Places got.
 - Terrain bake runtime in a GitHub-hosted runner — the manifest has the
   land-tile count; check it against the 6h job limit (POI already bakes 691k
   places + 35k geocode pages in the same workflow, so likely fine).

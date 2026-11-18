@@ -65,7 +65,7 @@ identical boxes:
 | Area                                                          | Overture Places | OSM (amenity/shop/tourism) | Ratio |
 | ------------------------------------------------------------- | --------------- | -------------------------- | ----- |
 | Gangnam Station                                               | 2,954           | 546                        | 5.4x  |
-| Suwon Maetan-dong (a residential/suburban area, not downtown) | 351             | 67                         | 5.2x  |
+| `<place>` (a residential/suburban area, not downtown)         | 351             | 67                         | 5.2x  |
 
 Consistent ~5x density in both a dense core and a suburban area, not just one
 lucky spot — and the names sampled from both are real, plausible Korean business
@@ -174,7 +174,7 @@ locally:
   per-exact-coordinate).
 - Baked results: POI 694,203 places across 22,259 non-empty pages (51.1 MB gzip,
   vs. OSM's 233,193/20,073/23.3 MB); geocode 35,047 labeled pages (1.9 MB gzip).
-  Spot-checked (Gangnam Station, Suwon City Hall, Gyeongbokgung) against known
+  Spot-checked (Gangnam Station, `<place>`, Gyeongbokgung) against known
   real labels — correct.
 - Client wiring (`config.ts`, `vite.config.ts`, `worker/index.ts`'s `KEY_RE`,
   `.env`/`.env.example`) mirrors POI's own static/live pattern exactly, one more
@@ -194,8 +194,8 @@ deliberately parked, unaffected by today's build.
 
 ### Follow-up, same day: reverse geocoding's real granularity gap
 
-Investigating why "Seoul, Jongno-gu, Sajik-dong" (3 levels) and "Gyeonggi-do,
-Seongnam-si, Bundang-gu" (stuck at 2, missing the dong) looked inconsistent
+Investigating why "Seoul, Jongno-gu, Sajik-dong" (3 levels) and a label in
+Gyeonggi-do, its city and its district (stuck there, missing the dong) looked inconsistent
 surfaced two separate real issues, both fixed:
 
 1. **`region` was filtered out at ingestion** (`KEEP_SUBTYPES` originally kept
@@ -210,16 +210,15 @@ surfaced two separate real issues, both fixed:
    representative point, present even with no boundary mapped). Checked
    nationwide: 21,596 `division`-point rows carry subtype `locality` vs. only
    3,600 `division_area` polygons at that subtype — most of Korea's named
-   localities (Baekhyeon-dong/Sunae-dong in Bundang/Pangyo, confirmed by name)
+   localities (two dongs of that district, confirmed by name)
    have NO mapped polygon at all, only a point. Point- in-polygon reverse
    geocoding structurally can't find these. Fixed by ingesting `division` points
    too (`overture_division_points`) and, when no fine-subtype polygon covers a
    point, looking up the nearest division point _inside_ whatever coarser
    polygon was already matched (not a bare radius — avoids leaking across a real
    boundary) and appending it as an extra, finer part marked `approx: true`.
-   Confirmed live: Sampyeong-dong/ Baekhyeon-dong area pages now resolve to a
-   real 4-level "Gyeonggi-do, Seongnam-si, Bundang-gu, X-dong" label instead of
-   stopping at Bundang-gu.
+   Confirmed live: those dongs' pages now resolve to a real 4-level label,
+   province, city, district and dong, instead of stopping at the district.
 
    Known imprecision, not fixed: this can also surface a _parallel_ naming
    variant rather than a genuine finer level — e.g. Jongno's Sajik-dong (an
