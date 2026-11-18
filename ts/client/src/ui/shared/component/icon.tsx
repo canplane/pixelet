@@ -15,6 +15,7 @@ import CircleDash32 from "@carbon/icons/es/circle-dash/32.js";
 import Close32 from "@carbon/icons/es/close/32.js";
 import Compass32 from "@carbon/icons/es/compass/32.js";
 import Cube32 from "@carbon/icons/es/cube/32.js";
+import CubeView32 from "@carbon/icons/es/cube-view/32.js";
 import Cursor_132 from "@carbon/icons/es/cursor--1/32.js";
 import Debug32 from "@carbon/icons/es/debug/32.js";
 import Earth32 from "@carbon/icons/es/earth/32.js";
@@ -73,6 +74,7 @@ const CARBON = {
   "sun.max": [Sun32, 0],
   "train.side.front.car": [Train32, 0],
   tree: [Sprout32, 0],
+  "view.3d": [CubeView32, 0],
   xmark: [Close32, 0],
 } as const satisfies Record<string, readonly [CarbonIcon, f64]>;
 
