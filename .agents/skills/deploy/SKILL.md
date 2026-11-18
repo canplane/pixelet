@@ -30,6 +30,10 @@ make -j8 check check-build check-xpute && make -j8 test test-xpute test-gpu
 A change that touches a GPU call also takes the web GPU test, as
 [CONTRIBUTING.md](../../../CONTRIBUTING.md#checking-a-change) says.
 
+`check-build` puts the published module in `ts/client/public/core.wasm`, which
+a running dev server serves; `pnpm --dir ts/client build:wasm` puts the dev one
+back.
+
 ## Squash
 
 main is the last squash plus the commits since. Squash those commits on the
