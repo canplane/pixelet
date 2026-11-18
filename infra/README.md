@@ -186,6 +186,21 @@ path is rewritten anywhere. A route outside the roots cannot be reached in
 production: the app's fallback answers it with `index.html`, which looks like
 the app loading rather than a missing route.
 
+**The bucket's key**, once a machine. In the Cloudflare dashboard, create the
+bucket with the name in `ts/server/edge/wrangler.jsonc`
+(`r2_buckets[0].bucket_name`) and keep it **private**; create an R2 API token (an S3-compatible key ID and secret); note
+the account ID. Then make a separate AWS profile:
+
+```bash
+aws configure --profile r2          # region: auto
+aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
+```
+
+`publish.py` reaches the bucket through `script/r2.py`: that profile, or a key in
+`AWS_ACCESS_KEY_ID`; the endpoint `$R2`, else the account's from
+`CLOUDFLARE_ACCOUNT_ID`, else the profile's. A manual `aws s3 sync` also needs
+`AWS_REQUEST_CHECKSUM_CALCULATION=when_required`.
+
 **Deploying the client** is CI's job (§5); by hand it is the script CI runs.
 Neither checks nor tests anything, so `make -j8 check` and `make -j8 test` must
 pass over the commit first, and the servers it talks to must already be deployed
@@ -242,8 +257,11 @@ answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`ts/client/src/ui/feature/setting/info/attribution.tsx`). Check the provider's
-source before shortening, rewording or dropping one.
+(`ts/client/src/ui/feature/setting/info/attribution.tsx`), and over the world
+OpenStreetMap's short form, `© OpenStreetMap`, which the OpenStreetMap
+Foundation's attribution guidelines take over a map
+(`ts/client/src/ui/feature/world/attribution.tsx`). Check the provider's source
+before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |
 | :-------------------------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

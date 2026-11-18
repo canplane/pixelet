@@ -71,6 +71,11 @@ sentences one at a time.
 
 ## Rules
 
+- **A rule the system stands on is stated as a contract.** One sentence, in
+  the document's exact terms, says what holds for every case, what alone may
+  differ and so what breaks it; the section under it is its argument. The
+  code is read against that sentence when it changes, so a sentence any code
+  would pass, or a list of what the code does, guards nothing.
 - **One theme, carried through.** A document is written from its theme, not
   patched from its last version. pixelet's is that the world exists only as far
   as it is seen; each part of `ARCHITECTURE.md` says which promise of the theme
