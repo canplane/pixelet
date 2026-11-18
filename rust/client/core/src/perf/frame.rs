@@ -109,7 +109,7 @@ pub(crate) struct FrameSample {
     /// indexed by `BaseKind`.
     pub loads: [f64; LAYER_CNT],
     /// The bricks the ground's fill filled after the frame.
-    pub fill_cnt: f64,
+    pub fill_brick_cnt: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (sys/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
@@ -227,7 +227,7 @@ words!(FrameSample, frame::WORDS,
     gpu.draw_cnt => frame::DRAW_CNT, gpu.triangle_cnt => frame::TRIANGLE_CNT, gpu.frame => frame::GPU_FRAME,
     gpu.light_changed => frame::LIGHT_CHANGED,
     ray_sample => frame::EYE_CAST,
-    loads => frame::LOADS, fill_cnt => frame::FILL_CNT,
+    loads => frame::LOADS, fill_brick_cnt => frame::FILL_BRICK_CNT,
     device.upload_cnt => frame::UPLOAD_CNT, device.upload_bytes => frame::UPLOAD_BYTES,
     heap_used_bytes => frame::HEAP_USED_BYTES,
 );

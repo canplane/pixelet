@@ -10,7 +10,7 @@
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 
 use crate::domain::layer::Base as _;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_content::strata::{bedrock, top};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{point, wrap_idx};
@@ -85,12 +85,12 @@ impl World {
             nodes(0).all(|x| {
                 let node = (zoom, [wrap_idx(zoom, x), y]);
                 let (line, mut place) = (
-                    TerrainTile::tile_cache().cursor(node, cell_zoom),
+                    IndexedTerrainTile::tile_cache().cursor(node, cell_zoom),
                     Lookup::NONE,
                 );
                 // `lo` and `hi` are the ground's lowest and highest faces in
                 // the node, in leaf cells.
-                TerrainTile::tile_cache()
+                IndexedTerrainTile::tile_cache()
                     .relief(&line, &mut place, node, [cell_zoom, cell_zoom])
                     .exact()
                     .is_some_and(|[[lo, hi], _]| {

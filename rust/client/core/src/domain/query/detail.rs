@@ -4,7 +4,7 @@
 //! distance from the eye, the one rule every reader of the world reads by.
 
 use crate::domain::layer::Base as _;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_engine::cast::{Detail, Spacing};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::q3::Q3;
@@ -31,7 +31,7 @@ pub(crate) fn zoom_range() -> [Zoom; 2] {
 /// once the source declares its top, no coarser than the cells a tile draws.
 pub(crate) fn cell_zoom_drawn(eye: V3, at: V3) -> Zoom {
     let cell_zoom = cell_zoom_read(eye, at).min(GROUND.leaf_cell_zoom());
-    TerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
+    IndexedTerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
 }
 
 /// The leaf tile over `at`: what an answer lacks there where the leaves'

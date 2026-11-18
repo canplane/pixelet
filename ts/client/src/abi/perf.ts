@@ -31,8 +31,8 @@ export const WORST: Method = 4;
 export const STRTAB: Method = 5;
 
 export interface Rows {
-  first: u64;
-  end: u64;
+  first_seq: u64;
+  end_seq: u64;
   bytes: Uint8Array<ArrayBuffer>;
 }
 
@@ -40,15 +40,15 @@ export const ROWS_SZ = 24;
 export const ROWS_ALIGN = 8;
 
 export function store_Rows(w: Lower, at: number, v: Rows): void {
-  w.u64(at, v.first);
-  w.u64(at + 8, v.end);
+  w.u64(at, v.first_seq);
+  w.u64(at + 8, v.end_seq);
   w.arr(at + 16, v.bytes);
 }
 
 export function load_Rows(r: Lift, at: number): Rows {
   return {
-    first: r.u64(at),
-    end: r.u64(at + 8),
+    first_seq: r.u64(at),
+    end_seq: r.u64(at + 8),
     bytes: r.arr(at + 16, Uint8Array),
   };
 }

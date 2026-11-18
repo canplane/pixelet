@@ -7,7 +7,7 @@
 //! the brick's levels, level 0 holding each column's own entry (`mip`), and the spans the query
 //! reads, kept in a run of the ways' pool (`spans_run_words`, `lay_spans`). The core runs
 //! these a part at a time, as its entries have room (pxl-core domain/layer/terrain/clipmap.rs
-//! `fill_share`).
+//! `fill_bricks`).
 
 use crate::answer;
 use crate::clipmap;

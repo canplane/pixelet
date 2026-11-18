@@ -22,7 +22,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::floor;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::domain::observer::eye;
 use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
@@ -100,7 +100,7 @@ pub(crate) fn observation() -> Option<Observation> {
 /// met. A column the world knows nothing of yet gets no brick, since there is
 /// nothing in it for a brick to stand in.
 pub(crate) fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
-    let (Some(min_zoom), Some(flat)) = (TerrainTile::min_zoom(), floor::ring(o)) else {
+    let (Some(min_zoom), Some(flat)) = (IndexedTerrainTile::min_zoom(), floor::ring(o)) else {
         return;
     };
     let height = (o.eye[2] - o.ground).max(0.0);

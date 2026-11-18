@@ -150,7 +150,7 @@ export interface FrameSummary {
   /** The ground's fill after a frame, and the bricks it filled over the
    * window. */
   fill: Percentile;
-  fillCount: f64;
+  fillBrickCount: f64;
   perf: Percentile;
   /** The GPU's busy time: the time its spans ran, with overlapping spans
    * counted once. */
@@ -283,7 +283,7 @@ function frameSummary(stats: F64Array): FrameSummary | null {
     pump: percentileAt(stats, at + layout.pump),
     stage: percentileAt(stats, at + layout.stage),
     fill: percentileAt(stats, at + layout.fill),
-    fillCount: stats[at + layout.fill_cnt],
+    fillBrickCount: stats[at + layout.fill_brick_cnt],
     perf: percentileAt(stats, at + layout.perf),
     gpuBusy: percentileAt(stats, at + layout.gpu_busy),
     gpuBusyKinds: FRAME_KINDS.map((name, k) => ({
@@ -448,7 +448,7 @@ async function rows(
   count: u32 | null,
 ): Promise<{ words: F64Array; lost: u32 }> {
   const k = TABLE_NAMES.indexOf(name);
-  const rowSz = WORD * ROW_WORDS[k];
+  const rowBytes = WORD * ROW_WORDS[k];
   const cap = count ?? U32_MAX;
   // A sequence past the table's end asks for its newest rows (perf.wit
   // `table`).
@@ -460,13 +460,13 @@ async function rows(
     const page = await perf.table(ui, k, at, cap - rowCount);
     // The first call's rows start where the table does; a later call's start
     // past where the last ended only by the rows dropped between them.
-    if (pages.length > 0) lost += Number(page.first - at);
+    if (pages.length > 0) lost += Number(page.first_seq - at);
     pages.push(page.bytes);
-    rowCount += page.bytes.length / rowSz;
-    at = page.first + BigInt(page.bytes.length / rowSz);
-    if (at >= page.end || rowCount >= cap) break;
+    rowCount += page.bytes.length / rowBytes;
+    at = page.first_seq + BigInt(page.bytes.length / rowBytes);
+    if (at >= page.end_seq || rowCount >= cap) break;
   }
-  const out = new Uint8Array(rowCount * rowSz);
+  const out = new Uint8Array(rowCount * rowBytes);
   pages.reduce((o, p) => (out.set(p, o), o + p.length), 0);
   return { words: words(out), lost };
 }

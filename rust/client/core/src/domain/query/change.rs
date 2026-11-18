@@ -10,7 +10,7 @@
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::object::store;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::domain::observer;
 use pxl_global::Global;
 use pxl_spec::brick;
@@ -38,7 +38,7 @@ fn changes() -> &'static mut ChangeLog {
 /// many times it moved. True when anything moved.
 pub(crate) fn take() -> bool {
     let c = changes();
-    TerrainTile::tile_cache().take_changed(&mut c.ground);
+    IndexedTerrainTile::tile_cache().take_changed(&mut c.ground);
     c.ground.sort_unstable();
     c.ground.dedup();
     store::take_damage(&mut c.damage);

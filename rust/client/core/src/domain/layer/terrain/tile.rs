@@ -6,26 +6,26 @@
 //! it goes when the tile does.
 
 use pxl_spec::bake::publication::BaseKind;
-use pxl_spec::bake::tile::terrain::{self, BrickPairs};
+use pxl_spec::bake::tile::terrain::{self, BrickEntries};
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use std::collections::TryReserveError;
 
 #[derive(Default)]
-pub(crate) struct TerrainTile {
+pub(crate) struct IndexedTerrainTile {
     pub(super) tile: terrain::TerrainTile,
-    pub(super) pairs: BrickPairs,
+    pub(super) entries: BrickEntries,
 }
 
-impl TerrainTile {
+impl IndexedTerrainTile {
     /// `tile` with its lines divided among its bricks, which a heap may
     /// refuse the room.
-    pub(crate) fn of(tile: terrain::TerrainTile) -> Result<TerrainTile, TryReserveError> {
-        let pairs = BrickPairs::of(&tile.separation)?;
-        Ok(TerrainTile { tile, pairs })
+    pub(crate) fn of(tile: terrain::TerrainTile) -> Result<IndexedTerrainTile, TryReserveError> {
+        let entries = BrickEntries::of(&tile.separation)?;
+        Ok(IndexedTerrainTile { tile, entries })
     }
 }
 
-impl Tile for TerrainTile {
+impl Tile for IndexedTerrainTile {
     const KIND: BaseKind = BaseKind::Terrain;
 
     fn occupancy(&self) -> Occupancy {

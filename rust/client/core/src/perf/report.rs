@@ -4,7 +4,7 @@
 //! it belongs to that one frame: what the frame measured of itself, what the
 //! renderer made of its frame, and the tiles each base layer took in.
 
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::sys::sched::tick::TickReport;
 use pxl_global::Global;
 use pxl_render::renderer::GpuRead;
@@ -108,7 +108,7 @@ fn cache_cnts() -> ([f64; LAYER_CNT], [f64; LAYER_CNT]) {
         )
     }
     let cnts = BaseKind::ALL.map(|layer| match layer {
-        BaseKind::Terrain => of::<TerrainTile>(),
+        BaseKind::Terrain => of::<IndexedTerrainTile>(),
         BaseKind::Place => of::<PlaceTile>(),
         BaseKind::Division => of::<DivisionTile>(),
         BaseKind::Earth => of::<EarthTile>(),

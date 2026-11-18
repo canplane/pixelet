@@ -24,14 +24,14 @@ import {
 import {
   SOURCE_FAILING,
   SOURCE_REFUSED,
-  type Source,
+  type SourceState,
 } from "@/service/sys/fs/source.ts";
 import { messageKey } from "@/ui/shared/locale/message-key.ts";
 
 export interface Standing {
   boot: Boot;
   gpu: Gpu;
-  source: Source;
+  source: SourceState;
   online: boolean;
   /** Why the server is not answering the world's reads, or null while it
    * answers. */

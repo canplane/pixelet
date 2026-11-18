@@ -13,7 +13,7 @@ use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::sys::io::request::pump;
 use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -136,11 +136,11 @@ fn demand_tick(_: &mut TickContext) {
         api::device_generation(),
     );
     if pinned {
-        TerrainTile::demand().on_changed();
+        IndexedTerrainTile::demand().on_changed();
     }
     demand::admit_arrived();
     changes_step();
-    TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
+    IndexedTerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
     // No place tile is fetched while places are hidden.
     match setting::settings().place {
         true => PlaceTile::demand().step(None, &[]),
@@ -300,7 +300,7 @@ pub(crate) fn refused_frames() -> Refused {
 /// is due by the target interval since the last frame's start, run or
 /// refused (rate.rs `due_at`), which answers its frame's start and the gap
 /// the display is measured by (sys/sched/display.rs). The budget is told the
-/// target the frame is asked on (sys/sched.rs `pace`) and its start
+/// target the frame is asked on (sys/sched.rs `set_pace_ms`) and its start
 /// (`begin_frame`), and the world's frame runs
 /// and ends its entry's budget (`end_frame`), so the entry ends and the
 /// frame's stream leaves for the GPU (link.rs `end`). The task then asks for
@@ -314,7 +314,7 @@ async fn frame_task() {
         sched::invalidated().await;
         let (display_ms, target_ms) = rate::pace_ms();
         let due_at = rate::due_at(sched::frame_at(), (display_ms, target_ms));
-        sched::pace((display_ms, target_ms));
+        sched::set_pace_ms((display_ms, target_ms));
         let frame = vsync::next(clock::mark(due_at)).await.or_bug(Errno::EPROTO);
         display::answered(clock::ms(frame.gap));
         let at = clock::ms(frame.at);
@@ -349,15 +349,15 @@ async fn frame_task() {
 /// Fills the ground's due bricks by one entry's share, apart from the frame
 /// as every task is: it leaves the frame's entry, which the frame's end has
 /// spent, and fills in the entry that wakes it, on that entry's budget
-/// (clipmap.rs `fill_share`), timed while the profiler records into the
+/// (clipmap.rs `fill_bricks`), timed while the profiler records into the
 /// record of the frame it follows.
 #[embassy_executor::task]
 async fn fill() {
     sched::yield_if_spent().await;
     let at = perf_recording().then(now);
-    let fill_cnt = clipmap::fill_share();
+    let fill_brick_cnt = clipmap::fill_bricks();
     if let Some(at) = at {
-        perf_record_fill(now() - at, fill_cnt);
+        perf_record_fill(now() - at, fill_brick_cnt);
     }
 }
 
@@ -437,7 +437,7 @@ fn changes_step() {
     EarthTile::tile_cache().take_changed(earth);
     DivisionTile::tile_cache().take_changed(divisions);
     if shared {
-        TerrainTile::demand().on_changed();
+        IndexedTerrainTile::demand().on_changed();
     }
     if shared || !places.is_empty() {
         PlaceTile::demand().on_changed();

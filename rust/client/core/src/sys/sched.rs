@@ -13,7 +13,7 @@
 //!   and the wait it lets go answers no one.
 //! - Each entry has an end, by one rule (`Budget`): the margin before the
 //!   next frame's start where the core knows it, and one slice from the
-//!   entry's own start where it does not (`begin`, link.rs `enter`; `pace`,
+//!   entry's own start where it does not (`begin`, link.rs `enter`; `set_pace_ms`,
 //!   `begin_frame`); and once a frame has run its entry is spent
 //!   (`end_frame`), so nothing stands between the frame and the entry's end,
 //!   where its stream leaves for the GPU. `spent` reads the end, `run` spends
@@ -246,7 +246,7 @@ pub(crate) fn begin() {
 
 /// The frame asked for is paced on the display's interval and a target
 /// interval, as the frame task asks the display for its vsync.
-pub(crate) fn pace((display_ms, target_ms): (f64, f64)) {
+pub(crate) fn set_pace_ms((display_ms, target_ms): (f64, f64)) {
     let b = &mut sched().budget;
     (b.display_ms, b.target_ms) = (display_ms, target_ms);
 }

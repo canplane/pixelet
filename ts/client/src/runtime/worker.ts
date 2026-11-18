@@ -30,7 +30,7 @@ import { mountObjects } from "@/service/sys/fs/object.ts";
 import {
   currentSource,
   declareSource,
-  type DeclarationOrState,
+  type Source,
   watchSource,
 } from "@/service/sys/fs/source.ts";
 import { setStorage } from "@/service/sys/fs/storage.ts";
@@ -47,7 +47,7 @@ export interface Kept {
 /** The source's state, as the worker tells the page. */
 export interface SourceReport {
   kind: "source";
-  source: DeclarationOrState;
+  source: Source;
 }
 
 /** A kept key the worker wrote, which the page keeps too. */

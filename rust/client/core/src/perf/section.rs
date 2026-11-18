@@ -90,7 +90,7 @@ pub(crate) struct FrameSection {
     /// The ground's fill after a frame, and the bricks it filled over the
     /// window.
     pub fill: Percentile,
-    pub fill_cnt: f64,
+    pub fill_brick_cnt: f64,
     pub perf: Percentile,
     /// Each effect's p95, indexed by `EffectName`.
     pub effects_p95: [f64; EFFECT_CNT],
@@ -139,7 +139,7 @@ words!(FrameSection, stat::frames::WORDS,
     interval => stat::frames::INTERVAL,
     tick => stat::frames::TICK, effect => stat::frames::EFFECT, pump => stat::frames::PUMP,
     stage => stat::frames::STAGE, stage_parts_p95 => stat::frames::STAGE_PARTS_P95,
-    fill => stat::frames::FILL, fill_cnt => stat::frames::FILL_CNT,
+    fill => stat::frames::FILL, fill_brick_cnt => stat::frames::FILL_BRICK_CNT,
     perf => stat::frames::PERF,
     effects_p95 => stat::frames::EFFECTS_P95, invalidations => stat::frames::INVALIDATIONS, gpu_busy => stat::frames::GPU_BUSY,
     gpu_busy_kinds => stat::frames::GPU_BUSY_KINDS,

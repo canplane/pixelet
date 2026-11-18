@@ -1,7 +1,7 @@
 // pxl-core/domain/layer/tile_cache.test.rs
 
 use super::*;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 
 fn asks(tiles: &[Quadrant]) -> FnvHashMap<Quadrant, ()> {
     tiles.iter().map(|&p| (p, ())).collect()
@@ -12,11 +12,11 @@ fn asks(tiles: &[Quadrant]) -> FnvHashMap<Quadrant, ()> {
 /// stale.
 #[test]
 fn shown_as_counted_afresh() {
-    let mut c = TileCache::<TerrainTile>::default();
+    let mut c = TileCache::<IndexedTerrainTile>::default();
     let top = Quadrant::new(LEAF_ZOOM - 2, [40, -20]);
     let [a, b, ..] = top.children();
     let fine = a.children()[0];
-    let check = |c: &TileCache<TerrainTile>, what: &str| {
+    let check = |c: &TileCache<IndexedTerrainTile>, what: &str| {
         let [asked, shown] = c.count_shown();
         assert_eq!(c.is_shown(), asked == shown, "{what}");
         let share = match asked {
@@ -25,8 +25,8 @@ fn shown_as_counted_afresh() {
         };
         assert_eq!(c.shown_share(), share, "{what}");
     };
-    let admit = |c: &mut TileCache<TerrainTile>, p: Quadrant| {
-        c.admit(p, |_| None, |_| Ok::<_, ()>(TerrainTile::default()))
+    let admit = |c: &mut TileCache<IndexedTerrainTile>, p: Quadrant| {
+        c.admit(p, |_| None, |_| Ok::<_, ()>(IndexedTerrainTile::default()))
             .unwrap();
     };
     check(&c, "nothing asked");
@@ -42,7 +42,7 @@ fn shown_as_counted_afresh() {
     check(&c, "a finer one held");
     c.ask(&asks(&[top, a, b, fine]));
     check(&c, "the top asked again");
-    c.set(fine, TerrainTile::default());
+    c.set(fine, IndexedTerrainTile::default());
     check(&c, "the finest set");
     c.ask(&asks(&[]));
     check(&c, "nothing asked again");
@@ -52,10 +52,10 @@ fn shown_as_counted_afresh() {
 /// for it on its next observation.
 #[test]
 fn again_reports_once() {
-    let mut c = TileCache::<TerrainTile>::default();
+    let mut c = TileCache::<IndexedTerrainTile>::default();
     let p = Quadrant::new(LEAF_ZOOM - 2, [40, -20]);
     c.ask(&asks(&[p]));
-    c.admit(p, |_| None, |_| Ok::<_, ()>(TerrainTile::default()))
+    c.admit(p, |_| None, |_| Ok::<_, ()>(IndexedTerrainTile::default()))
         .unwrap();
     let mut changed = Vec::new();
     c.take_changed(&mut changed);

@@ -5,11 +5,11 @@ interface perf {
 
   // Rows of a table, oldest first, as their bytes. A row's sequence is how
   // many rows its table landed before it, counted since the core started and
-  // never again from 0: `first` is the sequence of the first of these rows,
-  // `end` the one past the table's newest row.
+  // never again from 0: `first-seq` is the sequence of the first of these
+  // rows, `end-seq` the one past the table's newest row.
   record rows {
-    first: u64,
-    end: u64,
+    first-seq: u64,
+    end-seq: u64,
     bytes: list<u8>,
   }
 
@@ -19,12 +19,12 @@ interface perf {
   stats: func(window-ms: option<f64>) -> list<u8>;
   // The rows of table `table`, in `TABLE_NAMES`' order, from the sequence
   // `from` on: `cnt` of them at most, and no more than a page holds
-  // (`perf.json5` `LIMIT.PAGE_SZ`). `first` is `from`, or the table's oldest
-  // row where the table has dropped the row at `from`, so `first - from`
-  // rows are lost to the reader that asks from where its last read ended; it
-  // is `end` where `from` is `end`. A `from` past `end` names no row, and
-  // asks for the table's newest `cnt` rows: the reply starts `cnt` rows
-  // before `end`.
+  // (`perf.json5` `LIMIT.PAGE_SZ`). `first-seq` is `from`, or the table's
+  // oldest row where the table has dropped the row at `from`, so
+  // `first-seq - from` rows are lost to the reader that asks from where its
+  // last read ended; it is `end-seq` where `from` is `end-seq`. A `from` past
+  // `end-seq` names no row, and asks for the table's newest `cnt` rows: the
+  // reply starts `cnt` rows before `end-seq`.
   table: func(table: u32, %from: u64, cnt: u32) -> rows;
   // The worst frames (`perf.json5` `WORST`), longest first, all of them.
   worst: func() -> list<u8>;

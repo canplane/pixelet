@@ -47,7 +47,7 @@
 //! and never that nothing fills.
 
 use crate::domain::layer::Base as _;
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
 use pxl_engine::clipmap::{self, Lookup};
@@ -247,10 +247,14 @@ impl ground::Resident for GroundRead<'_> {
         cell_range: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (ground::Extent, bool) {
-        let line =
-            TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cell_range[1]);
+        let line = IndexedTerrainTile::tile_cache().walk_line(
+            self.path,
+            (zoom, [c[0], c[1]]),
+            cell_range[1],
+        );
         let node = (zoom, [c[0], c[1]]);
-        self.relief = match TerrainTile::tile_cache().relief(&line, place, node, cell_range) {
+        self.relief = match IndexedTerrainTile::tile_cache().relief(&line, place, node, cell_range)
+        {
             Answer::Coarser(..) if terrain_clipmap::stood_in(cell_range, node) => {
                 Some([ground::UNBOUNDED; 2])
             }

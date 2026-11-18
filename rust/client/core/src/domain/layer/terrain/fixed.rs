@@ -8,7 +8,7 @@
 //! once, the room a fill works in. The ways live on the heap, in one pool
 //! sized by what is resident (pool.rs).
 
-use crate::domain::layer::terrain::tile::TerrainTile;
+use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use pxl_engine::clipmap::{BRICK_WORDS, SPANS_WORDS};
 use pxl_spec::bake::tile::terrain::ELE_COLUMN;
 use pxl_spec::brick::BRICK_CELL_CNT;
@@ -20,7 +20,7 @@ use pxl_engine::clipmap::SLOT_CNT;
 /// The terrain's range in `.fixed`, which the boot hands in.
 pub(crate) static RANGE: OwnedRange = OwnedRange::new();
 
-const TILE_SLOT_CNT: u32 = TileCache::<TerrainTile>::SLOT_CNT;
+const TILE_SLOT_CNT: u32 = TileCache::<IndexedTerrainTile>::SLOT_CNT;
 
 const fn sum(bytes: &[u32]) -> u32 {
     let mut sum = 0;
