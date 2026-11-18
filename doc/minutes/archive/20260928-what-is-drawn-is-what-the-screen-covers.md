@@ -77,7 +77,7 @@ points.
     exist decided by what the screen showed it needs (virtual texturing's
     feedback, Nanite's streaming).
   - The records cast into directly: the shader walks the heightfield's pyramid
-    by its max mipmap and the objects' sparse bands, so the records are the
+    by its max mipmap and the object sparse bands, so the records are the
     render data and there is no mesh, no mesh bake, no arena and no chunk table.
     Its cost is pixels times steps, the screen's again; what it costs on a
     phone's GPU is unmeasured.
@@ -990,7 +990,7 @@ lease; the renderer quotients the world by its own and by nothing else.
 ## A box is all the view asks
 
 Until now the domain read the world by column: the ground's bound and the
-objects' span over a column, then the z-slices they crossed. Height was a
+object span over a column, then the z-slices they crossed. Height was a
 different kind of thing from x and y in the one place that decides what is
 drawn. Now what a box of the world holds is one question
 (`pxl-spec space/observation.rs` `Bounds::contents`), and both the demand's

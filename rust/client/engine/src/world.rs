@@ -24,7 +24,7 @@ use pxl_spec::way::NOTHING;
 
 /// What a node is handed by the node over it, each source's own part, so that a descent asks
 /// each node's sources once. It holds what is placed (`object::NodeSlot`, a cursor in the
-/// objects' tree), what is known of the service area at the node's shard (`area::Shard`),
+/// object tree), what is known of the service area at the node's shard (`area::Shard`),
 /// and where the clip levels held the ground's cells of a node above it (`clipmap::Lookup`,
 /// `clipmap::step`). The CPU and the GPU hand down the same. The caves are not part of it: a
 /// cube's caves are its own (`Content::hollow`).
@@ -281,7 +281,7 @@ pub const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
 const PLACED_STEP_CNT: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
 /// What is placed at the unit cells of a box, one leaf at a time (`PlacedCursor::next`), each
-/// with its cell and its stored word as the objects' tree holds it (`object`). It is asked of
+/// with its cell and its stored word as the object tree holds it (`object`). It is asked of
 /// the query. It is a cursor rather than a callback so that a GPU, which takes no closure over
 /// a binding's slice, walks it the same way.
 #[derive(Clone, Copy)]

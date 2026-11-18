@@ -3,7 +3,7 @@
 //! wgsl-port: the value space that every layer stores and the engine reads. A ground cell
 //! is a byte. An object's value is a u16: its byte range is the ground's, and the range past
 //! a byte holds what only an object can be. Decor values lie past the cube kind
-//! (`asset/id.json5`). This fixes the ground's and the objects' ranges around the sentinels
+//! (`asset/id.json5`). This fixes the ground's and the object ranges around the sentinels
 //! (`asset/cube.json5` `sentinel`), reads the ways' off the ground's records, and checks the
 //! palette against them.
 
@@ -79,7 +79,7 @@ const _: () = {
     while k < Object::ALL.len() {
         assert!(
             is_object(Object::ALL[k] as u32),
-            "an object's color in the objects' range"
+            "an object's color in the object range"
         );
         k += 1;
     }

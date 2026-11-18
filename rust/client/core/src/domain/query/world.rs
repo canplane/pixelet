@@ -1,7 +1,7 @@
 // pxl-core/domain/query/world.rs
 
 //! The world's answers: the ground and the placed objects over it, read as
-//! one. The objects are all resident, so what the world knows is what the
+//! one. The object layer is all resident, so what the world knows is what the
 //! ground knows.
 
 use pxl_spec::space::coord::zoom::Zoom;
@@ -38,9 +38,9 @@ impl World {
 }
 
 /// What a walk over columns carries from one column to the next
-/// (`World::bound`): the ground's lines and the objects' tree, each stepped
+/// (`World::bound`): the ground's lines and the object tree, each stepped
 /// down from where the last column left off. It stays valid only while
-/// neither the ground nor the objects move.
+/// neither the ground nor the object layer moves.
 #[derive(Default)]
 pub(crate) struct ColumnWalk {
     ground: Path,

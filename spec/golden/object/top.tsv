@@ -1,4 +1,4 @@
-# The top of the objects' tree a source keeps (spec/client/core/sys/io/file.json5 `top`):
+# The top of the object tree a source keeps (spec/client/core/sys/io/file.json5 `top`):
 # each case's writes, `<octkey, asset_id>` applied in order to an empty tree, and the rows they
 # fold to, `<shard's quadkey, fold word>` by shard. Read by the core's store
 # (pxl-core domain/layer/object/repository.test.rs) and by the client's source

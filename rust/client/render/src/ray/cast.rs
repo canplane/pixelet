@@ -98,7 +98,7 @@ pub struct Cast<'a> {
     pub ray_cnt: bool,
 }
 
-/// The objects' tree (pxl-core domain/layer/object/store.rs `objects`): its child
+/// The object tree (pxl-core domain/layer/object/store.rs `objects`): its child
 /// pointer lane and its data lane, with room for `cap` words each before they grow, at
 /// `revision`. `written_groups` names, by their first slots, the child groups written since
 /// revision `since`, the last the core uploaded (pxl-core domain/layer/object/store.rs `Upload`). The
@@ -296,7 +296,7 @@ pub(super) struct CastBuffer {
     shard_cap: usize,
     /// The world surface's drawn pixels, across and down. The cast casts a ray at each.
     size: [u32; 2],
-    /// The objects' child pointer lane then their data lane, `object_cap` words each, and
+    /// The object child pointer lane then their data lane, `object_cap` words each, and
     /// the revision they hold, none before the first upload.
     objects: u32,
     object_cap: usize,
@@ -622,7 +622,7 @@ impl RayPass {
         };
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
         // The pattern names every field the frame hands, so a new field fails to compile until
-        // the cast reads it. The objects' contents are read by their revision. Decor's
+        // the cast reads it. The object contents are read by their revision. Decor's
         // generation reads its own input (`Generator::prepare`), so a change to decor alone
         // casts no ray again.
         let Cast {

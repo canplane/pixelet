@@ -105,7 +105,7 @@ stops what nobody wants any more, ranks the rest by the one policy
  the loader ─ declare(asset, wants) ┘    one pump a frame
                                               │ start / stop
                                               ▼
-                               dispatch ─▶ fetch (tiles, objects)
+                               dispatch ─▶ fetch (tiles, shards) 
                                         └▶ loader (assets)
                                               │
                                               ▼

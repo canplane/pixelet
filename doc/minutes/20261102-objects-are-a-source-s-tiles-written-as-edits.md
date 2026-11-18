@@ -27,7 +27,7 @@ too.
   with no objects has no file.
 - **No migration**: the old blob (`pxl:kept:objects`) is neither read nor moved,
   on the user's word.
-- **The serve order**: the objects' shards ride the ground's order by shell —
+- **The serve order**: the object shards ride the ground's order by shell —
   seen ground, seen objects, unseen ground, unseen objects — then the assets,
   the places and the Earth, the divisions. This continues 2026-09-26's order
   (terrain, the assets decor draws with, the places; placed objects riding the

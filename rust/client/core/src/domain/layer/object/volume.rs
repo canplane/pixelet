@@ -1,7 +1,7 @@
 // pxl-core/domain/layer/object/volume.rs
 
-//! The objects' sparse tree, folded as it is written (store.rs), each branch holding its eight
-//! children folded by the objects' one rule (pxl-engine `object::fold`).
+//! The object sparse tree, folded as it is written (store.rs), each branch holding its eight
+//! children folded by the object one rule (pxl-engine `object::fold`).
 
 use crate::domain::layer::object::sparse_tree::{Slot, SparseTree};
 use pxl_engine::object;

@@ -2,7 +2,7 @@
 
 A layer is where the world's stored data lives in the core, and the only place
 that knows how it is stored. Everything above asks the world's query (`query/`),
-and the query asks the terrain and the objects; no other code reads either
+and the query asks the terrain and the object layer; no other code reads either
 directly, and the compiler holds that: the query is a child of this module
 (`layer.rs`, though its files stand beside the layers), and a layer's reads are
 visible within `layer` alone. What a layer holds, rather than what it answers,
@@ -56,7 +56,7 @@ for the floor's tiles (`earth::window`), each holding its packet until the GPU h
 its texels and then which device generation does, and answered by a coarser
 picture of the whole globe where none is held.
 
-## The objects
+## The object layer
 
 What people place is one sparse octree (`object/store.rs`): each leaf an asset's
 id at its node, each branch its eight children folded. A write splits leaves
@@ -66,7 +66,7 @@ A leaf may carry an extension, such as a marker's words, kept in a pool for its
 class of ids (pxl-spec `object.rs` `class_of`) and placed and erased with
 its leaf.
 
-The objects come from the objects' source, as the files of kind `OBJECT`
+The object layer comes from the object source, as the files of kind `OBJECT`
 (`object/repository.rs`). It keeps a file for each shard that holds objects, and
 the top: what each of those shards folds to. The top is read first and its folds
 stand in the tree where shards are not read; a shard the top lists is read as a

@@ -181,7 +181,7 @@ to smooth.
   > Since 2026-11-16 (`deb1fbb08c`): settled before this minute.
   > [Closing the scheduler](./20261109-closing-the-scheduler-the-reads-and-the-memory.md)
   > kept the location indicator outside the turn's budget, with the glTF parse and the
-  > objects' apply, and the user closed the rest of a recompute's cost, each height's
+  > object apply, and the user closed the rest of a recompute's cost, each height's
   > first ray from the root, as over-improvement. The code is the same as at #98.
 
   > Since 2026-11-16 (`c55e180b1a`): the note above reads more into that minute than

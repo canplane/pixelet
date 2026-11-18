@@ -85,7 +85,7 @@ pub fn boot() {
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slot_cnt));
     // The settings' slot is opened here and read by the frames that follow.
     // What waits on the settings, the profiler and the snapshot, starts once
-    // they are in (frame.rs). The objects are read a shard at a time as the
+    // they are in (frame.rs). The object layer is read a shard at a time as the
     // view asks for them (domain/layer/object/repository.rs).
     settings_open();
     // The UI must hold the core's state from its first render on.
@@ -143,7 +143,7 @@ pub fn end() -> bool {
         }
     }
     // A refused file set aside goes back to its owner: the settings write
-    // theirs from their next keep on, and the objects' file is read again now.
+    // theirs from their next keep on, and the object file is read again now.
     while let Some(r) = file::take_set_aside() {
         match r {
             file::Refused::Storage => on_settings_set_aside(),

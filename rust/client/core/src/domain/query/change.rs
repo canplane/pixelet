@@ -136,7 +136,7 @@ fn join(cells: [[f64; 2]; 2]) {
 /// An answer a step got from the world, kept with the key it was asked for,
 /// the eye it was asked under and the columns it read (`ReadRect`), their
 /// corners in units. It is asked again only when the key changes, when the
-/// eye has moved, or when a change to the ground or the objects touched
+/// eye has moved, or when a change to the ground or the object layer touched
 /// those columns (`forget_touched`). An answer that read nothing is not
 /// kept, since no change would ever tell it to go.
 pub(crate) struct Memo<K, A>(Option<(K, Option<V3>, [[f64; 2]; 2], A)>);

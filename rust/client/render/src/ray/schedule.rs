@@ -14,7 +14,7 @@ use crate::spec::span::{FrameKind, LightChanged};
 pub(super) struct CastRead {
     /// Whether the cast's input is byte for byte the last frame's and the cast's group is made
     /// (cast.rs `prepare`). The input is the eye's words without the light's, the jitter's and
-    /// the grid's; the clip levels' table; the shards; the objects' room and revision; and
+    /// the grid's; the clip levels' table; the shards; the object room and revision; and
     /// the world surface.
     pub same: bool,
     /// Where each pixel's ray passes through its pixel this frame (pxl-engine `eye::JITTER`).

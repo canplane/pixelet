@@ -2,7 +2,7 @@
 
 //! Hands each attempt that the request scheduler starts or stops
 //! (sys/io/request.rs `Event`) to the reader of its source: an asset to
-//! `loader`; a tile, a shard of objects or the objects' top to `fetch`. A key
+//! `loader`; a tile, a shard of objects or the object top to `fetch`. A key
 //! names an attempt only while the attempt is out.
 
 use crate::sys::io::demand::{Source, Stream};

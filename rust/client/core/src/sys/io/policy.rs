@@ -10,9 +10,9 @@
 //!    sphere, the moon's face, the ground's pack or a skin) is drawn whole
 //!    wherever it shows, while a model is one of the things decor draws. The
 //!    Earth's tiles rank with the pictures, since they are the far view's
-//!    picture. The catalog's models come next, then places. The objects'
+//!    picture. The catalog's models come next, then places. The object
 //!    shards follow the ground's order: each shell of the ground, seen and
-//!    then unseen, is followed by the objects of the same shell, so what is
+//!    then unseen, is followed by the object shards of the same shell, so what is
 //!    placed in view comes before ground out of view.
 //! 2. Within a layer, seen comes before unseen, and nearer before farther.
 //!    Among tiles equally near, the finer comes first, so the leaf under the
@@ -35,8 +35,8 @@ use xpute_kit::status::errno::Errno;
 
 /// The shells of a layer, seen and unseen, each a class of its own.
 const SHELL_CNT: u8 = 2;
-/// Terrain and the objects interleave by shell: the terrain of one shell,
-/// then the objects of the same shell. The classes of one shell are
+/// Terrain and the object layer interleave by shell: the terrain of one shell,
+/// then the object shards of the same shell. The classes of one shell are
 /// `GROUND_SHELL` from those of the next.
 const TERRAIN: u8 = 0;
 const OBJECT: u8 = TERRAIN + 1;

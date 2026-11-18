@@ -147,7 +147,7 @@ tree's own, and follow from what it represents:
 | --------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | the pyramid (`layer/quadrant.rs`)                         | 2    | resident by tile: one can be missing                                                  | a layer's fold of all under it                                  | a record a tile                                                                                                                              | from a point, up to the nearest resident tile                   |
 | a clip level's bound (pxl-engine clipmap.rs `bounded`) | 2    | with its brick, while a clip level about the eye, the pivot or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the CPU as a brick is filled, a level a zoom to the brick whole, and uploaded; bricks joined to the clip level's width               | a coarse cell passed whole where a ray is above it              |
-| the objects (pxl-core domain/layer/object/store.rs)       | 3    | by shard; where one is not read, the top's fold stands in                             | its leaf's value, or its eight folded, at every write           | the leaves and each branch's fold, one tree (pxl-core `domain/layer/object/sparse_tree.rs`)                                                  | down a cube's key range, by a box, or along a ray nearest first |
+| the object layer (pxl-core domain/layer/object/store.rs)       | 3    | by shard; where one is not read, the top's fold stands in                             | its leaf's value, or its eight folded, at every write           | the leaves and each branch's fold, one tree (pxl-core `domain/layer/object/sparse_tree.rs`)                                                  | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the ground
 under it — terrain's cells voted and averaged, places summed — so a far view
@@ -166,7 +166,7 @@ fold: a tile of places marks a child none when no cell over it holds two places,
 so the tree of places is only as deep as a crowd needs, and terrain marks only a
 child that is the zero tile, its vote being lossy.
 
-A ray crosses the pyramid and the objects in one descent (pxl-engine
+A ray crosses the pyramid and the object layer in one descent (pxl-engine
 `cast.rs` `first`, which pxl-core domain/query/ray.rs `first_hit` takes on the
 CPU), each node answered from the ground and what is placed together
 (pxl-engine `world.rs` `node`). Where the tile a node needs is missing, the

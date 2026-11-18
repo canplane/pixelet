@@ -42,7 +42,7 @@ So a person is a frame the walk moves, and their model and their chat line are
 two assets in it: neither is anchored to the other.
 
 Alike means one interface, not one behavior. How a kind is drawn is its own: a
-cube in the world's grid is found by the rays through the objects' tree, the
+cube in the world's grid is found by the rays through the object tree, the
 same cube in the pointer's frame is a box mesh, and a kind is still drawn wholly
 on one side. Only the world grid's instances are the world — what `world::node`,
 the walk, an edit and the fold read. An instance in any other frame is drawn and

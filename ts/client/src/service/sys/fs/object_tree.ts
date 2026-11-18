@@ -1,7 +1,7 @@
 // @pxl/client/service/sys/fs/object_tree.ts
 
 /**
- * The rules of the placed objects' tree that the OBJECT backend (object.ts)
+ * The rules of the object tree that the OBJECT backend (object.ts)
  * needs: which shard a leaf lies in, how a write is laid over a shard's
  * leaves, and what a shard folds to in the top of the tree. A leaf is named
  * by its octkey, and the first `SHARD_ZOOM` digits of an octkey are the
@@ -96,7 +96,7 @@ function foldWord(kind: number, share: number): number {
   return ((kind & 0xffff) | (share << 16)) >>> 0;
 }
 
-/** The ground's and the objects' numbers, the cube catalog's rows. */
+/** The ground's and the object numbers, the cube catalog's rows. */
 const CUBES: ReadonlySet<number> = new Set(
   [...ground, ...object].map((c) => c.number),
 );

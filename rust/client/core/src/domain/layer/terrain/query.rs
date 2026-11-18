@@ -27,7 +27,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 /// What only the world's query (domain/query.rs) reads of the ground: a node's
 /// bound and the cursor a descent carries to it, the ground's relief and
 /// columns, and the lines they are read on. A node names part of the hierarchy
-/// the ground shares with the objects; it says what it asks and how fine its
+/// the ground shares with the object layer; it says what it asks and how fine its
 /// cells are, and the answer says what it lacked (`Answer`).
 impl TileCache<TerrainTile> {
     /// The cursor of `node` asked alone, the line its cells at `cell_zoom` are

@@ -1,7 +1,7 @@
 // pxl-core/sys/io/fetch.rs
 
 //! The world's reads: a tile after its bake's token by its quadkey, and a
-//! shard's objects and the objects' top after OBJECT (sys/io/file.rs), each by
+//! shard's objects and the object top after OBJECT (sys/io/file.rs), each by
 //! a task of its own. A body is read whole and answered to the layer that
 //! asked, and so is an absence. The layer decides what an absence means and
 //! settles the fetch, and what it does with the packet is its own.

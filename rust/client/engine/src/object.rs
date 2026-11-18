@@ -1,6 +1,6 @@
 // pxl-engine/object.rs
 
-//! wgsl-port: what is placed, as a descent asks it. It is the objects' one tree (pxl-core
+//! wgsl-port: what is placed, as a descent asks it. It is the object one tree (pxl-core
 //! domain/layer/object/store.rs), read where it lives: two columns of one word a slot.
 //! `first_child` holds a branch's child group's first slot with `BRANCH` set, or 0 for a
 //! leaf. `data` holds a leaf's value and its record's handle, or a branch's fold: the kind
@@ -35,7 +35,7 @@ const FULL_BITS: u32 = FULL.trailing_zeros();
 /// domain/scene/decor/gpu.rs). Each is the columns an object wrote, as a box of leaf cells
 /// `[x0, y0, x1, y1)` with X on any lap. Past this many, the core joins the rest into the last.
 pub const WRITE_DAMAGE_CAP: u32 = 8;
-/// The most damage rects a frame is asked over: the written objects' (`WRITE_DAMAGE_CAP`) and
+/// The most damage rects a frame is asked over: the object writes' (`WRITE_DAMAGE_CAP`) and
 /// two for each of a preview's cuts, since each cut that moved gives its box as it was and as
 /// it is. Past this many, the rest is joined into the last (pxl-render gpu/generator.rs
 /// `hold`). Whatever reads those columns asks them again: decor's generation, and the node
@@ -77,12 +77,12 @@ pub const fn high(word: u32) -> u32 {
     word >> 16
 }
 
-/// A cube's eight children folded by volume: the one rule for what a node of the objects' tree
+/// A cube's eight children folded by volume: the one rule for what a node of the object tree
 /// holds at a coarser zoom. Each child comes as its fold word, with its kind low and the share of
 /// its cube filled high, `FULL` for whole; a leaf of a voxel fills its cube whole, and a leaf of
 /// nothing fills none. The fold's share is the mean of the children's, and its kind is the kind
 /// that makes up most of that fill, a tie going to the corner that pxl-spec `ground::majority`
-/// alternates to. The objects' store folds its tree by this rule as it is written (pxl-core
+/// alternates to. The object store folds its tree by this rule as it is written (pxl-core
 /// domain/layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     let (kind, fill) = (low, high);
@@ -126,7 +126,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 
 /// A leaf's share in its parent's fold (`fold`): a leaf whose value is a voxel fills its cube
 /// whole, and the empty word, or any other, fills none. It is the one rule for whichever side
-/// builds a tree of what is placed (the objects' store, pxl-core domain/layer/object/volume.rs).
+/// builds a tree of what is placed (the object store, pxl-core domain/layer/object/volume.rs).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
     if voxel(id) { fold_word(id, FULL) } else { 0 }

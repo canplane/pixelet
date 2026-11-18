@@ -8,8 +8,8 @@
  * left as its data, such as a tile's quadkey or a load's id, and its handler
  * checks their types and count. A path that leads to no node, to a node with
  * no handler, or whose data its handler does not take, is no file. Only the
- * settings are written; the objects' edits go up as pxl:core object `apply`
- * (object.ts). The settings and the objects' files can be set aside. */
+ * settings are written; the object edits go up as pxl:core object `apply`
+ * (object.ts). The settings and the object files can be set aside. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { ComponentError } from "@xpute/link";

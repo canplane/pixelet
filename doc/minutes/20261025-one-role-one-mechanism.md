@@ -106,7 +106,7 @@ and are taken with that work. The rest stand alone.
 > numbered by `scatter.rs`.
 
 > Since 2026-10-26, 2 is taken: the settings slot is opened on the storage root
-> as the objects' is, and `WORLD_BOOT` carries no settings (`door/apply.rs`,
+> as the object is, and `WORLD_BOOT` carries no settings (`door/apply.rs`,
 > `view/setting/store.rs`). 3 in part: the client's read of the source
 > declaration draws its wait with full jitter
 > (`ts/client/src/namespace/source.ts`), but still never gives up, and its

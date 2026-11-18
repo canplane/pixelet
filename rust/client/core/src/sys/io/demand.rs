@@ -16,7 +16,7 @@ pub(crate) use crate::spec::demand::TaskPhaseName;
 /// Where a stream's wants come from. A `Load` want is an asset file by its
 /// id, which the loader opens (sys/io/loader.rs). A `Base` want is a base
 /// layer's tile by its quadrant. An `Object` want is a shard's objects or the
-/// objects' top.
+/// object top.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Load,

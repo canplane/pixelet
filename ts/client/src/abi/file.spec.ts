@@ -101,7 +101,7 @@ export const write = {
 export const top = {
   /** A `strs` column holding each row's shard by its quadkey. */
   SHARD: 0 as number,
-  /** A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree
+  /** A `u32[]` column holding what each row's leaves fold to, its word in the object tree
    * (pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled. */
   FOLD: 1 as number,
 } as const;

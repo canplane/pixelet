@@ -45,7 +45,7 @@ cut to the cube's heights, or any object in a band the cube holds
 child it would make, so the air over a plain and the air between two things
 stacked apart are never split, counted, fetched for or drawn.
 
-A column's heights — the ground's and the objects' together, and each apart
+A column's heights — the ground's and the object together, and each apart
 where occupancy needs them apart — are read once per revision of the terrain and
 the objects (`Domain::heights`, `spans`) rather than once per chunk per step of
 the budget's search, which had been most of a zoom's turn on a mountain. The

@@ -11,8 +11,8 @@ const _: () = assert!(
 );
 pub use super::object::OBJECT_SCALE_CNT;
 
-/// The objects' coarsest zoom, at scale 0: a placed cell of one unit. The scales are the
-/// objects' own and never the ground's cell.
+/// The object coarsest zoom, at scale 0: a placed cell of one unit. The scales are the
+/// object own and never the ground's cell.
 pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 
 pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_SCALE_CNT as Zoom - 1;

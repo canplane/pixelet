@@ -152,7 +152,7 @@ whole, through tiles, or not at all, so nothing is read back to decide it.
 The GPU's memory has no sum the renderer keeps to, only a bound on each part.
 The terrain's bricks and palette are fixed at build time, and the ways' pool
 grows to a cap the build checks. What is sized by the screen is capped by the
-area drawn (`gpu/surface.rs`). The objects' tree, placed decor, the models and
+area drawn (`gpu/surface.rs`). The object tree, placed decor, the models and
 the images grow with what they hold, each buffer checked only against what
 every device can bind (`frame/shader/floor.rs` `fits`). Past that check the core
 stops. A device that runs out of memory first fails on its own terms: no error

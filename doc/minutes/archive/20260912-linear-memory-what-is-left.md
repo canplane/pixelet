@@ -105,7 +105,7 @@ Ordered as agreed: A, then B, then C.
       field is its base. Commit cd18b2f.
 - [x] A band's overflow sub-voxels (2026-09-12). Entry objects on the band, and
       a map of maps built over them on every scan, became lanes on the band
-      sorted by column at seal, read by binary search; the objects layer's
+      sorted by column at seal, read by binary search; the object layer's
       claimed-voxel Set of strings is an `IndexedMap` scratch over packed
       addresses. Commit 01ecf42.
 - [ ] Layout buckets — **deferred 2026-09-12**, in BACKLOG.md under parked. The

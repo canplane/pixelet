@@ -78,7 +78,7 @@ eight equal leaves are joined back into one, so one picture has exactly one
 tree. Placing air erases what the ground would show.
 
 ```text
-       the core                             the objects' source
+       the core                             the object source
   ┌──────────────┐   the top, first      ┌────────────────────────┐
   │ one tree     │ ◀──────────────────── │ a file for each shard  │
   │              │   a shard, when the   │ that holds objects     │
@@ -88,7 +88,7 @@ tree. Placing air erases what the ground would show.
   └──────────────┘                       └────────────────────────┘
 ```
 
-The objects come from the **objects' source**, which keeps a file for each shard
+The object layer comes from the **object source**, which keeps a file for each shard
 that holds any, and a **top** that says what each of those shards looks like
 folded. The top is read first, so a view from afar draws people's buildings
 without reading one shard, and a shard the top does not list is known to be
@@ -197,7 +197,7 @@ has no such place to stop.
 ### The query, the only seam
 
 Everything that looks at the world asks it the same question, and the **query**
-is the only place that knows how the terrain and the objects, the layers it
+is the only place that knows how the terrain and the object layer, the layers it
 answers from, store their answers. Its files stand beside the layers'
 (`pxl-core domain/query.rs`), and in the module tree it is a child of theirs
 (`domain/layer.rs`): what those two store their answers in is visible within
@@ -445,7 +445,7 @@ noticing:
 
 - The ground is stored as 2.5D, but nothing behaves as 2.5D: every reader asks
   the 3D query, so caves, bores and placed objects are seen alike.
-- Only the query reads the terrain and the objects, the layers it answers from.
+- Only the query reads the terrain and the object layer, the layers it answers from.
   Everything else asks the world, and the compiler refuses their reads anywhere
   else: they are visible within `domain/layer` alone, and the query is its
   child.
@@ -502,7 +502,7 @@ up, and the folders are that order. The check-rules tool holds it.
     view/        the lens, demand               ┐
     query/       the only seam                  ├ the trunk
     observer     the pose the world is seen from│
-    layer/       the base and the objects       ┘
+    layer/       the base and the object        ┘
   ────────────────────────────────────────────────────────────────────
   sys/                   what all of it stands on
     io/          reads and their scheduler
