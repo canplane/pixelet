@@ -5,7 +5,7 @@
 //! sRGB, as a texture reads it, and in alpha the square root of the Black
 //! Marble's lights, so a village keeps its few steps of brightness. Row by row from the
 //! tile's south edge, in the ground lattice's cell order. One XTP tree, as every
-//! other baked tile is; a tile with no object is answered by the global picture.
+//! other baked tile is; a tile with no object is answered by the global image.
 
 use crate::bake::malformed;
 use crate::space::coord::zoom::{MIN_ZOOM, Zoom};
@@ -17,13 +17,13 @@ use xpute_kit::wire::xtp::shape;
 /// a ground cell a texel, so the tile follows the grid as the ground does.
 pub const IMAGERY_ZOOM: Zoom = MIN_ZOOM;
 
-/// How far from the eye the tiles are drawn, before the global picture: the
+/// How far from the eye the tiles are drawn, before the global image: the
 /// ground's demand at that zoom.
 pub const IMAGERY_DIST: f64 = demand_dist(GROUND, IMAGERY_ZOOM);
 
 pub const TILE_SZ: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 
-/// The global picture's texels, across and down, what is drawn past the
+/// The global image's texels, across and down, what is drawn past the
 /// tiles: the whole Earth equirectangular, as pxl-geo-bake bin/imagery.rs
 /// writes it.
 pub const GLOBAL_SIZE: (u32, u32) = (2048, 1024);

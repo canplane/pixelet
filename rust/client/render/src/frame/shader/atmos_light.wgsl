@@ -105,13 +105,13 @@ fn ggx(l: vec3f, v: vec3f, n: vec3f, f0: vec3f, roughness: f32) -> vec3f {
 // What a glossy face mirrors toward `v` of the direct lights that
 // `surface_light_in` scatters. Each is weighed by the face's normal and
 // darkened by its own visibility `lit`, as there. The sky's light is not
-// mirrored, as no picture of the sky is held here to mirror.
+// mirrored, as no image of the sky is held here to mirror.
 fn surface_specular_in(n: vec3f, v: vec3f, f0: vec3f, roughness: f32, lit: vec2f, l: Light, s: Lighting) -> vec3f {
   return l.sun * max(dot(n, s.sun), 0.0) * lit.x * ggx(s.sun, v, n, f0, roughness) + l.other * max(dot(n, s.moon), 0.0) * lit.y * ggx(s.moon, v, n, f0, roughness);
 }
 
 // The light on a face where nothing casts a shadow or closes in: the Earth's
-// picture and the clouds.
+// image and the clouds.
 fn surface_light(n: vec3f, up: vec3f, l: Light) -> vec3f {
   return surface_light_in(n, up, vec2f(1.0), 1.0, l, lights_now());
 }

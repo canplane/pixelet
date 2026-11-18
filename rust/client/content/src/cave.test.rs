@@ -61,13 +61,13 @@ fn every_root_alike() {
     }
 }
 
-/// A picture of one root's caves, for a look only: `cargo test --release
-/// -p pxl-content picture -- --ignored`, written where `CAVE_PICTURE` says.
+/// An image of one root's caves, for a look only: `cargo test --release
+/// -p pxl-content image -- --ignored`, written where `CAVE_IMAGE` says.
 #[test]
 #[ignore]
-fn picture() {
+fn image() {
     use super::{PIPE, holds, hollow_from};
-    let Ok(path) = std::env::var("CAVE_PICTURE") else {
+    let Ok(path) = std::env::var("CAVE_IMAGE") else {
         return;
     };
     let side = 128usize; // The side in blocks, each two units, which makes four roots across.

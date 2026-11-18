@@ -227,7 +227,7 @@ pub mod light {
         /// scales the peak.
         RIM_POWER: f32 = 1.0;
         /// The imagery's reflectance is doubled, a value picked by eye beside the
-        /// original picture. The cities' lights are not scaled by it.
+        /// original image. The cities' lights are not scaled by it.
         IMAGERY_GAIN: f32 = 2.0;
     }
 }

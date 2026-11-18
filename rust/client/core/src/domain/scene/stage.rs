@@ -46,7 +46,7 @@ pub(crate) fn screen_shows_world() -> bool {
     *SCREEN_DEVICE.get(|| None) == Some(api::device_generation())
 }
 
-/// NASA's Blue Marble for July 2004, one picture of the Earth that serves
+/// NASA's Blue Marble for July 2004, one image of the Earth that serves
 /// every hour and season. It is opened after IMAGERY, so it is under that
 /// bake's version.
 const GLOBAL: Load = Load::Global;
@@ -192,7 +192,7 @@ pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit, timed: bool) -> FrameR
         skins: &skins[..skin_cnt],
         character_surfaces: &character_surfaces[..surface_cnt],
         pack: load_of(PACK).and_then(load_image),
-        moon: load_of(moon::PICTURE).and_then(load_image),
+        moon: load_of(moon::IMAGE).and_then(load_image),
         imagery_global: load_image(GLOBAL),
         imagery_layer: ImageryLayer {
             window,

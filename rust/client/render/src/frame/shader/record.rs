@@ -481,7 +481,7 @@ pub const AIR: [[u32; 2]; 6] = [
     [22, TEXTURE_3D],
 ];
 /// The air's bindings the sky alone reads: the sky views, the sun's and the moon's, and the
-/// imagery's picture and tiles (pass/atmosphere.rs `sky_entries`).
+/// imagery's global image and tiles (pass/atmosphere.rs `sky_entries`).
 const SKY_AIR: [[u32; 2]; 4] = [
     [10, TEXTURE],
     [15, TEXTURE],

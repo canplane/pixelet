@@ -61,7 +61,7 @@ pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu
 /// before its name (pxl-spec bake/source.rs `is_version`).
 pub const VERSION_SZ: usize = 32;
 
-/// The imagery's global picture, in place of a tile's name under the imagery
+/// The imagery's global image, in place of a tile's name under the imagery
 /// layer's version: no tile of the pyramid.
 pub const TILE_GLOBAL: &str = "global";
 

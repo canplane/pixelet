@@ -80,15 +80,15 @@ fn map_of(p: vec3f) -> vec2f {
 }
 
 // The imagery's reflectance at the map's place `mercator`, with the square root
-// of its city lights in alpha. It reads the global picture at the place's
-// latitude and longitude, which is zero until the picture has loaded, and a
+// of its city lights in alpha. It reads the global image at the place's
+// latitude and longitude, which is zero until the image has loaded, and a
 // held tile over that.
 fn imagery_at(mercator: vec2f, octaves: f32) -> vec4f {
   let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
   let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);
   let global = textureSampleLevel(imagery_global, atmos_sampler, uv, 0, 0.0);
   // A tile holds a ground cell a texel and takes over from the global
-  // picture, which is eight times coarser. It fades in over the octave in
+  // image, which is eight times coarser. It fades in over the octave in
   // which a pixel goes from covering two cells, at the tiles' reach, to one.
   let share = clamp(-octaves, 0.0, 1.0);
   if (share <= 0.0) {

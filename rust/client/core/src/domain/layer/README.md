@@ -50,20 +50,20 @@ lands.
 **Places** (`place.rs`) hold what Carto shows at a tile's zoom, a place a cell
 one icon wide, each with the zoom it shows from. **Divisions** (`division.rs`)
 hold the finest administrative division each cell is in, from `DIVISION_LEAF`
-up. The **imagery** (`imagery.rs`) is the planet's picture at one zoom only, held
+up. The **imagery** (`imagery.rs`) is the planet's image at one zoom only, held
 for the floor's tiles (`imagery::window`), each holding its packet until the GPU
 has its texels and then which device generation does, and answered by a coarser
-picture of the whole globe where none is held.
+image of the whole globe where none is held.
 
 ## The object layer
 
 What people place is one sparse octree (`object/store.rs`): each leaf an asset's
 id at its node, each branch its eight children folded. A write splits leaves
 only on its path, folds again up it and joins eight equal leaves into one, so
-one picture has one tree. A leaf of air erases what a lower layer would show.
-A leaf may carry an extension, such as a marker's words, kept in a pool for its
-class of ids (pxl-spec `object.rs` `class_of`) and placed and erased with
-its leaf.
+the same contents make one tree. A leaf of air erases what a lower layer would
+show. A leaf may carry an extension, such as a marker's words, kept in a pool
+for its class of ids (pxl-spec `object.rs` `class_of`) and placed and erased
+with its leaf.
 
 The object layer comes from the object source, as the files under `OBJECT`
 (`object/repository.rs`). It keeps a file for each shard that holds objects, and

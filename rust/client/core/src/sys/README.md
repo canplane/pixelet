@@ -140,7 +140,7 @@ one waits for a free credit.
 
 The policy is the only place where one layer's wants are ranked against
 another's. It orders by how a view builds up: the ground and what is placed
-on it first, then the pictures drawn whole, then models, then places, each
+on it first, then the images drawn whole, then models, then places, each
 seen before unseen and nearer before farther.
 
 ## When a read does not come back

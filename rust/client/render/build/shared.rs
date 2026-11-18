@@ -207,7 +207,7 @@ fn atmos_medium() -> String {
         // city's radiance where the imagery shows city lights at full strength.
         ("NIGHT_SKY", rgb(NIGHT_COLOR.map(|c| c * NIGHT_SKY))),
         ("CITY_LIGHT", rgb(CITY_COLOR.map(|c| c * CITY_LIGHT))),
-        // How far from the eye the imagery's tiles are drawn before the global picture takes
+        // How far from the eye the imagery's tiles are drawn before the global image takes
         // over, in units (pxl-spec bake/tile/imagery.rs), and the window's tiles across and the
         // tiles around the world at the imagery's zoom.
         ("IMAGERY_DIST", f(IMAGERY_DIST)),

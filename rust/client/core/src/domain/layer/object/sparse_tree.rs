@@ -4,8 +4,8 @@
 //! group (`BRANCH`), or nothing for a leaf; `data` holds a leaf's value, or a branch's
 //! children as its writer folds them. A child group is a node's 2^D children, named by its
 //! first slot; the first child group is the root's. A write splits leaves only on its path,
-//! frees what it replaces and joins a child group of equal leaves into one, so one picture has
-//! one tree, and it folds every branch left on its path again. A freed child group is reused
+//! frees what it replaces and joins a child group of equal leaves into one, so the same contents
+//! make one tree, and it folds every branch left on its path again. A freed child group is reused
 //! and no other moves, so a subtree comes and goes without the other child groups changing
 //! place. The child groups a write changes are listed so that a copy of the lanes can take
 //! just those (`take_written`): its path's, its leaf's and those it allocates. A freed child

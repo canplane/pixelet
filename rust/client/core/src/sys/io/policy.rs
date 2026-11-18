@@ -6,11 +6,11 @@
 //! those seen and those unseen.
 //!
 //! 1. Layers rank in the order a view builds up. Terrain comes first. The
-//!    pictures come before the models, because a picture (the imagery's global
-//!    picture, the moon's face, the ground's pack or a skin) is drawn whole
+//!    images come before the models, because an image (the imagery's global
+//!    image, the moon's face, the ground's pack or a skin) is drawn whole
 //!    wherever it shows, while a model is one of the things decor draws. The
-//!    imagery's tiles rank with the pictures, since they are the far view's
-//!    picture. The catalog's models come next, then places. The object shards
+//!    imagery's tiles rank with the images, since they are the far view's
+//!    image. The catalog's models come next, then places. The object shards
 //!    follow the ground's order: each shell of the ground, seen and then
 //!    unseen, is followed by the object shards of the same shell, so what is
 //!    placed in view comes before ground out of view.
@@ -41,11 +41,11 @@ const SHELL_CNT: u8 = 2;
 const TERRAIN: u8 = 0;
 const OBJECT: u8 = TERRAIN + 1;
 const GROUND_SHELL: u8 = 2;
-/// The pictures, and the imagery's tiles seen then unseen. A file ranks here or
-/// at `ASSET` by whether it is a picture or a model, never by which file it
+/// The images, and the imagery's tiles seen then unseen. A file ranks here or
+/// at `ASSET` by whether it is an image or a model, never by which file it
 /// is.
-const PICTURE: u8 = TERRAIN + SHELL_CNT * GROUND_SHELL;
-const ASSET: u8 = PICTURE + SHELL_CNT;
+const IMAGE: u8 = TERRAIN + SHELL_CNT * GROUND_SHELL;
+const ASSET: u8 = IMAGE + SHELL_CNT;
 const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELL_CNT;
 
@@ -89,7 +89,7 @@ pub(crate) fn rank(stream: Stream, id: u64, order: Order) -> Rank {
     let zoom = || Quadrant::of_id(id).zoom as u8;
     let (class, dist, detail) = match stream.row().class {
         Class::File => match of_id(id) {
-            Some((LoadKind::Image, _)) => (PICTURE, 0.0, 0),
+            Some((LoadKind::Image, _)) => (IMAGE, 0.0, 0),
             _ => (ASSET, 0.0, 0),
         },
         Class::Aside => (ASIDE, 0.0, 0),
@@ -97,7 +97,7 @@ pub(crate) fn rank(stream: Stream, id: u64, order: Order) -> Rank {
         _ if order == Order::LAST => (ASIDE, 0.0, 0),
         Class::Ground => (TERRAIN + unseen * GROUND_SHELL, order.near, zoom()),
         Class::OnGround => (OBJECT + unseen * GROUND_SHELL, order.near, 0),
-        Class::Picture => (PICTURE + unseen, order.near, zoom()),
+        Class::Imagery => (IMAGE + unseen, order.near, zoom()),
         Class::Place => (PLACE + unseen, order.near, zoom()),
     };
     Rank {
