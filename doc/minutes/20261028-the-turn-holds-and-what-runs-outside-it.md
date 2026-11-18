@@ -1,7 +1,7 @@
 # The turn holds its budget, and what runs outside it is cut
 
-**2026-10-28** — recorded with the user, by pixelet-d6 with pixelet-44, -53 and
--81. Main was at `d9ce6dc35`. Measured on the session's release builds (no
+**2026-10-28** — recorded with the user, by one session with three
+others. Main was at `d9ce6dc35`. Measured on the session's release builds (no
 `pxl`, the panel's Report and Trace) and on a probe export of the scheduler that
 was not kept.
 
@@ -132,7 +132,7 @@ and does real work is the hazard.
 - Memory and the turn stay as they are.
 - The fetch order stays as it is: no aging, and no cap on a layer. The user
   agreed to go on with this.
-- pixelet-81 corrects `window::fold` so that an absent square is bounded by
+- Another session corrects `window::fold` so that an absent square is bounded by
   the finest window holding it, and keeps the zero entry only where no window
   holds the square.
   - The CPU read the GPU's fold back a frame or more late
@@ -143,17 +143,17 @@ and does real work is the hazard.
     changes, and the read-back is retired.
   - This shortens places' surface rays and every vertical ray from the top
     alike.
-- pixelet-44 runs places' `show` under the pass, nearest first, with what is
+- Another session runs places' `show` under the pass, nearest first, with what is
   left carried to the next turn, in the form the cells' read already takes.
 
   > Since 2026-11-17 (`ff07ca506e`): taken up only then. A place's surface is asked
   > under `sched::run`, the nearest first and only where Carto shows it, standing on
   > its last surface until asked; a pin crowd's stand alike.
-- pixelet-53 makes the grounding ask each cell's height once, from a grid of
+- A third session makes the grounding ask each cell's height once, from a grid of
   the zone's cells and their ring, about 57 asks instead of 185, the
-  instances byte-identical. Before that, 53 counts `ground` calls on a still
+  instances byte-identical. Before that, it counts `ground` calls on a still
   view and on a pan, to tell a moving fix from a change in the columns.
-- pixelet-53 also steps the puck's bob and spin as the clouds drift, under one
+- The third session also steps the puck's bob and spin as the clouds drift, under one
   rule:
   - `seen_step_s` sits in `domain/view/lens.rs` beside `cell_there`. It is
     the time a motion takes to carry what it moves a share of the camera cell

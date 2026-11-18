@@ -61,8 +61,8 @@ pub(crate) fn layouts(module: &naga::Module, name: &str) -> Vec<&'static str> {
 /// Whether `ty` lies with nothing between its words, so no backend lays it out its own way: a
 /// four-byte scalar or atomic, a `vec4` of them, a `vec2` of them beside nothing else, an array
 /// of those whose stride is its element, or a struct of those with nothing between its members.
-/// A `vec3`, a matrix or a padded struct is where the S23's Vulkan read what the WGSL did not
-/// say.
+/// A `vec3`, a matrix or a padded struct is where an Android phone's Vulkan read what the WGSL
+/// did not say.
 fn has_no_room(module: &naga::Module, ty: naga::Handle<naga::Type>, in_struct: bool) -> bool {
     use naga::TypeInner::{Array, Atomic, Scalar, Struct, Vector};
     use naga::VectorSize::{Bi, Quad};
@@ -88,9 +88,9 @@ fn has_no_room(module: &naga::Module, ty: naga::Handle<naga::Type>, in_struct: b
     }
 }
 
-/// Refuses, in every assembled module, compute and render, what the Galaxy S23's driver or
+/// Refuses, in every assembled module, compute and render, what an Android phone's Vulkan driver or
 /// Safari fails to compile, and a binding a backend may lay out otherwise than the host writes it
-/// (`has_no_room`). The S23's Vulkan driver refuses a module whose struct holds a struct,
+/// (`has_no_room`). That driver refuses a module whose struct holds a struct,
 /// directly or in an array, one where a function's local is a struct or is or holds an array,
 /// one where a function returns what holds an array, and one that reads a constant, a `let` or
 /// a `var<private>` array of vectors at a place found as it runs: Tint holds a constant or a

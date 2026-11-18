@@ -2,7 +2,7 @@
 
 **2026-10-28.** E8: how the view looks with a wider vertical FOV and with a
 coarser camera grid cell, seen side by side. Exports and ports only, at the
-user's word through pixelet-81.
+user's word through another session.
 
 ## Why
 

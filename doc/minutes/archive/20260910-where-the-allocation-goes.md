@@ -607,12 +607,12 @@ That constraint is the residue worth carrying, not the two repairs.
 ## Sources
 
 ```
-~/Downloads/A-Trace-20260910T080510.json.gz             jump,   POI on
-~/Downloads/B-Trace-20260910T080618.json.gz             pan,    POI on
-~/Downloads/B1-Trace-20260910T080716.json.gz            pan,    POI off
-~/Downloads/C-Trace-20260910T080816.json.gz             rotate, POI on
-~/Downloads/pxl-ledger-2026-09-09T22-28-36-003Z.json    ledger run A
-~/Downloads/pxl-ledger-2026-09-09T22-34-38-426Z.json    ledger run B
+<scratch>/A-Trace-20260910T080510.json.gz             jump,   POI on
+<scratch>/B-Trace-20260910T080618.json.gz             pan,    POI on
+<scratch>/B1-Trace-20260910T080716.json.gz            pan,    POI off
+<scratch>/C-Trace-20260910T080816.json.gz             rotate, POI on
+<scratch>/pxl-ledger-2026-09-09T22-28-36-003Z.json    ledger run A
+<scratch>/pxl-ledger-2026-09-09T22-34-38-426Z.json    ledger run B
 ```
 
 The Chrome files are gzipped Chrome trace JSON; the ledger files are Perfetto

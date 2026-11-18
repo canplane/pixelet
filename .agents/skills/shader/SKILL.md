@@ -18,7 +18,7 @@ After writing, in this order:
 1. `./script/diff-check.py`.
 2. The shader probe in Safari on the Mac.
 3. The page, for what the change draws (`PXL_PREVIEW_PORT=<port> make preview`).
-4. The S23, or name it as not run.
+4. An Android phone, or name it as not run.
 
 ## The probe
 
@@ -49,7 +49,7 @@ open -g -a Safari http://127.0.0.1:<port>/probe.html
   path>` probes a shader recorded under an experiment of `doc/`.
 - Stop the server when it has ended.
 
-## The S23
+## An Android phone
 
 With the probe served on port 5173 under script/perf/android.py, over USB, `adb forward tcp:9333
 localabstract:chrome_devtools_remote` and `adb reverse tcp:5173 tcp:5173`, then

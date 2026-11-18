@@ -1,5 +1,5 @@
 #!/bin/zsh
-M=~/git/canplane/pixelet; O=$M/tmp/cmp
+M=$(git -C ${0:A:h} rev-parse --show-toplevel); O=$M/tmp/cmp
 (cd $M/ts/client && CARGO_TARGET_DIR=$O/t-main pnpm build:wasm && CARGO_TARGET_DIR=$O/t-main pnpm build:brand && node script/web.ts html) > $O/main-build.log 2>&1 || { tail -5 $O/main-build.log; exit 1; }
 lsof -nP -iTCP:3001 -sTCP:LISTEN >/dev/null || (cd $M/rust && CARGO_TARGET_DIR=$O/t-main nohup ../script/with-env.sh cargo serve-tile --shelf $M/out > $O/tile.log 2>&1 &)
 lsof -nP -iTCP:8298 -sTCP:LISTEN >/dev/null || (cd $M/ts/client && PXL_DEV_SOURCE=shelf EXPO_NO_TYPESCRIPT_SETUP=1 CI=1 nohup ./node_modules/.bin/expo start --web --port 8298 > $O/main.log 2>&1 &)

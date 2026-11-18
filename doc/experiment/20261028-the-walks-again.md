@@ -76,7 +76,7 @@ device's location (terraces by water).
   (`raster::EYED`). The added ones are the side faces: thin at grazing,
   wide on terrace steps looking down.
 
-**Reviewed before the build** (pixelet-d3, pixelet-1d [faaf39]):
+**Reviewed before the build** (two other sessions [faaf39]):
 
 - A LINE bit is a sound openness test at the stop's zoom, if a lenient one.
   A side face can still show past an undrawn finer or partial neighbor, as

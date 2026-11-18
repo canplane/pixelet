@@ -1,6 +1,6 @@
 #!/bin/zsh
 S=<scratch>
-R=~/git/canplane/pixelet
+R=$(git -C ${0:A:h} rev-parse --show-toplevel)
 A=~/Library/Android/sdk/platform-tools/adb
 cd "$S"
 $A shell input keyevent KEYCODE_WAKEUP

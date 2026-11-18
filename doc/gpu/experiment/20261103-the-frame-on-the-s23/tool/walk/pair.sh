@@ -1,8 +1,8 @@
 #!/bin/zsh
 S=<scratch>
-R=~/git/canplane/pixelet
+R=$(git -C ${0:A:h} rev-parse --show-toplevel)
 A=~/Library/Android/sdk/platform-tools/adb
-export CARGO_TARGET_DIR="$R/rust/target/session/572d46ae-efea-42fb-a49d-2e5909f1eb71"
+export CARGO_TARGET_DIR="$R/rust/target/session/$CLAUDE_CODE_SESSION_ID"
 cd $R
 for t in f9f66682e e8d616ba4; do
   git worktree add --detach "$S/w-$t" $t >/dev/null 2>&1 || { echo "worktree $t failed"; exit 1; }

@@ -172,7 +172,7 @@ holds", "A ray a pixel").
    ground "a tile's 512 × 512 cells, each a block shifted up to its cell's
    height", so the grid is the ground's representation and the samples are its
    source. `read` stays the one producer of a cell's height. Ordered 2026-10-14:
-   pixelet-01 the portable and shader half, pixelet-fb the residency and
+   one session the portable and shader half, another the residency and
    binding.
 2. **The bound from the grid.** A maximum and minimum pyramid over a tile's
    cells, from the grid's own reads, takes the place of what `relief` derives.

@@ -82,19 +82,28 @@ Make the program faster while keeping every condition the design met.
   `xcrun xctrace record --device <id> --template 'Activity Monitor' --all-processes
   --time-limit <n>s` started after the launch, and `Jetsam` records from `xcrun
   devicectl device info files --domain-type systemCrashLogs`.
+- A measurement has one purpose of two, never both. To watch for a regression,
+  the tree before the change and the change are compared by turns, on the
+  Android phone's Chrome and on the Mac's Safari. To record where the project
+  stands, the final commit alone is measured on every platform it runs on (the
+  Android phone's Chrome and app, the iPhone's Safari and app, the Mac's Chrome
+  and Safari) and compared with nothing.
 - One run decides nothing. A difference is said only of rounds taken by turns
   on one device, and a rise is first read in the code: the report's `steps` and
   `spans` name where the time went. A run whose device another process kept
-  busy (its `state` lines) is void and is run again alone.
+  busy (its `state` lines) is void and is run again with its device to itself.
 - `script/perf/gate.py <vendor> <base> <change> [rounds]` runs
   only when the user orders a comparison, on the two builds they name, the
   deployed build included. It only assembles: it runs the vendor's script on them
   by turns, keeps each run under `tmp/perf/` and compares their `values.json`.
-- The devices: the S23's Chrome (Tint, Vulkan, a weak mobile GPU) for
-  performance, hot; Safari on the Mac (WebKit's compiler, Metal) for the iPhone.
-  Mac Chrome only shows a page running: its figures are cited for nothing
-  else. Mobile web is the minimum; no polyfill
-  or fallback for what time will fix.
+- Devices are apart: a phone's runs and the Mac's go side by side, and only one
+  device's own runs go one at a time. A build that is ready is measured without
+  waiting on another device's work.
+- Of the two a regression is watched on, the Android phone's Chrome (Tint,
+  Vulkan, a weak mobile GPU) decides performance, hot, and the Mac's Safari
+  (WebKit's compiler, Metal) stands for the iPhone. The Mac's Chrome only shows
+  a page running: its figure enters a record and decides nothing. Mobile web is
+  the minimum; no polyfill or fallback for what time will fix.
 - Each experiment gets a journal entry under `doc/experiment/`, or
   `doc/gpu/experiment/` for the GPU's: tried, came of it, how we know, kept or
   dropped.

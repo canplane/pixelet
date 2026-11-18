@@ -3,7 +3,7 @@
 **2026-11-13** — recorded with the user. Main was at `021afd1dbc` when this was
 written. It follows `20261112-xpute-as-objects-references-and-methods.md`. Every
 item says who decided it: **the user**, or **the agents** (reduce-s23-light-p95
-and pixelet-68) within what the user gave them. An agent's plan is never written
+and another session) within what the user gave them. An agent's plan is never written
 as the user's decision.
 
 ## The rule the user set

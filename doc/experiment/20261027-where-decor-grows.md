@@ -43,7 +43,7 @@ in a span of its own, for one build: `decor_cs` p50 5.05, p95 18.7; mark p95
   the kernel's size and the occupancy it leaves, not the work its lanes do,
   is the likely cost; the third shows the lanes cheap where they return
   early in it. Not settled.
-- **Serializing a patch's world reads made a load frame 117 ms** (pixelet-d6,
+- **Serializing a patch's world reads made a load frame 117 ms** (another session,
   a thread a patch growing all its candidates). The contest stays a patch's
   (`decor_thin_cs`), the growth a record's (`decor_cs`).
 

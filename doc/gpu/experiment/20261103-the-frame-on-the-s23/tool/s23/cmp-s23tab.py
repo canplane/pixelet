@@ -1,5 +1,5 @@
-import re,glob,os
-D='~/git/canplane/pixelet/tmp/cmp/s23/'
+import re,glob,os,subprocess
+D=subprocess.check_output(["git", "-C", os.path.dirname(os.path.abspath(__file__)), "rev-parse", "--show-toplevel"], text=True).strip()+'/tmp/cmp/s23/'
 def rep(p):
     t=open(p,errors='replace').read()
     n=re.search(r'frames n=(\d+)\s+over ([\d.]+)s',t); k=re.search(r'kinds\s+(.*?)\s+wakes',t)

@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
-const require = createRequire('~/git/canplane/pixelet/ts/app/web/src/x.js');
+import { execFileSync } from 'node:child_process';
+const root = execFileSync('git', ['-C', import.meta.dirname, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+const require = createRequire(root + '/ts/app/web/src/x.js');
 const { create, globals } = require('webgpu');
 Object.assign(globalThis, globals);
 const gpu = create([]);

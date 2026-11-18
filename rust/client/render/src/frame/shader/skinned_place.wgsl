@@ -10,7 +10,7 @@
 // struct built from them makes Safari's WebGPU lose its GPU process.
 fn draw_translation() -> vec3f { return from_eye(skinned_q(), skinned_r()); }
 
-// The palette is read as vec4 columns, because the Galaxy S23's Vulkan driver misreads an
+// The palette is read as vec4 columns, because an Android phone's Vulkan driver misreads an
 // `array<mat4x4f>` in storage.
 @group(3) @binding(0) var<storage, read> palette: array<vec4f>;
 
