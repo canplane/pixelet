@@ -112,7 +112,7 @@ fn a_body_is_drawn_clear_of_the_wall_beside_it() {
 fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     use crate::domain::layer::object::store::Store;
     use crate::domain::query::change::Memo;
-    use crate::domain::query::test::{flat_at_five, look_from, placed, write};
+    use crate::domain::query::test::{flat_at_five, placed, set_eye, write};
     use crate::domain::scene::character::companion::drawn_at;
     use pxl_spec::asset::{AssetId, cube};
     use pxl_spec::bake::constant::OBJECT_COARSEST;
@@ -122,7 +122,7 @@ fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
     write(&mut store, [x + 1.0, y, 5.0], OBJECT_COARSEST, wall);
     placed(store);
     let at = [x + 0.9, y + 0.5];
-    look_from([at[0], at[1] - 3.0, 8.0]);
+    set_eye([at[0], at[1] - 3.0, 8.0]);
     let mut memo = Memo::NONE;
     let [drawn_x, drawn_y, _] = drawn_at(&mut memo, at, 5.0, 0.25);
     assert_eq!([drawn_x, drawn_y], [x + 0.75, y + 0.5]);
@@ -171,7 +171,7 @@ fn a_character_is_drawn_where_it_shows() {
 #[test]
 fn a_step_is_walked_where_a_body_shows_at_both_its_ends() {
     use crate::domain::layer::object::store::Store;
-    use crate::domain::query::test::{flat_at_five, look_from, placed};
+    use crate::domain::query::test::{flat_at_five, placed, set_eye};
     use crate::domain::query::{is_unknown, over, unknown};
     use crate::domain::scene::character::companion::walk_to;
     use pxl_spec::space::coord::world;
@@ -181,7 +181,7 @@ fn a_step_is_walked_where_a_body_shows_at_both_its_ends() {
     let world = placed(Store::default());
     let edge = draw_dist(GROUND, LEAF_ZOOM - 1);
     let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    look_from([x + 0.5, y - 3.0, 8.0]);
+    set_eye([x + 0.5, y - 3.0, 8.0]);
     let near = [x + 3.5, y + 0.5];
     assert_eq!(
         walk_to(world, &from, near),

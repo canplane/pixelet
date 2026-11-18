@@ -379,26 +379,20 @@ These are carried into `AGENTS.md`, the code skill and `doc/README.md`.
 > hot (`doc/experiment/20261118-a-node-not-held-splits-measured`); the form committed was
 > not measured, its GPU's walk being the base's.
 
-> Since 2026-11-18 (this note's commit), on the user's word that near and far are told
-> from the eye and from nothing else: every walk asks a node by its distance from the
-> observer's eye, wherever its line starts (pxl-engine `cast::Detail::eye`, pxl-core
-> `domain/query/detail.rs`), where a reader asked from where it stood. The pose the
-> world is seen from is `domain/observer.rs`, under the query in the layers' order,
-> and the view holds none. With no observer a walk answers a lack. A kept answer is
-> kept for the eye it was asked under (`change::Memo`, a place's `asked`, a pin's
-> `crowd`). A body's cell is the one the eye draws the ground with where it stands,
-> `floor_drawn` is `floor_under`, and a place has one height again. The eye a pan
-> passed to its walk (item 5) is gone with every other eye passed beside the
-> observer's: a pan reads the drawn eye. Built and its tests run; not run in the app.
+> Since 2026-11-18, on the user's word that near and far are told from the eye and from
+> nothing else: every walk asks a node by its distance from the observer's eye, wherever
+> its line starts (pxl-engine `cast::Detail::eye`, pxl-core `domain/query/detail.rs`),
+> where a reader asked from where it stood. The pose the world is seen from is
+> `domain/observer.rs`, under the query in the layers' order, and the view holds none.
+> With no observer a walk answers a lack. A kept answer is kept for the eye it was
+> asked under (`change::Memo`, a place's `asked`, a pin's `crowd`). A column has one
+> cell for an eye, the one drawn at its ground's surface, whatever height in it is
+> asked; `floor_drawn` is `floor_under`, and a place has one height again. The eye a
+> walk takes decides only whether there is a body to walk (`body_shown`): the
+> observer's for a body in the world, and for a pan the eye the camera keeps over the
+> pivot it starts from, as item 5 settled it. Built and its tests run; not run in the
+> app.
 
 > Since 2026-11-18 (this note's commit): the experiment the notes above name is
 > `doc/experiment/20261118-the-days-structure-against-the-tree-before`, renamed for what
 > it holds.
-
-> Since 2026-11-18 (this note's commit): the note above says a pan's eye is gone, and
-> it is back. The eye a walk takes decides only whether there is a body to walk
-> (`body_shown`), and for the camera's own pivot it is the eye the camera keeps over
-> that pivot, the drawn eye moved by as far as the pan's start leads the drawn pivot,
-> as item 5 settled it; a body in the world takes the observer's. What a walk reads
-> it reads by the observer's eye. A column has one cell for an eye, the one drawn at
-> its ground's surface, whatever height in it is asked.

@@ -16,7 +16,7 @@ use crate::domain::observer;
 use crate::domain::param;
 use crate::domain::query::World;
 use crate::domain::query::change::Memo;
-use crate::domain::query::{floor_of, is_unknown, over, unknown};
+use crate::domain::query::{floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
     BODY_HALF_WIDTH_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
@@ -468,14 +468,11 @@ fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
 }
 
 /// Slides a step through `world` from `from` toward `to`, a body the
-/// observer's eye sees (`World::step_slide`). With no observer there is no
-/// body to walk.
+/// observer's eye sees (`World::step_slide`). With no observer the body's
+/// own place stands for the eye.
 pub(super) fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
-    let to = world_to_canonical(&[x, y, 0.0]);
-    match observer::eye() {
-        Some(eye) => world.step_slide(from, &to, &world_to_canonical(&eye), true),
-        None => unknown(&to),
-    }
+    let eye = observer::eye().map_or(*from, |eye| world_to_canonical(&eye));
+    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), &eye, true)
 }
 
 /// Where a body `half` wide on each side is drawn for `at`, on the floor the

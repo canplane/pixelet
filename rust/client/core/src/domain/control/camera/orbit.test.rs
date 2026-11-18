@@ -8,7 +8,7 @@ use super::*;
 use crate::domain::layer::Answer;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, look_from, placed, withhold_at, write};
+use crate::domain::query::test::{flat_at_five, placed, set_eye, withhold_at, write};
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::{self};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
@@ -315,11 +315,11 @@ fn a_way_ends_short_of_an_eye_in_something_solid() {
     cube_at(&mut store, eye(&at_dist(40.0)).0.map(libm::floor));
     let world = placed(store);
     let from = at_dist(320.0);
-    look_from(eye(&at_dist(43.0)).0);
+    set_eye(eye(&at_dist(43.0)).0);
     let hit = |to: f64| way_hit(&from, &at_dist(to), |at| *at, &world);
     assert!(hit(40.0).is_some());
     assert_eq!(hit(43.0), None);
-    look_from(eye(&from).0);
+    set_eye(eye(&from).0);
     assert!(line_clear(eye(&from).0, eye(&at_dist(40.0)).0, &world));
 }
 

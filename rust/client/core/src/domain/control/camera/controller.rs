@@ -20,6 +20,7 @@ use crate::domain::control::camera::{camera, eye_world, facing_rot};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
 use crate::domain::control::support::pan_to;
 use crate::domain::observer::ObserverPose;
+use crate::domain::query::is_unknown;
 use crate::domain::setting::{CameraMode, settings};
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::frame::screen::units_per_px_at;
@@ -112,9 +113,13 @@ fn pan_by(lx: f64, ly: f64) {
     let Some(from) = pivot_to() else { return };
     // The eye the camera keeps over the pivot where the pan starts: the
     // drawn eye as far from `from` as it is from the drawn pivot, since the
-    // camera carries its eye with its pivot. Before the camera has an eye,
+    // camera carries its eye with its pivot; a start whose height is not
+    // known leads it across the ground alone. Before the camera has an eye,
     // the pan's start stands for it.
-    let lead = pivot_world().map(|drawn| v3::sub(&to_world(&from), &drawn));
+    let lead = pivot_world().map(|drawn| {
+        let [x, y, z] = v3::sub(&to_world(&from), &drawn);
+        [x, y, if is_unknown(&from) { 0.0 } else { z }]
+    });
     let eye = eye_world().zip(lead).map_or(from, |(eye, lead)| {
         world_to_canonical(&v3::add(&eye, &lead))
     });

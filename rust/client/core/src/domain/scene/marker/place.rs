@@ -139,7 +139,7 @@ fn ask(p: &mut Place) {
 
 /// How far the eye `p` was asked under is from `eye`, squared: without
 /// bound for one never asked.
-fn stale(p: &Place, eye: V3) -> f64 {
+fn asked_dist2(p: &Place, eye: V3) -> f64 {
     p.asked.map_or(f64::INFINITY, |a| {
         let v = v3::sub(&a, &eye);
         v3::dot(&v, &v)
@@ -159,7 +159,7 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) -> bool
     // eye farthest from it first: one never asked has nothing to show by,
     // and while the eye moves each comes to its turn.
     let mut due: Vec<_> = read.iter_mut().filter(|p| p.asked != Some(eye)).collect();
-    due.sort_by(|a, b| stale(b, eye).total_cmp(&stale(a, eye)));
+    due.sort_by(|a, b| asked_dist2(b, eye).total_cmp(&asked_dist2(a, eye)));
     let run = sched::run(due, |p| {
         ask(p);
         p.asked = Some(eye);

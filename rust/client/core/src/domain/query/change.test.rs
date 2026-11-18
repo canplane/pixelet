@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, placed, step_slide_from};
+use crate::domain::query::test::{flat_at_five, placed, step_slide_by};
 use pxl_spec::brick;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -64,7 +64,7 @@ fn queries_report_the_columns_they_read() {
     let from = point(at[0], at[1], over(5.0));
     // The eye stands where it draws the leaves' cells.
     let eye = point(at[0], at[1], 64.0);
-    step_slide_from(
+    step_slide_by(
         &world,
         &from,
         &point(at[0] + 3.0 * cell, at[1], 0.0),
@@ -76,7 +76,7 @@ fn queries_report_the_columns_they_read() {
     // far it goes.
     *read_rect() = ReadRect::default();
     let high = point(at[0], at[1], 1000.0);
-    step_slide_from(
+    step_slide_by(
         &world,
         &from,
         &point(at[0] + 3000.0 * cell, at[1], 0.0),
