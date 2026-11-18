@@ -55,7 +55,7 @@ it and any fields of the program's own its worker reads beside them. And the
 start tells the guest the page's lifecycle from the document's visibility,
 which a worker cannot see. What the worker posts the page is a message by its
 kind, the runtime's, a plugin's and the program's alike, which the UI hears by
-its kind as it comes (`message_on`); nothing is kept for a late hearer, since
+its kind as it comes (`msg_on`); nothing is kept for a late hearer, since
 the worker dies with its page. `give` hands an object beside the calls under a
 handle the worker's end issued:
 
@@ -63,7 +63,7 @@ handle the worker's end issued:
 const ui = open_ui(WORKER_URL);
 stopped_on((stop) => { /* show it */ });
 trap_on((err) => { /* show it */ });
-message_on<ViewReport>("view", (m) => { /* show it */ });
+msg_on<ViewReport>("view", (m) => { /* show it */ });
 // Mount on `ui` what the UI implements, before `start`.
 start(MODULE_URL, undefined);
 const view = await open(sender(ui), uri("app:view", "view"));

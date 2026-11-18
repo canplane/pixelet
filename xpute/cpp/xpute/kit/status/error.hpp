@@ -25,17 +25,17 @@ struct Error {
     // What a person reads beyond the errno, NUL-terminated, made once and
     // never grown, and shared by an error's copies, as an error is passed on
     // by value; null where the maker says nothing more.
-    std::shared_ptr<const char[]> message;
+    std::shared_ptr<const char[]> msg;
 
     constexpr Kind kind() const noexcept { return kind_Errno(errnum); }
 };
 
-inline Error make_error(Errno errnum, std::string_view message = {},
+inline Error make_error(Errno errnum, std::string_view msg = {},
                         std::source_location at = std::source_location::current()) noexcept {
     std::shared_ptr<char[]> m;
-    if (!message.empty()) {
-        m = std::make_shared<char[]>(message.size() + 1);
-        std::memcpy(m.get(), message.data(), message.size());
+    if (!msg.empty()) {
+        m = std::make_shared<char[]>(msg.size() + 1);
+        std::memcpy(m.get(), msg.data(), msg.size());
     }
     return Error{errnum, at, std::move(m)};
 }

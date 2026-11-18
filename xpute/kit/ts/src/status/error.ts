@@ -25,11 +25,17 @@ export function strerror(errnum: i32): string {
  * of it, or `strerror` of its errno; across the link it is its errno alone. */
 export class XputeError extends Error {
   readonly errnum: i32;
+  /** The message its maker gave, or null where it gave none, as Rust's
+   * `Option` and C++'s null say. `message` is the text shown, this or
+   * `strerror` of its errno, as Python's `LogRecord.msg` stands beside
+   * `getMessage()`. */
+  readonly msg: string | null;
 
-  constructor(errnum: i32, message?: string) {
-    super(message ?? strerror(errnum));
+  constructor(errnum: i32, msg?: string) {
+    super(msg ?? strerror(errnum));
     this.name = "XputeError";
     this.errnum = errnum;
+    this.msg = msg ?? null;
   }
 
   /** What happened: the errno's kind (`errno.json5`), or unknown for a

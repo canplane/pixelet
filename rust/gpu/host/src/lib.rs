@@ -160,9 +160,9 @@ impl GpuHost {
         );
         let device_lost = Arc::new(AtomicBool::new(false));
         let lost = device_lost.clone();
-        device.set_device_lost_callback(move |reason, message| {
+        device.set_device_lost_callback(move |reason, msg| {
             if reason == wgpu::DeviceLostReason::Unknown {
-                lose_device(&lost, &format!("device lost ({reason:?}): {message}"));
+                lose_device(&lost, &format!("device lost ({reason:?}): {msg}"));
                 wake();
             }
         });

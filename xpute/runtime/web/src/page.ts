@@ -15,7 +15,7 @@
  * matched; the guest's cancel of a method and its drop of an object; and the
  * answer to a call of the UI's. What the worker posts besides is a message by
  * its kind, the runtime's own and a host's or the program's alike
- * (`message_on`), heard as it comes. Nothing is kept for a late hearer: the
+ * (`msg_on`), heard as it comes. Nothing is kept for a late hearer: the
  * worker dies with its page, so no UI comes late to it, where the native
  * runtime outlives its UI and keeps the guest's stop and its trap.
  */
@@ -155,7 +155,7 @@ export function give(h: Handle, thing: Transferable): void {
 
 /** Adds `hear` to what is told each message of `kind` the worker posts from
  * now on. */
-export function message_on<M extends Message>(
+export function msg_on<M extends Message>(
   kind: M["kind"],
   hear: (m: M) => void,
 ): { remove(): void } {
@@ -168,13 +168,13 @@ export function message_on<M extends Message>(
 
 /** Adds `hear` to what is told the guest's stop (`Stopped`). */
 export function stopped_on(hear: (stop: UiStop) => void): { remove(): void } {
-  return message_on<Stopped>("stopped", (m) => hear(m.stop));
+  return msg_on<Stopped>("stopped", (m) => hear(m.stop));
 }
 
 /** Adds `hear` to what is told that the guest trapped, with what stopped it
  * (`Trap`). */
 export function trap_on(hear: (err: string) => void): { remove(): void } {
-  return message_on<Trap>("trap", (m) => hear(m.err));
+  return msg_on<Trap>("trap", (m) => hear(m.err));
 }
 
 /** Starts the guest with what the UI implements, once it is mounted on the

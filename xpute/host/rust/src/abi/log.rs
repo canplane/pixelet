@@ -57,7 +57,7 @@ impl Level {
 }
 
 pub trait Host {
-    fn log(&self, level: Level, context: String, message: String) -> Result<(), _rt::Errno>;
+    fn log(&self, level: Level, context: String, msg: String) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Host>);
@@ -71,8 +71,8 @@ impl _rt::Object for _Object {
                         .case(0, 6)
                         .and_then(|v| Level::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     let context = args_.str(4).map(str::to_owned)?;
-                    let message = args_.str(12).map(str::to_owned)?;
-                    match self.0.log(level, context, message) {
+                    let msg = args_.str(12).map(str::to_owned)?;
+                    match self.0.log(level, context, msg) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }

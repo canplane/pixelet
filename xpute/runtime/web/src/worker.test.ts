@@ -55,7 +55,7 @@ test("a world importing what has no implementation refuses to start, naming each
     kind: "log",
     level: LEVEL_ERROR,
     context: "link",
-    message: `trapped: ${err}`,
+    msg: `trapped: ${err}`,
   };
   const trap: Trap = { kind: "trap", err };
   assert.deepEqual(told, [written, trap]);

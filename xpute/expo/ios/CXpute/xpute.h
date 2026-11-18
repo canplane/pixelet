@@ -98,8 +98,8 @@ void xpute_taken_free(uint8_t *at, size_t len);
 void xpute_life(int32_t shown);
 
 // Writes a log record of the UI's by the runtime's writer, as the host's are:
-// `message` of `message_len` UTF-8 bytes at `level` (xpute:log `level`, its
+// `msg` of `msg_len` UTF-8 bytes at `level` (xpute:log `level`, its
 // number), about `context` of `context_len` UTF-8 bytes, neither
 // NUL-terminated.
-void xpute_log(uint32_t level, const char *context, size_t context_len, const char *message,
-               size_t message_len);
+void xpute_log(uint32_t level, const char *context, size_t context_len, const char *msg,
+               size_t msg_len);

@@ -16,27 +16,27 @@ import type { Level } from "./abi/log/log.enum.ts";
 /** The report of a broken invariant before the guest stops: the guest's
  * (wit/stop/stop.wit), which the host that implements the stop hands its
  * runtime (stop.ts), or the host's own failure, which its runtime reports
- * itself, as a native host's is (xpute-host runtime.rs `Stop`). A panic or a
- * throw the language raised carries its own message; a bug carries none. */
+ * itself, as a native host's is (xpute-host runtime.rs `Stop`). Its message is
+ * a panic's or a throw's own, or the bug's where it has one. */
 export interface Stop {
   errnum: i32;
   file: string;
   line: u32;
   n1: u64;
   n2: u64;
-  message: string | null;
+  msg: string | null;
 }
 
 /** A stop as the UI hears it: the report without its message, which the
  * runtime alone writes, as the native listener carries it. It sits here with
  * `Stop`, whose shape it takes, and the UI end takes it from the host. */
-export type UiStop = Omit<Stop, "message">;
+export type UiStop = Omit<Stop, "msg">;
 
 export interface Runtime {
   /** Reports the guest's stop. */
   stopped(stop: Stop): void;
   /** Writes a log record: its level, its context and its message. */
-  log(level: Level, context: string, message: string): void;
+  log(level: Level, context: string, msg: string): void;
 }
 
 let cur: Runtime | null = null;

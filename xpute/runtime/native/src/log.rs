@@ -20,9 +20,9 @@ const PRIORITY: [ndk_sys::android_LogPriority; 6] = [
     ndk_sys::android_LogPriority::ANDROID_LOG_FATAL,
 ];
 
-/// Writes `message` at `level`, about `context`.
-pub(crate) fn log(level: Level, context: &str, message: &str) {
-    let line = format!("[{context}] {message}");
+/// Writes `msg` at `level`, about `context`.
+pub(crate) fn log(level: Level, context: &str, msg: &str) {
+    let line = format!("[{context}] {msg}");
     #[cfg(target_os = "android")]
     {
         let line = std::ffi::CString::new(line.replace('\0', " ")).unwrap_or_default();

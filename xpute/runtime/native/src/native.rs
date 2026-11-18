@@ -132,15 +132,12 @@ fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
 /// Writes the stop `s` of `context`, the guest or the host, with its message
 /// where it has one, then tells the app (`listener::tell_stop`).
 fn tell_stop(context: &str, s: Stop) {
-    let message = s
-        .message
-        .as_deref()
-        .map_or(String::new(), |m| format!(": {m}"));
+    let msg = s.msg.as_deref().map_or(String::new(), |m| format!(": {m}"));
     log(
         Level::Error,
         context,
         &format!(
-            "stopped: {} at {}:{} ({}, {}){message}",
+            "stopped: {} at {}:{} ({}, {}){msg}",
             strerror(s.errnum),
             s.file,
             s.line,
@@ -165,14 +162,13 @@ fn caught(f: impl FnOnce()) {
 /// Makes a panic of the host's own, on any thread, a stop, as @xpute/runtime-web
 /// worker.ts `hook` makes a throw one: where the guest has not trapped
 /// already, the failure is written and told the app as a stop, with its errno,
-/// a bug's or ENOTRECOVERABLE, where it was raised and a panic's own message;
-/// then the link is
-/// trapped, so that no answer the dead thread owed leaves the guest waiting,
-/// and the app hears the trap after the stop, its cause what the panic gives,
-/// its message and place, as the web's trap carries the throw's, or a bug's
-/// place. A panic after the guest trapped
-/// is no failure of the host's. The link's state
-/// is the guest thread's: a panic there is told at once, before it unwinds,
+/// a bug's or ENOTRECOVERABLE, where it was raised and its message, a bug's
+/// or a panic's own; then the link is trapped, so that no answer the dead
+/// thread owed leaves the guest waiting, and the app hears the trap after the
+/// stop, its cause what the panic gives, its message and place, as the web's
+/// trap carries the throw's, or a bug's place. A panic after the guest
+/// trapped is no failure of the host's. The link's state is the guest
+/// thread's: a panic there is told at once, before it unwinds,
 /// and one on another thread is posted to it. A guest installs its own hook
 /// over this one and hands back what is not its own (xpute-guest link.rs
 /// `in_guest`). A bug panics with itself, which no report outside the guest
@@ -188,13 +184,13 @@ fn hook() {
                     line: b.line,
                     n1: b.a,
                     n2: b.b,
-                    message: None,
+                    msg: b.msg.map(str::to_owned),
                 },
                 format!("{} at {}:{}", link::HOST_STOPPED, b.file, b.line),
             ),
             None => {
                 let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
-                let message = payload
+                let msg = payload
                     .downcast_ref::<&str>()
                     .map(|m| (*m).to_owned())
                     .or_else(|| payload.downcast_ref::<String>().cloned());
@@ -205,7 +201,7 @@ fn hook() {
                         line,
                         n1: 0,
                         n2: 0,
-                        message,
+                        msg,
                     },
                     format!("{}: {info}", link::HOST_STOPPED),
                 )
@@ -398,24 +394,24 @@ macro_rules! native_abi {
         }
 
         /// # Safety
-        /// `context` is `context_len` readable bytes, and `message`
-        /// `message_len`.
+        /// `context` is `context_len` readable bytes, and `msg`
+        /// `msg_len`.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn xpute_log(
             level: u32,
             context: *const u8,
             context_len: usize,
-            message: *const u8,
-            message_len: usize,
+            msg: *const u8,
+            msg_len: usize,
         ) {
             // SAFETY: the caller's.
-            let (context, message) = unsafe {
+            let (context, msg) = unsafe {
                 (
                     $crate::native::text(context, context_len),
-                    $crate::native::text(message, message_len),
+                    $crate::native::text(msg, msg_len),
                 )
             };
-            $crate::log(level, &context, &message);
+            $crate::log(level, &context, &msg);
         }
 
         #[cfg(target_os = "android")]

@@ -50,8 +50,8 @@ BEGIN {
     exit 0
 }
 
-function fail(message) {
-    print "amalgamation: " message > "/dev/stderr"
+function fail(msg) {
+    print "amalgamation: " msg > "/dev/stderr"
     exit 1
 }
 

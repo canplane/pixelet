@@ -13,16 +13,16 @@ use crate::abi::log::{self, Level};
 use crate::runtime::runtime;
 
 /// Hands its runtime a record of the host's, or of what it implements:
-/// `message`, at `level`, about `context`.
-pub fn log(level: Level, context: &str, message: &str) {
-    (runtime().log)(level, context, message);
+/// `msg`, at `level`, about `context`.
+pub fn log(level: Level, context: &str, msg: &str) {
+    (runtime().log)(level, context, msg);
 }
 
 struct Log;
 
 impl log::Host for Log {
-    fn log(&self, level: Level, context: String, message: String) -> Result<(), Errno> {
-        log(level, &context, &message);
+    fn log(&self, level: Level, context: String, msg: String) -> Result<(), Errno> {
+        log(level, &context, &msg);
         Ok(())
     }
 }

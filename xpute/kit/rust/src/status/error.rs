@@ -16,7 +16,7 @@ pub struct XputeError {
     pub at: &'static Location<'static>,
     /// What a person reads beyond the errno, made once and never grown, so
     /// it holds no capacity.
-    pub message: Option<Box<str>>,
+    pub msg: Option<Box<str>>,
 }
 
 impl XputeError {
@@ -25,17 +25,17 @@ impl XputeError {
         XputeError {
             errnum,
             at: Location::caller(),
-            message: None,
+            msg: None,
         }
     }
 
     /// The error `errnum`, with what a person reads of it.
     #[track_caller]
-    pub fn with_message(errnum: Errno, message: impl Into<Box<str>>) -> XputeError {
+    pub fn with_msg(errnum: Errno, msg: impl Into<Box<str>>) -> XputeError {
         XputeError {
             errnum,
             at: Location::caller(),
-            message: Some(message.into()),
+            msg: Some(msg.into()),
         }
     }
 
@@ -47,7 +47,7 @@ impl XputeError {
 impl fmt::Display for XputeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?} at {}", self.errnum, self.at)?;
-        match &self.message {
+        match &self.msg {
             Some(m) => write!(f, ": {m}"),
             None => Ok(()),
         }

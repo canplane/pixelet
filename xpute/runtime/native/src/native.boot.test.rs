@@ -35,9 +35,9 @@ fn boot(_: std::path::PathBuf) -> Boot {
 #[test]
 fn failing_mount_traps() {
     let ui = app::start(boot, &[]);
-    let mut messages = Vec::new();
+    let mut msgs = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
-    assert_eq!(app::answer_to(ui, 1, &mut messages), Errno::EPIPE as i64);
+    assert_eq!(app::answer_to(ui, 1, &mut msgs), Errno::EPIPE as i64);
     let told = app::exits();
     assert!(
         matches!(&told[..], [Exit::Stop(e, _), Exit::Trap(err)]

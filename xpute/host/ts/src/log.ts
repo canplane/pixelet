@@ -11,9 +11,9 @@ import type { Side } from "@xpute/link/link.ts";
 import { runtime } from "./runtime.ts";
 
 /** Hands its runtime a record of the host's, or of what it implements:
- * `message`, at `level`, about `context`. */
-export function log(level: Level, context: string, message: string): void {
-  runtime().log(level, context, message);
+ * `msg`, at `level`, about `context`. */
+export function log(level: Level, context: string, msg: string): void {
+  runtime().log(level, context, msg);
 }
 
 export function mount_log(side: Pick<Side, "mount_named">): void {

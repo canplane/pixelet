@@ -55,25 +55,25 @@ function tell(m: Trap | Stopped | Log): void {
 /** The console's method each level is written by, in `Level`'s order. */
 const CONSOLE = ["debug", "debug", "info", "warn", "error", "error"] as const;
 
-/** Writes `message` at `level`, about `context`, as xpute-runtime-native log.rs
+/** Writes `msg` at `level`, about `context`, as xpute-runtime-native log.rs
  * writes the native runtime's: a log record the host hands the runtime
  * (@xpute/host `Runtime`), and the stop and the trap it tells. The record is
  * told the page too (`Log`), which writes nothing of it. */
-function log(level: Level, context: string, message: string): void {
-  console[CONSOLE[level]](`[${context}] ${message}`);
-  tell({ kind: "log", level, context, message });
+function log(level: Level, context: string, msg: string): void {
+  console[CONSOLE[level]](`[${context}] ${msg}`);
+  tell({ kind: "log", level, context, msg });
 }
 
 /** Writes the stop of `context`, the guest or the host, with its message
  * where it has one, then tells the page the guest stopped, the message left
  * out, as xpute-runtime-native native.rs `tell_stop` tells the native app. */
 function tell_stop(context: string, stop: Stop): void {
-  const { message, ...report } = stop;
+  const { msg, ...report } = stop;
   const { errnum, file, line, n1, n2 } = report;
   log(
     LEVEL_ERROR,
     context,
-    `stopped: ${strerror(errnum)} at ${file}:${line} (${n1}, ${n2})${message === null ? "" : `: ${message}`}`,
+    `stopped: ${strerror(errnum)} at ${file}:${line} (${n1}, ${n2})${msg === null ? "" : `: ${msg}`}`,
   );
   tell({ kind: "stopped", stop: report });
 }
@@ -182,10 +182,10 @@ export async function instantiate(
  * worker leaves unhandled or uncaught, as a method answered later throws
  * one. Where the guest has not trapped already, the failure is written and
  * told the page as a stop, with its errno, a bug's or ENOTRECOVERABLE, where
- * it was thrown and a throw's own message; then the link traps, so that no
- * answer the failed host owed leaves the guest waiting, and the page hears
- * the trap after the stop, as it does natively. A throw after the guest trapped
- * is no failure of the host's. */
+ * it was thrown and its message, a bug's or a throw's own; then the link
+ * traps, so that no answer the failed host owed leaves the guest waiting, and
+ * the page hears the trap after the stop, as it does natively. A throw after
+ * the guest trapped is no failure of the host's. */
 function hook(side: Side): (e: unknown) => void {
   const fail = (e: unknown): boolean => {
     if (side.trapped()) return false;
@@ -194,9 +194,13 @@ function hook(side: Side): (e: unknown) => void {
     const [file, line] =
       e instanceof XputeBug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
     const [n1, n2] = e instanceof XputeBug ? [e.a, e.b] : [0n, 0n];
-    const message =
-      e instanceof XputeBug ? null : e instanceof Error ? e.message : String(e);
-    tell_stop("host", { errnum, file, line, n1, n2, message });
+    const msg =
+      e instanceof XputeBug
+        ? e.msg
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    tell_stop("host", { errnum, file, line, n1, n2, msg });
     trap(side, e);
     return true;
   };

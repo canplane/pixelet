@@ -130,13 +130,13 @@ A failure is one error, `XputeError`, carrying an errno
 (`kit/spec/errno.json5`). What happened is its errno's kind, the gRPC and
 Abseil status code. The kind says nothing of whether the failure is fatal:
 that is the call's. A caller that holds a failure impossible makes it a
-**bug** (`bug` and `or_bug`), reported with its errno, file and line before it
-stops.
+**bug** (`bug` and `or_bug`), reported with its errno, its place, two numbers
+and an optional message before it stops.
 
 Between xpute's parts a failure moves as an `XputeError` with its optional
-message, an end as a stop or a trap report, the stop with the message of a
-panic the language raised, which a bug has none of, and what is worth telling
-and is neither as a log record, a level, a context and a message (`wit/log`, in
+message, an end as a stop or a trap report, the stop with the bug's optional
+message or that of a panic the language raised, and what is worth telling and
+is neither as a log record, a level, a context and a message (`wit/log`, in
 `wasi:logging`'s shape). Each end has its `log`: the guest's calls the import,
 and the host implements it and hands the records, with its own, to the log its
 runtime injects. The runtime alone writes them, every one, to the platform's

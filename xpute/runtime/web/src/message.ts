@@ -91,7 +91,7 @@ export interface Log {
   kind: "log";
   level: Level;
   context: string;
-  message: string;
+  msg: string;
 }
 
 /** A trap, out of an export or a failure of the host's own, its module not

@@ -13,9 +13,9 @@
 
 namespace xpute::guest {
 
-// Tells the host `message`, at `level`, about `context`. A host that hears
+// Tells the host `msg`, at `level`, about `context`. A host that hears
 // nothing more, the link trapped among them, has nothing to answer, so the
 // answer is not read.
-void log(abi::log::Level level, std::string_view context, std::string_view message) noexcept;
+void log(abi::log::Level level, std::string_view context, std::string_view msg) noexcept;
 
 } // namespace xpute::guest

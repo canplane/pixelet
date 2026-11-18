@@ -1,8 +1,10 @@
 // @xpute/kit/status/bug.ts
 
 /** A broken invariant is a bug, as Rust's `bug!` has it: `bug` throws a
- * `XputeBug`, its errno, the place in the source it was made and at most two
- * numbers, as Rust's and C++'s carry. A `XputeBug` is no `XputeError`, so a
+ * `XputeBug`, its errno, the place in the source it was made, at most two
+ * numbers and an optional message, as Rust's and C++'s carry. The message is
+ * a string literal, never one built at the bug, as theirs is a static string:
+ * what varies goes in the two numbers. A `XputeBug` is no `XputeError`, so a
  * catch that takes an `XputeError` passes it on. */
 
 import { strerror } from "./error.ts";
@@ -14,24 +16,41 @@ export class XputeBug extends Error {
   readonly line: u32;
   readonly a: u64;
   readonly b: u64;
+  /** The message its maker gave, or null where it gave none
+   * (`XputeError.msg`). `message` is the text shown, this or `strerror` of
+   * its errno, as Python's `LogRecord.msg` stands beside `getMessage()`. */
+  readonly msg: string | null;
 
-  constructor(errnum: i32, file: string, line: u32, a: u64, b: u64) {
-    super(strerror(errnum));
+  constructor(
+    errnum: i32,
+    file: string,
+    line: u32,
+    a: u64,
+    b: u64,
+    msg: string | null = null,
+  ) {
+    super(msg ?? strerror(errnum));
     this.name = "XputeBug";
     this.errnum = errnum;
     this.file = file;
     this.line = line;
     this.a = a;
     this.b = b;
+    this.msg = msg;
   }
 }
 
-/** Throws the bug `errnum` with the numbers `a` and `b`, made where `bug` is
- * called: its caller's frame, the one after `bug`'s own, as Rust's
- * `#[track_caller]` gives it. */
-export function bug(errnum: i32, a: u64 = 0n, b: u64 = 0n): never {
+/** Throws the bug `errnum` with the numbers `a` and `b` and what a person
+ * reads of it, made where `bug` is called: its caller's frame, the one after
+ * `bug`'s own, as Rust's `#[track_caller]` gives it. */
+export function bug(
+  errnum: i32,
+  a: u64 = 0n,
+  b: u64 = 0n,
+  msg: string | null = null,
+): never {
   const [file, line] = frames(new Error().stack ?? "")[1] ?? ["", 0];
-  throw new XputeBug(errnum, file, line, a, b);
+  throw new XputeBug(errnum, file, line, a, b, msg);
 }
 
 /** Each frame of `stack` that names its place, as its file and line, the

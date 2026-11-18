@@ -684,14 +684,20 @@ impl Header<'_> {
     }
 
     /// The C++ type a call takes a value of `k` as, as the Rust borrows it: a
-    /// scalar by value, a string as a view and a list as a span of its
-    /// elements, any other by const reference.
+    /// scalar by value, a string as a view, an optional string as an optional
+    /// view and a list as a span of its elements, any other by const
+    /// reference. A string a call reads is never copied to be passed.
     fn borrowed(&self, k: &Kind) -> Result<String, String> {
         Ok(match k {
             _ if is_scalar(k) => self.ty(k)?,
             Kind::Str => {
                 self.include("string_view");
                 "std::string_view".into()
+            }
+            Kind::Option(e) if matches!(**e, Kind::Str) => {
+                self.include("optional");
+                self.include("string_view");
+                "std::optional<std::string_view>".into()
             }
             Kind::Array(n) => {
                 self.include("cstdint");

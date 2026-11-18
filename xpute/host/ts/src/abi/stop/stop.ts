@@ -25,7 +25,7 @@ export interface Host {
     line: number,
     n1: u64,
     n2: u64,
-    message: string | null,
+    msg: string | null,
   ): void;
 }
 

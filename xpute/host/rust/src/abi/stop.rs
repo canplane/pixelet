@@ -16,7 +16,7 @@ pub trait Host {
         line: u32,
         n1: u64,
         n2: u64,
-        message: Option<String>,
+        msg: Option<String>,
     ) -> Result<(), _rt::Errno>;
 }
 
@@ -32,14 +32,14 @@ impl _rt::Object for _Object {
                     let line = args_.u32(12)?;
                     let n1 = args_.u64(16)?;
                     let n2 = args_.u64(24)?;
-                    let message = args_.case(32, 2).and_then(|d| {
+                    let msg = args_.case(32, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
                             args_.str(36).map(str::to_owned).map(Some)
                         }
                     })?;
-                    match self.0.stopped(errnum, file, line, n1, n2, message) {
+                    match self.0.stopped(errnum, file, line, n1, n2, msg) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }

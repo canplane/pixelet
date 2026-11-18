@@ -60,7 +60,7 @@ interface Xpute {
    * are `lo` and `hi`, a buffer over them, the UI's until the lend's answer. */
   bytes(lo: u32, hi: u32, len: u32): ArrayBuffer;
   /** Writes a log record by the runtime's writer (`log`). */
-  log(level: Level, context: string, message: string): void;
+  log(level: Level, context: string, msg: string): void;
   /** The guest's last stop, or null before the guest stopped (xpute.h
    * `xpute_stop`). */
   stop(): Report | null;
@@ -93,8 +93,8 @@ export function trap_on(hear: (err: string) => void): { remove(): void } {
   return sub;
 }
 
-/** Writes `message` at `level`, about `context`, by the runtime's writer,
+/** Writes `msg` at `level`, about `context`, by the runtime's writer,
  * which writes the host's records (xpute-runtime-native log.rs). */
-export function log(level: Level, context: string, message: string): void {
-  XPUTE.log(level, context, message);
+export function log(level: Level, context: string, msg: string): void {
+  XPUTE.log(level, context, msg);
 }
