@@ -14,6 +14,7 @@ import { Card, DOCK_HEIGHT } from "./card.tsx";
 import { SizePopover, usePopover } from "./popover.tsx";
 import { Message, useMessage } from "./message.tsx";
 import { STRIP, Strip } from "./strip.tsx";
+import { Attribution } from "@/ui/feature/world/attribution.tsx";
 
 export function Dock() {
   const mode = useDockMode();
@@ -40,6 +41,7 @@ export function Dock() {
         onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
         style={STYLE.bar}
       >
+        <Attribution />
         {barWidth > 0 && (
           <>
             <Card

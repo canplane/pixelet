@@ -752,8 +752,8 @@ fn far(cell_zoom: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
 }
 
 /// The tiles the pivot's and a destination's clip levels want, which the
-/// eye's demand need not name. They are held hard, as a destination's line
-/// is (domain/view/demand.rs `observe`).
+/// eye's demand need not name. They are pinned, as the leaf under a
+/// destination is (domain/view/demand.rs `observe`).
 pub(crate) fn pinned_tiles() -> &'static [Quadrant] {
     &clipmap().pinned
 }

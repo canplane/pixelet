@@ -147,7 +147,7 @@ fn demand_tick(_: &mut TickContext) {
         false => PlaceTile::demand().idle(),
     }
     EarthTile::demand().step(None, &[]);
-    DivisionTile::demand().step(division::line(controller::pivot()), &[]);
+    DivisionTile::demand().step(division::tile(controller::pivot()), &[]);
     demand::object_step();
 }
 

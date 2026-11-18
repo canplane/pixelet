@@ -1,8 +1,8 @@
 // pxl-core/domain/layer/division.rs
 
 //! The division layer: the named divisions of the map that hold the pivot.
-//! Only the tiles over the pivot are held. Their line is asked for as a
-//! destination's line is, and the finest tile held on it names the cell the
+//! Only the tiles over the pivot are held. The leaf over it is pinned with
+//! its ancestors, and the finest of them that is resident names the cell the
 //! pivot is in. Nothing of this layer is drawn; the names go straight into
 //! the UI snapshot.
 //!
@@ -40,7 +40,7 @@ const SLOT_SZ: u32 = arr_sz(CELL_CNT, 4);
 pub(crate) const DIVISION_SZ: u32 = TileCache::<DivisionTile>::SLOT_CNT * SLOT_SZ;
 
 impl Base for DivisionTile {
-    const ASK_SCOPE: AskScope = AskScope::Line;
+    const ASK_SCOPE: AskScope = AskScope::Pinned;
 
     fn tile_cache() -> &'static mut TileCache<DivisionTile> {
         DIVISION.get(TileCache::default)
@@ -61,9 +61,8 @@ impl Base for DivisionTile {
     }
 }
 
-/// The finest tile on the pivot's line. The demand asks for it together with
-/// every tile over it.
-pub(crate) fn line(pivot: Option<Q3>) -> Option<Quadrant> {
+/// The leaf tile over the pivot. The demand pins it with its ancestors.
+pub(crate) fn tile(pivot: Option<Q3>) -> Option<Quadrant> {
     pivot.map(|at| {
         let [x, y, _] = idx_of(LEAF_ZOOM, &at);
         Quadrant::over(DivisionTile::LEAF, [x, y])
@@ -75,7 +74,7 @@ pub(crate) fn line(pivot: Option<Q3>) -> Option<Quadrant> {
 /// and the index of `at`'s cell in that tile. The same tile always names the
 /// same divisions.
 pub(crate) fn naming(at: &Q3) -> Option<(Quadrant, u32)> {
-    let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
+    let from = tile(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 

@@ -5,10 +5,10 @@
 //! observation asks for, and in what order.
 //!
 //! A tile is asked for by the eye's demand (`ByEye`), by the floor
-//! (layer/floor.rs), by a destination's line, or as an ancestor of a
-//! missing tile. A tile asked for several reasons keeps the strongest
-//! (`Priority`). The pixels drawn do not enter the asks, since the camera grid
-//! is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
+//! (layer/floor.rs), as a pinned tile (a pinned leaf or one of its ancestors,
+//! or a reader's pin), or as an ancestor of a missing tile. A tile asked for
+//! several reasons keeps the strongest (`Priority`). The pixels drawn do not
+//! enter the asks, since the camera grid is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
@@ -146,10 +146,11 @@ pub(crate) fn of_stream(stream: Stream) -> Option<&'static Layer> {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Priority {
     Floor,
-    /// On a line asked for exactly: the camera's destination's, or the line
-    /// over the division layer's pivot.
-    Destination,
-    /// On the line over a missing tile. A coarser answer is then held
+    /// A tile asked for whatever the view shows: the leaf under the camera's
+    /// destination or over the division layer's pivot, with its ancestors,
+    /// and the tiles a reader pins.
+    Pinned,
+    /// An ancestor of a missing tile. A coarser answer is then held
     /// wherever the view looks, and leaving a zoom shows its parent at once
     /// (as Cesium's `preloadAncestors` does).
     Ancestor,
@@ -180,7 +181,7 @@ impl Ask {
 #[derive(Clone, Copy, PartialEq)]
 struct Key {
     o: Option<Observation>,
-    dst: Option<Quadrant>,
+    leaf: Option<Quadrant>,
 }
 
 pub(crate) struct Demand<L: DemandedBase> {
@@ -286,11 +287,12 @@ impl<L: DemandedBase> Demand<L> {
     }
 
     /// Builds the asks for `o`: the estimator's demand, the floor, and the
-    /// destination's line with the pinned tiles (`dst`).
+    /// pinned tiles (`pinned`): a pinned leaf with its ancestors, and a
+    /// reader's pins.
     pub(crate) fn observe(
         &mut self,
         o: Option<&Observation>,
-        dst: impl Iterator<Item = Quadrant>,
+        pinned: impl Iterator<Item = Quadrant>,
         estimator: &ByEye,
         top: Zoom,
     ) {
@@ -324,8 +326,8 @@ impl<L: DemandedBase> Demand<L> {
             for &p in &demand {
                 let at = L::tile_cache().seek(&mut path, p).src.unwrap_or(p);
                 ask(&mut asks, at, Priority::Demand, p);
-                // An ancestor already asked has its line asked up to the top,
-                // so the walk up stops there.
+                // An ancestor already asked has its own ancestors asked up to
+                // the top, so the walk up stops there.
                 for q in
                     std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1)
                 {
@@ -352,7 +354,7 @@ impl<L: DemandedBase> Demand<L> {
                 ENOTRECOVERABLE,
                 *read.iter().max().unwrap_or(&0)
             );
-            if !matches!(L::ASK_SCOPE, AskScope::Line) {
+            if !matches!(L::ASK_SCOPE, AskScope::Pinned) {
                 self.floor.clear();
                 floor::floor(o, top, |p| {
                     self.floor.push(p);
@@ -365,14 +367,13 @@ impl<L: DemandedBase> Demand<L> {
                 );
             }
         }
-        // The destination asks for its whole line, not only the finest tile:
-        // which tile on the line gives the ground is known only once the
-        // tiles above it are.
+        // A pinned leaf comes with its ancestors: which of them gives the
+        // ground is known only once the tiles above it are.
         let mut named = 0u32;
-        for p in dst {
+        for p in pinned {
             named += 1;
             let a = Ask {
-                priority: Priority::Destination,
+                priority: Priority::Pinned,
                 order: Order::FIRST,
             };
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
@@ -446,12 +447,12 @@ impl<L: DemandedBase> Demand<L> {
     fn names_same(&self, o: &Observation, estimator: &ByEye, top: Zoom) -> bool {
         (!matches!(L::ASK_SCOPE, AskScope::View)
             || names(&self.last_tiles, |each| estimator.requirements(o, each)))
-            && (matches!(L::ASK_SCOPE, AskScope::Line)
+            && (matches!(L::ASK_SCOPE, AskScope::Pinned)
                 || names(&self.floor, |each| floor::floor(o, top, each)))
     }
 
     /// Places the wants in the view of `o`. A want takes its own order, which
-    /// puts a destination's first, or else the earliest place of the tiles
+    /// puts a pinned tile first, or else the earliest place of the tiles
     /// it is asked by (`ask_tiles`). The places are read in one walk down the
     /// pyramid in key order, so each tile's ground steps on from its
     /// neighbor's. The result depends on what is asked and on `o` alone, so a
@@ -478,13 +479,13 @@ impl<L: DemandedBase> Demand<L> {
     /// reads moved and the eye names the tiles it named before (`names_same`),
     /// it only places the wants again.
     ///
-    /// `dst` is asked for with its line even before there is an observation,
-    /// since at the first fix the camera waits for that ground. `pinned`
-    /// holds the tiles that a reader taking no coarser answer declares
-    /// (`Base::PIN_CAP`), and they are asked for as the destination is. A
-    /// layer with a top of its own (`Base::MIN_ZOOM`) is observed out to that
-    /// top's reach.
-    pub(crate) fn step(&mut self, dst: Option<Quadrant>, pinned: &[Quadrant]) {
+    /// `leaf` is pinned with its ancestors, even before there is an
+    /// observation, since at the first fix the camera waits for the ground
+    /// under its destination. `pins` holds the tiles that a reader taking no
+    /// coarser answer declares (`Base::PIN_CAP`), and they are asked for as the
+    /// leaf is. A layer with a top of its own (`Base::MIN_ZOOM`) is observed out
+    /// to that top's reach.
+    pub(crate) fn step(&mut self, leaf: Option<Quadrant>, pins: &[Quadrant]) {
         let Some(min_zoom) = L::min_zoom() else {
             return;
         };
@@ -495,10 +496,10 @@ impl<L: DemandedBase> Demand<L> {
             },
             None => o,
         });
-        if o.is_none() && dst.is_none() && pinned.is_empty() {
+        if o.is_none() && leaf.is_none() && pins.is_empty() {
             return;
         }
-        self.want(o, dst, pinned, min_zoom);
+        self.want(o, leaf, pins, min_zoom);
         declare(const { Stream::of_layer(L::KIND) }, &self.wants);
     }
 
@@ -507,12 +508,12 @@ impl<L: DemandedBase> Demand<L> {
     fn want(
         &mut self,
         o: Option<Observation>,
-        dst: Option<Quadrant>,
-        pinned: &[Quadrant],
+        leaf: Option<Quadrant>,
+        pins: &[Quadrant],
         top: Zoom,
     ) {
         self.idle_revision = None;
-        let now = Key { o, dst };
+        let now = Key { o, leaf };
         let changed = core::mem::take(&mut self.changed);
         if !changed && self.last == Some(now) {
             return;
@@ -525,7 +526,7 @@ impl<L: DemandedBase> Demand<L> {
         // one did.
         let named = !changed
             && self.last.is_some_and(|k| {
-                k.dst == dst
+                k.leaf == leaf
                     && k.o.zip(o).is_some_and(|(was, is)| {
                         Observation {
                             frustum: is.frustum,
@@ -537,13 +538,13 @@ impl<L: DemandedBase> Demand<L> {
         if named {
             self.reorder(o.as_ref());
         } else {
-            let line = dst
+            let pinned = leaf
                 .into_iter()
                 .flat_map(|p| {
                     std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent()))
                 })
-                .chain(pinned.iter().copied());
-            self.observe(o.as_ref(), line, &estimator, top);
+                .chain(pins.iter().copied());
+            self.observe(o.as_ref(), pinned, &estimator, top);
         }
         self.last = Some(now);
     }

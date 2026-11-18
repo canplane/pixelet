@@ -7,8 +7,9 @@
 //! the client's UI and services, the core's heads, pxl-render's, the camera's and the view's,
 //! the GPU's TypeScript folders, and across xpute's parts. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
-//! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
-//! a crate's module tree, that no native host names its runtime's entries, and that the
+//! sys/, that only the screen reads the screen's pixels, that only the eye sets a size
+//! and nothing else is called an observer, that a kind of tile is told apart only
+//! where the pyramid holds it, that no Rust file lies outside a crate's module tree, that no native host names its runtime's entries, and that the
 //! modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
 //! xpute/clippy.toml).
 //!
@@ -552,6 +553,53 @@ fn screen_reached(text: &str) -> Vec<usize> {
         .collect();
     lines.dedup();
     lines
+}
+
+/// The eye alone sets the size a place is asked at, and the size is one
+/// function of the place's distance from it (ARCHITECTURE.md, "The camera
+/// grid"). Only these call that function: where it is defined, the lattice's
+/// read of a tile by it, the engine's walk and the light's band, and the two
+/// drawings that show where the eye draws the leaves. A new caller elsewhere
+/// is a reader working out a size of its own; a size worked out by other
+/// means is the review's to find.
+const CELL_ZOOM_AT: &str = r"\bcell_zoom_(at|in_splits)\b";
+/// The client's crates and the spec they share, where the world is read.
+const CLIENT_ROOTS: [&str; 2] = ["rust/client/", "rust/spec/"];
+const CELL_ZOOM_AT_USERS: [&str; 6] = [
+    "rust/spec/src/space/camera/grid.rs",
+    "rust/spec/src/space/layer/lattice.rs",
+    "rust/client/engine/src/cast.rs",
+    "rust/client/engine/src/light.rs",
+    "rust/client/core/src/domain/scene/gizmo/coverage.rs",
+    "rust/client/core/src/domain/scene/indicator/location.rs",
+];
+
+/// The eye is the camera's and nothing else is called an eye or an observer
+/// (AGENTS.md): the client's and the spec's Rust and WGSL do not hold the
+/// second word at all, in a name or a comment.
+const OBSERVER: &str = r"(?i)observer";
+
+/// Every kind of tile goes through the same demand and tile cache code
+/// (ARCHITECTURE.md, "Baked and built"). A layer's ask scope is all that code
+/// reads of its kind, and only these name it: where it is declared, the two
+/// layers that set theirs, the demand and the tile cache.
+const ASK_SCOPE: &str = r"\bASK_SCOPE\b";
+const ASK_SCOPE_USERS: [&str; 5] = [
+    "rust/client/core/src/domain/layer.rs",
+    "rust/client/core/src/domain/layer/division.rs",
+    "rust/client/core/src/domain/layer/earth.rs",
+    "rust/client/core/src/domain/layer/tile_cache.rs",
+    "rust/client/core/src/domain/view/demand.rs",
+];
+
+/// The lines of `text`, a Rust source, comments left out, that `pattern`
+/// meets.
+fn code_lines(text: &str, pattern: &Regex) -> Vec<usize> {
+    text.lines()
+        .enumerate()
+        .filter(|(_, l)| pattern.is_match(l.split("//").next().unwrap_or("")))
+        .map(|(k, _)| k + 1)
+        .collect()
 }
 
 /// xpute's words are the guest, its hosts and the link between them (AGENTS.md):
@@ -1617,6 +1665,47 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
+    let cell_zoom_at = Regex::new(CELL_ZOOM_AT).expect("the cell zoom's pattern");
+    let ask_scope = Regex::new(ASK_SCOPE).expect("the ask scope's pattern");
+    let observer = Regex::new(OBSERVER).expect("the observer's pattern");
+    let is_test = |f: &str| f.ends_with(".test.rs") || f.contains("/tests/");
+    for f in files
+        .iter()
+        .filter(|f| CLIENT_ROOTS.iter().any(|r| f.starts_with(r)))
+    {
+        let wgsl = f.ends_with(".wgsl");
+        if !wgsl && !f.ends_with(".rs") {
+            continue;
+        }
+        let text = read(f).unwrap_or_default();
+        for (k, _) in text
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| observer.is_match(l))
+        {
+            problems.push(format!(
+                "{f}:{}: names an observer; the eye is the camera's and there is no other (rule.rs `OBSERVER`)",
+                k + 1
+            ));
+        }
+        if wgsl || is_test(f) {
+            continue;
+        }
+        if !CELL_ZOOM_AT_USERS.contains(f) {
+            for line in code_lines(&text, &cell_zoom_at) {
+                problems.push(format!(
+                    "{f}:{line}: works out a size from a distance; the eye alone sets one, and only CELL_ZOOM_AT_USERS call its function (rule.rs)"
+                ));
+            }
+        }
+        if !ASK_SCOPE_USERS.contains(f) {
+            for line in code_lines(&text, &ask_scope) {
+                problems.push(format!(
+                    "{f}:{line}: reads a layer's ask scope; a kind of tile is told apart only where ASK_SCOPE_USERS hold it (rule.rs)"
+                ));
+            }
+        }
+    }
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
@@ -1685,7 +1774,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
             println!(
-                "check-rules: the memory's addresses, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold"
+                "check-rules: the memory's addresses, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the eye's size and its one name, the tile cache's one code, the crates' module trees and a dependency graph without cycles hold"
             );
             ExitCode::SUCCESS
         }
@@ -2022,6 +2111,13 @@ mod spec;"
             sys_refused("use pxl_spec::x;\nuse pxl_render::gpu::text::Raster;\n// pxl_render"),
             vec![2]
         );
+    }
+
+    #[test]
+    fn code_lines_leave_comments() {
+        let cell_zoom_at = Regex::new(CELL_ZOOM_AT).expect("the cell zoom's pattern");
+        let text = "use grid::cell_zoom_at;\n// cell_zoom_at is the eye's\nlet z = cell_zoom_in_splits(x); // cell_zoom_at\nlet w = my_cell_zoom_at_once();";
+        assert_eq!(code_lines(text, &cell_zoom_at), vec![1, 3]);
     }
 
     #[test]

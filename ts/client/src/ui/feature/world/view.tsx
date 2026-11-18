@@ -12,6 +12,7 @@ import { surfaceDriver } from "@/service/core/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
 import { WorldGestures } from "./gesture.tsx";
 import { Corner } from "./corner.tsx";
+import { ATTRIBUTION_HEIGHT_PX } from "./attribution.tsx";
 import { bottomRest } from "@/ui/shared/component/bottom-rest.ts";
 import { Toaster } from "@/ui/feature/world/toast/stack.tsx";
 import { CHROME, COLOR, LAYER } from "@/ui/shared/component/theme.ts";
@@ -28,7 +29,7 @@ import * as input from "@/service/core/input.ts";
 import * as scene from "@/service/core/scene.ts";
 import * as sensor from "@/service/core/sensor.ts";
 
-const TOAST_LIFT_PX = CHROME.inset + 20;
+const TOAST_LIFT_PX = CHROME.inset + 28;
 
 const PANEL_GAP_PX = 12;
 
@@ -54,7 +55,10 @@ function World() {
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + CHROME.control + PANEL_GAP_PX;
   const bottom =
-    bottomRest(useSafeArea(), CHROME.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
+    bottomRest(useSafeArea(), CHROME.inset) +
+    DOCK_HEIGHT +
+    ATTRIBUTION_HEIGHT_PX +
+    PANEL_GAP_PX;
   return <View style={[STYLE.between, { top, bottom }]}>{children}</View>;
 }
 

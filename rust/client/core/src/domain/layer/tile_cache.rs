@@ -119,12 +119,12 @@ impl<L: Base> TileCache<L> {
     };
 
     /// The tiles held hard apart from the view's demand: the floor
-    /// (layer/floor.rs), a destination's line, one at each zoom from its leaf
+    /// (layer/floor.rs), a pinned leaf and its ancestors, one at each zoom from its leaf
     /// to the top, and the tiles a reader that cannot take a coarser answer
     /// declares (`Base::PIN_CAP`).
     const PINNED_TILE_CAP: u32 = match L::ASK_SCOPE {
         AskScope::Floor => floor::tile_cap(L::LATTICE),
-        AskScope::Line => Self::ZOOM_CNT + L::PIN_CAP,
+        AskScope::Pinned => Self::ZOOM_CNT + L::PIN_CAP,
         AskScope::View => floor::tile_cap(L::LATTICE) + Self::ZOOM_CNT + L::PIN_CAP,
     };
 
