@@ -47,7 +47,11 @@
   Each finding is checked against the code or its source, and judged by the
   user's decisions and the system's own rules, before it is acted on or passed
   on: an agent's verdict that departs from them is refused, however it is
-  argued. One of correctness, a contract or structure is fixed by the
+  argued. A finding gives a fact, not the fix: its author opens the lines it
+  cites, and the fix comes from the rule, never from what the finding asks
+  for. Of what an agent found sound, one claim the change rests on is read
+  again. What is passed on says which findings were checked, which refused
+  and which not checked. One of correctness, a contract or structure is fixed by the
   change's author, one of lint or format alone is not, and a fix is no larger
   than its finding. The fix's diff alone gets a second round, and there is no
   third; the report says how many rounds it took. Whoever hands work to an agent
@@ -84,8 +88,27 @@
 - Read the skill the task needs (`.agents/skills/`).
 - A task is divided into problems that stand apart, and one is finished, built
   and reviewed, before the next is touched.
+- A unit starts from the rule: what stands there under one rule and
+  perspective is written first, then the code is read for where it departs.
+  No edit comes before the form stands: the form, what it removes and the
+  state it leaves are shown first.
 - The code is agents' work, not the user's intent: judge it against the user's
   decisions. A comment, a structure or a pattern in it is no reason to keep it.
+  A piece that blocks the form is read in its history: the user's decision
+  stays, an agent's piece goes.
+- A structure that departs from the rule is deleted, not mended: its files,
+  its tests, its goldens and what serves it alone go first, the build breaks,
+  and the form is written down from the documents (`ARCHITECTURE.md`, a
+  README), each caller fixed where the compiler names it. A broken build is
+  the way there, not a fault. No piece is laid beside the structure to spare
+  it, and no choice is weighed among ways to keep it.
+- The order is the rule, the structure, the build, the app, then tests, then
+  measurement. While a structure is being set up the build is its one check.
+  No test is written, and nothing is measured, over a structure not yet seen
+  in the app; a test that was there before holds nothing of the new structure
+  until it is read against it.
+- A fact or a figure in a record comes from the tree, a test or a script that
+  gives it again, never from recall.
 - Work in the main checkout, and a worktree only for a tree that must be built
   apart. A commit holds its author's hunks alone, staged in an index of HEAD
   that is still HEAD when it commits.
@@ -106,10 +129,12 @@
   change since `base` reaches (default HEAD and the uncommitted). `make check`
   and `make test` whole are a deploy's. A passed check is not run again over
   unchanged code, and a long run shows its progress.
-- A test that blocks a change is suspected first: `git blame` its lines and read
-  the commits that brought them in. One patched on to hold a case rather than a
-  contract is replaced by a test of the contract, or deleted where it is needless
-  or holds more than the contract does; it is not patched to pass.
+- A test and a measurement come last: they check a structure that already
+  stands for bugs and cost, and decide nothing of it. Over a structure that
+  departs from the rule they mean nothing. A test that blocks the form is the
+  first thing to go: deleted, a unit test before any other, or written again
+  to the form's contract. No structure is kept, restored or bent for a test to
+  pass or a figure to hold, and a failing test is no finding against the form.
 
 ## Instructions
 

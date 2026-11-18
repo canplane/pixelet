@@ -38,6 +38,13 @@ meant to do and where it is, not why its author thinks it is right.
 - **History.** The change contradicts, unremarked, what a commit or the
   user's decision made the code; or it removes nothing that the fact's move
   makes needless.
+- **A piece laid on.** A guard, an assert, a flag, a branch, a case of a test
+  or a sentence that lets a fault or a finding pass while its cause stands; a
+  structure kept because the code or a test there expects it, with no
+  decision of the user's behind it.
+- **A test defended.** A structure kept, restored or bent for a test to pass
+  or a measured figure to hold. A failing or missing test is no finding
+  against a form that follows the rule.
 - **Hold firmly.** A change against AGENTS.md's first section: symmetry broken,
   an ad hoc piece laid over a rule, what `doc/` records as dropped brought back
   unremarked, or state added that nothing justifies.
@@ -46,7 +53,8 @@ meant to do and where it is, not why its author thinks it is right.
 
 Report only what is real: a failure that happens, or a structure the checks
 above name, never a preference or a remote case. Findings, most severe first,
-each with its file and line, a concrete failure, and whether you verified it
-(read or ran) or only suspect it. A finding is a fact for the author to weigh:
-one that would remove a structure first states what it expresses and which of
+each with its file and line, the lines quoted, a concrete failure, the
+command that shows it where one does, and whether you verified it (read or
+ran) or only suspect it. A finding is a fact for the author to weigh, and
+says what is so, not what to add: one that would remove a structure first states what it expresses and which of
 its values are independent. List the areas found sound. Under about 800 words.
