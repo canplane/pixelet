@@ -61,14 +61,18 @@ pub(crate) fn clear(timer: Timer) -> Option<Return<()>> {
 }
 
 /// One turn of the guest thread's loop: the next task, or the earliest timer
-/// due, waited for, the task run and the timers due answered. A panic ends
-/// the turn alone (native.rs `run`): the task taken has run by then, and a
-/// timer not yet answered stays for the next turn.
+/// due, waited for, the task run and the timers that were due before it
+/// answered. A timer the task sets is answered in a later turn, a wait of 0
+/// at the next (wit/clocks/monotonic-clock.wit). A panic ends the turn alone
+/// (native.rs `run`): the task taken has run by then, and a timer not yet
+/// answered stays for the next turn.
 pub(crate) fn turn() {
-    if let Some(task) = wait() {
+    let task = wait();
+    let now = Instant::now();
+    if let Some(task) = task {
         task();
     }
-    answer_timers();
+    answer_timers(now);
 }
 
 /// The next task, waited for until the earliest timer is due: None when that
@@ -97,9 +101,8 @@ fn wait() -> Option<Task> {
     }
 }
 
-/// Answers every timer due, earliest first.
-fn answer_timers() {
-    let now = Instant::now();
+/// Answers every timer due at `now`, earliest first.
+fn answer_timers(now: Instant) {
     while let Some(task_return) = TIMERS.with_borrow_mut(|t| {
         let k = *t.keys().next().filter(|(at, _)| *at <= now)?;
         t.remove(&k)
