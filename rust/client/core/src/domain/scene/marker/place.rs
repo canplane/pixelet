@@ -14,8 +14,8 @@ use std::rc::Rc;
 
 use super::{Brick, Instance, Key, MarkerHit, cell_zoom};
 use crate::domain::layer::place::carto_zoom;
-use crate::domain::query::World;
 use crate::domain::query::change::Memo;
+use crate::domain::query::{SizeBy, World};
 use crate::domain::scene::marker::design::Design;
 use crate::sys::sched;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
@@ -138,9 +138,12 @@ pub(super) fn show(read: &mut [Place], out: &mut Vec<Instance>) -> bool {
     due.sort_by_key(|p| p.top.is_some());
     let run = sched::run(due, |p| {
         let at = p.ground.mid();
-        p.top = p
-            .surface
-            .of((), || World::now().surface_drawn(&at).val().flatten());
+        p.top = p.surface.of((), || {
+            World::now()
+                .surface_support_zoom(&at, SizeBy::Eye)
+                .val()
+                .flatten()
+        });
         true
     });
     for p in read {

@@ -6,9 +6,8 @@ use crate::abi::perf::Rows;
 use crate::abi::scene::SceneContent;
 use crate::abi::sensor::Position;
 use crate::abi::types::ErrorCode;
-use crate::domain::control::camera::state::{Intent, camera_state};
 use crate::domain::control::edit::write;
-use crate::domain::control::navigation::destination;
+use crate::domain::control::navigation;
 use crate::domain::query::test::flat_at_five;
 use crate::spec::perf::TABLE_NAMES;
 use pxl_render::gpu::surface::surface_open;
@@ -26,7 +25,6 @@ fn a_refused_argument_answers_its_errno() {
     let refused = [
         camera::goto(off_earth, 0.0),
         input::zoom(0.0),
-        input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
         edit::hold(Tool::Item, u32::MAX, 0),
         source::declare(0, Vec::new(), Vec::new()),
         sensor::pos(Some(Position {
@@ -119,24 +117,21 @@ fn a_table_is_read_by_sequence() {
     assert_eq!(times(&r)[0], (r.first_seq - start) as f64);
 }
 
-fn goto(from: f64) -> Intent {
-    use crate::domain::control::camera::controller::tracked_end;
-    use crate::domain::control::camera::fixture::place;
-    tracked_end();
-    place([0.0, 0.0, 0.0], from, 1.0, 0.5);
-    assert_eq!(camera::goto(127.0, 37.5), Ok(()));
-    destination::cancel();
-    camera_state().intent
-}
-
-/// `goto` keeps the camera's azimuth and polar, and a view far out comes in
-/// to the default distance, while a view already nearer stays where it is.
+/// `goto` asks for the place and leaves the view as it is until the camera
+/// goes there: the place is pending, and the camera's distance and facing are
+/// not touched by the call (destination.test.rs holds what happens as it
+/// leaves).
 #[test]
-fn goto_keeps_the_view_and_comes_in() {
-    use crate::domain::control::param::DEFAULT_DIST;
-    let far = goto(100.0);
-    assert_eq!((far.dist, far.azimuth, far.polar), (DEFAULT_DIST, 0.5, 1.0));
-    assert_eq!(goto(10.0).dist, 10.0, "nearer stays");
+fn goto_asks_for_the_place_and_keeps_the_view() {
+    use crate::domain::control::camera::fixture::{end_now, place};
+    place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
+    assert_eq!(camera::goto(127.0, 37.5), Ok(()));
+    assert!(
+        navigation::destination().is_some(),
+        "the place is asked for"
+    );
+    assert_eq!(end_now(), (100.0, 0.5, 1.0), "and the view is as it was");
+    navigation::take_by_hand();
 }
 
 /// Whether a frame was asked for, which this takes.
@@ -164,26 +159,22 @@ fn take_method_asks() -> u32 {
 /// it at once.
 #[test]
 fn a_method_applied_asks_for_its_frame() {
-    use crate::abi::camera::Tracking;
+    use crate::abi::types::TrackingMode;
     use crate::abi::{camera as cam, edit as ed, input as inp, sensor as sen};
     use crate::domain::control::camera::fixture::place;
     place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
-    let methods: [(&str, Input); 15] = [
+    let methods: [(&str, Input); 13] = [
         ("hover", &|| inp::Guest::hover(&Core, 10.0, 10.0)),
         ("drag", &|| inp::Guest::drag(&Core, true)),
         ("pan", &|| inp::Guest::pan(&Core, 1.0, 1.0)),
-        ("turn", &|| inp::Guest::turn(&Core, 0.1)),
+        ("rotate", &|| inp::Guest::rotate(&Core, 0.1)),
         ("tilt", &|| inp::Guest::tilt(&Core, 0.1)),
         ("zoom", &|| inp::Guest::zoom(&Core, 1.1)),
         ("drag end", &|| inp::Guest::drag(&Core, false)),
         ("tap", &|| inp::Guest::tap(&Core, 10.0, 10.0)),
         ("out", &|| inp::Guest::out(&Core)),
-        ("xr pose", &|| {
-            inp::Guest::xr_pose(&Core, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
-        }),
-        ("xr pose end", &|| inp::Guest::xr_pose_end(&Core)),
         ("tool", &|| ed::Guest::hold(&Core, Tool::Pointer, 0, 0)),
-        ("follow", &|| cam::Guest::track(&Core, Tracking::Follow)),
+        ("track", &|| cam::Guest::track(&Core, TrackingMode::Follow)),
         ("goto", &|| cam::Guest::goto(&Core, 127.0, 37.5)),
         ("pos", &|| sen::Guest::pos(&Core, None)),
     ];
@@ -194,8 +185,8 @@ fn a_method_applied_asks_for_its_frame() {
         assert!(take_invalid(), "{name} asks for no frame");
         assert_eq!(take_method_asks(), 1, "{name}");
     }
-    cam::Guest::track(&Core, Tracking::Unfollow).unwrap();
-    destination::cancel();
+    cam::Guest::track(&Core, TrackingMode::None).unwrap();
+    navigation::take_by_hand();
     // The methods of the other answers and of the other interfaces.
     use crate::abi::sensor::LocationStatus;
     use crate::abi::{scene as sc, setting as st};
@@ -230,21 +221,25 @@ fn a_method_refused_asks_for_no_frame() {
     assert_eq!(take_method_asks(), 0);
 }
 
-/// The device's heading asks for a frame only while the camera follows the
-/// device, which is when it turns the camera.
+/// The device's heading asks for a frame only while it is tracked with the
+/// user's location, which is when it turns the camera.
 #[test]
-fn a_heading_asks_only_while_following() {
-    use crate::abi::camera::Tracking;
+fn a_heading_asks_only_while_it_is_tracked() {
+    use crate::abi::types::TrackingMode;
     use crate::abi::{camera as cam, sensor as sen};
-    cam::Guest::track(&Core, Tracking::Unfollow).unwrap();
+    cam::Guest::track(&Core, TrackingMode::None).unwrap();
     take_method_asks();
     assert_eq!(sen::Guest::heading(&Core, Some(10.0)), Ok(()));
-    assert_eq!(take_method_asks(), 0, "free");
-    cam::Guest::track(&Core, Tracking::Follow).unwrap();
+    assert_eq!(take_method_asks(), 0, "not tracked");
+    cam::Guest::track(&Core, TrackingMode::Follow).unwrap();
+    take_method_asks();
+    assert_eq!(sen::Guest::heading(&Core, Some(15.0)), Ok(()));
+    assert_eq!(take_method_asks(), 0, "the location alone");
+    cam::Guest::track(&Core, TrackingMode::FollowWithHeading).unwrap();
     take_method_asks();
     assert_eq!(sen::Guest::heading(&Core, Some(20.0)), Ok(()));
-    assert_eq!(take_method_asks(), 1, "following");
-    cam::Guest::track(&Core, Tracking::Unfollow).unwrap();
+    assert_eq!(take_method_asks(), 1, "with the heading");
+    cam::Guest::track(&Core, TrackingMode::None).unwrap();
 }
 
 /// A text is held to its kind's cap and refused whole one past it,

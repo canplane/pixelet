@@ -190,9 +190,9 @@
       "object_size": "大小 {{n}}"
     },
     "controls": {
-      "move_to_location": "前往我的位置",
-      "start_compass_mode": "開啟指南針",
-      "exit_compass_mode": "關閉指南針",
+      "tracking_off": "追蹤已關閉",
+      "tracking_on": "追蹤已開啟",
+      "tracking_on_with_heading": "追蹤已開啟（含方向）",
       "first_person": "第一人稱視角",
       "third_person": "第三人稱視角",
       "show_places": "顯示地點",

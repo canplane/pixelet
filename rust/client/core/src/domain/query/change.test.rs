@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::eye;
 use crate::domain::layer::Answer;
 use crate::domain::layer::object::store::Store;
+use crate::domain::query::SizeBy;
 use crate::domain::query::over;
 use crate::domain::query::test::{
     flat_at_five, placed, set_eye, step_slide_by, withhold_at, write,
@@ -89,7 +90,7 @@ fn a_read_reports_the_zooms_it_read_and_whether_exactly() {
     let leaf = GROUND.leaf_cell_zoom();
     let read_from = |dist: f64| {
         set_eye([x + 0.5, y + 0.5 - dist, 6.0]);
-        let (_, read) = reads(|| world.floor_under(&at));
+        let (_, read) = reads(|| world.floor_under(&at, SizeBy::Eye));
         (read.cell_zoom_range, read.exact)
     };
     assert_eq!(read_from(30.0), (Some([leaf; 2]), true));
@@ -124,7 +125,7 @@ fn queries_report_the_rect_they_read() {
     // The eye stands where it draws the leaves' cells.
     let eye = point(at[0], at[1], 64.0);
     let ((), read) = reads(|| {
-        world.surface_support(&point(at[0], at[1], 0.0));
+        world.surface_support(&point(at[0], at[1], 0.0), SizeBy::Eye);
         assert_eq!(
             read().as_ref().unwrap().rect,
             Some([c, c.map(|v| v + cell)])
@@ -235,7 +236,7 @@ fn a_memo_keeps_a_floor_while_the_eye_chooses_its_size() {
     let (world, [x, y]) = cube_on_flat();
     let pivot = [x, y, over(6.0)];
     let at = point(x, y, pivot[2]);
-    let floor = || world.floor_under(&at);
+    let floor = || world.floor_under(&at, SizeBy::Eye);
     let turn = core::f64::consts::TAU / 240.0;
     let (ask_cnt, floors) = led(
         (0..240).map(|k| eye_about(pivot, 64.0, 0.5, f64::from(k) * turn)),
@@ -299,7 +300,12 @@ fn a_floor_is_read_once_a_size_held_there() {
     for (store, read_cnts) in [(Store::default(), [1, 5]), (finer, [5, 17])] {
         let world = placed(store);
         for (dist, swept) in [16.0, 157.8].into_iter().zip(read_cnts) {
-            let asked = |zooming| led(driven(pivot, dist, zooming), || world.floor_under(&at)).0;
+            let asked = |zooming| {
+                led(driven(pivot, dist, zooming), || {
+                    world.floor_under(&at, SizeBy::Eye)
+                })
+                .0
+            };
             assert_eq!(asked(false), 1, "a turn at {dist}");
             assert_eq!(asked(true), swept, "a sweep from {dist}");
         }
@@ -340,7 +346,7 @@ fn a_memo_keeps_a_surface_while_the_eye_chooses_its_sizes() {
             [eye[0], eye[1], 400.0],
         ]
         .into_iter(),
-        || world.surface_support(&at),
+        || world.surface_support(&at, SizeBy::Eye),
     );
     assert_eq!(ask_cnt, 2);
     assert_eq!(tops[0], Answer::Exact(Some(5.0)));
@@ -357,7 +363,7 @@ fn a_memo_with_no_eye_keeps_what_takes_no_eye() {
     eye::set_pose(None);
     let mut floor = Memo::<u32, Answer<Option<f64>>>::NONE;
     assert!(matches!(
-        floor.of(0, || world.floor_under(&at)),
+        floor.of(0, || world.floor_under(&at, SizeBy::Eye)),
         Answer::Lack(_)
     ));
     assert!(floor.0.is_none(), "a lack read nothing");
@@ -380,7 +386,7 @@ fn a_memo_with_no_eye_keeps_what_takes_no_eye() {
         memo.of(0, || {
             (
                 world.asset_of(&point(x + 0.5, y + 0.5, 4.5)).val(),
-                world.floor_under(&at).val().is_some(),
+                world.floor_under(&at, SizeBy::Eye).val().is_some(),
             )
         })
     };

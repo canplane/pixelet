@@ -11,22 +11,20 @@ use crate::spec::phase::Phase;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
-    Controller = 0,
-    Input = 1,
-    Camera = 2,
-    Edit = 3,
-    Ghost = 4,
-    Location = 5,
-    Environment = 6,
-    Companion = 7,
-    Demand = 8,
-    Scene = 9,
+    Input = 0,
+    Camera = 1,
+    Edit = 2,
+    Ghost = 3,
+    Location = 4,
+    Environment = 5,
+    Companion = 6,
+    Demand = 7,
+    Scene = 8,
 }
 
 impl StepName {
     /// Every member, in its source's own order.
-    pub const ALL: [StepName; 10] = [
-        StepName::Controller,
+    pub const ALL: [StepName; 9] = [
         StepName::Input,
         StepName::Camera,
         StepName::Edit,
@@ -41,16 +39,15 @@ impl StepName {
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<StepName> {
         match val {
-            0 => Some(StepName::Controller),
-            1 => Some(StepName::Input),
-            2 => Some(StepName::Camera),
-            3 => Some(StepName::Edit),
-            4 => Some(StepName::Ghost),
-            5 => Some(StepName::Location),
-            6 => Some(StepName::Environment),
-            7 => Some(StepName::Companion),
-            8 => Some(StepName::Demand),
-            9 => Some(StepName::Scene),
+            0 => Some(StepName::Input),
+            1 => Some(StepName::Camera),
+            2 => Some(StepName::Edit),
+            3 => Some(StepName::Ghost),
+            4 => Some(StepName::Location),
+            5 => Some(StepName::Environment),
+            6 => Some(StepName::Companion),
+            7 => Some(StepName::Demand),
+            8 => Some(StepName::Scene),
             _ => None,
         }
     }
@@ -58,7 +55,6 @@ impl StepName {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            StepName::Controller => "controller",
             StepName::Input => "input",
             StepName::Camera => "camera",
             StepName::Edit => "edit",
@@ -73,8 +69,7 @@ impl StepName {
 }
 
 /// The phase each step runs in, in STEP_NAME's order (pxl-core frame.rs `tick`).
-pub const STEP_PHASE: [Phase; 10] = [
-    Phase::Interaction,
+pub const STEP_PHASE: [Phase; 9] = [
     Phase::Interaction,
     Phase::Interaction,
     Phase::Interaction,
@@ -90,21 +85,15 @@ pub const STEP_PHASE: [Phase; 10] = [
 #[repr(u8)]
 pub enum EffectName {
     Navigation = 0,
-    Bootstrap = 1,
-    Follow = 2,
-    Dst = 3,
-    Decor = 4,
-    Object = 5,
-    Setting = 6,
+    Decor = 1,
+    Object = 2,
+    Setting = 3,
 }
 
 impl EffectName {
     /// Every member, in its source's own order.
-    pub const ALL: [EffectName; 7] = [
+    pub const ALL: [EffectName; 4] = [
         EffectName::Navigation,
-        EffectName::Bootstrap,
-        EffectName::Follow,
-        EffectName::Dst,
         EffectName::Decor,
         EffectName::Object,
         EffectName::Setting,
@@ -114,12 +103,9 @@ impl EffectName {
     pub const fn of(val: u8) -> Option<EffectName> {
         match val {
             0 => Some(EffectName::Navigation),
-            1 => Some(EffectName::Bootstrap),
-            2 => Some(EffectName::Follow),
-            3 => Some(EffectName::Dst),
-            4 => Some(EffectName::Decor),
-            5 => Some(EffectName::Object),
-            6 => Some(EffectName::Setting),
+            1 => Some(EffectName::Decor),
+            2 => Some(EffectName::Object),
+            3 => Some(EffectName::Setting),
             _ => None,
         }
     }
@@ -128,9 +114,6 @@ impl EffectName {
     pub const fn name(self) -> &'static str {
         match self {
             EffectName::Navigation => "navigation",
-            EffectName::Bootstrap => "bootstrap",
-            EffectName::Follow => "follow",
-            EffectName::Dst => "dst",
             EffectName::Decor => "decor",
             EffectName::Object => "object",
             EffectName::Setting => "setting",

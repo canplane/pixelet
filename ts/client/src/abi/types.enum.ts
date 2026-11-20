@@ -51,3 +51,32 @@ export function name_ErrorCode(val: ErrorCode): string {
       return "InsufficientMemory";
   }
 }
+
+export type TrackingMode =
+  | typeof TRACKING_MODE_NONE
+  | typeof TRACKING_MODE_FOLLOW
+  | typeof TRACKING_MODE_FOLLOW_WITH_HEADING;
+export const TRACKING_MODE_NONE = 0;
+export const TRACKING_MODE_FOLLOW = 1;
+export const TRACKING_MODE_FOLLOW_WITH_HEADING = 2;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_TrackingMode(val: number): TrackingMode | null {
+  return val === TRACKING_MODE_NONE ||
+    val === TRACKING_MODE_FOLLOW ||
+    val === TRACKING_MODE_FOLLOW_WITH_HEADING
+    ? val
+    : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_TrackingMode(val: TrackingMode): string {
+  switch (val) {
+    case TRACKING_MODE_NONE:
+      return "None";
+    case TRACKING_MODE_FOLLOW:
+      return "Follow";
+    case TRACKING_MODE_FOLLOW_WITH_HEADING:
+      return "FollowWithHeading";
+  }
+}

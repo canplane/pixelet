@@ -15,8 +15,8 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::World;
 use crate::domain::query::change::Memo;
+use crate::domain::query::{SizeBy, World};
 use crate::domain::scene::animation;
 use crate::domain::scene::environment;
 use crate::domain::scene::frame::Frame;
@@ -90,8 +90,8 @@ fn location() -> &'static mut LocationIndicator {
     LOCATION.get(LocationIndicator::default)
 }
 
-pub(crate) fn location_step(device_coord: Option<Q3>) {
-    location().step(device_coord);
+pub(crate) fn location_step(at: Option<Q3>) {
+    location().step(at);
 }
 
 /// Advances the beacon by one frame and lays the zone's cells while the zone
@@ -243,10 +243,10 @@ pub(crate) struct LocationIndicator {
 }
 
 impl LocationIndicator {
-    /// Stands at the device's location as the store keeps it, which outlives
+    /// Stands at the user's location as the store keeps it, which outlives
     /// a dropout and a hidden spell, and is gone where the location ends.
-    fn step(&mut self, device_coord: Option<Q3>) {
-        let Some(device) = device_coord else {
+    fn step(&mut self, at: Option<Q3>) {
+        let Some(device) = at else {
             if self.zone.take().is_some() {
                 invalidate(InvalidationReason::Scene);
             }
@@ -297,7 +297,7 @@ impl LocationIndicator {
         // ground's under its cell, which the query reads whole
         // (`surface_support`), and the last one found stands until a new one is.
         let mid = v3::center(&[at[0], at[1], 0.0], cell);
-        let center = world.surface_support(&world::point(mid[0], mid[1], 0.0));
+        let center = world.surface_support(&world::point(mid[0], mid[1], 0.0), SizeBy::Eye);
         if let Some(z) = center.val().flatten() {
             self.last_known_center_z = Some(z);
         }
@@ -329,7 +329,9 @@ impl LocationIndicator {
         let mut memo = core::mem::take(&mut self.ground_cells);
         let world = World::now();
         memo.of(center, || {
-            let instances = lay_zone(center, |at| world.surface_support(at).val().flatten());
+            let instances = lay_zone(center, |at| {
+                world.surface_support(at, SizeBy::Eye).val().flatten()
+            });
             if self.instances != instances {
                 self.instances = instances;
                 self.write(draw);

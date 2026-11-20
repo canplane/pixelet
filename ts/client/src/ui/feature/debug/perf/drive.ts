@@ -56,7 +56,7 @@ export async function perfDrive(): Promise<PerfReport> {
     input.wheel(WHEEL);
     await wait(STEP_MS);
   }
-  input.setDragMode("turn");
+  input.setDragMode("rotate");
   for (let n = 1; n <= RUN; n++) {
     input.tilt(TILT_RAD / RUN);
     await wait(STEP_MS);
@@ -64,7 +64,7 @@ export async function perfDrive(): Promise<PerfReport> {
   input.setDragMode("none");
   await wait(SETTLE_MS);
   perfWindowStart();
-  input.setDragMode("turn");
+  input.setDragMode("rotate");
   const t0 = performance.now();
   let turned = 0;
   // The sweep's place, in steps in from the farthest zoom, is computed from
@@ -75,7 +75,7 @@ export async function perfDrive(): Promise<PerfReport> {
   const step = setInterval(() => {
     const ms = performance.now() - t0;
     const turn = (ms / 1000 / TURN_S) * 2 * Math.PI;
-    input.turn(turned - turn);
+    input.rotate(turned - turn);
     turned = turn;
     const part = (ms % leg) / leg;
     const steps = RUN * (Math.floor(ms / leg) % 2 ? 1 - part : part);

@@ -1,22 +1,20 @@
 // pxl-core/domain/control/input.rs
 
-//! What the hand asks of the camera, as the UI recognizes it: a pan, a turn, a
-//! tilt and a zoom, each a change since the last, whether a hand holds the
-//! view, and the movement keys. Events only gather what they ask, and the
-//! camera is written once a frame (`camera_input_step`), each change applied to
-//! the intent as it stands, so that a change the camera refuses is not owed
-//! back. A pan by hand ends a pending destination, and a drag ends following
-//! the device. What the pointer is over, its hover and its tap, belongs to
-//! pxl-core pointer.rs; when what the pointer holds changes under a still
-//! pointer, its hover is picked again (`camera_rehover`).
+//! What the hand asks of the camera, as the UI recognizes it: a pan, a
+//! rotation, a tilt and a zoom, each a change since the last, whether a hand
+//! holds the view, and the movement keys. Events gather what they ask, and
+//! the camera is written once a frame (`camera_input_step`), where a gesture
+//! is taken: a pan applied to the camera as it stands, and a rotation, a
+//! tilt and a zoom to where it ends. A pan by hand takes the pivot
+//! (navigation.rs), and a rotation by hand ends the view's turning with the
+//! device's heading. What the pointer is over, its hover and its tap,
+//! belongs to pxl-core pointer.rs; when what the pointer holds changes under
+//! a still pointer, its hover is picked again (`camera_rehover`).
 
 use crate::spec::step::InvalidationReason;
 
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::controller::{Active, active};
-use crate::domain::control::camera::state::{IntentPatch, camera_state};
-use crate::domain::control::navigation::destination::cancel as cancel_destination;
-use crate::domain::control::navigation::follow_mode::set_following;
+use crate::domain::control::navigation::{stop_tracking_heading, take_by_hand, takes_gesture};
 use crate::domain::control::param::KEY_PAN_PER_S;
 use crate::domain::setting::settings;
 use crate::domain::view::frame::screen::px_to_ndc;
@@ -32,10 +30,10 @@ struct Input {
     hover: Option<[f64; 2]>,
     hover_pending: bool,
 
-    /// What the hand asked since the last step: the pan's pixels, the turn's
+    /// What the hand asked since the last step: the pan's pixels, the rotation's
     /// and the tilt's radians, and the zoom's spread, multiplied.
     pan: [f64; 2],
-    turn: f64,
+    rotate: f64,
     tilt: f64,
     zoom: f64,
 
@@ -55,7 +53,7 @@ fn fresh() -> Input {
         hover: None,
         hover_pending: false,
         pan: [0.0; 2],
-        turn: 0.0,
+        rotate: 0.0,
         tilt: 0.0,
         zoom: 1.0,
         key_dir: [0.0; 2],
@@ -72,13 +70,11 @@ pub(crate) fn forget() {
     INPUT.set(fresh());
 }
 
-/// Runs a pan the hand makes. A pan by hand cancels a pending destination.
-/// While the camera is tracked, nothing pans.
-fn by_hand(pan: impl FnOnce()) {
-    if active() != Active::Tracked {
-        cancel_destination();
-        pan();
-    }
+/// Whether a gesture is on: a hand holds the view, or a key is held. A
+/// wheel holds nothing: its zoom is taken and eased with no gesture.
+pub(crate) fn gesturing() -> bool {
+    let s = input();
+    s.dragging || s.key_dir != [0.0; 2]
 }
 
 pub(crate) fn camera_pan(dx: f64, dy: f64) {
@@ -86,8 +82,8 @@ pub(crate) fn camera_pan(dx: f64, dy: f64) {
     s.pan = [s.pan[0] + dx, s.pan[1] + dy];
 }
 
-pub(crate) fn camera_turn(rad: f64) {
-    input().turn += rad;
+pub(crate) fn camera_rotate(rad: f64) {
+    input().rotate += rad;
 }
 
 pub(crate) fn camera_tilt(rad: f64) {
@@ -98,12 +94,9 @@ pub(crate) fn camera_zoom(scale: f64) {
     input().zoom *= scale;
 }
 
-/// A hand takes or lets go of the view. Taking it ends following the device.
+/// A hand takes or lets go of the view.
 pub(crate) fn camera_drag(dragging: bool) {
     input().dragging = dragging;
-    if dragging {
-        set_following(false);
-    }
 }
 
 pub(crate) fn camera_hover(x: f64, y: f64) {
@@ -152,36 +145,47 @@ pub(crate) fn camera_keys(x: i32, y: i32) {
 }
 
 /// Writes into the camera what the hand and the keys asked since the last
-/// step. It runs once a frame.
+/// step, where a gesture is taken (navigation.rs `takes_gesture`): on an
+/// animation it is not, and what was asked is dropped. A pan takes the
+/// pivot first (`take_by_hand`), and a rotation ends the view's turning with
+/// the device's heading. It runs once a frame.
 pub(crate) fn camera_input_step() {
     let s = input();
+    let taken = takes_gesture();
     if s.key_dir != [0.0; 2] {
         let at = now();
         let share = KEY_PAN_PER_S * (at - s.keys_at) / 1000.0;
         s.keys_at = at;
         // A key moves the view the way it points. The keys' y runs down the
         // screen and the pan's runs up it, so y changes sign.
-        let way = [s.key_dir[0] * share, -s.key_dir[1] * share];
-        by_hand(|| controller::pan_across(way[0], way[1]));
+        if taken {
+            take_by_hand();
+            controller::pan_across(s.key_dir[0] * share, -s.key_dir[1] * share);
+        }
         invalidate(InvalidationReason::View);
     }
     let [dx, dy] = core::mem::take(&mut s.pan);
-    if dx != 0.0 || dy != 0.0 {
-        by_hand(|| controller::pan(dx, dy));
-    }
-    let turn = core::mem::take(&mut s.turn);
-    let tilt = core::mem::take(&mut s.tilt);
+    let rotate = core::mem::take(&mut s.rotate);
     // A tilt is not asked while the tilt is locked.
-    let tilt = if settings().tilt_lock { 0.0 } else { tilt };
-    if turn != 0.0 || tilt != 0.0 {
-        let intent = camera_state().intent;
-        controller::set_intent(IntentPatch {
-            azimuth: (turn != 0.0).then_some(intent.azimuth + turn),
-            polar: (tilt != 0.0).then_some(intent.polar + tilt),
-            ..Default::default()
-        });
-    }
+    let tilt = match settings().tilt_lock {
+        true => 0.0,
+        false => s.tilt,
+    };
+    s.tilt = 0.0;
     let zoom = core::mem::replace(&mut s.zoom, 1.0);
+    if !taken {
+        return;
+    }
+    if dx != 0.0 || dy != 0.0 {
+        take_by_hand();
+        controller::pan(dx, dy);
+    }
+    if rotate != 0.0 || tilt != 0.0 {
+        controller::face_by(rotate, tilt);
+    }
+    if rotate != 0.0 {
+        stop_tracking_heading();
+    }
     if zoom != 1.0 {
         controller::zoom(zoom);
     }
@@ -189,7 +193,7 @@ pub(crate) fn camera_input_step() {
 
 /// Where the pointer is to be picked again, after the tick has placed the
 /// camera. It is picked again when it moved over the screen, or when it
-/// hovers still and the view `moved` under it (a wheel's zoom, a glide, the
+/// hovers still and the view `moved` under it (a wheel's zoom, an ease, the
 /// keys). None while a hand drags the view. pxl-core pointer.rs decides what
 /// the pointer is over.
 pub(crate) fn rehover_at(moved: bool) -> Option<[f64; 2]> {

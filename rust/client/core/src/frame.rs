@@ -10,29 +10,23 @@ use crate::spec::step::{EffectName, InvalidationReason, STEP_PHASE, StepName};
 use pxl_spec::space::coord::q3::{self, Q3};
 
 use crate::domain::control::input::{camera_input_step, rehover_at};
-use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
-use crate::domain::control::navigation::follow_mode::follow_mode_step;
-use crate::domain::control::navigation::off_center::{off_center, off_center_step};
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
 use crate::sys::io::request::pump;
 use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
 
-use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::controller::Active;
 use crate::domain::control::edit::write;
 use crate::domain::control::input;
-use crate::domain::control::navigation::destination;
-use crate::domain::control::navigation::follow_mode;
-use crate::domain::control::support;
+use crate::domain::control::navigation;
+use crate::domain::control::navigation::location::user_location;
 use crate::domain::eye;
 use crate::domain::layer::division;
 use crate::domain::layer::imagery::ImageryTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::change;
-use crate::domain::scene::character::companion::{self, Camera, companion_step};
+use crate::domain::scene::character::companion::{Camera, companion_step};
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::environment_step;
@@ -44,6 +38,7 @@ use crate::domain::scene::rate::{self, Motion, Pace};
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::scene_step;
 use crate::domain::setting;
+use crate::domain::setting::CameraMode;
 use crate::domain::view::demand;
 use crate::domain::view::demand::DemandedBase as _;
 use crate::domain::view::frame::coord;
@@ -64,6 +59,8 @@ use pxl_global::Global;
 use pxl_gpu_guest::abi::vsync;
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::lattice::{GROUND, Grid};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::clock::{self, now};
 use xpute_kit::status::bug::OrBug;
@@ -75,21 +72,21 @@ use crate::sys::sched::param::MAX_STEP_S;
 /// The camera as the companion's walk reads it. It is None in first person,
 /// where the eye stands over the pivot and the person is the one looking.
 fn companion_camera() -> Option<Camera> {
-    if controller::active() != Active::Orbit {
+    if controller::mode() != CameraMode::Orbit {
         return None;
     }
     // The pivot the camera is easing toward, not the one its easing has
     // reached so far.
-    let goal = controller::pivot_to().or_else(controller::pivot)?;
+    let goal = controller::pivot_to()?;
     eye::at()?;
     let at = coord::to_world(&goal);
     Some(Camera {
         pivot: [at[0], at[1]],
-        floor: companion::pivot_floor(goal, |w| support::floor_at(w, &goal)),
-        azimuth: camera::azimuth(),
+        floor: controller::floor_to()?,
+        azimuth: controller::facing()?.1,
         dragging: input::dragging(),
         steered: input::steering(),
-        following: follow_mode::following(),
+        tracking: navigation::is_tracking(),
     })
 }
 
@@ -111,11 +108,11 @@ fn ghost_tick(_: &mut TickContext) {
     }
 }
 
-/// The indicator is handed the device's coordinate as reported, None
-/// included. It keeps showing its last coordinate while the device briefly
-/// reports none.
+/// The indicator is handed the user's location as the device reports it,
+/// None included. It keeps showing the last while the device briefly reports
+/// none.
 fn location_tick(_: &mut TickContext) {
-    location_step(off_center().device_coord);
+    location_step(user_location());
 }
 
 fn companion_tick(ctx: &mut TickContext) {
@@ -127,11 +124,13 @@ fn demand_tick(_: &mut TickContext) {
     // The ground's clip levels move to their new centers before arrived
     // tiles are admitted, so each arrival fills a level where it now stands.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
+    // The place being made a point, whose leaves are asked for.
+    let to = navigation::destination().map(|at| (at, GROUND.cell_of(LEAF_ZOOM, &at).tile()));
     let pinned = clipmap::step(
         [
             eye::at().map(|e| [e[0], e[1]]),
             controller::pivot().map(at),
-            destination::pending().map(at),
+            to.map(|(p, _)| at(p)),
         ],
         api::device_generation(),
     );
@@ -140,7 +139,7 @@ fn demand_tick(_: &mut TickContext) {
     }
     demand::admit_arrived();
     changes_step();
-    IndexedTerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
+    IndexedTerrainTile::demand().step(to.map(|(_, t)| t), clipmap::pinned_tiles());
     // No place tile is fetched while places are hidden.
     match setting::settings().place {
         true => PlaceTile::demand().step(None, &[]),
@@ -152,15 +151,15 @@ fn demand_tick(_: &mut TickContext) {
 }
 
 /// Runs the scene's frame with what control decided. The world gizmo is drawn
-/// about the camera's pivot, and in third person also about the view's
+/// about the camera's pivot, and for the orbit also about the view's
 /// heading.
 /// Decor leaves out what the edit's preview takes away.
 fn scene_tick(ctx: &mut TickContext) {
-    let third_person = controller::active() == Active::Orbit;
+    let orbits = controller::mode() == CameraMode::Orbit;
     scene_step(
         ctx,
         controller::pivot(),
-        third_person.then(pose::azimuth).flatten(),
+        orbits.then(pose::azimuth).flatten(),
         &write::render_edit(),
         write::draft(),
     );
@@ -173,7 +172,7 @@ fn camera_input_tick(_: &mut TickContext) {
 /// Writes the camera for the last time this frame and has the view take its
 /// pose where it differs by what can be told apart (`view_compose`). It must
 /// run after every writer of the pose (the link's
-/// events, the frame's effects, the controllers) and before every phase that
+/// events, the frame's effects, the hand's input) and before every phase that
 /// observes the view. The pointer is picked again from the new view, so what
 /// it is over stays right when the view moves under a still pointer.
 fn camera_tick(ctx: &mut TickContext) {
@@ -200,7 +199,6 @@ type Step = (StepName, fn(&mut TickContext));
 /// The tick's steps, in the order they run, each in its phase (step.json5
 /// `STEP_PHASE`).
 const STEPS: [Step; StepName::ALL.len()] = [
-    (StepName::Controller, controller::controller_step),
     (StepName::Input, camera_input_tick),
     (StepName::Camera, camera_tick),
     (StepName::Edit, edit_tick),
@@ -261,16 +259,9 @@ pub(crate) fn effects() -> [f64; EFFECT_CNT] {
             perf_follow(setting::settings().perf);
         }
     });
-    effect!(times, Navigation, off_center_step());
-    effect!(times, Bootstrap, map_bootstrap_step());
-    effect!(times, Follow, follow_mode_step());
-    effect!(times, Dst, {
-        // The floors the body found under a position of unknown height,
-        // and the climb's pitch, are dropped where the ground changed under
-        // them.
-        support::support_step();
-        camera::orbit::forget_climb();
-        destination::dst_step();
+    effect!(times, Navigation, {
+        controller::forget_touched();
+        navigation::navigation_step(input::gesturing());
     });
     effect!(times, Decor, decor_models_step());
     effect!(times, Object, repository::step());

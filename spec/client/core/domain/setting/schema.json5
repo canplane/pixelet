@@ -13,7 +13,7 @@
   ORBIT_OBSTACLE_MODE: {
     $value: { through: 0, stop: 1, climb: 2 },
     $type: "u32",
-    $description: "What terrain does to the camera.\n\n  through — nothing. The eye goes wherever the controls put it, ground\n            included, where its rays start inside what they meet and\n            the scene reads inside out.\n  stop    — a control goes as far as it asked or as far as it can.\n            Nothing moves on its own; a zoom into a hill stops short.\n  climb   — dist is granted and the *view* pitches up instead, as far\n            as straight down, at the cost of an angle nobody asked for.\n            Where its way hits something all the same, a zoom in goes\n            through to the pivot's side and any other control stops.",
+    $description: "What terrain does to the camera.\n\n  through — nothing. The eye goes wherever the controls put it, ground\n            included, where its rays start inside what they meet and\n            the scene reads inside out.\n  stop    — the eye is drawn no farther from the pivot than the first\n            thing between them, and is back out when the line is open.\n            What is asked stays as it was asked.\n  climb   — dist is granted and the *view* pitches up instead, as far\n            as straight down, at the cost of an angle nobody asked for.\n            Where no pitch clears the eye, it is drawn as `stop` draws it.",
   },
   AO_MODE: {
     $value: { off: 0, corner: 1, screen: 2 },
@@ -68,7 +68,7 @@
     },
     camera_mode: {
       number: { $value: 5, $type: "u32" },
-      $description: "On a switch to first person the person stands at the pivot, the eye at its\nheight over the ground. On a switch to third person the pivot is laid on the\nground and the eye steps back by the radius.",
+      $description: "The camera stays as it is on a switch, and only the eye moves about the\npivot: in first person it stands over the pivot, where a body standing\nthere looks from, and in third person it steps back by the distance.",
       kind: { $value: "choice" },
       default: { $value: "orbit" },
       options: { $value: "CAMERA_MODE" },
@@ -77,7 +77,7 @@
     },
     surface_follow: {
       number: { $value: 6, $type: "u32" },
-      $description: "The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.",
+      $description: "The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/camera/pivot.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.",
       kind: { $value: "toggle" },
       default: { $value: true },
       section: { $value: "camera" },
@@ -85,7 +85,7 @@
     },
     orbit_obstacle: {
       number: { $value: 7, $type: "u32" },
-      $description: "Only `climb` goes into a tunnel (camera/orbit.rs `pull_forward`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.",
+      $description: "How the ground holds the orbit's eye as it is drawn (camera/orbit.rs). A shipped build holds `climb`, and the others are a development build's to compare, each session from the default.",
       kind: { $value: "choice" },
       default: { $value: "climb" },
       options: { $value: "ORBIT_OBSTACLE_MODE" },

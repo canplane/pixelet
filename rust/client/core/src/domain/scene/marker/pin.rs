@@ -16,7 +16,7 @@ use super::{Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Draft;
 use crate::domain::query::change::Memo;
-use crate::domain::query::{World, cell_zoom_drawn};
+use crate::domain::query::{SizeBy, World, cell_zoom_drawn};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
@@ -173,7 +173,7 @@ fn crowd_at((zoom, at): Cell, pin: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
     let top = World::now()
-        .floor_under(&point(x, y, c.max[2]))
+        .floor_under(&point(x, y, c.max[2]), SizeBy::Eye)
         .val()
         .flatten()
         .filter(|top| (c.min[2]..=c.max[2]).contains(top))

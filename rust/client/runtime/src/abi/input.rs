@@ -7,8 +7,8 @@ pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
 /// `pan`
 pub const PAN: _rt::Method = 0;
-/// `turn`
-pub const TURN: _rt::Method = 1;
+/// `rotate`
+pub const ROTATE: _rt::Method = 1;
 /// `tilt`
 pub const TILT: _rt::Method = 2;
 /// `zoom`
@@ -23,10 +23,6 @@ pub const HOVER: _rt::Method = 6;
 pub const OUT: _rt::Method = 7;
 /// `move`
 pub const MOVE: _rt::Method = 8;
-/// `xr-pose`
-pub const XR_POSE: _rt::Method = 9;
-/// `xr-pose-end`
-pub const XR_POSE_END: _rt::Method = 10;
 
 pub fn pan(side_: &_rt::Side, dx: f64, dy: f64) -> Result<(), _rt::Errno> {
     let (r, _) = side_.call(
@@ -40,10 +36,10 @@ pub fn pan(side_: &_rt::Side, dx: f64, dy: f64) -> Result<(), _rt::Errno> {
     _rt::answer(r)
 }
 
-pub fn turn(side_: &_rt::Side, rad: f64) -> Result<(), _rt::Errno> {
+pub fn rotate(side_: &_rt::Side, rad: f64) -> Result<(), _rt::Errno> {
     let (r, _) = side_.call(
         HANDLE,
-        TURN,
+        ROTATE,
         _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.f64(0, rad);
         }))),
@@ -122,41 +118,6 @@ pub fn r#move(side_: &_rt::Side, x: i32, y: i32) -> Result<(), _rt::Errno> {
             w_.i32(4, y);
         }))),
     );
-    _rt::answer(r)
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the WIT function's parameters, each its own"
-)]
-pub fn xr_pose(
-    side_: &_rt::Side,
-    x: f64,
-    y: f64,
-    z: f64,
-    qx: f64,
-    qy: f64,
-    qz: f64,
-    qw: f64,
-) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(
-        HANDLE,
-        XR_POSE,
-        _rt::Packet::Args(Some((56, &|w_: &mut _rt::Lower| {
-            w_.f64(0, x);
-            w_.f64(8, y);
-            w_.f64(16, z);
-            w_.f64(24, qx);
-            w_.f64(32, qy);
-            w_.f64(40, qz);
-            w_.f64(48, qw);
-        }))),
-    );
-    _rt::answer(r)
-}
-
-pub fn xr_pose_end(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, XR_POSE_END, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 

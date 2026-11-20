@@ -190,9 +190,9 @@
       "object_size": "크기 {{n}}"
     },
     "controls": {
-      "move_to_location": "내 위치로",
-      "start_compass_mode": "나침반 켜기",
-      "exit_compass_mode": "나침반 끄기",
+      "tracking_off": "위치 추적 꺼짐",
+      "tracking_on": "위치 추적 켜짐",
+      "tracking_on_with_heading": "방향과 함께 위치 추적 켜짐",
       "first_person": "1인칭 보기",
       "third_person": "3인칭 보기",
       "show_places": "장소 보기",

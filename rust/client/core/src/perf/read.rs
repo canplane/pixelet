@@ -5,7 +5,6 @@
 //! reply hands over together (`perf_read`). A section is written only through
 //! `put` (perf/word.rs).
 
-use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
 use crate::domain::query;
 use crate::domain::query::HitKind;
@@ -312,7 +311,8 @@ fn view() -> ViewSection {
     let place = edit::hover().coord.filter(|_| asset.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
-    let eye = camera::eye_world().map(|e| coord::world_to_canonical(&e));
+    let eye = controller::pose().map(|p| coord::world_to_canonical(&p.eye));
+    let (polar, azimuth) = controller::facing().unwrap_or((f64::NAN, f64::NAN));
     let [eye_x, eye_y, eye_z] = eye.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let pivot = controller::pivot();
     let [pivot_x, pivot_y, pivot_z] = pivot.map_or([f64::NAN; 3], |p| q3::unpack(&p));
@@ -324,8 +324,8 @@ fn view() -> ViewSection {
         eye_y,
         eye_z,
         dist: controller::dist(),
-        polar: camera::polar(),
-        azimuth: camera::azimuth(),
+        polar,
+        azimuth,
         pivot_x,
         pivot_y,
         pivot_z,

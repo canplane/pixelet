@@ -147,31 +147,31 @@ function SearchStrip() {
   );
 }
 
-/** How long the gauges stay once the hand turning or zooming the view stops. */
+/** How long the gauges stay once the hand rotating or zooming the view stops. */
 const LINGER_MS = 500;
 
-/** Whether the pointers turn or zoom the view: a turning drag or a pinch. */
-function turnsOrZooms(mode: DragMode): boolean {
-  return mode === "turn" || mode === "pinch";
+/** Whether the pointers rotate or zoom the view: a rotating drag or a pinch. */
+function rotatesOrZooms(mode: DragMode): boolean {
+  return mode === "rotate" || mode === "pinch";
 }
 
 /** Whether the gauges, the compass bar and the scale, show: while a pointer
- * turns or pinches the view, and for `LINGER_MS` after it lets go or after a
+ * rotates or pinches the view, and for `LINGER_MS` after it lets go or after a
  * zoom by the wheel or a trackpad's pinch. Only the user's own input shows
  * them, so the view turning with the device does not. It is set where the
  * input is told, so the frame a hand lets go in already lingers. */
 function useGaugesShown(): boolean {
-  const [shown, setShown] = useState(() => turnsOrZooms(dragMode()));
+  const [shown, setShown] = useState(() => rotatesOrZooms(dragMode()));
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let holding = turnsOrZooms(dragMode());
+    let holding = rotatesOrZooms(dragMode());
     const linger = () => {
       setShown(true);
       clearTimeout(timer);
       timer = setTimeout(() => setShown(false), LINGER_MS);
     };
     const offMode = watchDragMode(() => {
-      const now = turnsOrZooms(dragMode());
+      const now = rotatesOrZooms(dragMode());
       if (now) {
         clearTimeout(timer);
         setShown(true);
@@ -241,7 +241,7 @@ const STYLE = StyleSheet.create({
     gap: CHROME.controlGap,
   },
   // The HUD is the strip: the title (the address over the sensors) or, while
-  // the view turns or zooms, the gauges in its place. The whole strip takes
+  // the hand rotates or zooms the view, the gauges in its place. The whole strip takes
   // the press, whichever shows. It is as high as the buttons' row.
   //
   // Its lines are the title's: the title stands in the strip's middle, and

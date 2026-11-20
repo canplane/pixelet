@@ -18,6 +18,8 @@ interface CircularButtonProps {
   place?: BackingPlace;
   onPress: () => void;
   label: string;
+  /** The button is not offered now: it takes no press and is drawn faint. */
+  disabled?: boolean;
 }
 
 export function CircularButton({
@@ -26,13 +28,16 @@ export function CircularButton({
   place = BackingPlace.OVER_MAP,
   onPress,
   label,
+  disabled = false,
 }: CircularButtonProps) {
   const round = { width: size, height: size, borderRadius: size / 2 };
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       style={round}
     >
       {({ pressed }) => (
@@ -47,7 +52,11 @@ export function CircularButton({
             interactive
             style={[STYLE.face, { borderRadius: size / 2 }]}
           >
-            <Glyph glyph={glyph} size={CHROME.glyph} color={LABEL.primary} />
+            <Glyph
+              glyph={glyph}
+              size={CHROME.glyph}
+              color={disabled ? LABEL.tertiary : LABEL.primary}
+            />
           </Backing>
         </Motion>
       )}

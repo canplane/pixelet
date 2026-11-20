@@ -99,7 +99,8 @@ which keeps four promises:
   never back. The view is loading until every tile demanded shows, exact or
   coarser (`TileCache::is_shown`).
 - Nothing is fetched on a guess: a view converges on its misses alone, and a
-  camera sent somewhere waits for the ground there.
+  place the camera is sent to waits for the ground there before it is a
+  point.
 
 ## The ground's clipmap
 
@@ -108,7 +109,7 @@ Jones 1998): a level a zoom about a center, addressed modulo its size. A ray
 observes a zoom's cells only within a fixed reach of the eye (pxl-engine
 `clipmap.rs` `RADIUS`), so one level holds every cell the ray can observe at
 that zoom. The eye has a level at every zoom drawn; the pivot has two, at the
-leaves and the zoom over them; and a place the camera travels to has one.
+leaves and the zoom over them; and a place the camera is sent to has one.
 
 A level is a few bricks of cells a side, each held in the entry its place names,
 so the level follows its center a brick at a time and no held cell moves. A

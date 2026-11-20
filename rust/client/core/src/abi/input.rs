@@ -7,8 +7,8 @@ pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
 /// `pan`
 pub const PAN: _rt::Method = 0;
-/// `turn`
-pub const TURN: _rt::Method = 1;
+/// `rotate`
+pub const ROTATE: _rt::Method = 1;
 /// `tilt`
 pub const TILT: _rt::Method = 2;
 /// `zoom`
@@ -23,14 +23,10 @@ pub const HOVER: _rt::Method = 6;
 pub const OUT: _rt::Method = 7;
 /// `move`
 pub const MOVE: _rt::Method = 8;
-/// `xr-pose`
-pub const XR_POSE: _rt::Method = 9;
-/// `xr-pose-end`
-pub const XR_POSE_END: _rt::Method = 10;
 
 pub trait Guest {
     fn pan(&self, dx: f64, dy: f64) -> Result<(), _rt::Errno>;
-    fn turn(&self, rad: f64) -> Result<(), _rt::Errno>;
+    fn rotate(&self, rad: f64) -> Result<(), _rt::Errno>;
     fn tilt(&self, rad: f64) -> Result<(), _rt::Errno>;
     fn zoom(&self, scale: f64) -> Result<(), _rt::Errno>;
     fn drag(&self, dragging: bool) -> Result<(), _rt::Errno>;
@@ -38,21 +34,6 @@ pub trait Guest {
     fn hover(&self, x: f64, y: f64) -> Result<(), _rt::Errno>;
     fn out(&self) -> Result<(), _rt::Errno>;
     fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::Errno>;
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the WIT function's parameters, each its own"
-    )]
-    fn xr_pose(
-        &self,
-        x: f64,
-        y: f64,
-        z: f64,
-        qx: f64,
-        qy: f64,
-        qz: f64,
-        qw: f64,
-    ) -> Result<(), _rt::Errno>;
-    fn xr_pose_end(&self) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
@@ -69,9 +50,9 @@ impl _rt::Object for _Object {
                         Err(e) => e as i32,
                     }
                 }
-                TURN => {
+                ROTATE => {
                     let rad = args_.f64(0)?;
-                    match self.0.turn(rad) {
+                    match self.0.rotate(rad) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }
@@ -125,23 +106,6 @@ impl _rt::Object for _Object {
                         Err(e) => e as i32,
                     }
                 }
-                XR_POSE => {
-                    let x = args_.f64(0)?;
-                    let y = args_.f64(8)?;
-                    let z = args_.f64(16)?;
-                    let qx = args_.f64(24)?;
-                    let qy = args_.f64(32)?;
-                    let qz = args_.f64(40)?;
-                    let qw = args_.f64(48)?;
-                    match self.0.xr_pose(x, y, z, qx, qy, qz, qw) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
-                }
-                XR_POSE_END => match self.0.xr_pose_end() {
-                    Ok(()) => 0,
-                    Err(e) => e as i32,
-                },
                 _ => _rt::Errno::ENOSYS as i32,
             })
         };

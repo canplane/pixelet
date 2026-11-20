@@ -20,4 +20,12 @@ interface types {
     // The profiler's window could not be had.
     insufficient-memory,
   }
+
+  // Whether the camera tracks the user's location, and turns with the
+  // device's heading as it does.
+  enum tracking-mode {
+    none,
+    follow,
+    follow-with-heading,
+  }
 }

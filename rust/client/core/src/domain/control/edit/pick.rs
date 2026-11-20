@@ -11,9 +11,9 @@ use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{Zoom, of_side, units};
+use pxl_spec::space::layer::lattice::LEAF_REACH;
 
 use crate::domain::control::edit::collision::object_aabb;
-use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query::{Hit, HitKind, Ray, World, cell_zoom_read};
 use crate::domain::setting::settings;
@@ -73,7 +73,13 @@ impl Pick {
     /// What is drawn there is then a summary of the cells, not the cells
     /// themselves, so nothing in it can be struck.
     pub(crate) fn is_folded(&self) -> bool {
-        self.ray_zoom.is_some_and(|z| z < self.zoom())
+        !self.draws(self.zoom())
+    }
+
+    /// Whether the rays draw the struck point with cells at `zoom` or finer.
+    /// With no eye nothing is judged, and it holds.
+    pub(crate) fn draws(&self, zoom: Zoom) -> bool {
+        self.ray_zoom.is_none_or(|z| z >= zoom)
     }
 
     /// The placed object struck: a cube, or a decor someone placed. None for
@@ -170,7 +176,8 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
 }
 
 /// The first thing the ray from the eye at `origin` along `dir` strikes
-/// within `PICK_DIST_U`, in the root frame. Decor is struck as the frame
+/// where the eye draws the ground as it is (`query::leaf_drawn`), in the
+/// root frame: out to pxl-spec `LEAF_REACH`, the one reach of what is near. Decor is struck as the frame
 /// draws it (`World::first_seen`). The world asked is the stored one
 /// (`World::now`), not the one the eraser's preview draws, because what is
 /// erased is what is stored.
@@ -178,7 +185,7 @@ pub(crate) fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
         dir,
-        t_max: PICK_DIST_U,
+        t_max: LEAF_REACH,
     };
     // Only an exact answer counts. A coarser tile's answer is a summary, not
     // what is held.

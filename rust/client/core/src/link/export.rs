@@ -19,8 +19,9 @@ use crate::spec::step::InvalidationReason;
 use std::rc::Rc;
 
 use crate::abi;
+use crate::abi::types::TrackingMode;
 use crate::domain::control::input::forget;
-use crate::domain::control::navigation::follow_mode::following;
+use crate::domain::control::navigation::tracking_mode;
 use crate::sys::sched::invalidate;
 use xpute_guest::abi::life;
 use xpute_kit::status::errno::Errno;
@@ -103,8 +104,8 @@ pub(super) fn mount() {
 }
 
 impl abi::camera::Guest for Core {
-    fn track(&self, tracking: abi::camera::Tracking) -> Result<(), Errno> {
-        with_frame(camera::track(tracking))
+    fn track(&self, mode: TrackingMode) -> Result<(), Errno> {
+        with_frame(camera::track(mode))
     }
     fn goto(&self, lon: f64, lat: f64) -> Result<(), Errno> {
         with_frame(camera::goto(lon, lat))
@@ -115,8 +116,8 @@ impl abi::input::Guest for Core {
     fn pan(&self, dx: f64, dy: f64) -> Result<(), Errno> {
         with_frame(input::pan(dx, dy))
     }
-    fn turn(&self, rad: f64) -> Result<(), Errno> {
-        with_frame(input::turn(rad))
+    fn rotate(&self, rad: f64) -> Result<(), Errno> {
+        with_frame(input::rotate(rad))
     }
     fn tilt(&self, rad: f64) -> Result<(), Errno> {
         with_frame(input::tilt(rad))
@@ -138,21 +139,6 @@ impl abi::input::Guest for Core {
     }
     fn r#move(&self, x: i32, y: i32) -> Result<(), Errno> {
         with_frame(input::r#move(x, y))
-    }
-    fn xr_pose(
-        &self,
-        x: f64,
-        y: f64,
-        z: f64,
-        qx: f64,
-        qy: f64,
-        qz: f64,
-        qw: f64,
-    ) -> Result<(), Errno> {
-        with_frame(input::xr_pose(x, y, z, qx, qy, qz, qw))
-    }
-    fn xr_pose_end(&self) -> Result<(), Errno> {
-        with_frame(input::xr_pose_end())
     }
 }
 
@@ -177,10 +163,11 @@ impl abi::sensor::Guest for Core {
     }
     /// The one method that asks by a condition: the device tells its heading
     /// far more often than a frame is worth, and the heading turns the camera
-    /// only while it follows the device, so it asks only then.
+    /// only while it is tracked with the user's location, so it asks only
+    /// then.
     fn heading(&self, deg: Option<f64>) -> Result<(), Errno> {
         let answer = sensor::heading(deg);
-        if following() {
+        if tracking_mode() == TrackingMode::FollowWithHeading {
             return with_frame(answer);
         }
         answer

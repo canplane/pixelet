@@ -1,308 +1,322 @@
 // pxl-core/domain/control/camera/controller.rs
 
-//! Which controller moves the camera (camera.rs), and the pivot it turns
-//! about. The orbit's pivot is a point `dist` ahead of the eye. The
-//! first-person camera's pivot is under the eye, at the person's center. The pivot is derived each
-//! time it is asked for and never kept. A tracker (`tracked_pose`) overrides
-//! either controller while it holds the pose, because a tracked turn can
-//! roll and neither controller has a roll.
+//! Which controller moves the camera (camera.rs), where its eye stands for
+//! the camera as drawn, and what the camera is told to do. The orbit's eye
+//! is the camera's distance behind its pivot along its facing, the two
+//! carried together over the ground on a flight. The first-person camera's
+//! eye is over the pivot, where a body standing there looks from. So a
+//! change of controller moves the eye about a pivot that stays.
+//!
+//! The camera does what it is told and refuses nothing: who may tell it
+//! what, and when, is said above it (domain/control/navigation.rs).
 
 use crate::spec::step::InvalidationReason;
-use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3::V3;
 
 use crate::domain::control::camera::first_person;
+use crate::domain::control::camera::motion::{Move, end, motion};
 use crate::domain::control::camera::orbit;
-use crate::domain::control::camera::orbit::orbit;
-use crate::domain::control::camera::state::{Intent, IntentPatch, camera_state, camera_state_mut};
-use crate::domain::control::camera::{camera, eye_world, facing_rot};
-use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
-use crate::domain::control::support::pan_to;
+use crate::domain::control::camera::pivot::{self, pan_to, stood, stood_at};
+use crate::domain::control::camera::{Camera, camera, facing_rot};
+use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::domain::eye::EyePose;
-use crate::domain::setting::{CameraMode, settings};
-use crate::domain::view::frame::coord::world_to_canonical;
+use crate::domain::query::floor_of;
+use crate::domain::query::leaf_drawn;
+use crate::domain::setting::CameraMode;
+use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::sys::sched::invalidate;
 use crate::sys::sched::tick::TickContext;
 use pxl_global::Global;
 
+// ---- what is read of the camera ----
+
+static MODE: Global<CameraMode> = Global::new();
+
+/// Which controller moves the camera.
+pub(crate) fn mode() -> CameraMode {
+    *MODE.get(|| CameraMode::Orbit)
+}
+
+/// The pose the camera is drawn at. None before the camera is put.
+pub(crate) fn pose() -> Option<EyePose> {
+    let at = drawn((*camera())?);
+    Some(EyePose {
+        eye: match mode() {
+            CameraMode::Orbit => orbit::eye(&at),
+            CameraMode::FirstPerson => first_person::eye(&at),
+        },
+        rot: facing_rot(at.polar, at.azimuth),
+    })
+}
+
+/// `cam` as the controller that moves it draws it.
+fn drawn(cam: Camera) -> Camera {
+    match mode() {
+        CameraMode::Orbit => orbit::drawn(&cam),
+        CameraMode::FirstPerson => cam,
+    }
+}
+
+/// The facing the camera is drawn at: its polar angle, radians from straight
+/// down, and its azimuth, radians from north toward east. None before the
+/// camera is put.
+pub(crate) fn facing() -> Option<(f64, f64)> {
+    let cam = drawn((*camera())?);
+    Some((cam.polar, cam.azimuth))
+}
+
+/// The distance the view is scaled by, the orbit's (orbit.rs `view_dist`): 0
+/// where the camera has no zoom, in first person, where a scale has nothing
+/// to say (ui.rs `m_per_px`).
 pub(crate) fn dist() -> f64 {
-    match active() {
-        Active::Orbit => orbit().dist,
-        Active::FirstPerson | Active::Tracked => 0.0,
+    match (mode(), *camera()) {
+        (CameraMode::Orbit, Some(cam)) => orbit::view_dist(&cam),
+        (CameraMode::Orbit, None) => DEFAULT_DIST,
+        (CameraMode::FirstPerson, _) => 0.0,
     }
 }
 
-pub(crate) fn pivot_world() -> Option<V3> {
-    match active() {
-        Active::Orbit => orbit::pivot_world(),
-        Active::FirstPerson => first_person::pivot_world(),
-        Active::Tracked => Some(pose()?.eye),
-    }
-}
-
+/// The camera's pivot where it stands, on the ground. A flight carries the
+/// camera over it (orbit.rs `at_height`). None before the camera is put.
 pub(crate) fn pivot() -> Option<Q3> {
-    pivot_world().map(|at| world_to_canonical(&at))
+    Some(world_to_canonical(&(*camera())?.pivot))
 }
 
-/// How the camera moves to a new pivot. A place found elsewhere (a search,
-/// a recenter, the start, a change of person) is snapped to. A place on the
-/// screen or a followed location fix is eased to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Motion {
-    Snap,
-    Smooth,
+/// Where the pivot is going to: the end of the camera's move, or where it
+/// is drawn on no move. None before the camera is put.
+pub(crate) fn pivot_to() -> Option<Q3> {
+    let cam = camera().as_ref()?;
+    Some(world_to_canonical(&end(cam).to))
 }
 
-/// While a tracker holds the pose, this does nothing, and the controller
-/// under the tracker does not move in its place.
-pub(crate) fn put_pivot(to: Q3, motion: Motion) {
-    if active() == Active::Tracked {
+/// The top of the floor the pivot stands on where it is going. None before
+/// the camera is put.
+pub(crate) fn floor_to() -> Option<f64> {
+    Some(floor_of(&stood(&pivot_to()?)))
+}
+
+/// Whether the camera is on a move.
+pub(crate) fn moving() -> bool {
+    motion().is_some()
+}
+
+/// Drops what the camera keeps of the ground where a change touched it: the
+/// floor its pivot stands on, and the orbit's pitch and arm.
+pub(crate) fn forget_touched() {
+    pivot::forget_touched();
+    orbit::forget_touched();
+}
+
+// ---- what the camera is told ----
+
+/// Has the camera end as `change` makes of where it ends now (motion.rs
+/// `end`). A camera never put has nothing to move.
+fn end_as(change: impl FnOnce(Move) -> Move) {
+    let Some(cam) = camera().as_ref() else {
+        return;
+    };
+    let was = end(cam);
+    let to = change(was).in_range();
+    if to != was {
+        *motion() = Some(to);
+        invalidate(InvalidationReason::View);
+    }
+}
+
+/// Puts a camera never put about `at`, at the default distance and facing.
+fn put(at: V3) {
+    *camera() = Some(Camera {
+        pivot: at,
+        dist: DEFAULT_DIST,
+        polar: DEFAULT_POLAR,
+        azimuth: DEFAULT_AZIMUTH,
+    });
+    invalidate(InvalidationReason::View);
+}
+
+/// Warps `cam` to `at`, where it is not there: its pivot is there at once,
+/// with nothing between, and a move it is on ends there, its flight over, so
+/// its distance and its facing are eased on.
+fn warp(cam: &mut Camera, at: V3) {
+    if cam.pivot == at {
         return;
     }
-    camera_state_mut().to = Some(to);
-    if motion == Motion::Snap {
-        snap();
+    cam.pivot = at;
+    if let Some(m) = motion() {
+        (m.to, m.speed, m.height) = (at, 0.0, 0.0);
     }
     invalidate(InvalidationReason::View);
 }
 
-/// Puts the active controller's camera at the pivot's `to` at once.
-fn snap() {
-    match active() {
-        Active::Orbit => orbit::snap(),
-        Active::FirstPerson => first_person::snap(),
-        Active::Tracked => {}
+/// Whether the camera goes to `at` on a move, or warps there: the orbit
+/// always goes, and first person, whose eye never leaves its body, only to
+/// a place the eye draws as it is, with the leaves' cells.
+fn goes_to(at: V3) -> bool {
+    match mode() {
+        CameraMode::Orbit => true,
+        CameraMode::FirstPerson => leaf_drawn(at),
     }
 }
 
-/// Where the pivot is going to: the place last put, which a smooth move
-/// eases toward, or else where the pivot stands. None while tracked.
-pub(crate) fn pivot_to() -> Option<Q3> {
-    match active() {
-        Active::Tracked => None,
-        Active::Orbit | Active::FirstPerson => camera_state().to.or_else(pivot),
+/// Has the camera go to the point `to`: its move ends there, the orbit
+/// flown (orbit.rs `step`) and first person eased, or it warps (`goes_to`).
+/// A camera never put is put there.
+pub(crate) fn go(to: Q3) {
+    let at = to_world(&to);
+    match camera() {
+        Some(_) if goes_to(at) => end_as(|m| Move { to: at, ..m }),
+        Some(cam) => warp(cam, at),
+        None => put(at),
     }
 }
 
-/// The distance a pan is scaled by. First person pans as the orbit does at
-/// `DEFAULT_DIST`, since it has no zoom distance of its own.
+/// Warps the camera to the point `to`. A camera never put is put there.
+pub(crate) fn warp_to(to: Q3) {
+    let at = to_world(&to);
+    match camera() {
+        Some(cam) => warp(cam, at),
+        None => put(at),
+    }
+}
+
+/// The camera stays where its pivot is: a move under way ends there, so
+/// the orbit comes down in place from a flight. Its distance and its facing
+/// are eased on to where they were asked.
+pub(crate) fn stay() {
+    if let (Some(m), Some(cam)) = (motion().as_mut(), camera().as_ref()) {
+        m.to = cam.pivot;
+        invalidate(InvalidationReason::View);
+    }
+}
+
+/// A view farther out than the default comes in to it, eased, and one
+/// brought nearer stays.
+pub(crate) fn come_in() {
+    end_as(|m| Move {
+        dist: m.dist.min(DEFAULT_DIST),
+        ..m
+    });
+}
+
+/// Turns the view to `azimuth`, eased.
+pub(crate) fn azimuth_to(azimuth: f64) {
+    end_as(|m| Move { azimuth, ..m });
+}
+
+/// Rotates the camera by `azimuth` and tilts it by `polar`, in radians: the
+/// facing is eased there, and what is asked adds up.
+pub(crate) fn face_by(azimuth: f64, polar: f64) {
+    end_as(|m| Move {
+        azimuth: m.azimuth + azimuth,
+        polar: m.polar + polar,
+        ..m
+    });
+}
+
+/// Zooms by `scale`, which divides the camera's distance: the distance is
+/// eased there, and what is asked adds up. First person has no zoom, so it
+/// ignores it.
+pub(crate) fn zoom(scale: f64) {
+    if mode() == CameraMode::Orbit {
+        end_as(|m| Move {
+            dist: m.dist / scale,
+            ..m
+        });
+    }
+}
+
+/// The distance a pan is scaled by, the one the view is drawn at (`dist`).
+/// First person pans as the orbit does at `DEFAULT_DIST`, since it has no
+/// zoom distance of its own.
 fn across() -> f64 {
-    match active() {
-        Active::Orbit => camera_state().intent.dist,
-        Active::FirstPerson | Active::Tracked => DEFAULT_DIST,
+    match mode() {
+        CameraMode::Orbit => dist(),
+        CameraMode::FirstPerson => DEFAULT_DIST,
     }
 }
 
-/// Pans by a drag of `dx`, `dy` pixels, so the ground follows the pointer.
+/// Pans by `dx`, `dy` pixels, so the ground follows the pointer.
 pub(crate) fn pan(dx: f64, dy: f64) {
     let upp = units_per_px_at(across());
     pan_by(-dx * upp, dy * upp);
 }
 
 /// Pans by `cx` and `cy` times the distance to the pivot, across and up the
-/// screen, so a held key keeps the same apparent speed at every zoom.
+/// screen, the same apparent length at every zoom.
 pub(crate) fn pan_across(cx: f64, cy: f64) {
     let d = across();
     pan_by(cx * d, cy * d);
 }
 
+/// Pans the pivot at once, across the ground from where it stands
+/// (pivot.rs `pan_to`). The pivot's height follows on the move, so a step up
+/// or down is eased. A camera never put has nothing to pan.
 fn pan_by(lx: f64, ly: f64) {
-    let Some(from) = pivot_to() else { return };
-    put_pivot(pan_to(&from, lx, ly, camera().azimuth), Motion::Smooth);
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Active {
-    Orbit,
-    FirstPerson,
-    Tracked,
-}
-
-/// Where the tracker's space lies in the world, fixed when the tracker took
-/// over, and where the camera is in that space now.
-struct TrackerSpace {
-    world_rot: Mat4,
-    world_at: V3,
-    rot: Mat4,
-    at: V3,
-}
-
-struct Controller {
-    base: CameraMode,
-    tracker: Option<TrackerSpace>,
-}
-
-static CONTROLLER: Global<Controller> = Global::new();
-
-fn controller() -> &'static mut Controller {
-    CONTROLLER.get(|| Controller {
-        base: CameraMode::Orbit,
-        tracker: None,
-    })
-}
-
-pub(crate) fn active() -> Active {
-    let c = controller();
-    match (&c.tracker, c.base) {
-        (Some(_), _) => Active::Tracked,
-        (None, CameraMode::Orbit) => Active::Orbit,
-        (None, CameraMode::FirstPerson) => Active::FirstPerson,
-    }
-}
-
-pub(crate) fn pose() -> Option<EyePose> {
-    camera().eye?;
-    let c = controller();
-    match (&c.tracker, c.base) {
-        (Some(t), _) => {
-            let (mut camera_to_world, mut world_to_camera, mut moved) =
-                (mat4::new(), mat4::new(), [0.0; 3]);
-            mat4::mul(&mut camera_to_world, &t.world_rot, &t.rot);
-            mat4::transform_point(&mut moved, &t.world_rot, t.at[0], t.at[1], t.at[2]);
-            Some(EyePose {
-                eye: v3::add(&t.world_at, &moved),
-                rot: *mat4::transpose(&mut world_to_camera, &camera_to_world),
-            })
-        }
-        (None, _) => {
-            let cam = camera();
-            Some(EyePose {
-                eye: eye_world()?,
-                rot: facing_rot(cam.polar, cam.azimuth),
-            })
-        }
-    }
-}
-
-/// Returns the intent the controller took.
-pub(crate) fn set_intent(partial: IntentPatch) -> Intent {
-    match active() {
-        Active::Orbit => orbit::ask(partial),
-        Active::FirstPerson | Active::Tracked => {
-            let c = camera_state_mut();
-            c.commit_intent(c.with_patch(partial));
-            c.intent
-        }
-    }
-}
-
-/// Turns the camera to north and keeps the tilt, as follow mode ends.
-pub(crate) fn reset_azimuth() {
-    set_intent(IntentPatch {
-        azimuth: Some(DEFAULT_AZIMUTH),
-        ..Default::default()
-    });
-}
-
-pub(crate) fn reset_dist() {
-    set_intent(IntentPatch {
-        dist: Some(DEFAULT_DIST),
-        ..Default::default()
-    });
-}
-
-/// A view farther out than the default comes back in to it, and a view the
-/// user brought nearer stays.
-pub(crate) fn come_in_to_default() {
-    let default = DEFAULT_DIST;
-    if camera_state().intent.dist > default {
-        reset_dist();
-    }
-}
-
-/// A spread of the hands by `scale`, which divides the camera's distance.
-/// First person has no zoom, so it ignores it.
-pub(crate) fn zoom(scale: f64) {
-    if active() == Active::Orbit {
-        orbit::zoom_by(1.0 / scale);
-    }
-}
-
-pub(crate) fn controller_step(_: &mut TickContext) {
-    switch();
-}
-
-pub(crate) fn camera_step(ctx: &mut TickContext) {
-    let moving = match active() {
-        Active::Orbit => orbit::step(ctx.delta),
-        Active::FirstPerson => first_person::step(ctx.delta),
-        Active::Tracked => false,
+    let Some(cam) = camera().as_mut() else {
+        return;
     };
-    if moving {
-        invalidate(InvalidationReason::View);
-    }
-}
-
-fn switch() {
-    if take_mode(settings().camera_mode) {
-        invalidate(InvalidationReason::View);
-    }
-}
-
-/// Switches to the controller `want` and returns whether it switched. The
-/// new controller's camera is put at the pivot's `to` at once, so nothing
-/// eases away. While a tracker holds the pose, the switch waits until the
-/// tracker lets go.
-fn take_mode(want: CameraMode) -> bool {
-    let c = controller();
-    if c.base == want || c.tracker.is_some() {
-        return false;
-    }
-    let at = pivot_to();
-    c.base = want;
-    let cam = camera();
-    if want == CameraMode::Orbit {
-        camera_state_mut().commit_intent(Intent {
-            dist: orbit().dist,
-            azimuth: cam.azimuth,
-            polar: cam.polar,
-        });
-    }
-    if let Some(at) = at {
-        camera_state_mut().to = Some(at);
-        snap();
-    }
-    true
-}
-
-/// A tracker's pose: the camera at `at` in the tracker's space, and the
-/// quaternion `q` (x, y, z, w) that turns the camera's axes to the
-/// tracker's. The first pose of a run places the tracker's space in the
-/// world so that the camera stays where it is. Before the camera has an
-/// eye, there is nowhere to place it, and the pose is dropped.
-pub(crate) fn tracked_pose(at: V3, q: [f64; 4]) {
-    let mut rot = mat4::new();
-    mat4::rot_quat(&mut rot, q);
-    let c = controller();
-    if c.tracker.is_none() {
-        let Some(now) = pose() else { return };
-        let (mut camera_to_world, mut rot_back, mut world_rot, mut off) =
-            (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
-        mat4::transpose(&mut camera_to_world, &now.rot);
-        mat4::mul(
-            &mut world_rot,
-            &camera_to_world,
-            mat4::transpose(&mut rot_back, &rot),
-        );
-        mat4::transform_point(&mut off, &world_rot, at[0], at[1], at[2]);
-        c.tracker = Some(TrackerSpace {
-            world_rot,
-            world_at: v3::sub(&now.eye, &off),
-            rot,
-            at,
-        });
-    } else if let Some(t) = &mut c.tracker {
-        (t.rot, t.at) = (rot, at);
-    }
+    let was = end(cam);
+    let to = pan_to(&cam.pivot, lx, ly, cam.azimuth);
+    cam.pivot = [to[0], to[1], cam.pivot[2]];
+    *motion() = Some(Move { to, ..was });
     invalidate(InvalidationReason::View);
 }
 
-pub(crate) fn tracked_end() {
-    if controller().tracker.take().is_some() {
+/// Has the controller `want` move the camera. The camera stays as it is,
+/// and its eye is where the new controller draws it; a move goes on, with
+/// no flight, which is the orbit's, left in it.
+pub(crate) fn set_mode(want: CameraMode) {
+    if mode() != want {
+        MODE.set(want);
+        orbit::level();
+        if let Some(m) = motion() {
+            (m.speed, m.height) = (0.0, 0.0);
+        }
         invalidate(InvalidationReason::View);
     }
+}
+
+// ---- the camera's step ----
+
+pub(crate) fn camera_step(ctx: &mut TickContext) {
+    if step(ctx.delta) {
+        invalidate(InvalidationReason::View);
+    }
+}
+
+/// Moves the camera over `delta` seconds and returns whether it moved. On a
+/// move, the distance and the facing are eased, the orbit flies to where its
+/// pivot is to go, its whole camera carried, and first person's pivot is
+/// eased; the move ends where the camera can no longer be told from its
+/// end. The pivot stands on its floor (pivot.rs `stood`): a move's end is
+/// kept on it, and a camera on no move whose floor changed moves onto it.
+/// The pitch the orbit climbs to is eased beside the move. The frame a move
+/// ends counts as moved, so whoever waits on it takes the frame after.
+pub(crate) fn step(delta: f64) -> bool {
+    let mode = mode();
+    let Some(cam) = camera().as_mut() else {
+        return false;
+    };
+    let was = end(cam);
+    let to = Move {
+        to: stood_at(&was.to),
+        ..was
+    };
+    if to != was {
+        *motion() = Some(to);
+    }
+    let on = moving();
+    let moves = motion().as_mut().is_some_and(|m| match mode {
+        CameraMode::Orbit => orbit::step(cam, m, delta),
+        CameraMode::FirstPerson => first_person::step(cam, m, delta),
+    });
+    if !moves {
+        *motion() = None;
+    }
+    let climbs = mode == CameraMode::Orbit && orbit::climb_step(cam, delta);
+    on || climbs
 }
 
 #[cfg(test)]

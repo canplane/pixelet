@@ -1,9 +1,13 @@
 package pxl:core@0.1.0;
 
 interface camera {
-  enum tracking { recenter, follow, unfollow }
+  use types.{tracking-mode};
 
-  track: func(tracking: tracking);
-  // Flies to (lon, lat), keeping the camera's dist, azimuth and polar.
+  // Sets the tracking mode, as the tracking button asks. While it tracks,
+  // the camera goes after the user's location; as it ends, the view turns
+  // back to north.
+  track: func(mode: tracking-mode);
+  // Goes to (lon, lat), keeping the camera's azimuth and polar; a view farther
+  // out than the default comes in to it on the way.
   goto: func(lon: f64, lat: f64);
 }

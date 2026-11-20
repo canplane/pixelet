@@ -3,6 +3,7 @@ package pxl:core@0.1.0;
 // What is drawn over the world: the core's state, told when it changes and
 // whole to a UI that attaches (xpute's `life.attached`).
 interface overlay {
+  use types.{tracking-mode};
 
   // A message the core raises and the UI shows in its own words.
   enum message {
@@ -21,7 +22,6 @@ interface overlay {
     // A frame has reached the screen over a view whose ground tiles all
     // show, some perhaps at a coarser zoom.
     ground-shown: bool,
-    is-off-center: bool,
     lon-lat: option<lon-lat>,
     outside: bool,
   }
@@ -33,14 +33,27 @@ interface overlay {
     area: bool,
   }
 
+  // What the camera is doing. It does one at a time: on an animation no
+  // gesture is taken, and during a gesture no animation starts.
+  enum camera-state {
+    // Neither: any input is taken, and the camera mode can be changed.
+    idle,
+    // A hand holds the view, or a key is held. What a gesture left to ease
+    // goes on while idle.
+    gesture,
+    // The camera's own way to a place it was sent to.
+    animation,
+  }
+
   // What the UI shows of the core, replaced whole when it changes.
   record snapshot {
     pivot: pivot-state,
+    camera: camera-state,
     // The person and the pet the player chose are both loaded.
     companion-ready: bool,
     // A marker's draft is open, its text told apart (`draft`).
     drafting: bool,
-    is-follow-mode: bool,
+    tracking-mode: tracking-mode,
     // The pointer is over a scene marker a tap would act on.
     over-marker: bool,
     // Every setting's value by its number; none until the core has read its

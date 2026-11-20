@@ -9,12 +9,13 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{FINEST_ZOOM, Zoom, units};
 
-use crate::abi::overlay::{DivisionPart, LonLat, Message, PivotState, Snapshot};
+use crate::abi::overlay::{CameraState, DivisionPart, LonLat, Message, PivotState, Snapshot};
+use crate::abi::types::TrackingMode;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
 use crate::domain::control::edit::write;
-use crate::domain::control::navigation::follow_mode::following;
-use crate::domain::control::navigation::off_center::off_center;
+use crate::domain::control::input;
+use crate::domain::control::navigation::{self, tracking_mode};
 use crate::domain::eye;
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
@@ -70,11 +71,12 @@ fn division_parts(at: Option<(Quadrant, u32)>, named_to: Option<Zoom>) -> Vec<Di
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct SnapshotInput {
     ground_shown: bool,
-    is_off_center: bool,
     pivot: Option<Q3>,
+    /// What the camera is doing (navigation.rs `state`).
+    camera: CameraState,
     companion_ready: bool,
     drafting: bool,
-    is_follow_mode: bool,
+    tracking_mode: TrackingMode,
     over_marker: bool,
     /// Each setting's value at its number, and 0 at a number no setting has.
     /// It is None until the settings are read, and the UI holds no settings
@@ -111,11 +113,11 @@ fn snapshot_input() -> SnapshotInput {
         eye::at().is_some() && screen_shows_world() && IndexedTerrainTile::tile_cache().is_shown();
     SnapshotInput {
         ground_shown,
-        is_off_center: off_center().is_off_center,
         pivot,
+        camera: navigation::state(input::gesturing()),
         companion_ready: companion_ready(),
         drafting: write::marker_draft().is_some(),
-        is_follow_mode: following(),
+        tracking_mode: tracking_mode(),
         over_marker: pointer::over_marker(),
         settings: are_settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOT_CNT];
@@ -185,7 +187,6 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
     Snapshot {
         pivot: PivotState {
             ground_shown: shown.ground_shown,
-            is_off_center: shown.is_off_center,
             lon_lat: shown.pivot.map(|c| {
                 let g = epsg4326::unproject(&c);
                 LonLat {
@@ -195,9 +196,10 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
             }),
             outside: shown.pivot.is_some_and(|c| World::now().past(&c)),
         },
+        camera: shown.camera,
         companion_ready: shown.companion_ready,
         drafting: shown.drafting,
-        is_follow_mode: shown.is_follow_mode,
+        tracking_mode: shown.tracking_mode,
         over_marker: shown.over_marker,
         settings: shown.settings.map_or(Vec::new(), |s| s.to_vec()),
         division: division_parts(shown.division, shown.named_to),

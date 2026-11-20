@@ -6,7 +6,6 @@
   STEP_NAME: {
     $type: "enum",
     $value: [
-      "controller",
       "input",
       "camera",
       "edit",
@@ -30,7 +29,6 @@
       "interaction",
       "interaction",
       "interaction",
-      "interaction",
       "visible",
       "visible",
     ],
@@ -39,9 +37,6 @@
     $type: "enum",
     $value: [
       "navigation",
-      "bootstrap",
-      "follow",
-      "dst",
       "decor",
       "object",
       "setting",

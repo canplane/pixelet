@@ -2,7 +2,14 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { type Message, of_Message } from "./overlay.enum.ts";
+import {
+  type CameraState,
+  type Message,
+  of_CameraState,
+  of_Message,
+} from "./overlay.enum.ts";
+import type { TrackingMode } from "./types.enum.ts";
+import { load_TrackingMode } from "./types.ts";
 import {
   ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
@@ -56,7 +63,6 @@ export function load_LonLat(r: Lift, at: number): LonLat {
 
 export interface PivotState {
   ground_shown: boolean;
-  is_off_center: boolean;
   lon_lat: LonLat | null;
   outside: boolean;
 }
@@ -66,7 +72,6 @@ export const PIVOT_STATE_ALIGN = 8;
 
 export function store_PivotState(w: Lower, at: number, v: PivotState): void {
   w.bool(at, v.ground_shown);
-  w.bool(at + 1, v.is_off_center);
   if (v.lon_lat !== null) {
     w.u8(at + 8, 1);
     store_LonLat(w, at + 8 + 8, v.lon_lat);
@@ -77,7 +82,6 @@ export function store_PivotState(w: Lower, at: number, v: PivotState): void {
 export function load_PivotState(r: Lift, at: number): PivotState {
   return {
     ground_shown: r.bool(at),
-    is_off_center: r.bool(at + 1),
     lon_lat: r.case(at + 8, 2) === 0 ? null : load_LonLat(r, at + 8 + 8),
     outside: r.bool(at + 32),
   };
@@ -113,11 +117,18 @@ export function load_DivisionPart(r: Lift, at: number): DivisionPart {
   };
 }
 
+export function load_CameraState(r: Lift, at: number): CameraState {
+  const v = of_CameraState(r.case(at, 3));
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
+  return v;
+}
+
 export interface Snapshot {
   pivot: PivotState;
+  camera: CameraState;
   companion_ready: boolean;
   drafting: boolean;
-  is_follow_mode: boolean;
+  tracking_mode: TrackingMode;
   over_marker: boolean;
   settings: Uint32Array<ArrayBuffer>;
   division: DivisionPart[];
@@ -127,19 +138,20 @@ export interface Snapshot {
   area_progress: number;
 }
 
-export const SNAPSHOT_SZ = 88;
+export const SNAPSHOT_SZ = 96;
 export const SNAPSHOT_ALIGN = 8;
 
 export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
   store_PivotState(w, at, v.pivot);
-  w.bool(at + 40, v.companion_ready);
-  w.bool(at + 41, v.drafting);
-  w.bool(at + 42, v.is_follow_mode);
-  w.bool(at + 43, v.over_marker);
-  w.arr(at + 44, v.settings);
+  w.u8(at + 40, v.camera);
+  w.bool(at + 41, v.companion_ready);
+  w.bool(at + 42, v.drafting);
+  w.u8(at + 43, v.tracking_mode);
+  w.bool(at + 44, v.over_marker);
+  w.arr(at + 48, v.settings);
   {
     const b0 = w.list(
-      at + 52,
+      at + 56,
       v.division.length,
       DIVISION_PART_SZ,
       DIVISION_PART_ALIGN,
@@ -149,30 +161,31 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
         store_DivisionPart(w, b0 + i0 * DIVISION_PART_SZ, x0);
       });
   }
-  w.arr(at + 60, v.character_surfaces);
+  w.arr(at + 64, v.character_surfaces);
   if (v.stall !== null) {
-    w.u8(at + 68, 1);
-    w.u8(at + 68 + 1, v.stall);
+    w.u8(at + 72, 1);
+    w.u8(at + 72 + 1, v.stall);
   }
-  w.f64(at + 72, v.renderer_progress);
-  w.f64(at + 80, v.area_progress);
+  w.f64(at + 80, v.renderer_progress);
+  w.f64(at + 88, v.area_progress);
 }
 
 export function load_Snapshot(r: Lift, at: number): Snapshot {
   return {
     pivot: load_PivotState(r, at),
-    companion_ready: r.bool(at + 40),
-    drafting: r.bool(at + 41),
-    is_follow_mode: r.bool(at + 42),
-    over_marker: r.bool(at + 43),
-    settings: r.arr(at + 44, Uint32Array),
-    division: r.map(at + 52, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
+    camera: load_CameraState(r, at + 40),
+    companion_ready: r.bool(at + 41),
+    drafting: r.bool(at + 42),
+    tracking_mode: load_TrackingMode(r, at + 43),
+    over_marker: r.bool(at + 44),
+    settings: r.arr(at + 48, Uint32Array),
+    division: r.map(at + 56, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
       load_DivisionPart(r, at),
     ),
-    character_surfaces: r.arr(at + 60, Uint32Array),
-    stall: r.case(at + 68, 2) === 0 ? null : load_Message(r, at + 68 + 1),
-    renderer_progress: r.f64(at + 72),
-    area_progress: r.f64(at + 80),
+    character_surfaces: r.arr(at + 64, Uint32Array),
+    stall: r.case(at + 72, 2) === 0 ? null : load_Message(r, at + 72 + 1),
+    renderer_progress: r.f64(at + 80),
+    area_progress: r.f64(at + 88),
   };
 }
 

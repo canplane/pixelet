@@ -10,8 +10,8 @@ export const HANDLE: Handle = 0x5ee0f8;
 
 /** `pan` */
 export const PAN: Method = 0;
-/** `turn` */
-export const TURN: Method = 1;
+/** `rotate` */
+export const ROTATE: Method = 1;
 /** `tilt` */
 export const TILT: Method = 2;
 /** `zoom` */
@@ -26,10 +26,6 @@ export const HOVER: Method = 6;
 export const OUT: Method = 7;
 /** `move` */
 export const MOVE: Method = 8;
-/** `xr-pose` */
-export const XR_POSE: Method = 9;
-/** `xr-pose-end` */
-export const XR_POSE_END: Method = 10;
 
 export async function pan(
   link_: Sender,
@@ -46,8 +42,8 @@ export async function pan(
   if (a_.result !== 0) throw new XputeError(a_.result);
 }
 
-export async function turn(link_: Sender, rad: number): Promise<void> {
-  const a_ = await link_.send(HANDLE, TURN, [
+export async function rotate(link_: Sender, rad: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, ROTATE, [
     8,
     (w_) => {
       w_.f64(0, rad);
@@ -125,35 +121,5 @@ export async function move(link_: Sender, x: number, y: number): Promise<void> {
       w_.i32(4, y);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
-}
-
-export async function xr_pose(
-  link_: Sender,
-  x: number,
-  y: number,
-  z: number,
-  qx: number,
-  qy: number,
-  qz: number,
-  qw: number,
-): Promise<void> {
-  const a_ = await link_.send(HANDLE, XR_POSE, [
-    56,
-    (w_) => {
-      w_.f64(0, x);
-      w_.f64(8, y);
-      w_.f64(16, z);
-      w_.f64(24, qx);
-      w_.f64(32, qy);
-      w_.f64(40, qz);
-      w_.f64(48, qw);
-    },
-  ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
-}
-
-export async function xr_pose_end(link_: Sender): Promise<void> {
-  const a_ = await link_.send(HANDLE, XR_POSE_END, null);
   if (a_.result !== 0) throw new XputeError(a_.result);
 }

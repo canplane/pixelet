@@ -121,7 +121,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
     let w = clipmap();
     for clip_level in 0..CLIP_LEVEL_CNT {
         let (center_of, cell_zoom) = layout(clip_level);
-        if center_of == Center::Destination {
+        if center_of == Center::Place {
             continue;
         }
         let first = clipmap::origin(cell_zoom, cell_at(cell_zoom, center));
@@ -226,7 +226,7 @@ fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
         let p = match center_of {
             Center::Eye => eye,
             Center::Pivot => pivot,
-            Center::Destination => continue,
+            Center::Place => continue,
         };
         let first = clipmap::origin(cell_zoom, cell_at(cell_zoom, p));
         w.table.entries[(SLOT_CNT + clip_level) as usize] = Entry::at(first, 1);

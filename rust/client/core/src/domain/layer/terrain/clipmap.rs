@@ -3,7 +3,8 @@
 //! The ground's cells as the core holds them (pxl-engine `clipmap`). Each
 //! center a reader declares has one clip level per zoom, as deep as that
 //! reader reads. The centers are the eye, the pivot where walking and
-//! editing happen, and a destination being traveled to. A brick at a given
+//! editing happen, and a destination, a place the camera is sent to that is
+//! not yet a point. A brick at a given
 //! zoom is held once, in one slot, however many clip levels want it (`Slot`).
 //!
 //! A brick is filled here from its tile in two stages. Its folds, four
@@ -75,7 +76,9 @@ use xpute_kit::status::errno::Errno;
 pub(crate) enum Center {
     Eye,
     Pivot,
-    Destination,
+    /// A place being made a point: one the camera is to go to, or the
+    /// user's location while it is tracked.
+    Place,
 }
 
 /// The most tiles the clip levels other than the eye's want: each such clip
@@ -103,7 +106,7 @@ const fn layout(w: u32) -> (Center, Zoom) {
         w if w < EYE_CLIP_LEVEL_CNT + 2 => {
             (Center::Pivot, LEAF_CELL_ZOOM - 1 + (w - EYE_CLIP_LEVEL_CNT))
         }
-        _ => (Center::Destination, LEAF_CELL_ZOOM),
+        _ => (Center::Place, LEAF_CELL_ZOOM),
     }
 }
 
@@ -446,10 +449,10 @@ pub(crate) fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         let (center, laid) = layout(clip_level);
         let p = at[center as usize];
         let cell_zoom = match (center, p) {
-            // A destination's clip level sits at the zoom where its line gives
+            // Such a place's clip level sits at the zoom where its line gives
             // the ground. Over open sea, the leaf's ground is given by the
             // tile over it.
-            (Center::Destination, Some(p)) => {
+            (Center::Place, Some(p)) => {
                 let leaf = Quadrant::new(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
                 terrain.src(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
             }
@@ -1301,7 +1304,7 @@ pub(in crate::domain::layer) fn bound_over(
     let (mut bound, from, here) =
         clipmap::bound_over(&ClipRead(w, Center::Eye), place, range, node);
     let finest = clipmap::clip_zoom(range[1]);
-    for center in [Center::Pivot, Center::Destination] {
+    for center in [Center::Pivot, Center::Place] {
         let reads = (EYE_CLIP_LEVEL_CNT..CLIP_LEVEL_CNT).any(|l| {
             let cell_zoom = w.clip_levels[l as usize].cell_zoom;
             layout(l).0 == center

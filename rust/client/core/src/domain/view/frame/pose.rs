@@ -82,9 +82,8 @@ pub(crate) fn view_mut() -> &'static mut View {
 }
 
 /// The view's heading: radians about Z from north toward east, read off
-/// its right, which lies level at any pitch for a camera that does not roll
-/// (the orbit and first person; a tracked pose may roll, and has no heading
-/// by this). None until the camera stands somewhere.
+/// its right, which lies level at any pitch, since no camera rolls. None
+/// until the camera stands somewhere.
 pub(crate) fn azimuth() -> Option<f64> {
     let rot = eye::pose()?.rot;
     Some(libm::atan2(-rot[4], rot[0]))

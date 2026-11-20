@@ -150,12 +150,6 @@ fn rot_unit(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
     out
 }
 
-/// The rotation a quaternion (x, y, z, w) turns by, normalized first.
-pub fn rot_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
-    let n = libm::sqrt(x * x + y * y + z * z + w * w);
-    rot_unit(out, [x / n, y / n, z / n, w / n])
-}
-
 /// T × R × S, from a translation, a unit quaternion and a scale.
 pub fn compose_trs<'a>(out: &'a mut Mat4, t: &V3, q: &[f64; 4], s: &V3) -> &'a mut Mat4 {
     rot_unit(out, *q);

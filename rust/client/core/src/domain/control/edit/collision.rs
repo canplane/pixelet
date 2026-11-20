@@ -67,7 +67,7 @@ pub(crate) fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> boo
 }
 
 /// The center of the leaf cell whose min corner is the hover anchor
-/// `anchor`. A tap recenters there, and the ghost box is drawn there.
+/// `anchor`. A tap sends the camera there, and the ghost box is drawn there.
 pub(crate) fn anchor_center(anchor: &Q3) -> Q3 {
     let half = q3::from_real(units(GROUND.leaf_cell_zoom()) / 2.0);
     world::at(

@@ -54,8 +54,8 @@ mod world;
 pub(crate) use detail::zoom_range;
 pub(crate) use ray::{Hit, HitKind, Ray};
 pub(crate) use support::{
-    body_room, body_shown, cell_zoom_drawn, cell_zoom_read, eye_over, floor_of, is_unknown,
-    on_floor, over, unknown,
+    SizeBy, body_room, body_shown, cell_zoom_drawn, cell_zoom_read, eye_over, floor_of, is_unknown,
+    leaf_drawn, on_floor, over, unknown,
 };
 pub(crate) use world::{ColumnWalk, World};
 

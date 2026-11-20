@@ -33,7 +33,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::Base as _;
 use crate::domain::layer::terrain::clipmap::{BrickCover, EyeBrick, eye_bricks};
-use crate::domain::query::World;
+use crate::domain::query::{SizeBy, World};
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::pose::view;
@@ -344,7 +344,7 @@ impl LineMap {
                 .entry((x.to_bits(), y.to_bits()))
                 .or_insert_with(|| {
                     let z = access
-                        .surface_support(&world::point(x, y, 0.0))
+                        .surface_support(&world::point(x, y, 0.0), SizeBy::Eye)
                         .val()
                         .flatten()
                         .unwrap_or(0.0);

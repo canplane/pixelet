@@ -1,24 +1,23 @@
 // pxl-core/domain/control/edit/pointer.rs
 
 //! The pointer tool. It points at what the pick struck, as the eraser does
-//! (edit.rs `aim`). A tap sends the pivot to the cell across the struck face,
-//! where it stands as it does where a pan lands. It previews no edit, and its
+//! (edit.rs `aim`). A tap sends the camera to the cell across the struck
+//! face, which is made a point on the floor under it
+//! (navigation/place.rs). It previews no edit, and its
 //! ghost shows a decor it is over as that decor and anything else as a box,
 //! never as a cube.
 
-use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::edit::Hover;
 use crate::domain::control::edit::collision::anchor_center;
 use crate::domain::control::edit::ghost::{at_corner, decor_of, ghost_of};
-use crate::domain::control::navigation::destination;
-use crate::domain::control::support::stand;
+use crate::domain::control::navigation;
 use crate::domain::preview::Ghost;
 
 pub(super) fn tap(hover: &Hover) {
     let Some(approach) = hover.approach else {
         return;
     };
-    destination::go_to(stand(&anchor_center(&approach)), Motion::Smooth);
+    navigation::go_to_floor_under(anchor_center(&approach));
 }
 
 pub(super) fn ghost(hover: &Hover) -> Ghost {

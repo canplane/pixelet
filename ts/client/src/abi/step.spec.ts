@@ -9,7 +9,6 @@
 import type { Phase } from "./phase.spec.ts";
 
 export const STEP_NAMES = [
-  "controller",
   "input",
   "camera",
   "edit",
@@ -22,7 +21,6 @@ export const STEP_NAMES = [
 ] as const;
 
 export type StepName =
-  | typeof STEP_NAME_CONTROLLER
   | typeof STEP_NAME_INPUT
   | typeof STEP_NAME_CAMERA
   | typeof STEP_NAME_EDIT
@@ -32,21 +30,19 @@ export type StepName =
   | typeof STEP_NAME_COMPANION
   | typeof STEP_NAME_DEMAND
   | typeof STEP_NAME_SCENE;
-export const STEP_NAME_CONTROLLER = 0;
-export const STEP_NAME_INPUT = 1;
-export const STEP_NAME_CAMERA = 2;
-export const STEP_NAME_EDIT = 3;
-export const STEP_NAME_GHOST = 4;
-export const STEP_NAME_LOCATION = 5;
-export const STEP_NAME_ENVIRONMENT = 6;
-export const STEP_NAME_COMPANION = 7;
-export const STEP_NAME_DEMAND = 8;
-export const STEP_NAME_SCENE = 9;
+export const STEP_NAME_INPUT = 0;
+export const STEP_NAME_CAMERA = 1;
+export const STEP_NAME_EDIT = 2;
+export const STEP_NAME_GHOST = 3;
+export const STEP_NAME_LOCATION = 4;
+export const STEP_NAME_ENVIRONMENT = 5;
+export const STEP_NAME_COMPANION = 6;
+export const STEP_NAME_DEMAND = 7;
+export const STEP_NAME_SCENE = 8;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_StepName(val: number): StepName | null {
-  return val === STEP_NAME_CONTROLLER ||
-    val === STEP_NAME_INPUT ||
+  return val === STEP_NAME_INPUT ||
     val === STEP_NAME_CAMERA ||
     val === STEP_NAME_EDIT ||
     val === STEP_NAME_GHOST ||
@@ -62,8 +58,6 @@ export function of_StepName(val: number): StepName | null {
 /** The member's name, as its source spells it. */
 export function name_StepName(val: StepName): string {
   switch (val) {
-    case STEP_NAME_CONTROLLER:
-      return "controller";
     case STEP_NAME_INPUT:
       return "input";
     case STEP_NAME_CAMERA:
@@ -94,16 +88,12 @@ export const STEP_PHASE = [
   0 as Phase,
   0 as Phase,
   0 as Phase,
-  0 as Phase,
   1 as Phase,
   1 as Phase,
 ] as const;
 
 export const EFFECT_NAMES = [
   "navigation",
-  "bootstrap",
-  "follow",
-  "dst",
   "decor",
   "object",
   "setting",
@@ -111,26 +101,17 @@ export const EFFECT_NAMES = [
 
 export type EffectName =
   | typeof EFFECT_NAME_NAVIGATION
-  | typeof EFFECT_NAME_BOOTSTRAP
-  | typeof EFFECT_NAME_FOLLOW
-  | typeof EFFECT_NAME_DST
   | typeof EFFECT_NAME_DECOR
   | typeof EFFECT_NAME_OBJECT
   | typeof EFFECT_NAME_SETTING;
 export const EFFECT_NAME_NAVIGATION = 0;
-export const EFFECT_NAME_BOOTSTRAP = 1;
-export const EFFECT_NAME_FOLLOW = 2;
-export const EFFECT_NAME_DST = 3;
-export const EFFECT_NAME_DECOR = 4;
-export const EFFECT_NAME_OBJECT = 5;
-export const EFFECT_NAME_SETTING = 6;
+export const EFFECT_NAME_DECOR = 1;
+export const EFFECT_NAME_OBJECT = 2;
+export const EFFECT_NAME_SETTING = 3;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_EffectName(val: number): EffectName | null {
   return val === EFFECT_NAME_NAVIGATION ||
-    val === EFFECT_NAME_BOOTSTRAP ||
-    val === EFFECT_NAME_FOLLOW ||
-    val === EFFECT_NAME_DST ||
     val === EFFECT_NAME_DECOR ||
     val === EFFECT_NAME_OBJECT ||
     val === EFFECT_NAME_SETTING
@@ -143,12 +124,6 @@ export function name_EffectName(val: EffectName): string {
   switch (val) {
     case EFFECT_NAME_NAVIGATION:
       return "navigation";
-    case EFFECT_NAME_BOOTSTRAP:
-      return "bootstrap";
-    case EFFECT_NAME_FOLLOW:
-      return "follow";
-    case EFFECT_NAME_DST:
-      return "dst";
     case EFFECT_NAME_DECOR:
       return "decor";
     case EFFECT_NAME_OBJECT:

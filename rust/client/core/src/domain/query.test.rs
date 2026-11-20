@@ -193,7 +193,7 @@ fn no_surface_placed_stands() {
         None
     );
     assert_eq!(
-        access.surface_support(&point(at[0], at[1])),
+        access.surface_support(&point(at[0], at[1]), SizeBy::Eye),
         Answer::Exact(None)
     );
     assert_eq!(access.first_hit(&down(at)).val().flatten(), None);
@@ -208,7 +208,7 @@ fn no_surface_placed_stands() {
     );
     let access = placed(store);
     assert_eq!(
-        access.surface_support(&point(at[0], at[1])),
+        access.surface_support(&point(at[0], at[1]), SizeBy::Eye),
         Answer::Exact(Some(6.0))
     );
     let hit = access.first_hit(&down(at)).val().flatten().unwrap();
@@ -239,7 +239,7 @@ fn deck_over_void_met() {
     resident(at, &[(leaf, void)]);
     let access = placed(Store::default());
     assert_eq!(
-        access.surface_support(&point(at[0], at[1])),
+        access.surface_support(&point(at[0], at[1]), SizeBy::Eye),
         Answer::Exact(Some(10.0))
     );
     let hit = access.first_hit(&down(at)).val().flatten().unwrap();
@@ -384,7 +384,7 @@ fn dig_met_as_folded() {
         // From near, the eye reads the dig as it is held.
         set_eye([at[0], at[1], 8.0]);
         assert_eq!(
-            access.surface_support(&point(at[0], at[1])),
+            access.surface_support(&point(at[0], at[1]), SizeBy::Eye),
             Answer::Exact(Some(stands)),
             "{n} of 8 dug"
         );
@@ -444,11 +444,11 @@ fn no_floor_where_ground_is_not_held() {
     let edge = held_edge();
     let z = 5.5;
     set_eye([x - 100.5, y + 0.5, 8.0]);
-    let floor = world.floor_under(&world::point(x - 100.5, y + 0.5, z));
+    let floor = world.floor_under(&world::point(x - 100.5, y + 0.5, z), SizeBy::Eye);
     assert_eq!(floor.val().flatten(), Some(5.0), "{floor:?}");
     assert!(floor.lack().is_some(), "{floor:?}");
     set_eye([edge - 10.5, y + 0.5, 8.0]);
-    let floor_past = world.floor_under(&world::point(edge - 10.5, y + 0.5, z));
+    let floor_past = world.floor_under(&world::point(edge - 10.5, y + 0.5, z), SizeBy::Eye);
     assert_eq!(floor_past.val().flatten(), None, "{floor_past:?}");
     assert!(floor_past.lack().is_some(), "{floor_past:?}");
 }
@@ -500,7 +500,7 @@ fn body_stands_any_tier() {
         set_eye([x + 0.1, y + 0.1, 6.5]);
         let at = point(x + 0.1, y + 0.1);
         assert_eq!(
-            access.surface_support(&at),
+            access.surface_support(&at, SizeBy::Eye),
             Answer::Exact(Some(5.0 + side)),
             "a cube of z{zoom}"
         );
@@ -519,8 +519,14 @@ fn stack_gap_floored() {
     }
     let access = placed(store);
     let gap = world::point(x + 0.5, y + 0.5, 6.5);
-    assert_eq!(access.floor_under(&gap), Answer::Exact(Some(6.0)));
-    assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
+    assert_eq!(
+        access.floor_under(&gap, SizeBy::Eye),
+        Answer::Exact(Some(6.0))
+    );
+    assert_eq!(
+        access.surface_support(&gap, SizeBy::Eye),
+        Answer::Exact(Some(6.0))
+    );
 }
 
 /// A ray that goes on from where the last ray from its point ended meets what
@@ -603,7 +609,7 @@ fn coarse_cell_floored_as_drawn() {
     assert!(drawn < cube_top, "the cell is filled short of its cube");
     for z in [drawn + 3.0, drawn - 0.25, (drawn + cube_top) / 2.0] {
         // The leaves' cells were not read, so the answer is a coarser one.
-        let floor = access.floor_under(&world::point(at[0], at[1], z));
+        let floor = access.floor_under(&world::point(at[0], at[1], z), SizeBy::Eye);
         assert!(
             matches!(floor, Answer::Coarser(Some(top), _) if top == drawn),
             "from {z}: {floor:?}"
@@ -622,7 +628,7 @@ fn coarse_cell_floored_as_drawn() {
     assert_eq!(top, 9.5);
     assert_eq!(
         access
-            .floor_under(&world::point(at[0], at[1], top))
+            .floor_under(&world::point(at[0], at[1], top), SizeBy::Eye)
             .val()
             .flatten(),
         Some(top)
@@ -792,12 +798,14 @@ fn a_read_with_no_eye_answers_a_lack() {
     let world = placed(Store::default());
     eye::set_pose(None);
     let at = world::point(x + 0.5, y + 0.5, over(5.0));
-    assert!(matches!(world.floor_under(&at), Answer::Lack(_)));
     assert!(matches!(
-        world.surface_support(&unknown(&at)),
+        world.floor_under(&at, SizeBy::Eye),
         Answer::Lack(_)
     ));
-    assert!(matches!(world.support_nearest(&at), Answer::Lack(_)));
+    assert!(matches!(
+        world.surface_support(&unknown(&at), SizeBy::Eye),
+        Answer::Lack(_)
+    ));
 }
 
 #[test]
@@ -1095,7 +1103,7 @@ fn placed_decor_answers_its_box() {
         .flatten()
         .unwrap();
     assert_eq!(from_inside.kind, HitKind::Ground);
-    let stands = world.floor_under(&world::point(cx + 0.5, cy + 0.5, 6.5));
+    let stands = world.floor_under(&world::point(cx + 0.5, cy + 0.5, 6.5), SizeBy::Eye);
     assert_eq!(
         stands.exact().flatten(),
         Some(5.0),
@@ -1211,7 +1219,7 @@ fn the_floor_far_under_a_point_is_the_one_drawn_there() {
         }
         let seen = world.first_hit(&ray).val().flatten().unwrap().cube.max[2];
         assert!(seen > 5.0, "the eye draws a coarser cell there: {seen}");
-        let floor = world.floor_under(&world::point(eye[0], eye[1], eye[2]));
+        let floor = world.floor_under(&world::point(eye[0], eye[1], eye[2]), SizeBy::Eye);
         assert!(
             matches!(floor, Answer::Coarser(Some(top), _) if top == seen),
             "{floor:?}"
@@ -1241,7 +1249,7 @@ fn the_floor_under_a_point_over_a_deck_is_the_deck() {
     let at = [x + 1.5, y + 1.5, 10.5];
     for eye in [[at[0] + 100.0, at[1], at[2]], [at[0], at[1], at[2] + 95.8]] {
         set_eye(eye);
-        let floor = world.floor_under(&world::point(at[0], at[1], at[2]));
+        let floor = world.floor_under(&world::point(at[0], at[1], at[2]), SizeBy::Eye);
         assert_eq!(floor.val().flatten(), Some(10.0), "from {eye:?}: {floor:?}");
     }
 }
@@ -1267,8 +1275,27 @@ fn a_floor_is_the_same_at_sizes_finer_than_what_is_there() {
     ] {
         for dist in [60.0, 30.0, 15.0, 8.0] {
             set_eye([at[0], at[1] - dist, 6.5]);
-            let floor = world.floor_under(&world::point(at[0], at[1], 6.5));
+            let floor = world.floor_under(&world::point(at[0], at[1], 6.5), SizeBy::Eye);
             assert_eq!(floor, Answer::Exact(Some(top)), "{at:?} from {dist}");
         }
+    }
+}
+
+/// What is near is one fact: the eye draws the ground with the leaves' cells
+/// out to `LEAF_REACH` in every direction, and no farther.
+#[test]
+fn the_leaves_are_drawn_out_to_their_reach() {
+    let at = [40_000.5, -20_000.5, 30.0];
+    set_eye(at);
+    let reach = lattice::LEAF_REACH;
+    for dir in [
+        [1.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.6, 0.0, -0.8],
+    ] {
+        let out = |d: f64| [at[0] + dir[0] * d, at[1] + dir[1] * d, at[2] + dir[2] * d];
+        assert!(leaf_drawn(out(reach - 0.5)), "{dir:?}: inside");
+        assert!(!leaf_drawn(out(reach + 0.5)), "{dir:?}: outside");
     }
 }

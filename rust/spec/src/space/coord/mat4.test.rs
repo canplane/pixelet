@@ -29,7 +29,7 @@ fn compose_trs_is_t_r_s() {
     let (t, q, s) = ([1.0, -2.0, 3.0], [0.5, -0.5, 0.5, 0.5], [2.0, 3.0, 4.0]);
     let (mut move_to, mut turn, mut grow) = (new(), new(), new());
     translation(&mut move_to, t[0], t[1], t[2]);
-    rot_quat(&mut turn, q);
+    rot_unit(&mut turn, q);
     (grow[0], grow[5], grow[10]) = (s[0], s[1], s[2]);
     let (mut turned, mut want, mut got) = (new(), new(), new());
     mul(&mut turned, &turn, &grow);

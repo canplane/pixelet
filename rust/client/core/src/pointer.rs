@@ -12,6 +12,7 @@ use pxl_spec::space::layer::octant::Octant;
 use crate::domain::control::edit::{self, Tool};
 use crate::domain::control::navigation;
 use crate::domain::layer::object::asset::Asset;
+use crate::domain::query::unknown;
 use crate::domain::scene::marker::{self, MarkerHit};
 
 /// What a tap on a scene marker does with the tool held.
@@ -54,7 +55,7 @@ pub(crate) fn over_marker() -> bool {
 
 pub(crate) fn tap(x: f64, y: f64) {
     match marker_at(x, y) {
-        Some(MarkerTap::Go(at)) => navigation::go_to_place(at),
+        Some(MarkerTap::Go(at)) => navigation::go_to_ground(unknown(&at)),
         Some(MarkerTap::Remove(e)) => edit::write::remove(e),
         Some(MarkerTap::Draft(e)) => edit::write::draft_at(e),
         None => edit::tap(x, y),

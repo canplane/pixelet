@@ -1,24 +1,40 @@
 // pxl-core/domain/control/camera/fixture.test.rs
 //
-// What the camera's tests share. `place` stands the orbit at a pivot with
-// its intent and its drawn camera already equal, so nothing eases.
+// What the camera's tests share, and how a test outside the folder places
+// and reads the camera past its controller. `place` stands the camera at a
+// pivot on no move.
 
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3::V3;
+
+use crate::domain::control::camera::motion::{end, motion};
+use crate::domain::control::camera::{Camera, camera, orbit};
 
 pub(crate) fn place(at: V3, dist: f64, polar: f64, azimuth: f64) {
-    use crate::domain::control::camera::orbit::{orbit, orbit_eye_off};
-    use crate::domain::control::camera::state::{Intent, camera_state_mut};
-    use crate::domain::control::camera::{camera, set_eye_world};
-    use crate::domain::view::frame::coord::world_to_canonical;
-    camera_state_mut().to = Some(world_to_canonical(&at));
-    orbit().dist = dist;
-    let cam = camera();
-    (cam.polar, cam.azimuth) = (polar, azimuth);
-    camera_state_mut().intent = Intent {
+    *motion() = None;
+    orbit::level();
+    *camera() = Some(Camera {
+        pivot: at,
         dist,
-        azimuth,
         polar,
-    };
-    let e = orbit_eye_off(dist, polar, azimuth);
-    set_eye_world(&v3::add(&at, &e));
+        azimuth,
+    });
+}
+
+/// The camera as it is now, before a flight carries it and the ground bounds
+/// what is drawn of it.
+pub(crate) fn camera_now() -> Camera {
+    (*camera()).expect("a camera")
+}
+
+/// Where the camera ends: its distance, azimuth and polar angle.
+pub(crate) fn end_now() -> (f64, f64, f64) {
+    let m = end(&camera_now());
+    (m.dist, m.azimuth, m.polar)
+}
+
+/// Leaves the camera never put, as at the app's start.
+pub(crate) fn clear_camera() {
+    *camera() = None;
+    *motion() = None;
+    orbit::level();
 }

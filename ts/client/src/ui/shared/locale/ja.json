@@ -190,9 +190,9 @@
       "object_size": "サイズ {{n}}"
     },
     "controls": {
-      "move_to_location": "現在地へ",
-      "start_compass_mode": "コンパスをオン",
-      "exit_compass_mode": "コンパスをオフ",
+      "tracking_off": "追跡オフ",
+      "tracking_on": "追跡オン",
+      "tracking_on_with_heading": "方向付きで追跡オン",
       "first_person": "一人称で見る",
       "third_person": "三人称で見る",
       "show_places": "場所を表示",

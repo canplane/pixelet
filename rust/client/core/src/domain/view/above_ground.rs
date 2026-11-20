@@ -5,7 +5,7 @@
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 
-use crate::domain::query::World;
+use crate::domain::query::{SizeBy, World};
 
 /// The height of the floor under `at`. The search starts at the point's own
 /// height, so a point inside a cave finds the cave's floor and not the
@@ -13,7 +13,7 @@ use crate::domain::query::World;
 fn floor_under(at: V3) -> f64 {
     let point = world::point(at[0], at[1], at[2]);
     World::now()
-        .floor_under(&point)
+        .floor_under(&point, SizeBy::Eye)
         .val()
         .flatten()
         .unwrap_or(0.0)

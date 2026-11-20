@@ -4,10 +4,10 @@
  * The hand's gestures on the world, recognized alike on the web and natively
  * by react-native-gesture-handler, and what each asks of the camera. A finger
  * or a mouse's primary button pans, and taps where it lets go without having
- * moved. A mouse's secondary button, or the primary with Shift, turns the
+ * moved. A mouse's secondary button, or the primary with Shift, rotates the
  * view about the screen's center as an arcball does, or tilts it, by
  * whichever axis its drag takes first. Two fingers pinch to zoom, twist to
- * turn and move up or down together to tilt, and do not pan.
+ * rotate and move up or down together to tilt, and do not pan.
  *
  * A press that starts on the world puts the keyboard away. While the dock is
  * in message mode, that press ends the typing instead of tapping, and its
@@ -59,13 +59,13 @@ import * as input from "@/service/core/input.ts";
 const TAP_SLOP_PX = 4;
 /** The share of the view's height a drag crosses to tilt the view by π. */
 const TILT_SWEEP_FRACTION = 0.5;
-/** Once a turning drag moves this far, its dominant axis holds for the rest
- * of the drag, so that an off-center vertical drag does not start to turn
+/** Once a rotating drag moves this far, its dominant axis holds for the rest
+ * of the drag, so that an off-center vertical drag does not start to rotate
  * the view once the tilt reaches its limit. */
 const AXIS_LOCK_PX = 12;
-/** Within this radius of the screen's center, a turning drag does not turn
+/** Within this radius of the screen's center, a rotating drag does not rotate
  * the view, because the hand's angle about the center swings wildly there. */
-const MIN_TURN_RADIUS_PX = 24;
+const MIN_ROTATE_RADIUS_PX = 24;
 
 /** The view's size, in its logical pixels. */
 let size: [f64, f64] = [0, 0];
@@ -79,10 +79,10 @@ let fingerCount = 0;
  * typing, and not one a second finger joined. */
 let taps = false;
 
-/** The drag under way turns rather than pans, with the axis it took, the
+/** The drag under way rotates rather than pans, with the axis it took, the
  * hand's angle about the center (null near the center) and its height. */
-let turning = false;
-let axis: "none" | "tilt" | "turn" = "none";
+let rotating = false;
+let axis: "none" | "tilt" | "rotate" = "none";
 let from: [f64, f64] = [0, 0];
 let angle: f64 | null = null;
 let lastY = 0;
@@ -93,7 +93,7 @@ watchDockMode((mode) => {
 
 function sendDragMode(): void {
   input.setDragMode(
-    fingerCount > 1 ? "pinch" : turning ? "turn" : pressed ? "pan" : "none",
+    fingerCount > 1 ? "pinch" : rotating ? "rotate" : pressed ? "pan" : "none",
   );
 }
 
@@ -103,19 +103,19 @@ function tiltOf(dy: f64): f64 {
   return (-Math.PI * dy) / (TILT_SWEEP_FRACTION * size[1]);
 }
 
-function beginTurn(x: f64, y: f64): void {
-  turning = true;
+function beginRotate(x: f64, y: f64): void {
+  rotating = true;
   axis = "none";
   from = [x, y];
   angle = null;
   lastY = y;
 }
 
-function turnTo(x: f64, y: f64): void {
+function rotateTo(x: f64, y: f64): void {
   if (axis === "none") {
     const [dx, dy] = [x - from[0], y - from[1]];
     if (Math.hypot(dx, dy) < AXIS_LOCK_PX) return;
-    axis = Math.abs(dy) > Math.abs(dx) ? "tilt" : "turn";
+    axis = Math.abs(dy) > Math.abs(dx) ? "tilt" : "rotate";
   }
   if (axis === "tilt") {
     input.tilt(tiltOf(y - lastY));
@@ -123,12 +123,12 @@ function turnTo(x: f64, y: f64): void {
     return;
   }
   const [cx, cy] = [x - size[0] / 2, y - size[1] / 2];
-  if (Math.hypot(cx, cy) < MIN_TURN_RADIUS_PX) {
+  if (Math.hypot(cx, cy) < MIN_ROTATE_RADIUS_PX) {
     angle = null;
     return;
   }
   const now = Math.atan2(cy, cx);
-  if (angle !== null) input.turn(-wrap(now - angle, -Math.PI, Math.PI));
+  if (angle !== null) input.rotate(-wrap(now - angle, -Math.PI, Math.PI));
   angle = now;
 }
 
@@ -137,7 +137,7 @@ function beginPress(x: f64, y: f64): void {
   putKeyboardAway();
   taps = dockMode() !== DockMode.MESSAGE;
   if (!taps) setDockMode(DockMode.PALETTE);
-  if (pressShifted()) beginTurn(x, y);
+  if (pressShifted()) beginRotate(x, y);
   sendDragMode();
 }
 
@@ -152,24 +152,24 @@ function setFingerCount(count: f64): void {
 function dragTo(x: f64, y: f64, dx: f64, dy: f64, count: f64): void {
   setFingerCount(count);
   if (fingerCount > 1) input.tilt(tiltOf(dy));
-  else if (turning) turnTo(x, y);
+  else if (rotating) rotateTo(x, y);
   else input.pan(dx, dy);
 }
 
 function endPress(): void {
   pressed = false;
   fingerCount = 0;
-  turning = false;
+  rotating = false;
   sendDragMode();
 }
 
 function beginSecondaryPress(x: f64, y: f64): void {
-  beginTurn(x, y);
+  beginRotate(x, y);
   sendDragMode();
 }
 
 function endSecondaryPress(): void {
-  turning = false;
+  rotating = false;
   sendDragMode();
 }
 
@@ -210,7 +210,7 @@ export function WorldGestures({
       if (e.pointerType === PointerType.MOUSE) beginSecondaryPress(e.x, e.y);
     },
     onUpdate: (e) => {
-      if (e.pointerType === PointerType.MOUSE) turnTo(e.x, e.y);
+      if (e.pointerType === PointerType.MOUSE) rotateTo(e.x, e.y);
     },
     onFinalize: (e) => {
       if (e.pointerType === PointerType.MOUSE) endSecondaryPress();
@@ -222,7 +222,7 @@ export function WorldGestures({
   });
   const twist = useRotationGesture({
     runOnJS: true,
-    onUpdate: (e) => input.turn(-e.rotationChange),
+    onUpdate: (e) => input.rotate(-e.rotationChange),
   });
   const tap = useTapGesture({
     runOnJS: true,

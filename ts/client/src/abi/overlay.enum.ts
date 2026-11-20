@@ -25,3 +25,36 @@ export function name_Message(val: Message): string {
       return "WorldUnavailable";
   }
 }
+
+export type CameraState =
+  | typeof CAMERA_STATE_IDLE
+  | typeof CAMERA_STATE_GESTURE
+  | typeof CAMERA_STATE_ANIMATION;
+/** Neither: any input is taken, and the camera mode can be changed. */
+export const CAMERA_STATE_IDLE = 0;
+/** A hand holds the view, or a key is held. What a gesture left to ease
+ * goes on while idle. */
+export const CAMERA_STATE_GESTURE = 1;
+/** The camera's own way to a place it was sent to. */
+export const CAMERA_STATE_ANIMATION = 2;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_CameraState(val: number): CameraState | null {
+  return val === CAMERA_STATE_IDLE ||
+    val === CAMERA_STATE_GESTURE ||
+    val === CAMERA_STATE_ANIMATION
+    ? val
+    : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_CameraState(val: CameraState): string {
+  switch (val) {
+    case CAMERA_STATE_IDLE:
+      return "Idle";
+    case CAMERA_STATE_GESTURE:
+      return "Gesture";
+    case CAMERA_STATE_ANIMATION:
+      return "Animation";
+  }
+}

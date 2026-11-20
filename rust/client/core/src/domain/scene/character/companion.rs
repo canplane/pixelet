@@ -2,8 +2,8 @@
 
 //! The companion: the person and the pet the player chose, and how each walks
 //! to the pivot. When the pivot comes to rest, each makes a catch-up walk of
-//! fixed duration to it. When the pivot never rests, because the map follows
-//! a GPS stream of about one fix a second or the keys steer it, each instead
+//! fixed duration to it. When the pivot never rests, because the user's
+//! location is tracked, about one fix a second, or the keys steer it, each instead
 //! glides at the world's scroll rate; the two motions cancel, and the
 //! character holds at the screen's center. Neither is anchored to the other:
 //! the pet walks to its own place beside the person's. While the eye is the
@@ -15,7 +15,7 @@
 use crate::domain::param;
 use crate::domain::query::World;
 use crate::domain::query::change::Memo;
-use crate::domain::query::{body_shown, floor_of, is_unknown, over};
+use crate::domain::query::{SizeBy, body_shown, floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
     BODY_HALF_WIDTH_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
@@ -124,9 +124,8 @@ impl SettleTracker {
 pub(crate) struct Camera {
     /// Where the camera's pivot is going.
     pub pivot: [f64; 2],
-    /// The top of the floor the pivot is drawn on. It is None while nothing
-    /// is known there, and then the person and the pet hold where they are.
-    pub floor: Option<f64>,
+    /// The top of the floor the pivot stands on.
+    pub floor: f64,
     /// The camera's heading, which the person and the pet turn their backs to.
     pub azimuth: f64,
     /// Whether the camera is being dragged. The release fixes where a
@@ -134,8 +133,8 @@ pub(crate) struct Camera {
     pub dragging: bool,
     /// Whether the keys steer the camera.
     pub steered: bool,
-    /// Whether the map follows the device.
-    pub following: bool,
+    /// Whether the camera tracks the user's location.
+    pub tracking: bool,
 }
 
 #[derive(Default)]
@@ -147,8 +146,6 @@ struct Companion {
     /// character. A character that has no place starts a fresh one
     /// (`Character::step`).
     walks: [Walk; Group::ALL.len()],
-    /// The floor the pivot is drawn on, kept by the pivot (`pivot_floor`).
-    pivot_floor: Memo<Q3, Option<f64>>,
     /// The pet's floor beside the person, found by walking there from the
     /// person's floor. It is kept by the pivot and its floor, and the pet's
     /// target.
@@ -161,24 +158,12 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(Companion::default)
 }
 
-/// The floor the pivot `goal` is drawn on, as `ask` finds it in the world.
-/// The answer is kept while the pivot stands and no change touches what it
-/// read (`Memo`), as the companion's own floors are.
-pub(crate) fn pivot_floor(goal: Q3, ask: impl FnOnce(World) -> Option<f64>) -> Option<f64> {
-    let c = companion();
-    c.pivot_floor.forget_touched();
-    c.pivot_floor.of(goal, || ask(World::now()))
-}
-
 /// Steps the person and the pet. Each is the row its setting names, and a
 /// character of another row is let go for it. Each walks to the pivot, and
 /// neither is placed in first person (`camera` is None).
 pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let s = companion();
     s.pet_floor.forget_touched();
-    // A memo must see every change once, so the pivot's floor checks for
-    // a touched rect on every frame, also on one that does not ask it.
-    s.pivot_floor.forget_touched();
     let settings = settings();
     for ((slot, walk), (group, number)) in s
         .characters
@@ -210,16 +195,8 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         }
         return;
     };
-    // While nothing is known under the pivot, each character with a height
-    // holds where it is, and the rest of its step goes on.
-    let hold = |w: &Walk| w.floor().map(|z| (w.at, z));
-    if let Some(person) = person
-        && let Some((target, z)) = camera
-            .floor
-            .map(|z| (camera.pivot, z))
-            .or_else(|| hold(person_walk))
-    {
-        person.step(person_walk, ctx, target, z, &camera);
+    if let Some(person) = person {
+        person.step(person_walk, ctx, camera.pivot, camera.floor, &camera);
     }
     let Some(pet) = pet else { return };
     let target = [camera.pivot[0] + PET_OFF[0], camera.pivot[1] + PET_OFF[1]];
@@ -238,13 +215,8 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
             }
         })
     };
-    if let Some((target, z)) = camera
-        .floor
-        .map(|z| (target, walked(z)))
-        .or_else(|| hold(pet_walk))
-    {
-        pet.step(pet_walk, ctx, target, z, &camera);
-    }
+    let z = walked(camera.floor);
+    pet.step(pet_walk, ctx, target, z, &camera);
 }
 
 impl Character {
@@ -293,7 +265,7 @@ struct Walk {
     settle: SettleTracker,
     init_facing_done: bool,
     follow_walk_until: f64,
-    /// Where it stands, its height unknown as the pivot's can be. None until
+    /// Where it stands, its height unknown until it is read. None until
     /// it first has a place. Its height is the one height a body has: the
     /// floor under it at the size the eye sets now (`drawn_at`), on which it
     /// is drawn and from which it walks on.
@@ -325,14 +297,6 @@ impl Walk {
         }
     }
 
-    /// The floor it stands on, None where it has no height: nothing is asked
-    /// of the world for it.
-    fn floor(&self) -> Option<f64> {
-        self.stands
-            .filter(|at| !is_unknown(at))
-            .map(|at| floor_of(&at))
-    }
-
     /// Steps the walk toward `target`, where it will stand at `arrive_floor`. It
     /// returns where a body `half` wide on each side is drawn with the point
     /// it stands at (`drawn_at`), its turn about
@@ -347,7 +311,7 @@ impl Walk {
         half: f64,
         camera: &Camera,
     ) -> (([f64; 3], V3), f32, bool) {
-        let (follows, steered) = (camera.following || camera.steered, camera.steered);
+        let (follows, steered) = (camera.tracking || camera.steered, camera.steered);
         // Wall-clock seconds. The tick's elapsed time is clamped each delta,
         // which would stretch these spans across a gap in which the world did
         // not tick.
@@ -501,7 +465,10 @@ pub(crate) fn drawn_at(memo: &mut FloorMemo, stands: Q3, floor: f64, half: f64) 
             return ([x, y], own_floor, stood);
         }
         let floor_at = |[x, y]: [f64; 2], floor: f64| {
-            world.floor_under(&center([x, y], floor)).val().flatten()
+            world
+                .floor_under(&center([x, y], floor), SizeBy::Eye)
+                .val()
+                .flatten()
         };
         let drawn = floor_at([x, y], own_floor).unwrap_or(own_floor);
         let rises = |p| floor_at(p, drawn).is_some_and(|top| top > drawn);

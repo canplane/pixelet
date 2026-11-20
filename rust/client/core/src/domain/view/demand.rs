@@ -480,8 +480,8 @@ impl<L: DemandedBase> Demand<L> {
     /// it only places the wants again.
     ///
     /// `leaf` is pinned with its ancestors, even before there is an
-    /// observation, since at the first fix the camera waits for the ground
-    /// under its destination. `pins` holds the tiles that a reader taking no
+    /// observation, since a place the camera is sent to waits for the ground
+    /// under it before it is a point. `pins` holds the tiles that a reader taking no
     /// coarser answer declares (`Base::PIN_CAP`), and they are asked for as the
     /// leaf is. A layer with a top of its own (`Base::MIN_ZOOM`) is observed out
     /// to that top's reach.

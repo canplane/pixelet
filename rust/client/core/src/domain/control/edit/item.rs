@@ -17,9 +17,12 @@ use crate::domain::control::edit::write::restores_scattered;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Ghost;
 
+/// An item has a place only where the eye draws cells of its size: where it
+/// draws coarser ones, the item would be folded into a summary the pointer
+/// cannot strike (pick.rs `Pick::is_folded`).
 pub(super) fn hover(zoom: Zoom, pick: &Pick) -> Hover {
     Hover {
-        coord: Some(pick.adjacent_corner(zoom)),
+        coord: pick.draws(zoom).then(|| pick.adjacent_corner(zoom)),
         target: None,
         approach: None,
     }

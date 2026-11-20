@@ -80,43 +80,43 @@ pub mod frame {
     pub const FILL_MS: usize = 15;
     pub const PERF_MS: usize = 16;
     pub const EFFECTS: usize = 17;
-    pub const INVALIDATIONS: usize = 24;
-    pub const KIND_NAME: usize = 30;
-    pub const GPU_TIMED: usize = 31;
-    pub const GPU_SPANS: usize = 32;
-    pub const GPU_BUSY_MS: usize = 70;
-    pub const GPU_PX: usize = 71;
-    pub const SCALE: usize = 72;
-    pub const DRAW_CNT: usize = 73;
-    pub const TRIANGLE_CNT: usize = 74;
-    pub const GPU_FRAME: usize = 75;
-    pub const LIGHT_CHANGED: usize = 76;
-    pub const EYE_CAST: usize = 77;
-    pub const EYE_RAY_CNT: usize = 78;
-    pub const EYE_BEAM: usize = 79;
-    pub const EYE_SAMPLE: usize = 80;
-    pub const EYE_HOLE_WALK: usize = 81;
-    pub const EYE_ASK_CNT: usize = 82;
-    pub const EYE_VOXEL: usize = 83;
-    pub const EYE_HOLE: usize = 84;
-    pub const EYE_SKY: usize = 85;
-    pub const EYE_BOX_CNT: usize = 86;
-    pub const LIGHT_CAST: usize = 87;
-    pub const LIGHT_RAY_CNT: usize = 88;
-    pub const LIGHT_BEAM: usize = 89;
-    pub const LIGHT_SAMPLE: usize = 90;
-    pub const LIGHT_HOLE_WALK: usize = 91;
-    pub const LIGHT_ASK_CNT: usize = 92;
-    pub const LIGHT_VOXEL: usize = 93;
-    pub const LIGHT_HOLE: usize = 94;
-    pub const LIGHT_SKY: usize = 95;
-    pub const LIGHT_BOX_CNT: usize = 96;
-    pub const LOADS: usize = 97;
-    pub const FILL_BRICK_CNT: usize = 101;
-    pub const UPLOAD_CNT: usize = 102;
-    pub const UPLOAD_BYTES: usize = 103;
-    pub const HEAP_USED_BYTES: usize = 104;
-    pub const WORDS: usize = 105;
+    pub const INVALIDATIONS: usize = 21;
+    pub const KIND_NAME: usize = 27;
+    pub const GPU_TIMED: usize = 28;
+    pub const GPU_SPANS: usize = 29;
+    pub const GPU_BUSY_MS: usize = 67;
+    pub const GPU_PX: usize = 68;
+    pub const SCALE: usize = 69;
+    pub const DRAW_CNT: usize = 70;
+    pub const TRIANGLE_CNT: usize = 71;
+    pub const GPU_FRAME: usize = 72;
+    pub const LIGHT_CHANGED: usize = 73;
+    pub const EYE_CAST: usize = 74;
+    pub const EYE_RAY_CNT: usize = 75;
+    pub const EYE_BEAM: usize = 76;
+    pub const EYE_SAMPLE: usize = 77;
+    pub const EYE_HOLE_WALK: usize = 78;
+    pub const EYE_ASK_CNT: usize = 79;
+    pub const EYE_VOXEL: usize = 80;
+    pub const EYE_HOLE: usize = 81;
+    pub const EYE_SKY: usize = 82;
+    pub const EYE_BOX_CNT: usize = 83;
+    pub const LIGHT_CAST: usize = 84;
+    pub const LIGHT_RAY_CNT: usize = 85;
+    pub const LIGHT_BEAM: usize = 86;
+    pub const LIGHT_SAMPLE: usize = 87;
+    pub const LIGHT_HOLE_WALK: usize = 88;
+    pub const LIGHT_ASK_CNT: usize = 89;
+    pub const LIGHT_VOXEL: usize = 90;
+    pub const LIGHT_HOLE: usize = 91;
+    pub const LIGHT_SKY: usize = 92;
+    pub const LIGHT_BOX_CNT: usize = 93;
+    pub const LOADS: usize = 94;
+    pub const FILL_BRICK_CNT: usize = 98;
+    pub const UPLOAD_CNT: usize = 99;
+    pub const UPLOAD_BYTES: usize = 100;
+    pub const HEAP_USED_BYTES: usize = 101;
+    pub const WORDS: usize = 102;
 }
 
 /// FRAME's lanes in groups, every lane in one (lane.test.ts), in the order a reader asks in turn — where the time went, what was drawn and cast, what landed, and what it holds. The trace prints every lane by its group's order, so a lane the core adds is printed without a word written for it; the panel shows some groups, a few rows each, and the report its own lines. The `rays` group's lanes lie in FRAME in its order, which the window's sums of them (STAT.frames.rays) keep.
@@ -202,11 +202,11 @@ pub mod task {
 /// One of the worst moving frames since the recording started, by its interval, of which the core keeps the longest few (pxl-core perf/record.rs `WORST_CAP`), which fit one page (LIMIT.PAGE_SZ), and hands them over together, longest first (perf.wit `worst`), and what changed from the frame before it: its uploads, their bytes and the heap's high-water mark, each this frame's less that one's, all 0 where `has_prev` is 0. A still interval is long on purpose and is never among them.
 pub mod worst {
     pub const SAMPLE: usize = 0;
-    pub const HAS_PREV: usize = 105;
-    pub const UPLOAD_CNT_DELTA: usize = 106;
-    pub const UPLOAD_DELTA_BYTES: usize = 107;
-    pub const HEAP_USED_DELTA_BYTES: usize = 108;
-    pub const WORDS: usize = 109;
+    pub const HAS_PREV: usize = 102;
+    pub const UPLOAD_CNT_DELTA: usize = 103;
+    pub const UPLOAD_DELTA_BYTES: usize = 104;
+    pub const HEAP_USED_DELTA_BYTES: usize = 105;
+    pub const WORDS: usize = 106;
 }
 
 /// A value's percentiles over n values: p50 and p95 each the nearest rank, the least value at or above which lie no more than that share of the n (sorted, the value at ceil(q × n) − 1), and the most.
@@ -262,33 +262,33 @@ pub mod stat {
         pub const FILL_BRICK_CNT: usize = 29;
         pub const PERF: usize = 30;
         pub const EFFECTS_P95: usize = 33;
-        pub const INVALIDATIONS: usize = 40;
-        pub const GPU_BUSY: usize = 46;
-        pub const GPU_BUSY_KINDS: usize = 49;
-        pub const PHASES_P95: usize = 76;
-        pub const GPU_SPANS_P95: usize = 78;
-        pub const GPU_SPANS_CNT: usize = 116;
-        pub const KINDS: usize = 154;
-        pub const GPU_PX: usize = 163;
-        pub const RAYS: usize = 164;
-        pub const HEAP_USED_DELTA_BYTES: usize = 184;
-        pub const LAST: usize = 185;
-        pub const WORDS: usize = 290;
+        pub const INVALIDATIONS: usize = 37;
+        pub const GPU_BUSY: usize = 43;
+        pub const GPU_BUSY_KINDS: usize = 46;
+        pub const PHASES_P95: usize = 73;
+        pub const GPU_SPANS_P95: usize = 75;
+        pub const GPU_SPANS_CNT: usize = 113;
+        pub const KINDS: usize = 151;
+        pub const GPU_PX: usize = 160;
+        pub const RAYS: usize = 161;
+        pub const HEAP_USED_DELTA_BYTES: usize = 181;
+        pub const LAST: usize = 182;
+        pub const WORDS: usize = 284;
     }
     pub mod tasks {
-        pub const AT: usize = 290;
+        pub const AT: usize = 284;
         pub const SLOTS: usize = 0;
         pub const WORDS: usize = 138;
     }
     pub mod steps {
-        pub const AT: usize = 428;
+        pub const AT: usize = 422;
         pub const CNT: usize = 0;
         pub const SLOTS: usize = 1;
-        pub const WORDS: usize = 41;
+        pub const WORDS: usize = 37;
     }
     /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame's record is taken (perf/record.rs `perf_fold_recording`): `frame_cnt` the frames folded; the heap's figures by their allocator's names (pxl-core sys/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the body slots' peak (sys/io/body.rs `take_peak`); and `refusals` the tiles each base layer's tile cache refused a slot, summed, in BASE_KIND's order (domain/layer/tile_cache.rs `take_refusal_cnt`). Every word 0 before a frame is folded.
     pub mod recording {
-        pub const AT: usize = 469;
+        pub const AT: usize = 459;
         pub const FRAME_CNT: usize = 0;
         pub const HEAP_LIVE_MAX_BYTES: usize = 1;
         pub const HEAP_RUN_MAX_BYTES: usize = 2;
@@ -300,7 +300,7 @@ pub mod stat {
         pub const REFUSALS: usize = 8;
         pub const WORDS: usize = 12;
     }
-    pub const WORDS: usize = 481;
+    pub const WORDS: usize = 471;
 }
 
 /// What `perf.stats` finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.
@@ -329,7 +329,7 @@ pub mod now {
         pub const WORDS: usize = 7;
     }
     /// Where the camera, its pivot and the pointer are as the read finds them, recording or not: `eye_x`..`eye_z`, `dist`, `pivot_x`..`pivot_z`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, angles in radians, `pivot_lon` and `pivot_lat` in degrees and `pivot_ele` in meters, a zoom as its number, and NaN where there is none.
-    /// The eye is where the camera looks from and the pivot the point it turns about, under the eye in the first-person camera, where the character stands (pxl-core domain/control/camera.rs `eye_world`, camera/controller.rs `pivot`).
+    /// The eye is where the camera looks from and the pivot the point it turns about, under the eye in the first-person camera, where the character stands (pxl-core domain/control/camera/controller.rs `pose`, `pivot`).
     /// The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell_zoom` the zoom the eye's rays draw there (pxl-core domain/query/support.rs `cell_zoom_read`).
     /// The pick is what the tool held strikes there (pxl-core domain/control/edit/pick.rs `pick_at`): `hit_kind` what it met, an index into HIT_KIND; `pick_zoom` the zoom of the box struck and `ray_zoom` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-core domain/control/edit.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/edit/collision.rs `is_placement_blocked`).
     pub mod view {

@@ -10,9 +10,9 @@ import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 const WHEEL_GAIN = 0.0022;
 
 /** What the hand does with the world from its press to its release, as the
- * UI's gestures recognize it (ui/feature/world/gesture.tsx): it pans, turns
+ * UI's gestures recognize it (ui/feature/world/gesture.tsx): it pans, rotates
  * or pinches. */
-export type DragMode = "none" | "pan" | "turn" | "pinch";
+export type DragMode = "none" | "pan" | "rotate" | "pinch";
 
 let mode: DragMode = "none";
 const modeListeners = new ListenerSet();
@@ -51,8 +51,8 @@ export function pan(dx: f64, dy: f64): void {
   void input.pan(ui, dx, dy);
 }
 
-export function turn(radians: f64): void {
-  void input.turn(ui, radians);
+export function rotate(radians: f64): void {
+  void input.rotate(ui, radians);
 }
 
 export function tilt(radians: f64): void {

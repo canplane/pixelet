@@ -69,7 +69,6 @@ impl LonLat {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PivotState {
     pub ground_shown: bool,
-    pub is_off_center: bool,
     pub lon_lat: Option<LonLat>,
     pub outside: bool,
 }
@@ -80,7 +79,6 @@ impl PivotState {
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
         w.bool(at, self.ground_shown);
-        w.bool(at + 1, self.is_off_center);
         if let Some(v) = &self.lon_lat {
             w.u8(at + 8, 1);
             (v).store(w, at + 8 + 8);
@@ -91,7 +89,6 @@ impl PivotState {
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<PivotState, _rt::Errno> {
         Ok(PivotState {
             ground_shown: r.bool(at)?,
-            is_off_center: r.bool(at + 1)?,
             lon_lat: r.case(at + 8, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
@@ -133,12 +130,53 @@ impl DivisionPart {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum CameraState {
+    /// Neither: any input is taken, and the camera mode can be changed.
+    Idle = 0,
+    /// A hand holds the view, or a key is held. What a gesture left to ease
+    /// goes on while idle.
+    Gesture = 1,
+    /// The camera's own way to a place it was sent to.
+    Animation = 2,
+}
+
+impl CameraState {
+    /// Every member, in its source's own order.
+    pub const ALL: [CameraState; 3] = [
+        CameraState::Idle,
+        CameraState::Gesture,
+        CameraState::Animation,
+    ];
+
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<CameraState> {
+        match val {
+            0 => Some(CameraState::Idle),
+            1 => Some(CameraState::Gesture),
+            2 => Some(CameraState::Animation),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            CameraState::Idle => "Idle",
+            CameraState::Gesture => "Gesture",
+            CameraState::Animation => "Animation",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
     pub pivot: PivotState,
+    pub camera: CameraState,
     pub companion_ready: bool,
     pub drafting: bool,
-    pub is_follow_mode: bool,
+    pub tracking_mode: super::types::TrackingMode,
     pub over_marker: bool,
     pub settings: Vec<u32>,
     pub division: Vec<DivisionPart>,
@@ -149,18 +187,19 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub const SZ: usize = 88;
+    pub const SZ: usize = 96;
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
         self.pivot.store(w, at);
-        w.bool(at + 40, self.companion_ready);
-        w.bool(at + 41, self.drafting);
-        w.bool(at + 42, self.is_follow_mode);
-        w.bool(at + 43, self.over_marker);
-        w.arr(at + 44, &self.settings);
+        w.u8(at + 40, self.camera as u8);
+        w.bool(at + 41, self.companion_ready);
+        w.bool(at + 42, self.drafting);
+        w.u8(at + 43, self.tracking_mode as u8);
+        w.bool(at + 44, self.over_marker);
+        w.arr(at + 48, &self.settings);
         if let Some(b) = w.list(
-            at + 52,
+            at + 56,
             self.division.len(),
             DivisionPart::SZ,
             DivisionPart::ALIGN,
@@ -169,42 +208,47 @@ impl Snapshot {
                 (x).store(w, b + i * DivisionPart::SZ);
             }
         }
-        w.arr(at + 60, &self.character_surfaces);
+        w.arr(at + 64, &self.character_surfaces);
         if let Some(v) = &self.stall {
-            w.u8(at + 68, 1);
-            w.u8(at + 68 + 1, *v as u8);
+            w.u8(at + 72, 1);
+            w.u8(at + 72 + 1, *v as u8);
         }
-        w.f64(at + 72, self.renderer_progress);
-        w.f64(at + 80, self.area_progress);
+        w.f64(at + 80, self.renderer_progress);
+        w.f64(at + 88, self.area_progress);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
         Ok(Snapshot {
             pivot: PivotState::load(r, at)?,
-            companion_ready: r.bool(at + 40)?,
-            drafting: r.bool(at + 41)?,
-            is_follow_mode: r.bool(at + 42)?,
-            over_marker: r.bool(at + 43)?,
-            settings: r.arr::<u32>(at + 44)?,
+            camera: r
+                .case(at + 40, 3)
+                .and_then(|v| CameraState::of(v).ok_or(_rt::Errno::EBADMSG))?,
+            companion_ready: r.bool(at + 41)?,
+            drafting: r.bool(at + 42)?,
+            tracking_mode: r
+                .case(at + 43, 3)
+                .and_then(|v| super::types::TrackingMode::of(v).ok_or(_rt::Errno::EBADMSG))?,
+            over_marker: r.bool(at + 44)?,
+            settings: r.arr::<u32>(at + 48)?,
             division: r
-                .list(at + 52, DivisionPart::SZ, DivisionPart::ALIGN)
+                .list(at + 56, DivisionPart::SZ, DivisionPart::ALIGN)
                 .and_then(|(b, n)| {
                     (0..n)
                         .map(|i| DivisionPart::load(r, b + i * DivisionPart::SZ))
                         .collect::<Result<Vec<_>, _rt::Errno>>()
                 })?,
-            character_surfaces: r.arr::<u32>(at + 60)?,
-            stall: r.case(at + 68, 2).and_then(|d| {
+            character_surfaces: r.arr::<u32>(at + 64)?,
+            stall: r.case(at + 72, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
                 } else {
-                    r.case(at + 68 + 1, 2)
+                    r.case(at + 72 + 1, 2)
                         .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Some)
                 }
             })?,
-            renderer_progress: r.f64(at + 72)?,
-            area_progress: r.f64(at + 80)?,
+            renderer_progress: r.f64(at + 80)?,
+            area_progress: r.f64(at + 88)?,
         })
     }
 }

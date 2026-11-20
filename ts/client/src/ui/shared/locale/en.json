@@ -190,9 +190,9 @@
       "object_size": "Size {{n}}"
     },
     "controls": {
-      "move_to_location": "Go to my location",
-      "start_compass_mode": "Turn on compass",
-      "exit_compass_mode": "Turn off compass",
+      "tracking_off": "Tracking off",
+      "tracking_on": "Tracking on",
+      "tracking_on_with_heading": "Tracking on with heading",
       "first_person": "View in first person",
       "third_person": "View in third person",
       "show_places": "Show places",

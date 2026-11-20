@@ -1,13 +1,12 @@
 // pxl-core/link/export/input.rs
 
 //! The input interface's methods: what the hand does to the view as the UI
-//! recognizes it, the held movement keys and a tracker's pose.
+//! recognizes it, and the held movement keys.
 
 use super::refuse_unless;
-use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::input::{
-    camera_drag, camera_hover, camera_keys, camera_out, camera_pan, camera_tilt, camera_turn,
+    camera_drag, camera_hover, camera_keys, camera_out, camera_pan, camera_rotate, camera_tilt,
     camera_zoom, hovering, tap_ndc,
 };
 use crate::pointer;
@@ -18,8 +17,8 @@ pub(super) fn pan(dx: f64, dy: f64) -> Result<(), Errno> {
     Ok(())
 }
 
-pub(super) fn turn(rad: f64) -> Result<(), Errno> {
-    camera_turn(rad);
+pub(super) fn rotate(rad: f64) -> Result<(), Errno> {
+    camera_rotate(rad);
     Ok(())
 }
 
@@ -67,26 +66,5 @@ pub(super) fn out() -> Result<(), Errno> {
 
 pub(super) fn r#move(x: i32, y: i32) -> Result<(), Errno> {
     camera_keys(x, y);
-    Ok(())
-}
-
-pub(super) fn xr_pose(
-    x: f64,
-    y: f64,
-    z: f64,
-    qx: f64,
-    qy: f64,
-    qz: f64,
-    qw: f64,
-) -> Result<(), Errno> {
-    // The protocol sends a unit quaternion. One of zero length describes no
-    // rotation and is refused.
-    refuse_unless(qx * qx + qy * qy + qz * qz + qw * qw > 0.0, Errno::EINVAL)?;
-    controller::tracked_pose([x, y, z], [qx, qy, qz, qw]);
-    Ok(())
-}
-
-pub(super) fn xr_pose_end() -> Result<(), Errno> {
-    controller::tracked_end();
     Ok(())
 }

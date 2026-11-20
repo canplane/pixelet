@@ -66,12 +66,12 @@ impl CameraMode {
 ///   through — nothing. The eye goes wherever the controls put it, ground
 ///             included, where its rays start inside what they meet and
 ///             the scene reads inside out.
-///   stop    — a control goes as far as it asked or as far as it can.
-///             Nothing moves on its own; a zoom into a hill stops short.
+///   stop    — the eye is drawn no farther from the pivot than the first
+///             thing between them, and is back out when the line is open.
+///             What is asked stays as it was asked.
 ///   climb   — dist is granted and the *view* pitches up instead, as far
 ///             as straight down, at the cost of an angle nobody asked for.
-///             Where its way hits something all the same, a zoom in goes
-///             through to the pivot's side and any other control stops.
+///             Where no pitch clears the eye, it is drawn as `stop` draws it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum OrbitObstacleMode {
@@ -295,13 +295,13 @@ pub enum SettingKey {
     /// Off by default: the tilt is the one control a view from above is expected to
     /// have, and locking it reads as the app being stuck.
     TiltLock = 4,
-    /// On a switch to first person the person stands at the pivot, the eye at its
-    /// height over the ground. On a switch to third person the pivot is laid on the
-    /// ground and the eye steps back by the radius.
+    /// The camera stays as it is on a switch, and only the eye moves about the
+    /// pivot: in first person it stands over the pivot, where a body standing
+    /// there looks from, and in third person it steps back by the distance.
     CameraMode = 5,
-    /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
+    /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/camera/pivot.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
     SurfaceFollow = 6,
-    /// Only `climb` goes into a tunnel (camera/orbit.rs `pull_forward`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
+    /// How the ground holds the orbit's eye as it is drawn (camera/orbit.rs). A shipped build holds `climb`, and the others are a development build's to compare, each session from the default.
     OrbitObstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.

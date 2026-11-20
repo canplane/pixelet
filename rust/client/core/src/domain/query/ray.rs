@@ -230,8 +230,8 @@ impl Query for CastWorld<'_> {
 impl World {
     /// The first cell that stops a ray from the eye within its `t_max`
     /// (`seen`): the layers alone, so no decor is met. The orbit camera asks
-    /// it of the lines its eye would go along and of the line from its pivot
-    /// to its eye, and the profiler of the pointer's ray. What the ray
+    /// it of the line from its pivot to its eye, and the profiler of the
+    /// pointer's ray. What the ray
     /// starts inside is not met, so the eye under the ground is not stopped
     /// where it stands. A cell met coarser than it is held comes with
     /// the tile lacked. A cell not held at all is lacked too, and past it the
@@ -247,8 +247,8 @@ impl World {
         self.seen(ray, Some(decors))
     }
 
-    /// `along` for a ray from the eye or along the eye's way, the pointer's
-    /// and the orbit's lines: each node is asked at the
+    /// `along` for a ray from the eye, the pointer's, or the orbit's line to
+    /// the eye: each node is asked at the
     /// zoom its own distance from the eye asks (`detail`), as a pixel's ray
     /// asks it, so the answer is of the eye where it stands (`change::eye`).
     /// With no eye nothing is observed, and it answers a lack.

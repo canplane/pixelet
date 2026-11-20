@@ -10,40 +10,8 @@ pub const TRACK: _rt::Method = 0;
 /// `goto`
 pub const GOTO: _rt::Method = 1;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum Tracking {
-    Recenter = 0,
-    Follow = 1,
-    Unfollow = 2,
-}
-
-impl Tracking {
-    /// Every member, in its source's own order.
-    pub const ALL: [Tracking; 3] = [Tracking::Recenter, Tracking::Follow, Tracking::Unfollow];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<Tracking> {
-        match val {
-            0 => Some(Tracking::Recenter),
-            1 => Some(Tracking::Follow),
-            2 => Some(Tracking::Unfollow),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            Tracking::Recenter => "Recenter",
-            Tracking::Follow => "Follow",
-            Tracking::Unfollow => "Unfollow",
-        }
-    }
-}
-
 pub trait Guest {
-    fn track(&self, tracking: Tracking) -> Result<(), _rt::Errno>;
+    fn track(&self, mode: super::types::TrackingMode) -> Result<(), _rt::Errno>;
     fn goto(&self, lon: f64, lat: f64) -> Result<(), _rt::Errno>;
 }
 
@@ -54,10 +22,10 @@ impl _rt::Object for _Object {
         let run = || -> Result<i32, _rt::Errno> {
             Ok(match m_ {
                 TRACK => {
-                    let tracking = args_
-                        .case(0, 3)
-                        .and_then(|v| Tracking::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    match self.0.track(tracking) {
+                    let mode = args_.case(0, 3).and_then(|v| {
+                        super::types::TrackingMode::of(v).ok_or(_rt::Errno::EBADMSG)
+                    })?;
+                    match self.0.track(mode) {
                         Ok(()) => 0,
                         Err(e) => e as i32,
                     }
