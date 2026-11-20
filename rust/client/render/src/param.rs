@@ -72,7 +72,7 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
 
 /// The effects on a drawn surface: its lines, the occlusion of its corners and of the screen,
 /// and the shadows. They share one reach from the eye (pxl-spec space/layer/lattice.rs
-/// `EFFECT_REACH`), and all fade alike before it (frame/shader/effect.wgsl `effect_share`).
+/// `LEAF_REACH`), and all fade alike before it (frame/shader/effect.wgsl `effect_share`).
 pub mod effect {
     params! {
         /// The share of the reach at which the effects begin to fade. They are gone at the

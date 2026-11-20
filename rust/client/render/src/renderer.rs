@@ -16,7 +16,7 @@ use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::Mat4;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::lattice::EFFECT_REACH;
+use pxl_spec::space::layer::lattice::LEAF_REACH;
 use xpute_kit::abi::word::join64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -828,8 +828,8 @@ impl Renderer {
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
         if let Some((dir, _)) = light {
             // A receiver reads the map within the effects' reach.
-            let half_width = shadow::half_width(EFFECT_REACH);
-            let reach_ndc = (EFFECT_REACH / half_width) as f32;
+            let half_width = shadow::half_width(LEAF_REACH);
+            let reach_ndc = (LEAF_REACH / half_width) as f32;
             self.shadow
                 .aim(dir, eye, half_width, reach_ndc, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);

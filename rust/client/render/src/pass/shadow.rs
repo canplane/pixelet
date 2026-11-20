@@ -1,7 +1,7 @@
 // pxl-render/pass/shadow.rs
 
 //! The light's shadow map: the world's depth along the light, orthographic, centered on
-//! the eye and as wide as every effect reaches (`EFFECT_REACH`). Its texels are snapped to a
+//! the eye and as wide as every effect reaches (`LEAF_REACH`). Its texels are snapped to a
 //! grid fixed in the world (`Shadow::aim`). The world is cast a ray a texel through the
 //! world's query, as the eye's rays are (light.wgsl `light_cs`), into `world`, a clipmap over
 //! which the light box slides a texel at a time (pxl-engine `light`). Each frame the world's
@@ -24,7 +24,7 @@ use pxl_gpu_link::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilter
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::layer::lattice::EFFECT_REACH;
+use pxl_spec::space::layer::lattice::LEAF_REACH;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -64,7 +64,7 @@ pub const fn light_reach(half_width: f64) -> f64 {
     2.0 * half_width / (1.0 - DEPTH_STEP) + 4.0 * half_width
 }
 const _: () = assert!(
-    light_reach(half_width(EFFECT_REACH)) < REACH as f64,
+    light_reach(half_width(LEAF_REACH)) < REACH as f64,
     "every node the light's cast meets is one the node cache keeps and the record names again from its box (pxl-engine cast::REACH)"
 );
 const _: () = assert!(

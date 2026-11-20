@@ -42,7 +42,7 @@ fn constant() -> String {
     use pxl_spec::space::camera::grid;
     use pxl_spec::space::coord::q3::FRAC_W;
     use pxl_spec::space::coord::zoom::{HEIGHT_BITS, UNIT_ZOOM};
-    use pxl_spec::space::layer::lattice::EFFECT_REACH;
+    use pxl_spec::space::layer::lattice::LEAF_REACH;
     use word::*;
     let vec4s = |floats: usize| {
         assert!(floats.is_multiple_of(4), "a uniform is whole vec4s");
@@ -122,7 +122,7 @@ fn constant() -> String {
         // The camera grid's cell is the footprint a drawn cell covers per unit of distance,
         // seen square on. Every effect shares the one reach written beside it.
         ("GRID_CELL", F32(grid::CELL)),
-        ("EFFECT_REACH", F32(EFFECT_REACH as f32)),
+        ("LEAF_REACH", F32(LEAF_REACH as f32)),
         // How far apart a receiver's taps lie in the shadow map. The map's read pad is sized
         // by it (pxl-engine param.rs `light::SPREAD`, light.rs `READ_PAD`).
         ("LIGHT_SPREAD", F32(param::light::SPREAD)),

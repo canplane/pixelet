@@ -100,7 +100,7 @@ slid on, or into another band, is cast anew and the rest keep what they cast
 
 The effects on a drawn surface, its lines, the occlusion of its corners and of
 the screen, the shadows and the rim, all end at one distance from the eye, the
-**effects' reach**, and fade alike before it (pxl-spec `EFFECT_REACH`,
+**effects' reach**, and fade alike before it (pxl-spec `LEAF_REACH`,
 `effect.wgsl` `effect_share`). It lies where the camera grid's cells a zoom
 coarser than the ground's leaf begin, and the box reaches at least that far.
 

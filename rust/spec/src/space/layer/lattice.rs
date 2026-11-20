@@ -137,10 +137,14 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
 pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
     split_dist(lattice.grid_zoom(zoom - 1))
 }
-/// Every effect's one reach from the eye: out to where the grid's cells one zoom coarser
-/// than the ground's leaf begin, where the casters are drawn whole and a face's bits read the
-/// leaf's (pxl-render frame/shader/effect.wgsl `effect_share`, pass/shadow.rs `half_width`).
-pub const EFFECT_REACH: f64 = split_dist(GROUND.leaf_cell_zoom() - 1);
+/// How far from the eye the ground is drawn with the leaves' cells: out to where the grid's
+/// cells one zoom coarser than the ground's leaf begin. What is near is within it, and one
+/// reach serves all that means near: every effect reaches this far, where the casters are
+/// drawn whole and a face's bits read the leaf's (pxl-render frame/shader/effect.wgsl
+/// `effect_share`, pass/shadow.rs `half_width`); the pointer picks this far; and first person
+/// is eased to a place within it and warps to one past it (pxl-core domain/query/support.rs
+/// `leaf_drawn`).
+pub const LEAF_REACH: f64 = split_dist(GROUND.leaf_cell_zoom() - 1);
 
 /// How far from the eye's foot a demand at `zoom` can lie: where a
 /// clip level holds the grid's cell a zoom coarser from (`CLIP_MARGIN`), as
