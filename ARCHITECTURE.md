@@ -105,7 +105,12 @@ size is the world's, valid wherever the eye moves.** No axis of the screen, no
 facing, no platform and no light sets a size. Two forms read the world, and
 there is no third: a ray of the eye's, which crosses many sizes and asks each
 node at its own, and a read at one size, a body's cell or a tile of the sun's
-light, which asks at the one size the eye sets for it. An answer tied to the
+light, which asks at the one size the eye sets for it. Where the camera is sent,
+and where its pivot stands, is the one thing asked otherwise: it is a point,
+what the ground is there and not how an eye would draw it, so a place is made a
+point at the leaves before the camera goes, and the camera is handed points
+alone
+(`pxl-core domain/control/navigation/place.rs`). An answer tied to the
 eye's exact place could not be cached, so no reader is given one. The size is a
 zoom, one function of that distance (`pxl-spec space/camera/grid.rs`
 `cell_zoom_at`), the same bits on the CPU and the GPU, and it is read off the
@@ -168,7 +173,7 @@ click.
 
 A body asks its cell at the size the eye sets where it stands, no finer than
 what the world holds over the cell, and stands on what fills it. A ray across
-what the eye sees, the pointer's or the orbit camera's way, crosses many sizes
+what the eye sees, the pointer's or the orbit camera's line to its eye, crosses many sizes
 and asks each node at its own, as a pixel's ray does, and the pointer judges
 what it strikes by the zoom the eye's rays draw there
 (`domain/control/edit/pick.rs`).
@@ -256,7 +261,7 @@ stops and says nothing past it. Nothing is invented.
 What the view fetches is **demand**, and a tile is asked for by one of four
 reasons: it lies within its zoom's band about the eye; it is an ancestor of a
 missing tile, up to the coarsest zoom; it is **pinned**, the leaf over the pivot
-or over a place the camera is sent to, with its ancestors, or a tile a reader
+or over a place being made a point, with its ancestors, or a tile a reader
 that takes no coarser answer pins; or it is of the floor, below. Demand follows
 where those stand, never what the rays met, and each layer holds what is
 demanded in its own **tile cache**, which keeps four promises. Every observation
@@ -265,7 +270,8 @@ the **floor**. No view asks for more tiles than the cache holds, because what
 the floor and demand can hold at once is counted at compile time against its
 slots. A region only ever goes from unresolved to coarse to as fine as it is
 observed, never back. And nothing is fetched on a guess: a view converges on its
-misses alone, and a camera sent somewhere waits for the ground there.
+misses alone, and a place the camera is sent to waits for the ground there
+before it is a point.
 
 The ground's cells are held in a **clipmap** (Tanner, Migdal and Jones 1998):
 one level per zoom about a center, each a few **bricks** wide and addressed
@@ -550,6 +556,7 @@ whatever asks. The machinery under it is earlier work:
 | Precedent | What is taken |
 | --- | --- |
 | Google Earth and the web map's tile pyramid | The pyramid: a tile at one zoom folded from the four under it, so a view from afar reads a handful of tiles |
+| van Wijk and Nuij, "Smooth and efficient zooming and panning" (2003) | The way the orbit camera flies to a place: the shortest in the space of a view's place and width, a level pan where the place is beside it and, the whole camera carried, a rise, a crossing and a descent that grow with how far it is, so a far flight reads the pyramid's coarse tiles and not every leaf between |
 | Morton order | Tile and shard names, each a prefix of its children's |
 | Earth Engine's `MODE` pyramiding | The ground's fold: a parent's asset id is the majority of the four under it |
 | Cesium's `preloadAncestors` | Demand: the ancestors of a missing tile are asked for, so a coarser tile answers wherever the view looks |

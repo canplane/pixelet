@@ -35,7 +35,11 @@
       a read at one size, a body's cell or a tile of the light with its bundle
       of rays, which asks at the one size the eye sets for it, the light's the
       finest along its bundle. A read that takes a size from anything else
-      departs. The sun is where the light comes from and sets nothing. What a
+      departs, but one: where the camera is sent, and where its pivot stands,
+      is a point, which is what the ground is and not how an eye draws it. A
+      place is made a point at the leaves before the camera goes there, and
+      the camera is handed points alone. The sun is where the light comes
+      from and sets nothing. What a
       ray does not find within its cap of steps is not there.
     - In change the screen is drawn again only for a difference that can be
       told apart: a move of the eye, a turn, a step of what moves on its own, each

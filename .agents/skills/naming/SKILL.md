@@ -93,7 +93,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | --- | --- | --- |
   | where the camera looks from | `eye` | camera position |
   | the point the camera turns about (under the eye in first person) | `pivot` | focus, center, target |
-  | where the pivot is going | its `to` (`pivot_to`, `put_pivot`, `resolve_to`) | target |
+  | where the pivot is going | its `to` (`pivot_to`, a move's `to`) | target |
   | the direction the camera faces | `facing` | look |
   | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
   | what a mouse, touch or controller points with | `pointer` | cursor |
@@ -123,10 +123,16 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | what walks and collides, a character's as an engine has it | a `body` (`body_shown`, `BODY_BOX`) | walker |
   | what stands over a body's head or over the camera's pivot | a `ceiling` | roof |
   | a point moved out of what it overlaps | `depenetrate` | lift |
-  | the camera brought before what stands in a zoom's way | `pull_forward` | dive |
+  | how far the eye is drawn from the pivot before what stands on its line | its arm (`arm_of`) | dive |
   | a decor or a body being there at a zoom | it `shows_at` it (`box_shows_at`) | stands |
-  | the floor under a point as the eye draws the world there | `floor_under` | |
+  | the floor under a point, at the size the eye sets there or at the leaves | `floor_under` | |
   | the cell zoom at a point by its distance from the eye, as the eye's rays draw it, and as a walk reads it | `cell_zoom_drawn`, `cell_zoom_read` | |
+  | whether the eye draws a point with the leaves' cells, which is what near means, and how far from the eye that holds | `leaf_drawn`, `LEAF_REACH` | near, close, full detail, lod0 |
+  | how the camera goes to a place: on a move, the orbit flown and first person eased, or there at once | ease, fly, warp | walk, jump, teleport, put whole |
+  | what the camera is doing, as a map has it: nothing, a hand holding the view or a key held, its own way to a place it was sent to | `idle`, `gesture`, `animation` | control, travel, transition |
+  | who has the camera's pivot: the start, a place the user asked to go to, the camera on its way there, the user's location, no one | the holder (`Holder`) | owner, target, intent |
+  | whether the camera tracks the user's location, as MapKit has it | the tracking mode: `none`, `follow`, `follow-with-heading` | follow mode, `is_follow_mode`, recenter, unfollow |
+  | the hand's inputs | `pan`, `zoom`, `rotate`, `tilt` | turn, pitch |
 
   `at` is where a thing is, `to` where it is going.
 - The world and its units are told apart, each by one word:
