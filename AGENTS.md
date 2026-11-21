@@ -202,6 +202,9 @@
   form.
 - A fact or a figure in a record or a report comes from the tree, a test or a
   script that gives it again, never from recall.
+- Before a fact is reported as odd, what the structure holds of it is read: a
+  value the structure keeps for each case (a column for each shard, a field for
+  each kind) differs from case to case by design and is not reported.
 - Work in the main checkout, and a worktree only for a tree that must be built
   apart. A commit holds its author's hunks alone, staged in an index of HEAD
   that is still HEAD when it commits.

@@ -103,43 +103,28 @@ from a checkout and run on the VM. By hand it is the same script, for a commit
 ssh root@$(hcloud server ip pixelet-prod) bash -eu -s -- "$(git rev-parse origin/deploy)" < infra/prod/deploy.sh
 ```
 
-### Copying the search tables
+### Ingesting the search tables
 
 A deploy does not carry db-geo, so production's three tables change only when
-they are copied over. When a copy changes a table's shape, the server that reads
-it goes out in the same step: stop `api` (`docker compose stop api`), restore,
-then deploy the server.
-
-Dump with the local container's own `pg_dump`, since a newer one on the host
-writes a format that production's PostgreSQL 18 cannot restore:
-
-```sh
-set -a; . ./infra/local/.env; set +a
-docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
-  -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
-  -t overture_places -t overture_division_areas -t overture_divisions > overture.dump
-
-scp overture.dump root@$(hcloud server ip pixelet-prod):
-ssh root@$(hcloud server ip pixelet-prod)
-```
-
-Then run the rest in the VM's own shell. Piped into `ssh`, the first
-`docker exec -i` would swallow the commands after it.
+they are ingested. Production's db-geo is one more database the Overture
+ingest writes into ([geo/README.md](./geo/README.md)), the shards it names and
+their catalog rows, through a tunnel to the container. A table whose shape
+changes is made anew from every shard with `--whole` in place of `--shard`, and
+the server that reads it goes out in the same step: stop `api` (`docker compose
+stop api`), ingest, then deploy the server.
 
 ```sh
-sql() { docker exec -i pixelet-db-geo sh -c 'exec "$@" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' sh "$@"; }
-
-# a table-only dump carries no CREATE EXTENSION
-sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
-# one transaction: a failure leaves the old tables as they were
-sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
-# the planner's statistics and the visibility map, which a restore does not
-# write; one worker, since parallel workers outgrow Docker's 64 MB /dev/shm
-sql psql -v ON_ERROR_STOP=1 -c "VACUUM (ANALYZE, PARALLEL 0) overture_places" -c "VACUUM (ANALYZE, PARALLEL 0) overture_division_areas" -c "VACUUM (ANALYZE, PARALLEL 0) overture_divisions"
-rm ~/overture.dump
+vm=root@$(hcloud server ip pixelet-prod)
+ip=$(ssh $vm 'docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" pixelet-db-geo')
+ssh -f -N -M -S /tmp/prod-geo.sock -L 127.0.0.1:5434:$ip:5432 $vm
+export DB_GEO_URL=postgresql://<user>:<password>@127.0.0.1:5434/<db>   # the VM's .env
+(cd rust && cargo ingest-overture --type place --type division --type division_area --shard <name>)
+ssh -S /tmp/prod-geo.sock -O exit $vm
 ```
 
-`./script/smoke.py --origin` checks the result.
+`make ingest-overture` would point `DB_GEO_URL` back at the local database
+(`script/env.sh`), so the cargo alias is run directly. `./script/smoke.py
+--origin` checks the result.
 
 ## 4. Cloudflare
 

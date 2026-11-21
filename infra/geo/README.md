@@ -7,9 +7,10 @@ reads it live, so the database says exactly what it holds: which version of
 each source, over which part of the world. Three ingests fill it, run by hand
 when a source or the coverage changes.
 
-Two files decide what it holds. Each source's `source.json` pins its version
-and the time it was taken, and the ingest writes both into the database, so the
-database can say what it holds without these files. The coverage,
+Overture's ingest takes its latest release when it runs, and the elevation's
+and the coast's take the version their `source.json` pins. Each ingest writes
+the version and the time it was taken into the database, so the database says
+what it holds without these files. The coverage,
 `coverage.json`, lists the shards: tiles at zoom 8, each named by its Morton
 key, each holding everything its leaves' bakes read, out to its apron
 (`rust/server/geo-bake/README.md`). The coast belongs to no shard; it is taken
@@ -42,7 +43,7 @@ reader filters on is generated from the properties.
 docker compose -f infra/local/docker-compose.yml up -d db-geo
 
 make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
-./infra/geo/elevation/ingest.sh
+./infra/geo/elevation/ingest.sh [--shard <name>]… [--whole]
 ./infra/geo/coastline/ingest.sh
 ```
 
@@ -65,13 +66,16 @@ tools' image, downloads each type's GeoParquet to `overture/raw/`, where it is
 kept until the release or the shards change. Divisions come with their
 ancestors, which may lie outside every shard.
 
-**Elevation.** Each shard is warped out of the remote GeoTIFF over HTTP onto one
-grid, at the stride the bake samples, and cut into blocks. A block is a square
-of samples as wide as a tile at one zoom and is named by that tile, so a block
-that two aprons share is stored once. A run fills the tables beside the old ones
-and swaps them in once every shard is whole. A run that stopped partway resumes
-from the shards already beside, unless those hold another version, which it
-refuses rather than mix.
+**Elevation.** A run takes the shards it names, or the coverage's. Each shard is
+warped out of the remote GeoTIFF over HTTP onto one grid, at the stride the bake
+samples, and cut into blocks. A block is a square of samples as wide as a tile
+at one zoom and is named by that tile, so a block that two aprons share is
+stored once. A run writes each shard into the tables as they are, its blocks
+and its catalog row in one transaction, at the pinned version. With `--whole`,
+it fills the tables beside the old ones from every shard and swaps them in once
+every shard is whole; such a run that stopped partway resumes from the shards
+already beside, unless those hold another version, which it refuses rather than
+mix.
 
 **Coastline.** OSM's land polygons for the whole world come as one zip. osmdata
 names no version and serves only its latest, so the first 16 hex digits of the
@@ -91,12 +95,12 @@ SELECT count(*) AS shards, min(version), max(version) FROM elevation_catalog;
 SELECT obj_description('osm_land_polygons'::regclass);
 ```
 
-Every table should name each of the coverage's shards at the pinned version. A
-bake checks the same before it reads anything: it refuses an Overture table that
-lacks a shard it needs or holds one outside the coverage, and an elevation that
-holds anything other than exactly the coverage's shards (`pxl-geo-bake
-coverage.rs`, `elevation.rs`). Replacing rows leaves dead space behind, which
-`VACUUM ANALYZE` reclaims.
+Every table should name each of the coverage's shards. A bake checks the same
+before it reads anything: it refuses an Overture table that lacks a shard it
+needs or holds one outside the coverage, and an elevation that holds anything
+other than exactly the coverage's shards (`pxl-geo-bake coverage.rs`,
+`elevation.rs`). Replacing rows leaves dead space behind, which `VACUUM ANALYZE`
+reclaims.
 
-Production keeps its own copy of the three tables search reads. A re-ingest
-reaches it only when they are copied over ([infra/README.md](../README.md) §3).
+Production keeps its own db-geo with the three tables search reads, which the
+same ingest fills by shard ([infra/README.md](../README.md) §3).

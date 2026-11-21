@@ -1,13 +1,18 @@
 #!/bin/bash
 
-# The elevation into db-geo, a shard at a time: each shard the coverage
-# needs (`elevation_shard`), its apron of whole blocks included, warped out
-# of the remote COG onto the one grid the bake samples, and its blocks put
-# under the names of the tiles they are (`elevation_shard --blocks`). The
-# tables are filled beside the live ones and swapped in once every shard is
-# whole, so readers never see them emptied; a run stopped partway resumes
-# from the shards its tables beside hold, and refuses ones of another
-# version (source.json's `pin`) rather than mix them.
+# The elevation into db-geo, a shard at a time: each shard named, or the
+# coverage's (`elevation_shard`), its apron of whole blocks included, warped
+# out of the remote COG onto the one grid the bake samples, and its blocks put
+# under the names of the tiles they are (`elevation_shard --blocks`). A shard
+# is written into the live tables as they are, its blocks and its catalog row
+# in one transaction, and takes the version source.json pins (`pin`); a
+# block a neighbor's apron shares is the same block, stored once. With
+# `--whole`, the tables are made anew from every shard beside the live ones
+# and swapped in once every shard is whole, so readers never see them
+# emptied; such a run stopped partway resumes from the shards its tables
+# beside hold, and refuses ones of another version rather than mix them.
+#
+#   ./infra/geo/elevation/ingest.sh [--shard <name>]… [--whole]
 
 set -e
 set -o pipefail
@@ -35,11 +40,24 @@ CREATE INDEX IF NOT EXISTS $1_rast ON $1 USING GIST (ST_ConvexHull(rast));
 CREATE TABLE IF NOT EXISTS $2 (shard TEXT PRIMARY KEY, version TEXT NOT NULL, accessed_at TIMESTAMPTZ NOT NULL, total_count BIGINT NOT NULL);
 SQL
 }
-psql_geo -c "CREATE EXTENSION IF NOT EXISTS postgis_raster CASCADE;" > /dev/null
-tables elevation_raster_next elevation_catalog_next | psql_geo > /dev/null
-OTHER=$(psql_geo -Atc "SELECT count(*) FROM elevation_catalog_next WHERE version <> '$VERSION'")
-if [ "$OTHER" != "0" ]; then
-    echo "[elevation] the tables beside hold $OTHER shards of another version: drop elevation_raster_next and elevation_catalog_next first" >&2
+
+# `--shard <name>`, repeated, for those shards alone; `--whole` for the tables
+# made anew from every shard.
+NAMED=()
+WHOLE=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --shard)
+            [ -n "$2" ] || { echo "--shard names a shard" >&2; exit 1; }
+            NAMED+=("$2")
+            shift 2
+            ;;
+        --whole) WHOLE=1; shift ;;
+        *) echo "unknown flag: $1" >&2; exit 1 ;;
+    esac
+done
+if [ "$WHOLE" = 1 ] && [ ${#NAMED[@]} -gt 0 ]; then
+    echo "--whole makes the tables from every shard; it takes no --shard" >&2
     exit 1
 fi
 
@@ -47,10 +65,47 @@ mkdir -p "$WARPED_DIR"
 BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}/server/elevation_shard"
 (cd "$REPO_ROOT/rust" && cargo build -q --profile server -p pxl-geo-bake --bin elevation_shard)
 SHARDS=$("$BAKE_BIN")
+# Whether the name `$1` is among `$2`'s, one a line, its first word, compared
+# as strings: awk compares two numeric-looking fields as numbers.
+among() { awk -v n="$1" '$1 "" == n "" { found = 1 } END { exit !found }' <<< "$2"; }
+for N in "${NAMED[@]}"; do
+    if ! among "$N" "$SHARDS"; then
+        echo "$N: no shard of the coverage (infra/geo/coverage.json)" >&2
+        exit 1
+    fi
+done
+NAMES=$(printf '%s\n' "${NAMED[@]}")
+
+psql_geo -c "CREATE EXTENSION IF NOT EXISTS postgis_raster CASCADE;" > /dev/null
+if [ "$WHOLE" = 1 ]; then
+    RASTER=elevation_raster_next CATALOG=elevation_catalog_next
+else
+    RASTER=elevation_raster CATALOG=elevation_catalog
+fi
+tables "$RASTER" "$CATALOG" | psql_geo > /dev/null
+if [ "$WHOLE" = 0 ]; then
+    # A shard is added to the raster as it is; one on another grid is made anew only on --whole.
+    read -r STRIDE BLOCK <<< "$(awk 'NR == 1 { print $6, $7 }' <<< "$SHARDS")"
+    OFF=$(psql_geo -Atc "SELECT count(*) FROM (SELECT rast FROM $RASTER LIMIT 1) r
+        WHERE abs(ST_ScaleX(rast) - $STRIDE) > 1e-9 * $STRIDE OR ST_Width(rast) <> $BLOCK")
+    if [ "$OFF" != "0" ]; then
+        echo "[elevation] $RASTER is on another grid than the stride $STRIDE and the block $BLOCK; run with --whole" >&2
+        exit 1
+    fi
+else
+    OTHER=$(psql_geo -Atc "SELECT count(*) FROM $CATALOG WHERE version <> '$VERSION'")
+    if [ "$OTHER" != "0" ]; then
+        echo "[elevation] the tables beside hold $OTHER shards of another version: drop $RASTER and $CATALOG first" >&2
+        exit 1
+    fi
+fi
 
 # On its own descriptor: psql would read the list as its input.
 while read -r NAME MINX MINY MAXX MAXY STRIDE BLOCK BLOCK_MERC <&3; do
-    if [ -n "$(psql_geo -Atc "SELECT 1 FROM elevation_catalog_next WHERE shard = '$NAME'")" ]; then
+    if [ ${#NAMED[@]} -gt 0 ] && ! among "$NAME" "$NAMES"; then
+        continue
+    fi
+    if [ "$WHOLE" = 1 ] && [ -n "$(psql_geo -Atc "SELECT 1 FROM $CATALOG WHERE shard = '$NAME'")" ]; then
         echo "[elevation/$NAME] already held"
         continue
     fi
@@ -69,16 +124,24 @@ while read -r NAME MINX MINY MAXX MAXY STRIDE BLOCK BLOCK_MERC <&3; do
         echo "[elevation/$NAME] $UNPLACED blocks fall on no tile of the shard" >&2
         exit 1
     fi
-    psql_geo -c "INSERT INTO elevation_raster_next (tile, rast)
-            SELECT b.tile, s.rast FROM elevation_stage s JOIN (VALUES $BLOCKS) b(bx, by, tile) ON $PLACE
-            ON CONFLICT (tile) DO UPDATE SET rast = EXCLUDED.rast;
-        INSERT INTO elevation_catalog_next (shard, version, accessed_at, total_count)
-            SELECT '$NAME', '$VERSION', '$ACCESSED_AT', count(*) FROM elevation_stage;" > /dev/null
+    # One transaction: the shard's blocks and its catalog row, whole or absent.
+    psql_geo > /dev/null <<SQL
+BEGIN;
+INSERT INTO $RASTER (tile, rast)
+    SELECT b.tile, s.rast FROM elevation_stage s JOIN (VALUES $BLOCKS) b(bx, by, tile) ON $PLACE
+    ON CONFLICT (tile) DO UPDATE SET rast = EXCLUDED.rast;
+INSERT INTO $CATALOG (shard, version, accessed_at, total_count)
+    SELECT '$NAME', '$VERSION', '$ACCESSED_AT', count(*) FROM elevation_stage
+    ON CONFLICT (shard) DO UPDATE SET version = EXCLUDED.version,
+        accessed_at = EXCLUDED.accessed_at, total_count = EXCLUDED.total_count;
+COMMIT;
+SQL
 done 3<<< "$SHARDS"
 
-psql_geo -c "DROP TABLE IF EXISTS elevation_stage; ANALYZE elevation_raster_next;" > /dev/null
-# One short transaction: the live tables dropped, those beside given their names and their indexes'.
-psql_geo > /dev/null <<SQL
+psql_geo -c "DROP TABLE IF EXISTS elevation_stage; ANALYZE $RASTER;" > /dev/null
+if [ "$WHOLE" = 1 ]; then
+    # One short transaction: the live tables dropped, those beside given their names and their indexes'.
+    psql_geo > /dev/null <<SQL
 BEGIN;
 SET LOCAL lock_timeout = '30s';
 DROP TABLE IF EXISTS elevation_raster, elevation_catalog;
@@ -91,4 +154,5 @@ DO \$\$ DECLARE i text; BEGIN
 END \$\$;
 COMMIT;
 SQL
+fi
 echo "[elevation] $(psql_geo -Atc "SELECT count(*) FROM elevation_catalog") shards"

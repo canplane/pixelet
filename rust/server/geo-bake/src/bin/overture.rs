@@ -20,7 +20,8 @@
 //! swaps it in.
 //!
 //! When to run which is the user's to say: the catalog records each shard's release and when
-//! it was ingested, and decides nothing. The release is the one `source.json` pins. A column
+//! it was ingested, and decides nothing. The release is the latest, as the CLI names it when the
+//! run starts, and it was taken at the database's time just after. A column
 //! a reader filters on is generated from `properties`. A division names its parent, which may
 //! lie past every shard, so the divisions are taken with their ancestors, each fetched by its
 //! id, and a name's chain never breaks at the coverage's edge.
@@ -223,7 +224,6 @@ const TYPES: &[Type] = &[
 /// downloads is kept in `EXTRACTS`.
 const TOOLS: &str = "./infra/geo/tool/run";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
-const SRC: &str = "./infra/geo/overture/source.json";
 
 /// How long the swap waits for the live table's readers, and how often it
 /// tries: waiting longer would queue every new reader behind it.
@@ -284,7 +284,11 @@ fn run() -> Result<(), String> {
         NoTls,
     )
     .map_err(|e| e.to_string())?;
-    let (release, accessed_at) = (read_pin("version")?, read_pin("accessed_at")?);
+    let release = latest()?;
+    let accessed_at: String = client
+        .query_one("SELECT now()::text", &[])
+        .map_err(|e| e.to_string())?
+        .get(0);
     println!(
         "[ingest] release {release}, {} shards{}",
         shards.len(),
@@ -331,9 +335,10 @@ fn run() -> Result<(), String> {
             .batch_execute(&format!("DROP TABLE {}", staging(ty)))
             .map_err(|e| e.to_string())?;
         // Vacuuming writes the visibility map too, without which the index-only scan on a place's
-        // name would read the rows after all.
+        // name would read the rows after all. One worker: parallel workers outgrow the 64 MB
+        // /dev/shm Docker gives a db-geo container, which neither compose file raises.
         client
-            .batch_execute(&format!("VACUUM (ANALYZE) {}", ty.table))
+            .batch_execute(&format!("VACUUM (ANALYZE, PARALLEL 0) {}", ty.table))
             .map_err(|e| e.to_string())?;
         println!(
             "[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching",
@@ -1089,15 +1094,13 @@ fn overture(args: &[&str]) -> Result<Output, String> {
     }
     Ok(out)
 }
-/// A field of `source.json`'s pin: the release (Overture's name for its
-/// version) and when it was taken, which the catalog repeats.
-fn read_pin(field: &str) -> Result<String, String> {
-    let path = Path::new(SRC);
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let meta: Value =
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    meta["pin"][field]
-        .as_str()
-        .map(str::to_string)
-        .ok_or_else(|| format!("{}: no pin.{field}", path.display()))
+
+/// The latest release (Overture's name for its version), as the CLI names it.
+fn latest() -> Result<String, String> {
+    let out = overture(&["releases", "latest"])?;
+    let release = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    match release.is_empty() {
+        true => Err("overturemaps releases latest: named no release".into()),
+        false => Ok(release),
+    }
 }

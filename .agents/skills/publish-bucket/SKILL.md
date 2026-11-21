@@ -12,7 +12,13 @@ client reads at boot: publishing needs no commit or deploy. **A manual upload
 sets content-type and content-encoding.**
 
 `publish.py` reaches the bucket through `script/r2.py`, with the key
-[infra/README.md](../../../infra/README.md) §4 sets up.
+[infra/README.md](../../../infra/README.md) §4 sets up. It uploads with the AWS
+CLI's `s3 sync`, as many requests at once as the `r2` profile's
+`s3.max_concurrent_requests`, which the repository does not set:
+
+```bash
+aws configure set s3.max_concurrent_requests 32 --profile r2
+```
 
 ## Upload
 
