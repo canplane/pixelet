@@ -19,15 +19,16 @@ use crate::domain::view::frame::pose::view_resize;
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::space::coord::{q3, world};
+use pxl_spec::space::coord::world;
 
-/// The app's start: no camera, no eye, no location, and the start has the
-/// pivot.
+/// The app's start: no camera, no eye and no fix yet, and the user's
+/// location has the pivot, once.
 fn start() {
     view_resize(1280.0, 720.0);
     clear_camera();
     eye::set_pose(None);
-    *holder() = Holder::Start;
+    *holder() = Holder::LocationOnce;
+    LOCATED.set(false);
     sensor::set_location_status(LocationStatus::Ready);
     sensor::set_pos(None);
     sensor::set_heading(None);
@@ -216,32 +217,57 @@ fn a_view_far_out_comes_in_as_it_goes() {
     }
 }
 
-/// Tracking: the user's location has the pivot, and the camera goes after
-/// it, idle all the while, at the distance the user set, sent nowhere. With
-/// the heading the view turns to it; a rotation by hand ends the turning
-/// alone and a zoom keeps the mode; the button's end turns the view to
-/// north and leaves the camera where it is.
+/// The location button's three modes. Off: the pivot is off the user's
+/// location. Locate warps the camera there once, at the distance the user
+/// set, and the mode is locate while the pivot stands there, leaving past
+/// `LOCATE_LEAVE_U` and back within `LOCATE_ENTER_U`; the camera
+/// tracks nothing. Track: the location has the pivot, and the camera
+/// tracks it, idle all the while, at the distance the user set, the view
+/// turning to the heading; a zoom keeps it, a rotation by hand ends it, and
+/// the button's end turns the view to north and leaves the camera where it
+/// is.
 #[test]
-fn tracking_goes_after_the_location() {
+fn the_location_modes() {
     let [x, y] = flat_at_five();
     placed(Store::default());
     standing(x + 0.5, y + 0.5, 16.0);
-    user_at(x + 4.5, y + 0.5);
-    assert_eq!(
-        destination(),
-        None,
-        "no one has the pivot: no place is made a point"
-    );
+    user_at(x + 20.5, y + 0.5);
+    assert!(!frame());
+    assert_eq!(location_mode(), LocationMode::Off);
+    assert_eq!(destination(), None, "no one has the pivot");
 
-    track(TrackingMode::Follow);
-    assert_eq!(destination(), user_location(), "the location is");
-    assert!(frame(), "the camera goes after it");
-    assert_eq!(state(false), CameraState::Idle, "sent nowhere");
+    controller::zoom(0.25);
     settled();
-    assert!(off(x + 4.5, y + 0.5) < 0.01, "at the location");
+    set_location_mode(LocationMode::Locate);
+    assert_eq!(destination(), user_location(), "the location is asked");
+    assert!(frame(), "the camera warps there");
+    assert_eq!(state(false), CameraState::Idle, "on no animation");
+    assert!(off(x + 20.5, y + 0.5) < 0.01, "at the location");
     assert_eq!(camera_now().pivot[2], over(5.0), "on its floor");
+    assert_eq!(camera_now().dist, 64.0, "at the distance the user set");
+    assert_eq!(location_mode(), LocationMode::Locate);
+    assert_eq!(destination(), None, "sent once");
+    controller::zoom(4.0);
+    settled();
 
-    user_at(x + 6.5, y + 1.5);
+    user_at(x + 20.5 + LOCATE_LEAVE_U - 0.5, y + 0.5);
+    settled();
+    assert!(off(x + 20.5, y + 0.5) < 0.01, "the camera tracks nothing");
+    assert_eq!(location_mode(), LocationMode::Locate, "within the edge");
+    user_at(x + 20.5 + LOCATE_LEAVE_U + 0.5, y + 0.5);
+    settled();
+    assert_eq!(location_mode(), LocationMode::Off, "past it");
+    user_at(x + 20.5 + LOCATE_ENTER_U + 0.5, y + 0.5);
+    settled();
+    assert_eq!(location_mode(), LocationMode::Off, "not back yet");
+    user_at(x + 20.5 + LOCATE_ENTER_U - 0.5, y + 0.5);
+    settled();
+    assert_eq!(location_mode(), LocationMode::Locate, "back");
+
+    set_location_mode(LocationMode::Track);
+    assert_eq!(location_mode(), LocationMode::Track);
+    assert_eq!(destination(), user_location(), "the location is");
+    let to = x + 20.5 + LOCATE_ENTER_U - 0.5;
     let mut moved = false;
     for _ in 0..10_000 {
         let on = frame();
@@ -251,17 +277,15 @@ fn tracking_goes_after_the_location() {
             break;
         }
     }
-    assert!(moved && off(x + 6.5, y + 1.5) < 0.01, "it followed");
+    assert!(moved && off(to, y + 0.5) < 0.01, "it tracked");
     controller::zoom(0.25);
     settled();
-    user_at(x + 7.5, y + 1.5);
+    user_at(to + 1.0, y + 1.5);
     settled();
-    assert!(off(x + 7.5, y + 1.5) < 0.01, "followed on");
+    assert!(off(to + 1.0, y + 1.5) < 0.01, "tracked on");
     assert_eq!(camera_now().dist, 64.0, "at the distance the user set");
-    controller::zoom(8.0);
-    settled();
+    assert_eq!(location_mode(), LocationMode::Track, "a zoom kept the mode");
 
-    track(TrackingMode::FollowWithHeading);
     for k in 1..=10 {
         let heading = 1.6 * f64::from(k);
         sensor::set_heading(Some(heading));
@@ -273,23 +297,26 @@ fn tracking_goes_after_the_location() {
             off.to_degrees()
         );
     }
-    stop_tracking_heading();
-    assert_eq!(tracking_mode(), TrackingMode::Follow, "tracked on");
+    stop_tracking();
+    assert_eq!(location_mode(), LocationMode::Locate, "ended, and there");
     sensor::set_heading(Some(180.0));
     settled();
     assert!((camera_now().azimuth - 16.0f64.to_radians()).abs() < 1e-9);
-    assert_eq!(camera_now().dist, 8.0, "a zoom kept the mode");
 
-    track(TrackingMode::None);
+    set_location_mode(LocationMode::Track);
+    settled();
+    set_location_mode(LocationMode::Off);
     settled();
     assert_eq!(
-        (tracking_mode(), camera_now().azimuth),
-        (TrackingMode::None, 0.0)
+        (location_mode(), camera_now().azimuth),
+        (LocationMode::Locate, 0.0)
     );
-    user_at(x + 8.5, y + 0.5);
+    user_at(to + 20.0, y + 0.5);
     settled();
-    assert!(off(x + 7.5, y + 1.5) < 0.01, "and the camera stays");
+    assert!(off(to + 1.0, y + 1.5) < 0.01, "and the camera stays");
+    assert_eq!(location_mode(), LocationMode::Off);
     assert_eq!(destination(), None);
+    sensor::set_heading(None);
 }
 
 /// One has the pivot at a time, whoever asked last: a place, tracking, the
@@ -306,7 +333,7 @@ fn who_asked_last_has_the_pivot() {
     go_to_ground(marker);
     assert!(frame() && frame(), "on its way to the marker");
     assert_eq!(state(false), CameraState::Animation);
-    track(TrackingMode::Follow);
+    set_location_mode(LocationMode::Track);
     assert_eq!(
         state(false),
         CameraState::Idle,
@@ -314,10 +341,10 @@ fn who_asked_last_has_the_pivot() {
     );
     assert_eq!(destination(), user_location(), "tracking has the pivot");
     settled();
-    assert!(off(x + 4.5, y + 0.5) < 0.01, "and the camera went after it");
+    assert!(off(x + 4.5, y + 0.5) < 0.01, "and the camera tracked it");
 
     go_to_ground(marker);
-    assert_eq!(tracking_mode(), TrackingMode::None, "ended by the going");
+    assert!(!is_tracking(), "ended by the going");
     assert_eq!(destination(), Some(marker));
     take_by_hand();
     assert_eq!(destination(), None, "the hand has it: nothing waits");
@@ -325,19 +352,19 @@ fn who_asked_last_has_the_pivot() {
     assert!(off(x + 4.5, y + 0.5) < 0.01, "and the camera went nowhere");
 }
 
-/// The start has the pivot until someone takes it: the user's location,
-/// coming after the camera was put elsewhere, takes the camera over with a
-/// warp, at the distance and the facing it has, and then no one has it.
-/// Once someone has taken it, a location that comes is not the start's. A
-/// camera never put is put all the same: at the fallback where its holder
-/// wants it nowhere.
+/// The location has the pivot once, from the start until someone takes it:
+/// the user's location, coming after the camera was put elsewhere, takes
+/// the camera over with a warp, at the distance and the facing it has, and
+/// then no one has it. Once someone has taken it, a location that comes
+/// takes nothing. A camera never put is put all the same: at the fallback
+/// where its holder wants it nowhere.
 #[test]
-fn the_start_has_the_pivot_until_someone_takes_it() {
+fn the_location_has_the_pivot_once_until_someone_takes_it() {
     let [x, y] = flat_at_five();
     placed(Store::default());
 
     standing(x + 30.5, y + 0.5, 300.0);
-    *holder() = Holder::Start;
+    *holder() = Holder::LocationOnce;
     assert_eq!(
         destination(),
         None,
@@ -351,12 +378,16 @@ fn the_start_has_the_pivot_until_someone_takes_it() {
         (camera_now().dist, state(false)),
         (300.0, CameraState::Idle)
     );
-    assert_eq!(*holder(), Holder::NoOne, "the start is over");
+    assert_eq!(
+        *holder(),
+        Holder::NoOne,
+        "the location has the pivot no more"
+    );
     user_at(x + 3.5, y + 0.5);
     assert!(!frame(), "a later fix is no one's");
 
     standing(x + 30.5, y + 0.5, 300.0);
-    *holder() = Holder::Start;
+    *holder() = Holder::LocationOnce;
     take_by_hand();
     user_at(x + 0.5, y + 0.5);
     assert_eq!(
@@ -368,12 +399,12 @@ fn the_start_has_the_pivot_until_someone_takes_it() {
     start();
     let fallback = surface(&FALLBACK_G4326);
     assert_eq!(destination(), Some(fallback), "never put, no location");
-    track(TrackingMode::Follow);
+    set_location_mode(LocationMode::Track);
     assert_eq!(destination(), Some(fallback), "tracking with no fix yet");
     user_at(x + 0.5, y + 0.5);
     assert!(frame(), "put where the location is");
     assert!(off(x + 0.5, y + 0.5) < 0.01);
-    track(TrackingMode::None);
+    set_location_mode(LocationMode::Off);
 }
 
 /// The camera does one thing at a time. While a hand holds the view a place

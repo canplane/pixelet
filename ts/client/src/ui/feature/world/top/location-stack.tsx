@@ -6,10 +6,10 @@ import { type GlyphName, Spinner } from "@/ui/shared/component/icon.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import {
-  type TrackingMode,
-  TRACKING_MODE_FOLLOW,
-  TRACKING_MODE_FOLLOW_WITH_HEADING,
-  TRACKING_MODE_NONE,
+  type LocationMode,
+  LOCATION_MODE_LOCATE,
+  LOCATION_MODE_OFF,
+  LOCATION_MODE_TRACK,
 } from "@/abi/types.enum.ts";
 import {
   SENSOR_STATUS_LOADING,
@@ -22,27 +22,26 @@ import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 import { useCore, useSensor } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 
-/** What the button shows in each tracking mode, its glyph and its label the
- * mode's own as Apple's Maps names its button, and the mode a press asks
- * for, the modes in turn. */
+/** What the button shows in each location mode: the mode a press asks for,
+ * its glyph and its label. */
 const BUTTON: Record<
-  TrackingMode,
-  { glyph: GlyphName; label: string; press: TrackingMode }
+  LocationMode,
+  { glyph: GlyphName; label: string; press: LocationMode }
 > = {
-  [TRACKING_MODE_NONE]: {
+  [LOCATION_MODE_OFF]: {
     glyph: "location",
-    label: "world.controls.tracking_off",
-    press: TRACKING_MODE_FOLLOW,
+    label: "world.controls.location_mode_off",
+    press: LOCATION_MODE_LOCATE,
   },
-  [TRACKING_MODE_FOLLOW]: {
+  [LOCATION_MODE_LOCATE]: {
     glyph: "location.fill",
-    label: "world.controls.tracking_on",
-    press: TRACKING_MODE_FOLLOW_WITH_HEADING,
+    label: "world.controls.location_mode_locate",
+    press: LOCATION_MODE_TRACK,
   },
-  [TRACKING_MODE_FOLLOW_WITH_HEADING]: {
+  [LOCATION_MODE_TRACK]: {
     glyph: "location.north.line.fill",
-    label: "world.controls.tracking_on_with_heading",
-    press: TRACKING_MODE_NONE,
+    label: "world.controls.location_mode_track",
+    press: LOCATION_MODE_OFF,
   },
 };
 
@@ -50,8 +49,8 @@ export function LocationStack() {
   const { t } = useTranslation();
   const status = useSensor((l) => l.state.status);
   const hasLocation = useSensor((l) => l.location !== null);
-  const mode = useCore((s) => s.tracking_mode);
-  const tracking = mode !== TRACKING_MODE_NONE;
+  const mode = useCore((s) => s.location_mode);
+  const tracking = mode === LOCATION_MODE_TRACK;
   const { glyph, label, press } = BUTTON[mode];
 
   return (
@@ -60,7 +59,7 @@ export function LocationStack() {
       items={[
         {
           label: t(label),
-          onPress: () => void camera.track(press),
+          onPress: () => void camera.setLocationMode(press),
           isActive: tracking,
           disabled: status !== SENSOR_STATUS_READY || !hasLocation,
           face:

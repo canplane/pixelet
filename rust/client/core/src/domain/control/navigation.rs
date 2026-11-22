@@ -1,21 +1,22 @@
 // pxl-core/domain/control/navigation.rs
 
 //! Who has the camera's pivot, where the camera goes for them, and what
-//! the camera is doing. One has the pivot at a time (`Holder`): the start,
-//! until someone takes it; a place the user asked to go to, and then the
-//! camera on its way there; the user's location, while it is tracked; or no
-//! one. Each wants the camera at a place, and a place is made a point at
-//! the leaves before the camera goes there (place.rs), so it waits here
-//! until the world holds the leaves over it. Who asks last takes the pivot
-//! (`take`); there is one holder, so whoever had it has it no more.
+//! the camera is doing. One has the pivot at a time (`Holder`): the user's
+//! location once, as the app starts and as locate asks; a place the user
+//! asked to go to, and then the camera on its way there; the user's
+//! location tracked; or no one. Each wants the camera at a place, and a
+//! place is made a point at the leaves before the camera goes there
+//! (place.rs), so it waits here until the world holds the leaves over it.
+//! Who asks last takes the pivot (`take`); there is one holder, so whoever
+//! had it has it no more.
 //!
-//! | the holder          | wants               | the camera    | then      |
-//! | ------------------- | ------------------- | ------------- | --------- |
-//! | the start           | the user's location | warps there   | no one    |
-//! | a place             | the place           | is sent there | on its way|
-//! | on its way          | to arrive           | goes on       | no one    |
-//! | the user's location | the user's location | goes after it | keeps it  |
-//! | no one              | nothing             |               |           |
+//! | the holder           | wants               | the camera    | then       |
+//! | -------------------- | ------------------- | ------------- | ---------- |
+//! | the location once    | the user's location | warps there   | no one     |
+//! | a place              | the place           | is sent there | on its way |
+//! | on its way           | to arrive           | goes on       | no one     |
+//! | the location tracked | the user's location | tracks it     | keeps it   |
+//! | no one               | nothing             |               |            |
 //!
 //! Where nothing stands at the place, its holder lets go, whoever it is. A
 //! camera never put is put at the fallback while its holder wants it
@@ -31,14 +32,15 @@ pub(crate) mod place;
 
 use pxl_global::Global;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::world;
 
 use crate::abi::overlay::CameraState;
-use crate::abi::types::TrackingMode;
+use crate::abi::types::LocationMode;
 use crate::domain::control::camera::controller;
 use crate::domain::control::navigation::location::{Grace, user_location};
 use crate::domain::control::navigation::place::{Floor, point};
-use crate::domain::control::param::DEFAULT_AZIMUTH;
+use crate::domain::control::param::{DEFAULT_AZIMUTH, LOCATE_ENTER_U, LOCATE_LEAVE_U};
 use crate::domain::query::unknown;
 use crate::domain::setting::settings;
 use crate::domain::view::param::FALLBACK_G4326;
@@ -49,16 +51,17 @@ use crate::sys::sensor;
 /// Who has the camera's pivot.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Holder {
-    /// The start: no one has taken it yet.
-    Start,
+    /// The user's location, once: the camera is to warp there. The app
+    /// starts with it, and locate asks for it.
+    LocationOnce,
     /// A place the user asked to go to, and the floor it takes there, until
     /// the camera is sent.
     Place(Q3, Floor),
     /// The camera, on its way to the place it was sent to.
     Going,
-    /// The user's location, tracked: whether the view turns with the
-    /// device's heading, and how long a location not ready is waited for.
-    Location { heading: bool, grace: Grace },
+    /// The user's location, tracked: how long a location not ready is waited
+    /// for.
+    LocationTracked { grace: Grace },
     /// No one: the camera is where it was left, or where the hand pans it.
     NoOne,
 }
@@ -66,7 +69,7 @@ enum Holder {
 static HOLDER: Global<Holder> = Global::new();
 
 fn holder() -> &'static mut Holder {
-    HOLDER.get(|| Holder::Start)
+    HOLDER.get(|| Holder::LocationOnce)
 }
 
 /// `by` takes the pivot from another: whoever had it has it no more, and
@@ -122,52 +125,84 @@ pub(crate) fn take_by_hand() {
     take(Holder::NoOne);
 }
 
-/// Sets the tracking mode, as the tracking button asks. Tracking takes the
-/// pivot as it starts; from one tracking mode to another it has it already.
-/// As it ends, the view turns back to north.
-pub(crate) fn track(mode: TrackingMode) {
-    let turns = mode == TrackingMode::FollowWithHeading;
-    match (mode, holder()) {
-        (TrackingMode::None, Holder::Location { .. }) => {
+/// Asks for a location mode, as the location button does. Locate has the
+/// location take the pivot once where there is one, so the camera warps to
+/// the user's location as it did at the start. Tracking takes the pivot. As
+/// tracking ends, the view turns back to north.
+pub(crate) fn set_location_mode(mode: LocationMode) {
+    match (mode, *holder()) {
+        (LocationMode::Locate, _) => {
+            if user_location().is_some() {
+                take(Holder::LocationOnce);
+            }
+        }
+        (LocationMode::Track, Holder::LocationTracked { .. }) => {}
+        (LocationMode::Track, _) => take(Holder::LocationTracked { grace: None }),
+        (LocationMode::Off, Holder::LocationTracked { .. }) => {
             controller::azimuth_to(DEFAULT_AZIMUTH);
             take(Holder::NoOne);
         }
-        (TrackingMode::None, _) => {}
-        (_, Holder::Location { heading, .. }) => *heading = turns,
-        _ => take(Holder::Location {
-            heading: turns,
-            grace: None,
-        }),
+        (LocationMode::Off, _) => {}
     }
 }
 
-/// The tracking mode: whether the user's location has the pivot, and
-/// whether the view turns with the device's heading.
-pub(crate) fn tracking_mode() -> TrackingMode {
+static LOCATED: Global<bool> = Global::new();
+
+/// Whether the pivot stands at the user's location, as of this frame's
+/// `located_step`.
+fn located() -> bool {
+    *LOCATED.get(|| false)
+}
+
+/// Decides once a frame whether the pivot stands at the user's location:
+/// it leaves past `LOCATE_LEAVE_U` across the ground and is back within
+/// `LOCATE_ENTER_U`. The fix's Z is an altitude and the pivot's a floor, so the
+/// height is not counted.
+fn located_step() {
+    let located = LOCATED.get(|| false);
+    *located = match (controller::pivot(), user_location()) {
+        (Some(pivot), Some(at)) => {
+            // X is measured the short way across the antimeridian.
+            let [dx, dy, _] = world::between(&pivot, &at).map(q3::to_real);
+            let within = match *located {
+                true => LOCATE_LEAVE_U,
+                false => LOCATE_ENTER_U,
+            };
+            libm::hypot(dx, dy) <= within
+        }
+        _ => false,
+    };
+}
+
+/// The location mode: the user's location has the pivot, or the pivot
+/// stands at it, or neither.
+pub(crate) fn location_mode() -> LocationMode {
     match *holder() {
-        Holder::Location { heading: true, .. } => TrackingMode::FollowWithHeading,
-        Holder::Location { heading: false, .. } => TrackingMode::Follow,
-        _ => TrackingMode::None,
+        Holder::LocationTracked { .. } => LocationMode::Track,
+        _ if located() => LocationMode::Locate,
+        _ => LocationMode::Off,
     }
 }
 
 /// Whether the user's location is tracked.
 pub(crate) fn is_tracking() -> bool {
-    tracking_mode() != TrackingMode::None
+    matches!(*holder(), Holder::LocationTracked { .. })
 }
 
-/// Ends the view's turning with the device's heading, as a hand rotates the
-/// view: the user's location is tracked on.
-pub(crate) fn stop_tracking_heading() {
-    if let Holder::Location { heading, .. } = holder() {
-        *heading = false;
+/// Ends tracking, as a hand rotates the view: tracking turns the view with
+/// the heading.
+pub(crate) fn stop_tracking() {
+    if is_tracking() {
+        take(Holder::NoOne);
     }
 }
 
 /// The place the holder wants the camera at, and the floor it takes there.
 fn asked() -> Option<(Q3, Floor)> {
     match *holder() {
-        Holder::Start | Holder::Location { .. } => user_location().map(|at| (at, Floor::Ground)),
+        Holder::LocationOnce | Holder::LocationTracked { .. } => {
+            user_location().map(|at| (at, Floor::Ground))
+        }
         Holder::Place(at, floor) => Some((at, floor)),
         Holder::Going | Holder::NoOne => None,
     }
@@ -191,18 +226,19 @@ pub(crate) fn destination() -> Option<Q3> {
 /// Has the camera go where its holder wants it, once that place is a point
 /// (the module's table), each frame, given whether a hand holds the view or
 /// a key is held. Tracking ends where the location is lost
-/// (`location::lost`), and turns the view with the device's heading. The
-/// camera's mode is the setting's while the camera is idle.
+/// (`location::lost`), and turns the view with the device's heading where
+/// there is one. The camera's mode is the setting's while the camera is
+/// idle.
 pub(crate) fn navigation_step(gesturing: bool) {
     place::forget_touched();
     if *holder() == Holder::Going && !controller::moving() {
         *holder() = Holder::NoOne;
     }
-    if let Holder::Location { heading, grace } = holder() {
+    if let Holder::LocationTracked { grace } = holder() {
         match (location::lost(grace), sensor::heading()) {
             (true, _) => take(Holder::NoOne),
-            (false, Some(deg)) if *heading => controller::azimuth_to(deg.to_radians()),
-            (false, _) => {}
+            (false, Some(deg)) => controller::azimuth_to(deg.to_radians()),
+            (false, None) => {}
         }
     }
     let exact = |(at, floor): (Q3, Floor)| point(&at, floor).exact();
@@ -212,7 +248,7 @@ pub(crate) fn navigation_step(gesturing: bool) {
         (_, None) => {}
         // Nothing stands there: the holder lets go.
         (_, Some(None)) => take(Holder::NoOne),
-        (Holder::Start, Some(Some(to))) => {
+        (Holder::LocationOnce, Some(Some(to))) => {
             controller::warp_to(to);
             *holder() = Holder::NoOne;
         }
@@ -227,7 +263,7 @@ pub(crate) fn navigation_step(gesturing: bool) {
                 false => Holder::NoOne,
             };
         }
-        (Holder::Location { .. }, Some(Some(to))) => controller::go(to),
+        (Holder::LocationTracked { .. }, Some(Some(to))) => controller::go(to),
         // These ask for no place.
         (Holder::Going | Holder::NoOne, Some(Some(_))) => {}
     }
@@ -237,6 +273,7 @@ pub(crate) fn navigation_step(gesturing: bool) {
     if state(gesturing) == CameraState::Idle {
         controller::set_mode(settings().camera_mode);
     }
+    located_step();
 }
 
 #[cfg(test)]

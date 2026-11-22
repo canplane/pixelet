@@ -130,8 +130,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | whether the eye draws a point with the leaves' cells, which is what near means, and how far from the eye that holds | `leaf_drawn`, `LEAF_REACH` | near, close, full detail, lod0 |
   | how the camera goes to a place: on a move, the orbit flown and first person eased, or there at once | ease, fly, warp | walk, jump, teleport, put whole |
   | what the camera is doing, as a map has it: nothing, a hand holding the view or a key held, its own way to a place it was sent to | `idle`, `gesture`, `animation` | control, travel, transition |
-  | who has the camera's pivot: the start, a place the user asked to go to, the camera on its way there, the user's location, no one | the holder (`Holder`) | owner, target, intent |
-  | whether the camera tracks the user's location, as MapKit has it | the tracking mode: `none`, `follow`, `follow-with-heading` | follow mode, `is_follow_mode`, recenter, unfollow |
+  | who has the camera's pivot: the user's location once, a place the user asked to go to, the camera on its way there, the user's location tracked, no one | the holder (`Holder`) | owner, target, intent |
+  | what the location button shows and asks for: the camera off the user's location, at it, tracking it | the location mode: `off`, `locate`, `track` | tracking mode, follow, recenter, compass mode |
   | the hand's inputs | `pan`, `zoom`, `rotate`, `tilt` | turn, pitch |
 
   `at` is where a thing is, `to` where it is going.

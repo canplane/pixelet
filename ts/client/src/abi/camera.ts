@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import type { TrackingMode } from "./types.enum.ts";
+import type { LocationMode } from "./types.enum.ts";
 import {
   type Handle,
   type Method,
@@ -13,13 +13,16 @@ import {
 /** The interface's handle, named by `pxl:core/camera` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5a7108;
 
-/** `track` */
-export const TRACK: Method = 0;
+/** `set-location-mode` */
+export const SET_LOCATION_MODE: Method = 0;
 /** `goto` */
 export const GOTO: Method = 1;
 
-export async function track(link_: Sender, mode: TrackingMode): Promise<void> {
-  const a_ = await link_.send(HANDLE, TRACK, [
+export async function set_location_mode(
+  link_: Sender,
+  mode: LocationMode,
+): Promise<void> {
+  const a_ = await link_.send(HANDLE, SET_LOCATION_MODE, [
     1,
     (w_) => {
       w_.u8(0, mode);

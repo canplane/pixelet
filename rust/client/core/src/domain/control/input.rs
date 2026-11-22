@@ -6,15 +6,15 @@
 //! the camera is written once a frame (`camera_input_step`), where a gesture
 //! is taken: a pan applied to the camera as it stands, and a rotation, a
 //! tilt and a zoom to where it ends. A pan by hand takes the pivot
-//! (navigation.rs), and a rotation by hand ends the view's turning with the
-//! device's heading. What the pointer is over, its hover and its tap,
+//! (navigation.rs), and a rotation by hand ends tracking, whose heading
+//! turns the view. What the pointer is over, its hover and its tap,
 //! belongs to pxl-core pointer.rs; when what the pointer holds changes under
 //! a still pointer, its hover is picked again (`camera_rehover`).
 
 use crate::spec::step::InvalidationReason;
 
 use crate::domain::control::camera::controller;
-use crate::domain::control::navigation::{stop_tracking_heading, take_by_hand, takes_gesture};
+use crate::domain::control::navigation::{stop_tracking, take_by_hand, takes_gesture};
 use crate::domain::control::param::KEY_PAN_PER_S;
 use crate::domain::setting::settings;
 use crate::domain::view::frame::screen::px_to_ndc;
@@ -147,8 +147,8 @@ pub(crate) fn camera_keys(x: i32, y: i32) {
 /// Writes into the camera what the hand and the keys asked since the last
 /// step, where a gesture is taken (navigation.rs `takes_gesture`): on an
 /// animation it is not, and what was asked is dropped. A pan takes the
-/// pivot first (`take_by_hand`), and a rotation ends the view's turning with
-/// the device's heading. It runs once a frame.
+/// pivot first (`take_by_hand`), and a rotation ends tracking, whose
+/// heading turns the view. It runs once a frame.
 pub(crate) fn camera_input_step() {
     let s = input();
     let taken = takes_gesture();
@@ -184,7 +184,7 @@ pub(crate) fn camera_input_step() {
         controller::face_by(rotate, tilt);
     }
     if rotate != 0.0 {
-        stop_tracking_heading();
+        stop_tracking();
     }
     if zoom != 1.0 {
         controller::zoom(zoom);

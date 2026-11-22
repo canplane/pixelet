@@ -190,9 +190,9 @@
       "object_size": "크기 {{n}}"
     },
     "controls": {
-      "tracking_off": "위치 추적 꺼짐",
-      "tracking_on": "위치 추적 켜짐",
-      "tracking_on_with_heading": "방향과 함께 위치 추적 켜짐",
+      "location_mode_off": "내 위치에서 벗어남",
+      "location_mode_locate": "내 위치에 있음",
+      "location_mode_track": "내 위치 추적 중",
       "first_person": "1인칭 보기",
       "third_person": "3인칭 보기",
       "show_places": "장소 보기",

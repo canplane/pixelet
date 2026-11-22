@@ -3,7 +3,7 @@ package pxl:core@0.1.0;
 // What is drawn over the world: the core's state, told when it changes and
 // whole to a UI that attaches (xpute's `life.attached`).
 interface overlay {
-  use types.{tracking-mode};
+  use types.{location-mode};
 
   // A message the core raises and the UI shows in its own words.
   enum message {
@@ -53,7 +53,7 @@ interface overlay {
     companion-ready: bool,
     // A marker's draft is open, its text told apart (`draft`).
     drafting: bool,
-    tracking-mode: tracking-mode,
+    location-mode: location-mode,
     // The pointer is over a scene marker a tap would act on.
     over-marker: bool,
     // Every setting's value by its number; none until the core has read its

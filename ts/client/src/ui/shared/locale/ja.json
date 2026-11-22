@@ -190,9 +190,9 @@
       "object_size": "サイズ {{n}}"
     },
     "controls": {
-      "tracking_off": "追跡オフ",
-      "tracking_on": "追跡オン",
-      "tracking_on_with_heading": "方向付きで追跡オン",
+      "location_mode_off": "現在地から離れています",
+      "location_mode_locate": "現在地にいます",
+      "location_mode_track": "現在地を追跡中",
       "first_person": "一人称で見る",
       "third_person": "三人称で見る",
       "show_places": "場所を表示",

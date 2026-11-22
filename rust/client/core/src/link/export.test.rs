@@ -164,7 +164,7 @@ fn take_method_asks() -> u32 {
 /// it at once.
 #[test]
 fn a_method_applied_asks_for_its_frame() {
-    use crate::abi::types::TrackingMode;
+    use crate::abi::types::LocationMode;
     use crate::abi::{camera as cam, edit as ed, input as inp, sensor as sen};
     use crate::domain::control::camera::fixture::place;
     place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
@@ -179,7 +179,9 @@ fn a_method_applied_asks_for_its_frame() {
         ("tap", &|| inp::Guest::tap(&Core, 10.0, 10.0)),
         ("out", &|| inp::Guest::out(&Core)),
         ("tool", &|| ed::Guest::hold(&Core, Tool::Pointer, 0, 0)),
-        ("track", &|| cam::Guest::track(&Core, TrackingMode::Follow)),
+        ("set-location-mode", &|| {
+            cam::Guest::set_location_mode(&Core, LocationMode::Track)
+        }),
         ("goto", &|| cam::Guest::goto(&Core, 127.0, 37.5)),
         ("pos", &|| sen::Guest::pos(&Core, None)),
     ];
@@ -190,7 +192,7 @@ fn a_method_applied_asks_for_its_frame() {
         assert!(take_invalid(), "{name} asks for no frame");
         assert_eq!(take_method_asks(), 1, "{name}");
     }
-    cam::Guest::track(&Core, TrackingMode::None).unwrap();
+    cam::Guest::set_location_mode(&Core, LocationMode::Off).unwrap();
     navigation::take_by_hand();
     // The methods of the other answers and of the other interfaces.
     use crate::abi::sensor::LocationStatus;
@@ -241,25 +243,21 @@ fn a_method_refused_asks_for_no_frame() {
     assert_eq!(take_method_asks(), 0);
 }
 
-/// The device's heading asks for a frame only while it is tracked with the
-/// user's location, which is when it turns the camera.
+/// The device's heading asks for a frame only while the camera tracks
+/// the user's location, which is when it turns the camera.
 #[test]
 fn a_heading_asks_only_while_it_is_tracked() {
-    use crate::abi::types::TrackingMode;
+    use crate::abi::types::LocationMode;
     use crate::abi::{camera as cam, sensor as sen};
-    cam::Guest::track(&Core, TrackingMode::None).unwrap();
+    cam::Guest::set_location_mode(&Core, LocationMode::Off).unwrap();
     take_method_asks();
     assert_eq!(errnum(sen::Guest::heading(&Core, Some(10.0))), Ok(()));
     assert_eq!(take_method_asks(), 0, "not tracked");
-    cam::Guest::track(&Core, TrackingMode::Follow).unwrap();
-    take_method_asks();
-    assert_eq!(errnum(sen::Guest::heading(&Core, Some(15.0))), Ok(()));
-    assert_eq!(take_method_asks(), 0, "the location alone");
-    cam::Guest::track(&Core, TrackingMode::FollowWithHeading).unwrap();
+    cam::Guest::set_location_mode(&Core, LocationMode::Track).unwrap();
     take_method_asks();
     assert_eq!(errnum(sen::Guest::heading(&Core, Some(20.0))), Ok(()));
-    assert_eq!(take_method_asks(), 1, "with the heading");
-    cam::Guest::track(&Core, TrackingMode::None).unwrap();
+    assert_eq!(take_method_asks(), 1, "tracked");
+    cam::Guest::set_location_mode(&Core, LocationMode::Off).unwrap();
 }
 
 /// A text is held to its kind's cap and refused whole one past it,

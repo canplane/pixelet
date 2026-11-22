@@ -10,7 +10,7 @@
  * stopped while the app is hidden. Each sensor has one start, which holds
  * that gate and which every trigger calls: a world's draw, the return from
  * hidden, a permission granted, and a press, the location card's (`locate`)
- * or the tracking button's (`startOrientation`). */
+ * or the location button's (`startOrientation`). */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
@@ -193,7 +193,7 @@ function startLocation(): void {
 
 /** Starts the heading while a world is open, once the platform permits it,
  * and resolves whether it does: never where the platform has no heading. The platform answers from the decision it
- * holds, and asks only inside a press: the tracking button's calls this from the
+ * holds, and asks only inside a press: the location button's calls this from the
  * press itself. A world closed while it answers starts nothing. */
 export async function startOrientation(): Promise<boolean> {
   if (worlds.size === 0 || !platform.ORIENTATION.has) return false;

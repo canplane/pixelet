@@ -190,9 +190,9 @@
       "object_size": "大小 {{n}}"
     },
     "controls": {
-      "tracking_off": "追蹤已關閉",
-      "tracking_on": "追蹤已開啟",
-      "tracking_on_with_heading": "追蹤已開啟（含方向）",
+      "location_mode_off": "已離開我的位置",
+      "location_mode_locate": "位於我的位置",
+      "location_mode_track": "正在追蹤我的位置",
       "first_person": "第一人稱視角",
       "third_person": "第三人稱視角",
       "show_places": "顯示地點",

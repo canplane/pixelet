@@ -58,26 +58,23 @@ impl ErrorCode {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum TrackingMode {
-    None = 0,
-    Follow = 1,
-    FollowWithHeading = 2,
+pub enum LocationMode {
+    Off = 0,
+    Locate = 1,
+    Track = 2,
 }
 
-impl TrackingMode {
+impl LocationMode {
     /// Every member, in its source's own order.
-    pub const ALL: [TrackingMode; 3] = [
-        TrackingMode::None,
-        TrackingMode::Follow,
-        TrackingMode::FollowWithHeading,
-    ];
+    pub const ALL: [LocationMode; 3] =
+        [LocationMode::Off, LocationMode::Locate, LocationMode::Track];
 
     /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<TrackingMode> {
+    pub const fn of(val: u32) -> Option<LocationMode> {
         match val {
-            0 => Some(TrackingMode::None),
-            1 => Some(TrackingMode::Follow),
-            2 => Some(TrackingMode::FollowWithHeading),
+            0 => Some(LocationMode::Off),
+            1 => Some(LocationMode::Locate),
+            2 => Some(LocationMode::Track),
             _ => None,
         }
     }
@@ -85,9 +82,9 @@ impl TrackingMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            TrackingMode::None => "None",
-            TrackingMode::Follow => "Follow",
-            TrackingMode::FollowWithHeading => "FollowWithHeading",
+            LocationMode::Off => "Off",
+            LocationMode::Locate => "Locate",
+            LocationMode::Track => "Track",
         }
     }
 }

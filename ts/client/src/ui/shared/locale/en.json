@@ -190,9 +190,9 @@
       "object_size": "Size {{n}}"
     },
     "controls": {
-      "tracking_off": "Tracking off",
-      "tracking_on": "Tracking on",
-      "tracking_on_with_heading": "Tracking on with heading",
+      "location_mode_off": "Away from my location",
+      "location_mode_locate": "At my location",
+      "location_mode_track": "Tracking my location",
       "first_person": "View in first person",
       "third_person": "View in third person",
       "show_places": "Show places",

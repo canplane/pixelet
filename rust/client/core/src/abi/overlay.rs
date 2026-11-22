@@ -213,7 +213,7 @@ pub struct Snapshot {
     pub camera: CameraState,
     pub companion_ready: bool,
     pub drafting: bool,
-    pub tracking_mode: super::types::TrackingMode,
+    pub location_mode: super::types::LocationMode,
     pub over_marker: bool,
     pub settings: Vec<u32>,
     pub division: Vec<DivisionPart>,
@@ -232,7 +232,7 @@ impl Snapshot {
         w.u8(at + 40, self.camera as u8);
         w.bool(at + 41, self.companion_ready);
         w.bool(at + 42, self.drafting);
-        w.u8(at + 43, self.tracking_mode as u8);
+        w.u8(at + 43, self.location_mode as u8);
         w.bool(at + 44, self.over_marker);
         w.arr(at + 48, &self.settings);
         if let Some(b) = w.list(
@@ -266,7 +266,7 @@ impl Snapshot {
         camera: CameraState,
         companion_ready: bool,
         drafting: bool,
-        tracking_mode: super::types::TrackingMode,
+        location_mode: super::types::LocationMode,
         over_marker: bool,
         settings: &[u32],
         division: &[DivisionPart],
@@ -279,7 +279,7 @@ impl Snapshot {
         w_.u8(at_ + 40, camera as u8);
         w_.bool(at_ + 41, companion_ready);
         w_.bool(at_ + 42, drafting);
-        w_.u8(at_ + 43, tracking_mode as u8);
+        w_.u8(at_ + 43, location_mode as u8);
         w_.bool(at_ + 44, over_marker);
         w_.arr(at_ + 48, settings);
         if let Some(b) = w_.list(
@@ -309,9 +309,9 @@ impl Snapshot {
                 .and_then(|v| CameraState::of(v).ok_or(_rt::Errno::EBADMSG))?,
             companion_ready: r.bool(at + 41)?,
             drafting: r.bool(at + 42)?,
-            tracking_mode: r
+            location_mode: r
                 .case(at + 43, 3)
-                .and_then(|v| super::types::TrackingMode::of(v).ok_or(_rt::Errno::EBADMSG))?,
+                .and_then(|v| super::types::LocationMode::of(v).ok_or(_rt::Errno::EBADMSG))?,
             over_marker: r.bool(at + 44)?,
             settings: r.arr::<u32>(at + 48)?,
             division: r

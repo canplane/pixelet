@@ -5,18 +5,21 @@
 /// The interface's handle, named by `pxl:core/camera` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5a7108;
 
-/// `track`
-pub const TRACK: _rt::Method = 0;
+/// `set-location-mode`
+pub const SET_LOCATION_MODE: _rt::Method = 0;
 /// `goto`
 pub const GOTO: _rt::Method = 1;
 
-/// The size of the fixed part of `track`'s args.
-pub const TRACK_ARGS_SZ: usize = 1;
+/// The size of the fixed part of `set-location-mode`'s args.
+pub const SET_LOCATION_MODE_ARGS_SZ: usize = 1;
 
-pub fn track(side_: &_rt::Side, mode: super::types::TrackingMode) -> Result<(), _rt::XputeError> {
+pub fn set_location_mode(
+    side_: &_rt::Side,
+    mode: super::types::LocationMode,
+) -> Result<(), _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
-        TRACK,
+        SET_LOCATION_MODE,
         _rt::Packet::Args(Some((1, &|w_: &mut _rt::Lower| {
             w_.u8(0, mode as u8);
         }))),

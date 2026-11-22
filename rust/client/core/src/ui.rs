@@ -10,12 +10,12 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{FINEST_ZOOM, Zoom, units};
 
 use crate::abi::overlay::{CameraState, DivisionPart, LonLat, Message, PivotState, Snapshot};
-use crate::abi::types::TrackingMode;
+use crate::abi::types::LocationMode;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
 use crate::domain::control::edit::write;
 use crate::domain::control::input;
-use crate::domain::control::navigation::{self, tracking_mode};
+use crate::domain::control::navigation::{self, location_mode};
 use crate::domain::eye;
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::layer::terrain::tile::IndexedTerrainTile;
@@ -76,7 +76,7 @@ pub(crate) struct SnapshotInput {
     camera: CameraState,
     companion_ready: bool,
     drafting: bool,
-    tracking_mode: TrackingMode,
+    location_mode: LocationMode,
     over_marker: bool,
     /// Each setting's value at its number, and 0 at a number no setting has.
     /// It is None until the settings are read, and the UI holds no settings
@@ -117,7 +117,7 @@ fn snapshot_input() -> SnapshotInput {
         camera: navigation::state(input::gesturing()),
         companion_ready: companion_ready(),
         drafting: write::marker_draft().is_some(),
-        tracking_mode: tracking_mode(),
+        location_mode: location_mode(),
         over_marker: pointer::over_marker(),
         settings: are_settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOT_CNT];
@@ -199,7 +199,7 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
         camera: shown.camera,
         companion_ready: shown.companion_ready,
         drafting: shown.drafting,
-        tracking_mode: shown.tracking_mode,
+        location_mode: shown.location_mode,
         over_marker: shown.over_marker,
         settings: shown.settings.map_or(Vec::new(), |s| s.to_vec()),
         division: division_parts(shown.division, shown.named_to),

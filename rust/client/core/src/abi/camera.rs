@@ -5,13 +5,13 @@
 /// The interface's handle, named by `pxl:core/camera` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5a7108;
 
-/// `track`
-pub const TRACK: _rt::Method = 0;
+/// `set-location-mode`
+pub const SET_LOCATION_MODE: _rt::Method = 0;
 /// `goto`
 pub const GOTO: _rt::Method = 1;
 
 pub trait Guest {
-    fn track(&self, mode: super::types::TrackingMode) -> Result<(), _rt::XputeError>;
+    fn set_location_mode(&self, mode: super::types::LocationMode) -> Result<(), _rt::XputeError>;
     fn goto(&self, lon: f64, lat: f64) -> Result<(), _rt::XputeError>;
 }
 
@@ -21,11 +21,11 @@ impl _rt::Object for _Object {
     fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
         let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
-                TRACK => {
+                SET_LOCATION_MODE => {
                     let mode = args_.case(0, 3).and_then(|v| {
-                        super::types::TrackingMode::of(v).ok_or(_rt::Errno::EBADMSG)
+                        super::types::LocationMode::of(v).ok_or(_rt::Errno::EBADMSG)
                     })?;
-                    let () = self.0.track(mode)?;
+                    let () = self.0.set_location_mode(mode)?;
                     0
                 }
                 GOTO => {

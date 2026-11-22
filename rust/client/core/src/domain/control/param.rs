@@ -100,3 +100,9 @@ const _: () = assert!(
 /// watch starting again, keeps tracking. A dead location lets tracking go
 /// before the camera looks frozen behind a disabled button.
 pub(crate) const SENSOR_GRACE_MS: f64 = 12000.0;
+
+/// The pivot leaves the user's location past `LOCATE_LEAVE_U` across the
+/// ground and is back at it within `LOCATE_ENTER_U`, so a pivot near the edge
+/// does not flicker between the two (navigation.rs `located_step`).
+pub(crate) const LOCATE_LEAVE_U: f64 = 8.0;
+pub(crate) const LOCATE_ENTER_U: f64 = 4.0;

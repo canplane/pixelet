@@ -21,11 +21,12 @@ interface types {
     insufficient-memory,
   }
 
-  // Whether the camera tracks the user's location, and turns with the
-  // device's heading as it does.
-  enum tracking-mode {
-    none,
-    follow,
-    follow-with-heading,
+  // What the location button shows and asks for: off, the camera off the
+  // user's location; locate, the camera at it; track, the camera tracking
+  // it, turning with the device's heading where there is one.
+  enum location-mode {
+    off,
+    locate,
+    track,
   }
 }

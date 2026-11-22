@@ -1,12 +1,12 @@
 package pxl:core@0.1.0;
 
 interface camera {
-  use types.{tracking-mode};
+  use types.{location-mode};
 
-  // Sets the tracking mode, as the tracking button asks. While it tracks,
-  // the camera goes after the user's location; as it ends, the view turns
-  // back to north.
-  track: func(mode: tracking-mode);
+  // Asks for a location mode, as the location button does. Locate puts the
+  // camera at the user's location once. Track has the camera track the
+  // location; as tracking ends, the view turns back to north.
+  set-location-mode: func(mode: location-mode);
   // Goes to (lon, lat), keeping the camera's azimuth and polar; a view farther
   // out than the default comes in to it on the way.
   goto: func(lon: f64, lat: f64);

@@ -3,7 +3,7 @@
 import type { Callee } from "@xpute/link/link.ts";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
-import { TRACKING_MODE_NONE } from "@/abi/types.enum.ts";
+import { LOCATION_MODE_OFF } from "@/abi/types.enum.ts";
 import { CAMERA_STATE_IDLE } from "@/abi/overlay.enum.ts";
 
 const INIT: Snapshot = {
@@ -15,7 +15,7 @@ const INIT: Snapshot = {
   camera: CAMERA_STATE_IDLE,
   companion_ready: false,
   drafting: false,
-  tracking_mode: TRACKING_MODE_NONE,
+  location_mode: LOCATION_MODE_OFF,
   over_marker: false,
   settings: new Uint32Array(),
   division: [],

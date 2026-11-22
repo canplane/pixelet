@@ -1,16 +1,16 @@
 // pxl-core/link/export/camera.rs
 
-//! The camera interface's methods: the tracking button, and going to a search
+//! The camera interface's methods: the location button, and going to a search
 //! result.
 
 use super::{on_earth, refuse_unless};
-use crate::abi::types::TrackingMode;
+use crate::abi::types::LocationMode;
 use crate::domain::control::navigation;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::XputeError;
 
-pub(super) fn track(mode: TrackingMode) -> Result<(), XputeError> {
-    navigation::track(mode);
+pub(super) fn set_location_mode(mode: LocationMode) -> Result<(), XputeError> {
+    navigation::set_location_mode(mode);
     Ok(())
 }
 

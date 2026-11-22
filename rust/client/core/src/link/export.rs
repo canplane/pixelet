@@ -19,9 +19,9 @@ use crate::spec::step::InvalidationReason;
 use std::rc::Rc;
 
 use crate::abi;
-use crate::abi::types::TrackingMode;
+use crate::abi::types::LocationMode;
 use crate::domain::control::input::forget;
-use crate::domain::control::navigation::tracking_mode;
+use crate::domain::control::navigation::is_tracking;
 use crate::sys::sched::invalidate;
 use xpute_guest::abi::life;
 use xpute_kit::status::errno::Errno;
@@ -110,8 +110,8 @@ pub(super) fn mount() {
 }
 
 impl abi::camera::Guest for Core {
-    fn track(&self, mode: TrackingMode) -> Result<(), XputeError> {
-        with_frame(camera::track(mode))
+    fn set_location_mode(&self, mode: LocationMode) -> Result<(), XputeError> {
+        with_frame(camera::set_location_mode(mode))
     }
     fn goto(&self, lon: f64, lat: f64) -> Result<(), XputeError> {
         with_frame(camera::goto(lon, lat))
@@ -169,11 +169,11 @@ impl abi::sensor::Guest for Core {
     }
     /// The one method that asks by a condition: the device tells its heading
     /// far more often than a frame is worth, and the heading turns the camera
-    /// only while it is tracked with the user's location, so it asks only
+    /// only while the camera tracks the user's location, so it asks only
     /// then.
     fn heading(&self, deg: Option<f64>) -> Result<(), XputeError> {
         let answer = sensor::heading(deg);
-        if tracking_mode() == TrackingMode::FollowWithHeading {
+        if is_tracking() {
             return with_frame(answer);
         }
         answer

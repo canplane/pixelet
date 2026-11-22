@@ -52,31 +52,31 @@ export function name_ErrorCode(val: ErrorCode): string {
   }
 }
 
-export type TrackingMode =
-  | typeof TRACKING_MODE_NONE
-  | typeof TRACKING_MODE_FOLLOW
-  | typeof TRACKING_MODE_FOLLOW_WITH_HEADING;
-export const TRACKING_MODE_NONE = 0;
-export const TRACKING_MODE_FOLLOW = 1;
-export const TRACKING_MODE_FOLLOW_WITH_HEADING = 2;
+export type LocationMode =
+  | typeof LOCATION_MODE_OFF
+  | typeof LOCATION_MODE_LOCATE
+  | typeof LOCATION_MODE_TRACK;
+export const LOCATION_MODE_OFF = 0;
+export const LOCATION_MODE_LOCATE = 1;
+export const LOCATION_MODE_TRACK = 2;
 
 /** The member `val` is, or null for a number no member has. */
-export function of_TrackingMode(val: number): TrackingMode | null {
-  return val === TRACKING_MODE_NONE ||
-    val === TRACKING_MODE_FOLLOW ||
-    val === TRACKING_MODE_FOLLOW_WITH_HEADING
+export function of_LocationMode(val: number): LocationMode | null {
+  return val === LOCATION_MODE_OFF ||
+    val === LOCATION_MODE_LOCATE ||
+    val === LOCATION_MODE_TRACK
     ? val
     : null;
 }
 
 /** The member's name, as its source spells it. */
-export function name_TrackingMode(val: TrackingMode): string {
+export function name_LocationMode(val: LocationMode): string {
   switch (val) {
-    case TRACKING_MODE_NONE:
-      return "None";
-    case TRACKING_MODE_FOLLOW:
-      return "Follow";
-    case TRACKING_MODE_FOLLOW_WITH_HEADING:
-      return "FollowWithHeading";
+    case LOCATION_MODE_OFF:
+      return "Off";
+    case LOCATION_MODE_LOCATE:
+      return "Locate";
+    case LOCATION_MODE_TRACK:
+      return "Track";
   }
 }

@@ -8,8 +8,8 @@ import {
   of_CameraState,
   of_Message,
 } from "./overlay.enum.ts";
-import type { TrackingMode } from "./types.enum.ts";
-import { load_TrackingMode } from "./types.ts";
+import type { LocationMode } from "./types.enum.ts";
+import { load_LocationMode } from "./types.ts";
 import {
   ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
@@ -129,7 +129,7 @@ export interface Snapshot {
   camera: CameraState;
   companion_ready: boolean;
   drafting: boolean;
-  tracking_mode: TrackingMode;
+  location_mode: LocationMode;
   over_marker: boolean;
   settings: Uint32Array<ArrayBuffer>;
   division: DivisionPart[];
@@ -147,7 +147,7 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
   w.u8(at + 40, v.camera);
   w.bool(at + 41, v.companion_ready);
   w.bool(at + 42, v.drafting);
-  w.u8(at + 43, v.tracking_mode);
+  w.u8(at + 43, v.location_mode);
   w.bool(at + 44, v.over_marker);
   w.arr(at + 48, v.settings);
   {
@@ -177,7 +177,7 @@ export function load_Snapshot(r: Lift, at: number): Snapshot {
     camera: load_CameraState(r, at + 40),
     companion_ready: r.bool(at + 41),
     drafting: r.bool(at + 42),
-    tracking_mode: load_TrackingMode(r, at + 43),
+    location_mode: load_LocationMode(r, at + 43),
     over_marker: r.bool(at + 44),
     settings: r.arr(at + 48, Uint32Array),
     division: r.map(at + 56, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>

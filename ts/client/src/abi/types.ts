@@ -4,9 +4,9 @@
 
 import {
   type ErrorCode,
-  type TrackingMode,
+  type LocationMode,
   of_ErrorCode,
-  of_TrackingMode,
+  of_LocationMode,
 } from "./types.enum.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
@@ -18,8 +18,8 @@ export function load_ErrorCode(r: Lift, at: number): ErrorCode {
   return v;
 }
 
-export function load_TrackingMode(r: Lift, at: number): TrackingMode {
-  const v = of_TrackingMode(r.case(at, 3));
+export function load_LocationMode(r: Lift, at: number): LocationMode {
+  const v = of_LocationMode(r.case(at, 3));
   if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
