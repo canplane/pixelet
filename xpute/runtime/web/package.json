@@ -25,5 +25,8 @@
     "@xpute/link": "workspace:*",
     "@xpute/kit": "workspace:*",
     "@xpute/host": "workspace:*"
+  },
+  "devDependencies": {
+    "@xpute/golden": "workspace:*"
   }
 }

@@ -111,7 +111,7 @@ pub(crate) fn rank(stream: Stream, id: u64, order: Order) -> Rank {
 /// (`ts/client/src/service/sys/fs/read.ts`). An object's failure comes back the same
 /// however often it is asked, because within a version the key fixes the
 /// bytes.
-pub(crate) fn fault(failure: Failure) -> Fault {
+pub(crate) fn fault(failure: &Failure) -> Fault {
     match failure.errnum {
         // The browser reports that it is offline.
         Errno::ENETUNREACH => Fault::Network,

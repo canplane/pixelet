@@ -40,7 +40,7 @@ fn a_refused_argument_answers_its_errno() {
         perf::table(TABLE_NAMES.len() as u32, 0, 0).map(drop),
     ];
     for (k, r) in refused.into_iter().enumerate() {
-        assert_eq!(r, Err(Errno::EINVAL), "refusal {k}");
+        assert_eq!(errnum(r), Err(Errno::EINVAL), "refusal {k}");
     }
 }
 
@@ -125,7 +125,7 @@ fn a_table_is_read_by_sequence() {
 fn goto_asks_for_the_place_and_keeps_the_view() {
     use crate::domain::control::camera::fixture::{end_now, place};
     place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
-    assert_eq!(camera::goto(127.0, 37.5), Ok(()));
+    assert_eq!(errnum(camera::goto(127.0, 37.5)), Ok(()));
     assert!(
         navigation::destination().is_some(),
         "the place is asked for"
@@ -145,7 +145,12 @@ fn take_invalid() -> bool {
 }
 
 /// An input the UI sends, called as the link calls it.
-type Input<'a> = &'a dyn Fn() -> Result<(), Errno>;
+type Input<'a> = &'a dyn Fn() -> Result<(), XputeError>;
+
+/// What a method answered, its error by its errno.
+fn errnum<T>(r: Result<T, XputeError>) -> Result<T, Errno> {
+    r.map_err(|e| e.errnum)
+}
 
 /// How many times a frame was asked for as a method, which this takes.
 fn take_method_asks() -> u32 {
@@ -181,7 +186,7 @@ fn a_method_applied_asks_for_its_frame() {
     for (name, method) in methods {
         take_invalid();
         take_method_asks();
-        assert_eq!(method(), Ok(()), "{name}");
+        assert_eq!(errnum(method()), Ok(()), "{name}");
         assert!(take_invalid(), "{name} asks for no frame");
         assert_eq!(take_method_asks(), 1, "{name}");
     }
@@ -192,19 +197,28 @@ fn a_method_applied_asks_for_its_frame() {
     use crate::abi::{scene as sc, setting as st};
     assert!(surface_open(2));
     take_method_asks();
-    assert_eq!(sen::Guest::location(&Core, LocationStatus::Ready), Ok(()));
+    assert_eq!(
+        errnum(sen::Guest::location(&Core, LocationStatus::Ready)),
+        Ok(())
+    );
     assert_eq!(take_method_asks(), 1, "location");
     let drawn = sc::Guest::draw(&Core, 2, SceneContent::World, None, None);
-    assert_eq!(drawn, Ok(Ok(())));
+    assert_eq!(errnum(drawn), Ok(Ok(())));
     assert_eq!(take_method_asks(), 1, "draw");
-    assert_eq!(ed::Guest::marker_text(&Core, String::new()), Ok(Ok(())));
+    assert_eq!(
+        errnum(ed::Guest::marker_text(&Core, String::new())),
+        Ok(Ok(()))
+    );
     assert_eq!(take_method_asks(), 1, "marker text");
-    assert_eq!(ed::Guest::marker_commit(&Core), Ok(()));
+    assert_eq!(errnum(ed::Guest::marker_commit(&Core)), Ok(()));
     assert_eq!(take_method_asks(), 1, "marker commit");
-    assert_eq!(ed::Guest::marker_cancel(&Core), Ok(()));
+    assert_eq!(errnum(ed::Guest::marker_cancel(&Core)), Ok(()));
     assert_eq!(take_method_asks(), 1, "marker cancel");
     // The settings are not read yet, so a set is refused in its answer.
-    assert_eq!(st::Guest::set(&Core, 0, 0), Ok(Err(ErrorCode::WouldBlock)));
+    assert_eq!(
+        errnum(st::Guest::set(&Core, 0, 0)),
+        Ok(Err(ErrorCode::WouldBlock))
+    );
     assert_eq!(take_method_asks(), 0, "a set refused");
 }
 
@@ -214,10 +228,16 @@ fn a_method_applied_asks_for_its_frame() {
 fn a_method_refused_asks_for_no_frame() {
     use crate::abi::{camera as cam, input as inp, scene as sc};
     take_method_asks();
-    assert_eq!(cam::Guest::goto(&Core, 181.0, 0.0), Err(Errno::EINVAL));
-    assert_eq!(inp::Guest::zoom(&Core, 0.0), Err(Errno::EINVAL));
+    assert_eq!(
+        errnum(cam::Guest::goto(&Core, 181.0, 0.0)),
+        Err(Errno::EINVAL)
+    );
+    assert_eq!(errnum(inp::Guest::zoom(&Core, 0.0)), Err(Errno::EINVAL));
     let long = "a".repeat(CHAT_TEXT_CHARS as usize + 1);
-    assert_eq!(sc::Guest::chat(&Core, long), Ok(Err(ErrorCode::TooLong)));
+    assert_eq!(
+        errnum(sc::Guest::chat(&Core, long)),
+        Ok(Err(ErrorCode::TooLong))
+    );
     assert_eq!(take_method_asks(), 0);
 }
 
@@ -229,15 +249,15 @@ fn a_heading_asks_only_while_it_is_tracked() {
     use crate::abi::{camera as cam, sensor as sen};
     cam::Guest::track(&Core, TrackingMode::None).unwrap();
     take_method_asks();
-    assert_eq!(sen::Guest::heading(&Core, Some(10.0)), Ok(()));
+    assert_eq!(errnum(sen::Guest::heading(&Core, Some(10.0))), Ok(()));
     assert_eq!(take_method_asks(), 0, "not tracked");
     cam::Guest::track(&Core, TrackingMode::Follow).unwrap();
     take_method_asks();
-    assert_eq!(sen::Guest::heading(&Core, Some(15.0)), Ok(()));
+    assert_eq!(errnum(sen::Guest::heading(&Core, Some(15.0))), Ok(()));
     assert_eq!(take_method_asks(), 0, "the location alone");
     cam::Guest::track(&Core, TrackingMode::FollowWithHeading).unwrap();
     take_method_asks();
-    assert_eq!(sen::Guest::heading(&Core, Some(20.0)), Ok(()));
+    assert_eq!(errnum(sen::Guest::heading(&Core, Some(20.0))), Ok(()));
     assert_eq!(take_method_asks(), 1, "with the heading");
     cam::Guest::track(&Core, TrackingMode::None).unwrap();
 }
@@ -253,19 +273,22 @@ fn a_text_is_held_to_its_kind_cap() {
     let text = |cnt: u32| "😀".repeat(cnt as usize);
     take_method_asks();
     assert_eq!(
-        sc::Guest::chat(&Core, text(CHAT_TEXT_CHARS + 1)),
+        errnum(sc::Guest::chat(&Core, text(CHAT_TEXT_CHARS + 1))),
         Ok(Err(ErrorCode::TooLong))
     );
     assert_eq!(take_method_asks(), 0, "a refused line asks for a frame");
 
     let [x, y] = flat_at_five();
     write::draft_at(Octant::holding(UNIT_ZOOM, &world::point(x, y, 5.0)));
-    assert_eq!(ed::Guest::marker_text(&Core, String::new()), Ok(Ok(())));
+    assert_eq!(
+        errnum(ed::Guest::marker_text(&Core, String::new())),
+        Ok(Ok(()))
+    );
     let held = ed::Guest::marker_text(&Core, text(MARKER_TEXT_CHARS));
-    assert_eq!(held, Ok(Ok(())));
+    assert_eq!(errnum(held), Ok(Ok(())));
     take_method_asks();
     assert_eq!(
-        ed::Guest::marker_text(&Core, text(MARKER_TEXT_CHARS + 1)),
+        errnum(ed::Guest::marker_text(&Core, text(MARKER_TEXT_CHARS + 1))),
         Ok(Err(ErrorCode::TooLong))
     );
     assert_eq!(take_method_asks(), 0, "a refused draft asks for a frame");

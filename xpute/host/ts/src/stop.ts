@@ -8,12 +8,12 @@
 
 import * as stop from "./abi/stop/stop.ts";
 import type { Side } from "@xpute/link/link.ts";
-import { runtime } from "./runtime.ts";
+import { make_stop, runtime } from "./runtime.ts";
 
 export function mount_stop(side: Pick<Side, "mount_named">): void {
   stop.mount(side, {
     stopped(errnum, file, line, n1, n2, msg) {
-      runtime().stopped({ errnum, file, line, n1, n2, msg });
+      runtime().stopped(make_stop(errnum, file, line, n1, n2, msg));
     },
   });
 }

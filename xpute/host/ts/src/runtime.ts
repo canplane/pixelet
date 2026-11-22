@@ -10,6 +10,7 @@ import {
   ERRNO_EALREADY,
   ERRNO_ENOTRECOVERABLE,
 } from "@xpute/kit/status/errno.spec.ts";
+import { cut_msg } from "@xpute/kit/status/msg.ts";
 import type { i32, u32, u64 } from "@xpute/kit/abi/word.ts";
 import type { Level } from "./abi/log/log.enum.ts";
 
@@ -25,6 +26,29 @@ export interface Stop {
   n1: u64;
   n2: u64;
   msg: string | null;
+}
+
+/** The stop of these facts, its file and its message cut as far as a
+ * message's cap holds them (`cut_msg`), an empty message none: the one place
+ * a stop is made on the host's side, the guest's as it came across the link
+ * and the host's own alike (xpute-host runtime.rs `Stop::new`). */
+export function make_stop(
+  errnum: i32,
+  file: string,
+  line: u32,
+  n1: u64,
+  n2: u64,
+  msg: string | null,
+): Stop {
+  const cut = msg === null ? "" : cut_msg(msg);
+  return {
+    errnum,
+    file: cut_msg(file),
+    line,
+    n1,
+    n2,
+    msg: cut === "" ? null : cut,
+  };
 }
 
 /** A stop as the UI hears it: the report without its message, which the

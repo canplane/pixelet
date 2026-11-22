@@ -46,15 +46,15 @@ pub trait Guest {
         content: SceneContent,
         group: Option<u8>,
         bg: Option<u32>,
-    ) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
-    fn chat(&self, text: String) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
+    ) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError>;
+    fn chat(&self, text: String) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
     fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
-        let mut run = || -> Result<i32, _rt::Errno> {
+        let mut run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 DRAW => {
                     let surface = args_.u32(0)?;
@@ -75,42 +75,38 @@ impl _rt::Object for _Object {
                             args_.u32(12).map(Some)
                         }
                     })?;
-                    match self.0.draw(surface, content, group, bg) {
-                        Ok(v) => {
-                            ret_.start(2);
-                            match &v {
-                                Ok(_) => {}
-                                Err(v) => {
-                                    ret_.u8(0, 1);
-                                    ret_.u8(1, *v as u8);
-                                }
+                    let v = self.0.draw(surface, content, group, bg)?;
+                    {
+                        ret_.start(2);
+                        match &v {
+                            Ok(_) => {}
+                            Err(v) => {
+                                ret_.u8(0, 1);
+                                ret_.u8(1, *v as u8);
                             }
-                            0
                         }
-                        Err(e) => e as i32,
+                        0
                     }
                 }
                 CHAT => {
                     let text = args_.str(0).map(str::to_owned)?;
-                    match self.0.chat(text) {
-                        Ok(v) => {
-                            ret_.start(2);
-                            match &v {
-                                Ok(_) => {}
-                                Err(v) => {
-                                    ret_.u8(0, 1);
-                                    ret_.u8(1, *v as u8);
-                                }
+                    let v = self.0.chat(text)?;
+                    {
+                        ret_.start(2);
+                        match &v {
+                            Ok(_) => {}
+                            Err(v) => {
+                                ret_.u8(0, 1);
+                                ret_.u8(1, *v as u8);
                             }
-                            0
                         }
-                        Err(e) => e as i32,
+                        0
                     }
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -123,5 +119,6 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag, store_err};
 }

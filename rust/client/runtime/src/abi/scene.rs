@@ -39,13 +39,16 @@ impl SceneContent {
     }
 }
 
+/// The size of the fixed part of `draw`'s args.
+pub const DRAW_ARGS_SZ: usize = 16;
+
 pub fn draw(
     side_: &_rt::Side,
     surface: u32,
     content: SceneContent,
     group: Option<u8>,
     bg: Option<u32>,
-) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
         DRAW,
@@ -62,9 +65,9 @@ pub fn draw(
             }
         }))),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.case(0, 2).and_then(|d| {
+        Ok(r_.case(0, 2).and_then(|d| {
             if d == 0 {
                 Ok(Ok(()))
             } else {
@@ -72,14 +75,17 @@ pub fn draw(
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
-        })
+        })?)
     })
 }
+
+/// The size of the fixed part of `chat`'s args.
+pub const CHAT_ARGS_SZ: usize = 8;
 
 pub fn chat(
     side_: &_rt::Side,
     text: &str,
-) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
         CHAT,
@@ -87,9 +93,9 @@ pub fn chat(
             w_.str(0, text);
         }))),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.case(0, 2).and_then(|d| {
+        Ok(r_.case(0, 2).and_then(|d| {
             if d == 0 {
                 Ok(Ok(()))
             } else {
@@ -97,11 +103,12 @@ pub fn chat(
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
-        })
+        })?)
     })
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

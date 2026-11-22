@@ -12,6 +12,7 @@ import {
   type Handle,
   type Method,
   type Sender,
+  answer,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/perf` (frame.json5 `NAMED`). */
@@ -55,7 +56,7 @@ export function load_Rows(r: Lift, at: number): Rows {
 
 export async function start(link_: Sender): Promise<void> {
   const a_ = await link_.send(HANDLE, START, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   const v_ =
@@ -68,7 +69,7 @@ export async function start(link_: Sender): Promise<void> {
 
 export async function stop(link_: Sender): Promise<void> {
   const a_ = await link_.send(HANDLE, STOP, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function stats(
@@ -84,7 +85,7 @@ export async function stats(
       }
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return r_.arr(0, Uint8Array);
@@ -104,7 +105,7 @@ export async function table(
       w_.u32(16, cnt);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return load_Rows(r_, 0);
@@ -112,7 +113,7 @@ export async function table(
 
 export async function worst(link_: Sender): Promise<Uint8Array<ArrayBuffer>> {
   const a_ = await link_.send(HANDLE, WORST, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return r_.arr(0, Uint8Array);
@@ -120,7 +121,7 @@ export async function worst(link_: Sender): Promise<Uint8Array<ArrayBuffer>> {
 
 export async function strtab(link_: Sender): Promise<Uint8Array<ArrayBuffer>> {
   const a_ = await link_.send(HANDLE, STRTAB, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return r_.arr(0, Uint8Array);

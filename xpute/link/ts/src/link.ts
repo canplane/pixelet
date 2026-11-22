@@ -38,6 +38,12 @@
  *   marked `RES`, with its result and its return data as the packet. A call's
  *   return data is readable until the next crossing; a send's answer gets a
  *   copy, which it owns.
+ * - An answer whose result is an errno carries the rest of its error, its
+ *   place and its message, as its packet (`types.wit` `error-packet`), so the
+ *   caller's error is the one that was made (`store_err`, `answer`),
+ *   whoever refused: an implementation, or the link itself, of a handle it
+ *   does not hold or a packet past the cap. A trapped link lays no frame, so
+ *   its EPIPE alone is made where it is read.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -53,10 +59,14 @@ import {
   ERRNO_EPIPE,
 } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
+import { MSG_CAP } from "@xpute/kit/status/msg.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { Lift, Lower } from "./cabi.ts";
 import {
+  ERROR_PACKET_SZ,
+  load_ErrorPacket,
   load_Token,
+  store_ErrorPacket,
   store_Token,
   type Token,
   TOKEN_ALIGN,
@@ -91,7 +101,8 @@ export { CANCEL, DROP, NAMED, OPEN, ROOT };
  * is dropped (xpute-link `link.rs` `Object`). The reader and the writer are
  * over the frame the request came in, the side's own for the crossing alone,
  * so a method that answers a value writes it once its args are read, starting
- * the packet (`Lower.start`), and one that writes none answers no packet. */
+ * the packet (`Lower.start`), one that fails its error (`store_err`), and one
+ * that writes none answers no packet. */
 export interface LinkObject {
   call(m: Method, tag: Tag, args: Lift, ret: Lower): i32;
   drop(): void;
@@ -146,12 +157,14 @@ export interface Sender {
 /** What the generated bindings implement by, the callee's end: it mounts an
  * interface's implementation under its named handle (`mount_named`), puts the
  * opener of an interface's resources under a URI's leading tokens (`mount`),
- * answers a request later by its tag (`task_return`), and puts what runs if
- * the caller cancels a request (`on_cancel`). An end (`End`) is one. */
+ * answers a request later by its tag, with its value (`task_return`) or the
+ * error it failed with (`task_err`), and puts what runs if the caller cancels
+ * a request (`on_cancel`). An end (`End`) is one. */
 export interface Callee {
   mount_named(h: Handle, o: LinkObject): void;
   mount(h: Handle, prefix: readonly Token[], open: Opener): void;
   task_return(t: Tag, result: i32, data?: Packet): void;
+  task_err(t: Tag, e: XputeError): void;
   on_cancel(t: Tag, stop: () => void): void;
 }
 
@@ -185,7 +198,7 @@ export async function open(
   uri: readonly Token[],
 ): Promise<Handle> {
   const a = await link.send(ROOT, OPEN, [8, (w) => store_uri(w, 0, uri)]);
-  if (a.result !== 0) throw new XputeError(a.result);
+  answer(a);
   if (a.data === null) throw new XputeError(ERRNO_EBADMSG);
   return new Lift(a.data).u32(0);
 }
@@ -207,14 +220,47 @@ export class ComponentError<P = unknown> extends Error {
   }
 }
 
-/** The errno a method refuses with: an XputeError's. Anything else, a `XputeBug`
- * or any other throw, is a failure of the callee's own, thrown on: out
- * of a method answered at once, to what called it (on the host, the guest's
- * import, `Side.recv`; on a UI, its runtime's message handler); out of
- * one answered later, on either side, as a rejection no one handles. */
-export function refusal_of(e: unknown): i32 {
-  if (e instanceof XputeError) return e.errnum;
+/** The error a method fails with: `e`, an XputeError. Anything else, a
+ * `XputeBug` or any other throw, is a failure of the callee's own, thrown on:
+ * out of a method answered at once, to what called it (on the host, the
+ * guest's import, `Side.recv`; on a UI, its runtime's message handler); out
+ * of one answered later, on either side, as a rejection no one handles. */
+export function err_of(e: unknown): XputeError {
+  if (e instanceof XputeError) return e;
   throw e;
+}
+
+/** The most bytes an error's answer holds as its packet: its fixed part, and
+ * its file and its message, each as far as a message's cap (xpute-link
+ * link.rs `ERR_PKT_CAP`). */
+export const ERR_PKT_CAP = ERROR_PACKET_SZ + 2 * MSG_CAP;
+
+/** Writes the fixed part of the error `e`'s packet from 0 on, and its file
+ * and message past it. */
+function lower_err(w: Lower, e: XputeError): void {
+  store_ErrorPacket(w, 0, { file: e.file, line: e.line, msg: e.msg });
+}
+
+/** Writes the error `e` as an answer at once: the rest of it as the packet
+ * (`types.wit` `error-packet`). It answers the answer's result, the error's
+ * errno (xpute-link link.rs `store_err`). */
+export function store_err(w: Lower, e: XputeError): i32 {
+  w.start(ERROR_PACKET_SZ);
+  lower_err(w, e);
+  return e.errnum;
+}
+
+/** A method's answer `a`, by its status: answered, its value, if it has one,
+ * in its return data; or the error it failed with, thrown, the one that was
+ * made, with the place and the message the data holds (`store_err`). Data
+ * that holds no error's packet is EBADMSG. A trapped link's EPIPE alone
+ * holds no data, no frame having crossed, and its error is made here
+ * (xpute-link link.rs `answer`). */
+export function answer(a: Answered): void {
+  if (a.result === 0) return;
+  if (a.data === null) throw new XputeError(a.result);
+  const pkt = load_ErrorPacket(new Lift(a.data), 0);
+  throw new XputeError(a.result, pkt.msg, [pkt.file, pkt.line]);
 }
 
 /** What reads the guest's memory in place, where what the guest lends lies:
@@ -354,8 +400,11 @@ export abstract class End implements Callee {
     try {
       o = open(uri, h);
     } catch (e) {
-      const refused = refusal_of(e);
-      o = { call: () => refused, drop() {} };
+      const err = err_of(e);
+      o = {
+        call: (_m, _tag, _args, ret) => store_err(ret, err),
+        drop() {},
+      };
     }
     this._objects.put(h, o);
   }
@@ -372,7 +421,7 @@ export abstract class End implements Callee {
    * later answer is found by its tag alone. While this end is crossing, its
    * packet is written now and carried after the work at hand (`_run_due`),
    * as xpute-link `link.rs` `Side::task_return` holds it; one past the cap is
-   * answered EMSGSIZE with no data, as one carried at once is. */
+   * answered EMSGSIZE, as one carried at once is. */
   task_return(t: Tag, result: i32, data: Packet = null): void {
     this._cancels.delete(t);
     if (!this._crossing) {
@@ -381,6 +430,13 @@ export abstract class End implements Callee {
     }
     const cnt = this._completions.push([t, result, pkt_of(data)]);
     if (cnt === 1) queueMicrotask(() => this._run_due());
+  }
+
+  /** Answers the request `t`, whose method answered EINPROGRESS, with the
+   * error `e` it failed with, as `task_return` answers its value (xpute-link
+   * link.rs `Side::task_err`). */
+  task_err(t: Tag, e: XputeError): void {
+    this.task_return(t, e.errnum, [ERROR_PACKET_SZ, (w) => lower_err(w, e)]);
   }
 
   /** Carries the later answers given while crossing, in the order they were
@@ -456,7 +512,7 @@ export abstract class End implements Callee {
         stop?.();
         return 0;
       } catch (e) {
-        return refusal_of(e);
+        return store_err(ret, err_of(e));
       }
     }
     if (h === ROOT && m === OPEN_AT) {
@@ -464,12 +520,12 @@ export abstract class End implements Callee {
         this.open_at(args.u32(4), args.u32(0), load_uri(args, 8));
         return 0;
       } catch (e) {
-        return refusal_of(e);
+        return store_err(ret, err_of(e));
       }
     }
     if (m === DROP) {
       const o = this._objects.remove(h);
-      if (o === undefined) return ERRNO_EBADF;
+      if (o === undefined) return store_err(ret, new XputeError(ERRNO_EBADF));
       o.drop();
       return 0;
     }
@@ -477,10 +533,12 @@ export abstract class End implements Callee {
     // issued one no longer held is a bad handle.
     if ((h & NAMED) !== 0) {
       const o = this._named.get(h);
-      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args, ret);
+      if (o === undefined) return store_err(ret, new XputeError(ERRNO_ENOENT));
+      return o.call(m, tag, args, ret);
     }
     const o = this._objects.get(h);
-    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args, ret);
+    if (o === undefined) return store_err(ret, new XputeError(ERRNO_EBADF));
+    return o.call(m, tag, args, ret);
   }
 
   /** The opener of `uri`'s longest matching mount, if one matches. */
@@ -505,16 +563,16 @@ export abstract class End implements Callee {
     try {
       uri = load_uri(args, 0);
     } catch (e) {
-      return refusal_of(e);
+      return store_err(ret, err_of(e));
     }
     const open = this._opener(uri);
-    if (open === undefined) return ERRNO_ENOENT;
+    if (open === undefined) return store_err(ret, new XputeError(ERRNO_ENOENT));
     const h = this._objects.issue();
     try {
       this._objects.put(h, open(uri, h));
     } catch (e) {
       this._objects.remove(h);
-      return refusal_of(e);
+      return store_err(ret, err_of(e));
     }
     ret.start(4);
     ret.u32(0, h);
@@ -628,13 +686,14 @@ export class Side extends End implements Memory {
       return this.input(f.tag, f.handle, f.method, true, f.result, r, w);
     f.result = fits
       ? this.input(f.tag, f.handle, f.method, false, f.result, r, w)
-      : ERRNO_EBADMSG;
+      : store_err(w, new XputeError(ERRNO_EBADMSG));
     f.res = true;
     f.pkt_len = w.finish();
-    // An answer past the cap is refused as a later one is (`_out`).
+    // An answer past the cap is refused as a later one is (`_out`), its
+    // error laid in its place.
     if (f.pkt_len < 0) {
-      f.result = ERRNO_EMSGSIZE;
-      f.pkt_len = 0;
+      f.result = store_err(w, new XputeError(ERRNO_EMSGSIZE));
+      f.pkt_len = w.finish();
     }
     this._renew();
     lay(this._view, off, f);
@@ -683,10 +742,10 @@ export class Side extends End implements Memory {
   /** Lays a frame in the guest's inbox and crosses with it, and answers what
    * the guest laid there: its result, and its return data. A packet past the
    * cap is refused: a packet written elsewhere, as one a runtime carried
-   * from another thread, is its sender's fault, answered EMSGSIZE; a later
-   * answer's is answered EMSGSIZE with no data, so its request still hears;
-   * args this side writes past it are a bug (xpute-link `link.rs`
-   * `Side::out`). */
+   * from another thread, is its sender's fault, answered EMSGSIZE here,
+   * nothing crossed; a later answer's is answered EMSGSIZE, so its request
+   * still hears; args this side writes past it are a bug (xpute-link
+   * `link.rs` `Side::out`). */
   protected _out(
     tag: Tag,
     h: Handle,
@@ -702,12 +761,12 @@ export class Side extends End implements Memory {
     f.method = m;
     f.result = result;
     if (this._lay(this._inbox, f, args) !== 0) {
-      if (!res) {
-        if (!(args instanceof Uint8Array)) bug(ERRNO_EMSGSIZE);
-        return { result: ERRNO_EMSGSIZE, data: null };
-      }
-      f.result = ERRNO_EMSGSIZE;
-      this._lay(this._inbox, f, null);
+      if (!res && !(args instanceof Uint8Array)) bug(ERRNO_EMSGSIZE);
+      const e = new XputeError(ERRNO_EMSGSIZE);
+      const pkt: Args = [ERROR_PACKET_SZ, (w) => lower_err(w, e)];
+      if (!res) return { result: e.errnum, data: pkt_of(pkt) };
+      f.result = e.errnum;
+      this._lay(this._inbox, f, pkt);
     }
     const answered = this.crossed(this._in);
     this._renew();

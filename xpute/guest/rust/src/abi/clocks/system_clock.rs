@@ -23,6 +23,12 @@ impl Instant {
         w.u32(at + 8, self.nanoseconds);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, seconds: i64, nanoseconds: u32) {
+        w_.i64(at_, seconds);
+        w_.u32(at_ + 8, nanoseconds);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Instant, _rt::Errno> {
         Ok(Instant {
             seconds: r.i64(at)?,
@@ -31,16 +37,17 @@ impl Instant {
     }
 }
 
-pub fn now() -> Result<Instant, _rt::Errno> {
+pub fn now() -> Result<Instant, _rt::XputeError> {
     let (r, data) = _rt::link::call(HANDLE, NOW, None);
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        Instant::load(r_, 0)
+        Ok(Instant::load(r_, 0)?)
     })
 }
 
 mod _rt {
     pub(super) use crate::link;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer};
 }

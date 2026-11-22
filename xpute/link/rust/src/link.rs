@@ -42,6 +42,12 @@
 //!   marked `RES`, with its result and its return data as the packet. A call's
 //!   return data is readable until the next crossing; a send's answer gets a
 //!   copy, which it owns.
+//! - An answer whose result is an errno carries the rest of its error, its
+//!   place and its message, as its packet (`types.wit` `error-packet`), so
+//!   the caller's error is the one that was made (`store_err`, `answer`),
+//!   whoever refused: an implementation, or the link itself, of a handle it
+//!   does not hold or a packet past the cap. A trapped link lays no frame, so
+//!   its EPIPE alone is made where it is read.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
@@ -51,8 +57,10 @@ use crate::cabi::{Lift, Lower};
 use xpute_kit::abi::word::{join64, split64};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
+use xpute_kit::status::msg::MSG_CAP;
 
-use crate::abi::types::{Lent, Token};
+use crate::abi::types::{ErrorPacket, Lent, Token};
 
 use crate::frame::{Frame, HDR_SZ};
 use crate::mem;
@@ -83,8 +91,8 @@ pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, OPEN_AT, ROOT, TRAP, TRA
 /// writer of its answer's value (`ret`), it answers its result, a status
 /// (link.ts `LinkObject`). The reader and the writer are over the frame the
 /// request came in, so a method that answers a value writes it once its args
-/// are read, starting the packet (`Lower::start`), and one that writes none
-/// answers no packet.
+/// are read, starting the packet (`Lower::start`), one that fails its error
+/// (`store_err`), and one that writes none answers no packet.
 pub trait Object {
     fn call(&self, m: Method, tag: Tag, args: Lift, ret: &mut Lower) -> i32;
 }
@@ -97,18 +105,21 @@ pub type Cancel = Box<dyn FnOnce()>;
 pub struct Return<T> {
     /// The answering side's `on_cancel` for the request.
     on: Box<dyn Fn(Cancel)>,
-    answer: Box<dyn FnOnce(Result<T, Errno>)>,
+    answer: Box<dyn FnOnce(Result<T, XputeError>)>,
 }
 
 impl<T> Return<T> {
     /// The answer to a request, `on` putting how it stops on the side that
     /// answers it.
-    pub fn new(on: Box<dyn Fn(Cancel)>, answer: Box<dyn FnOnce(Result<T, Errno>)>) -> Return<T> {
+    pub fn new(
+        on: Box<dyn Fn(Cancel)>,
+        answer: Box<dyn FnOnce(Result<T, XputeError>)>,
+    ) -> Return<T> {
         Return { on, answer }
     }
 
     /// Answers the request with `v`.
-    pub fn answer(self, v: Result<T, Errno>) {
+    pub fn answer(self, v: Result<T, XputeError>) {
         (self.answer)(v);
     }
 
@@ -121,7 +132,7 @@ impl<T> Return<T> {
 }
 
 /// What opens the object a URI names, given the handle it is issued.
-type Opener = dyn Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno>;
+type Opener = dyn Fn(&[Token], Handle) -> Result<Rc<dyn Object>, XputeError>;
 
 /// What hears a sent method's answer: its result, and a copy of its return
 /// data, which it owns.
@@ -175,9 +186,10 @@ impl Layout {
 /// An answer due: what hears it, its result and its return data.
 type Due = (Answer, i32, Option<Vec<u8>>);
 
-/// A later answer given while this side is crossing: its request, result and
-/// packet, written.
-type Completion = (Tag, i32, Option<Vec<u8>>);
+/// A later answer given while this side is crossing: its request, and its
+/// result and packet, written, or the error it failed with, which holds what
+/// its packet is made of.
+type Completion = (Tag, Result<(i32, Option<Vec<u8>>), XputeError>);
 
 /// An opener mounted: the named handle of the interface whose resources it
 /// opens, the URI's leading tokens it opens under, and the opener.
@@ -291,7 +303,7 @@ impl Side {
         &self,
         h: Handle,
         prefix: Vec<Token>,
-        open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
+        open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, XputeError> + 'static,
     ) {
         self.mounts.borrow_mut().push((h, prefix, Rc::new(open)));
     }
@@ -317,11 +329,11 @@ impl Side {
 
     /// Opens the object `uri` names on the other side, and answers its
     /// handle.
-    pub fn open(&self, uri: &[Token]) -> Result<Handle, Errno> {
+    pub fn open(&self, uri: &[Token]) -> Result<Handle, XputeError> {
         let write = |w: &mut Lower| store_uri(w, 0, uri);
         let (result, data) = self.call(ROOT, OPEN, Packet::Args(Some((8, &write))));
-        answer(result)?;
-        Lift::new(data.ok_or(Errno::EBADMSG)?).u32(0)
+        answer(result, data)?;
+        Ok(Lift::new(data.ok_or(Errno::EBADMSG)?).u32(0)?)
     }
 
     /// Lets the object `h` names on the other side go.
@@ -376,8 +388,8 @@ impl Side {
     /// `result` and its return data, as the component model's `task.return`.
     /// A later answer is found by its tag alone. While this side is crossing,
     /// its packet is written now and laid after the work at hand
-    /// (`run_due`); a packet past the cap is answered EMSGSIZE with no data,
-    /// as one laid at once is.
+    /// (`run_due`); a packet past the cap is answered EMSGSIZE, as one laid
+    /// at once is.
     pub fn task_return(&self, t: Tag, result: i32, pkt: Packet) {
         self.cancels.borrow_mut().remove(&t);
         if !self.crossing.get() {
@@ -397,11 +409,29 @@ impl Side {
                 })
             }
         };
-        let completion = match written {
-            Ok(pkt) => (t, result, pkt),
-            Err(_) => (t, Errno::EMSGSIZE as i32, None),
-        };
-        self.completions.borrow_mut().push_back(completion);
+        let completion = written.map(|pkt| (result, pkt)).map_err(XputeError::from);
+        self.completions.borrow_mut().push_back((t, completion));
+    }
+
+    /// Answers the request `t`, whose method answered EINPROGRESS, with the
+    /// error `e` it failed with, as `task_return` answers its value. While
+    /// this side is crossing, the error itself waits and is laid after the
+    /// work at hand, so answering one allocates nothing, as an error answered
+    /// at once does not.
+    pub fn task_err(&self, t: Tag, e: XputeError) {
+        self.cancels.borrow_mut().remove(&t);
+        if self.crossing.get() {
+            self.completions.borrow_mut().push_back((t, Err(e)));
+        } else {
+            self.out_err(t, &e);
+        }
+    }
+
+    /// Lays the later answer of the error `e` to the request `t`.
+    fn out_err(&self, t: Tag, e: &XputeError) {
+        let write = |w: &mut Lower| lower_err(w, e);
+        let pkt = Packet::Args(Some((ErrorPacket::SZ, &write)));
+        self.out(t, ROOT, 0, true, e.errnum as i32, pkt);
     }
 
     /// The frame the other side laid at `at`: a later answer, made due, or a
@@ -425,30 +455,27 @@ impl Side {
         let pkt_at = at + u64::from(HDR_SZ);
         // SAFETY: the frame's bytes past its words, which only this side
         // touches while it answers.
-        let mut w = unsafe { Lower::from_raw_parts(mem::ptr(pkt_at), (cap - HDR_SZ) as usize) };
-        let result = match pkt {
-            Ok(p) => {
-                let len = p.map_or(0, <[u8]>::len);
-                // SAFETY: as the writer's.
-                let args = unsafe { Lift::from_raw_parts(mem::ptr(pkt_at), len) };
-                self.run(f.handle, f.method, f.tag, args, &mut w)
-            }
-            Err(e) => e as i32,
-        };
-        // An answer past the cap is refused as a later one is (`out`).
-        let words = match w.finish() {
-            Ok(n) => Frame {
-                res: true,
-                result,
-                pkt_len: n as u32,
-                ..f
-            },
-            Err(e) => Frame {
-                res: true,
-                result: e as i32,
-                pkt_len: 0,
-                ..f
-            },
+        let writer = || unsafe { Lower::from_raw_parts(mem::ptr(pkt_at), (cap - HDR_SZ) as usize) };
+        let mut w = writer();
+        let ran = pkt.map_err(XputeError::from).and_then(|p| {
+            let len = p.map_or(0, <[u8]>::len);
+            // SAFETY: as the writer's.
+            let args = unsafe { Lift::from_raw_parts(mem::ptr(pkt_at), len) };
+            self.run(f.handle, f.method, f.tag, args, &mut w)
+        });
+        let mut result = ran.unwrap_or_else(|e| store_err(&mut w, &e));
+        // An answer past the cap is refused as a later one is (`out`), its
+        // error laid in its place.
+        let pkt_len = w.finish().unwrap_or_else(|e| {
+            let mut w = writer();
+            result = store_err(&mut w, &e.into());
+            w.finish().or_bug(Errno::EMSGSIZE)
+        });
+        let words = Frame {
+            res: true,
+            result,
+            pkt_len: pkt_len as u32,
+            ..f
         };
         words.lay(at);
         words.result
@@ -459,11 +486,14 @@ impl Side {
     pub fn run_due(&self) {
         loop {
             let next = self.completions.borrow_mut().pop_front();
-            let Some((t, result, pkt)) = next else {
-                break;
-            };
-            let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
-            self.out(t, ROOT, 0, true, result, pkt);
+            match next {
+                Some((t, Ok((result, pkt)))) => {
+                    let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
+                    self.out(t, ROOT, 0, true, result, pkt);
+                }
+                Some((t, Err(e))) => self.out_err(t, &e),
+                None => break,
+            }
         }
         loop {
             let next = self.due.borrow_mut().pop_front();
@@ -480,50 +510,52 @@ impl Side {
     }
 
     /// Runs `m` of `h`: the root's open or cancel, a drop, or an object's
-    /// method (`Object::call`).
-    fn run(&self, h: Handle, m: Method, tag: Tag, args: Lift, ret: &mut Lower) -> i32 {
+    /// method (`Object::call`), which answers its status, its own error laid
+    /// where it failed; or the error the link itself refuses the call with,
+    /// made here.
+    fn run(
+        &self,
+        h: Handle,
+        m: Method,
+        tag: Tag,
+        args: Lift,
+        ret: &mut Lower,
+    ) -> Result<i32, XputeError> {
         match (h, m) {
-            (ROOT, OPEN) => match self.opened(args) {
-                Ok(h) => {
-                    ret.start(4);
-                    ret.u32(0, h);
-                    0
+            (ROOT, OPEN) => {
+                let h = self.opened(args)?;
+                ret.start(4);
+                ret.u32(0, h);
+                Ok(0)
+            }
+            (ROOT, CANCEL) => {
+                let t = args.u32(0)?;
+                let stop = self.cancels.borrow_mut().remove(&t);
+                if let Some(stop) = stop {
+                    stop();
                 }
-                Err(e) => e as i32,
-            },
-            (ROOT, CANCEL) => match args.u32(0) {
-                Ok(t) => {
-                    let stop = self.cancels.borrow_mut().remove(&t);
-                    if let Some(stop) = stop {
-                        stop();
-                    }
-                    0
-                }
-                Err(e) => e as i32,
-            },
-            (_, DROP) => match self.objects.borrow_mut().remove(h) {
-                Some(_) => 0,
-                None => Errno::EBADF as i32,
-            },
+                Ok(0)
+            }
+            (_, DROP) => {
+                let o = self.objects.borrow_mut().remove(h);
+                o.map(|_| 0).ok_or(Errno::EBADF).map_err(XputeError::from)
+            }
             // A named handle no interface is mounted under is no object
             // there; an issued one no longer held is a bad handle.
             _ if h & NAMED != 0 => {
                 let o = self.named.borrow().get(&h).cloned();
-                o.map_or(Errno::ENOENT as i32, |o| o.call(m, tag, args, ret))
+                Ok(o.ok_or(Errno::ENOENT)?.call(m, tag, args, ret))
             }
             _ => {
                 let o = self.objects.borrow().get(h).cloned();
-                match o {
-                    Some(o) => o.call(m, tag, args, ret),
-                    None => Errno::EBADF as i32,
-                }
+                Ok(o.ok_or(Errno::EBADF)?.call(m, tag, args, ret))
             }
         }
     }
 
     /// Opens the object the args' URI names, by the opener of its longest
     /// matching mount, and issues its handle.
-    fn opened(&self, args: Lift) -> Result<Handle, Errno> {
+    fn opened(&self, args: Lift) -> Result<Handle, XputeError> {
         let uri = load_uri(args, 0)?;
         let open = self
             .mounts
@@ -586,9 +618,10 @@ impl Side {
     /// the callee laid there: its result, and its return data. A packet past
     /// the cap is refused: a packet written elsewhere, as one a runtime
     /// carried from another thread, is its sender's fault, answered
-    /// EMSGSIZE; a later answer's is answered EMSGSIZE with no data, so its
-    /// request still hears; args this side writes past it are a bug (link.ts
-    /// `Side._out`).
+    /// EMSGSIZE here, the error laid in the box with nothing crossed; a later
+    /// answer's is answered EMSGSIZE, so its request still hears; args this
+    /// side writes past it are a bug (link.ts `Side._out`). A trapped link
+    /// lays nothing, so its EPIPE is the one answer with no error laid.
     fn out(
         &self,
         tag: Tag,
@@ -614,16 +647,19 @@ impl Side {
         };
         let written = matches!(pkt, Packet::Bytes(_));
         if let Err(e) = self.lay(at, words, pkt) {
-            if !res {
-                xpute_kit::ensure!(written, EMSGSIZE, h, m);
-                return (e as i32, None);
-            }
+            xpute_kit::ensure!(res || written, EMSGSIZE, h, m);
+            let e = XputeError::from(e);
             let refused = Frame {
-                result: e as i32,
+                res: true,
+                result: e.errnum as i32,
                 ..words
             };
-            self.lay(at, refused, Packet::Args(None))
+            let write = |w: &mut Lower| lower_err(w, &e);
+            self.lay(at, refused, Packet::Args(Some((ErrorPacket::SZ, &write))))
                 .or_bug(Errno::EMSGSIZE);
+            if !res {
+                return (refused.result, Frame::at(at).pkt(at, l.cap).ok().flatten());
+            }
         }
         let result = self.crossed(|| (self.cross)(at));
         let f = Frame::at(at);
@@ -659,14 +695,42 @@ pub fn load_uri(r: Lift, at: usize) -> Result<Vec<Token>, Errno> {
         .collect()
 }
 
-/// A method's result, its status: answered, or the errno it failed with (a
-/// refusal, or a method's errno where its WIT has no `result`). Its value, if
-/// it has one, is in its return data.
-pub fn answer(result: i32) -> Result<(), Errno> {
-    match result {
-        0 => Ok(()),
-        _ => Err(Errno::of(result).or_bug(Errno::EPROTO)),
+/// The most bytes an error's answer holds as its packet: its fixed part, and
+/// its file and its message, each as far as a message's cap. A frame's cap
+/// holds one (xpute-guest link.rs `init`), so no error's answer is past it.
+pub const ERR_PKT_CAP: usize = ErrorPacket::SZ + 2 * MSG_CAP as usize;
+
+/// Writes the fixed part of the error `e`'s packet from 0 on, and its file
+/// and message past it.
+fn lower_err(w: &mut Lower, e: &XputeError) {
+    ErrorPacket::store_of(w, 0, &e.file, e.line, e.msg.as_deref());
+}
+
+/// Writes the error `e` as an answer at once: the rest of it as the packet
+/// (`types.wit` `error-packet`). It answers the answer's result, the error's
+/// errno.
+pub fn store_err(w: &mut Lower, e: &XputeError) -> i32 {
+    w.start(ErrorPacket::SZ);
+    lower_err(w, e);
+    e.errnum as i32
+}
+
+/// A method's result, its status, with its return data `data`: answered, its
+/// value, if it has one, in its return data; or the error it failed with (a
+/// refusal, or a method's error where its WIT has no `result`), the one that
+/// was made, with the place and the message the data holds (`store_err`).
+/// Data that holds no error's packet is EBADMSG. A trapped link's EPIPE
+/// alone holds no data, no frame having crossed, and its error is made here.
+pub fn answer(result: i32, data: Option<&[u8]>) -> Result<(), XputeError> {
+    if result == 0 {
+        return Ok(());
     }
+    let errnum = Errno::of(result).or_bug(Errno::EPROTO);
+    let Some(data) = data else {
+        return Err(XputeError::new(errnum));
+    };
+    let pkt = ErrorPacket::load(Lift::new(data), 0)?;
+    Err(XputeError::at(errnum, pkt.file, pkt.line, pkt.msg))
 }
 
 #[cfg(test)]

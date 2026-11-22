@@ -46,7 +46,7 @@ use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 
 use pxl_gpu_link::pack::Pack;
-use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
 use crate::abi::gpu;
 
@@ -73,7 +73,7 @@ enum Mark {
 }
 
 /// A run of the stream's records, out to the host's `gpu.run`.
-type Run = Pin<Box<dyn Future<Output = (Vec<u32>, Result<(), Errno>)>>>;
+type Run = Pin<Box<dyn Future<Output = (Vec<u32>, Result<(), XputeError>)>>>;
 
 /// Who holds the stream's buffer: the guest, with the records recorded since
 /// the last flush, or a run, which gives it back with its answer.

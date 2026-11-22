@@ -6,7 +6,8 @@
 // PKT are their indices, little-endian. The tag is the request, unique among the sender's
 // pending ones, and a later answer carries it back. The command is the RES bit, the handle
 // the callee issued above METHOD_BITS, and the method's place among its object's below
-// them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,
+// them. An answer carries 0, its value in its packet, or a negative errno, the rest of its error in
+// its packet (link/wit/types.wit `error-packet`). The method's args, a packet in the Canonical ABI's layout,
 // lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT
 // is the handle every side implements, OPEN, CANCEL and OPEN_AT its methods, DROP the method
 // every handle has, NAMED marks an interface's handle, SLOT_BITS splits an issued handle
@@ -18,7 +19,7 @@ pub const TAG: u32 = 0;
 /// RES, the handle and the method.
 pub const CMD: u32 = 1;
 
-/// On an answer, 0 or a negative errno: the call refused, by the link or by the method as a caller's bug (EINVAL), or a method's failure where its WIT has no result; on a request, 0.
+/// On an answer, 0 or a negative errno: the call refused, by the link or by the method as a caller's bug (EINVAL), or a method's failure where its WIT has no result, the rest of the error the packet; on a request, 0.
 pub const RESULT: u32 = 2;
 
 /// The length in bytes of the frame's packet, which lies right past its words; 0 when it has none.

@@ -88,7 +88,7 @@ async fn read(key: u64, stream: Stream, path: &[Token]) -> Result<Option<Body>, 
     match read {
         Ok(b) if b.is_empty() => Err(exit_of(Failure::from(Errno::EBADMSG))),
         Ok(b) => Ok(Some(b)),
-        Err(Errno::ENOENT) => Ok(None),
+        Err(e) if e.errnum == Errno::ENOENT => Ok(None),
         Err(e) => Err(exit_of(Failure::from(e))),
     }
 }

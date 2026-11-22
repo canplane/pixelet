@@ -303,7 +303,7 @@ fn side_trait(o: &Obj, side: &str) -> String {
 /// The names the Rust bindings give beside WIT names, those the runtime
 /// module `_rt` holds, and the prelude's they name bare. A WIT name that
 /// meets one takes `_`, as wit-bindgen's `Guest_` does.
-const RS_GIVEN: [&str; 32] = [
+const RS_GIVEN: [&str; 33] = [
     "HANDLE",
     "IMPORTS",
     "CALLS",
@@ -313,6 +313,7 @@ const RS_GIVEN: [&str; 32] = [
     "Host",
     "L",
     "Errno",
+    "XputeError",
     "Future",
     "Handle",
     "Lend",
@@ -342,7 +343,7 @@ const RS_GIVEN: [&str; 32] = [
 /// import from the kit and the link, and the globals they name. A WIT name
 /// that meets one takes `_`, as jco's names keep clear of its
 /// `exclude_globals`.
-const TS_GIVEN: [&str; 33] = [
+const TS_GIVEN: [&str; 35] = [
     "HANDLE",
     "mount",
     "object",
@@ -360,7 +361,9 @@ const TS_GIVEN: [&str; 33] = [
     "Ref",
     "Sender",
     "XputeError",
-    "refusal_of",
+    "answer",
+    "err_of",
+    "store_err",
     "AbortController",
     "AbortSignal",
     "ArrayBuffer",

@@ -7,6 +7,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdlib>
+#include <string_view>
 
 namespace xpute {
 
@@ -26,8 +27,8 @@ sigjmp_buf *&bug_detail::catcher() noexcept {
 }
 #endif
 
-void bug(Errno errnum, std::uint64_t a, std::uint64_t b, const char *msg, std::source_location at) noexcept {
-    if (Report report = installed_report.load()) report(errnum, at, a, b, msg);
+void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::string_view msg, std::source_location at) noexcept {
+    if (Report report = installed_report.load()) report(errnum, at, a, b, cut_msg(msg));
 #ifndef __wasm__
     if (sigjmp_buf *c = bug_detail::catcher()) siglongjmp(*c, 1);
 #endif
@@ -37,12 +38,10 @@ void bug(Errno errnum, std::uint64_t a, std::uint64_t b, const char *msg, std::s
 } // namespace xpute
 
 namespace {
-// The bytes of a libc++ check's message: its file, its line, the expression
-// and what it says of it, a longer one cut.
-constexpr std::size_t ABORT_MSG_CAP = 512;
-
 // The bug of a failed check of libc++'s own, with the check's message as
-// `fmt` and `args` write it. The message is written into one static buffer,
+// `fmt` and `args` write it: its file, its line, the expression and what it
+// says of it, as far as a message's cap holds them, the bug's cut ending it at
+// a character boundary. The message is written into one static buffer,
 // so that it is storage nothing allocates, as a bug's message is, one a
 // thread, as a native bug is caught on its own thread. It is
 // written here and not by `vsnprintf`, which links WASI's file calls into a
@@ -50,10 +49,10 @@ constexpr std::size_t ABORT_MSG_CAP = 512;
 // from a conversion that is none of them on, `fmt` goes as it is, since
 // nothing says how wide its argument is.
 [[noreturn]] void abort_bug(const char *fmt, std::va_list args) noexcept {
-    static thread_local char msg[ABORT_MSG_CAP];
+    static thread_local char msg[xpute::MSG_CAP];
     std::size_t n = 0;
     auto put = [&](char c) {
-        if (n + 1 < ABORT_MSG_CAP) msg[n++] = c;
+        if (n < xpute::MSG_CAP) msg[n++] = c;
     };
     auto number = [&](unsigned long long v, unsigned base) {
         char digits[24];
@@ -101,8 +100,7 @@ constexpr std::size_t ABORT_MSG_CAP = 512;
         }
         f = spec + 1;
     }
-    msg[n] = '\0';
-    xpute::bug(xpute::Errno::enotrecoverable, 0, 0, msg);
+    xpute::bug(xpute::Errno::enotrecoverable, 0, 0, std::string_view(msg, n));
 }
 } // namespace
 

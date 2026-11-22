@@ -6,14 +6,15 @@
 
 use std::rc::Rc;
 
-use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::Side;
 
 use crate::abi::log::{self, Level};
 use crate::runtime::runtime;
 
 /// Hands its runtime a record of the host's, or of what it implements:
-/// `msg`, at `level`, about `context`.
+/// `msg`, at `level`, about `context`. The runtime's writer is the one place
+/// a record is made on the host's side, and cuts it.
 pub fn log(level: Level, context: &str, msg: &str) {
     (runtime().log)(level, context, msg);
 }
@@ -21,7 +22,7 @@ pub fn log(level: Level, context: &str, msg: &str) {
 struct Log;
 
 impl log::Host for Log {
-    fn log(&self, level: Level, context: String, msg: String) -> Result<(), Errno> {
+    fn log(&self, level: Level, context: String, msg: String) -> Result<(), XputeError> {
         log(level, &context, &msg);
         Ok(())
     }

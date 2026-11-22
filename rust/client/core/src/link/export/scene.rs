@@ -12,9 +12,10 @@ use pxl_render::gpu::surface;
 use pxl_render::spec::api::surface_role;
 use pxl_spec::asset::character::Group;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
 /// Says the line `text`, refused whole past `CHAT_TEXT_CHARS`, `too-long`.
-pub(super) fn chat(text: String) -> Result<Result<(), ErrorCode>, Errno> {
+pub(super) fn chat(text: String) -> Result<Result<(), ErrorCode>, XputeError> {
     if marker::append_chat_line(&text).is_err() {
         return Ok(Err(ErrorCode::TooLong));
     }
@@ -31,7 +32,7 @@ pub(super) fn draw(
     content: SceneContent,
     group: Option<u8>,
     bg: Option<u32>,
-) -> Result<Result<(), ErrorCode>, Errno> {
+) -> Result<Result<(), ErrorCode>, XputeError> {
     let Some(role) = surface::surface(surface_at).map(|open| open.role) else {
         return Ok(Err(ErrorCode::BadDescriptor));
     };
@@ -48,7 +49,7 @@ pub(super) fn draw(
         }
         SceneContent::Character => {
             let (Some(group), Some(bg)) = (group, bg) else {
-                return Err(Errno::EINVAL);
+                return Err(Errno::EINVAL.into());
             };
             let group = or_refuse(Group::of(group), Errno::EINVAL)?;
             if role != surface_role::NONE && role != surface_role::CHARACTER {

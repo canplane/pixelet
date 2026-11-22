@@ -7,6 +7,7 @@
 
 use xpute_kit::status::bug;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::msg::cut_msg;
 
 use crate::abi::stop;
 use crate::link::{in_guest, in_init};
@@ -14,7 +15,8 @@ use crate::link::{in_guest, in_init};
 /// Tells the host a bug or a panic in the guest's own code, by its stop,
 /// before the guest stops; `link!` runs it as the guest's first export
 /// starts, so that it covers the guest's whole run, `init` too, where the
-/// failure is told by the trap alone, as on the web. Both hooks are the
+/// failure is told by the trap alone, as on the web. A panic's message is
+/// cut as a bug's is (`cut_msg`), and its file with it. Both hooks are the
 /// process's natively, so what is not the guest's own (another thread's,
 /// or the host's while the guest is out on `link_out`) goes on to the hook
 /// before, its runtime's (xpute-runtime-native native.rs `hook`), as it
@@ -24,7 +26,7 @@ use crate::link::{in_guest, in_init};
 pub fn hook() {
     bug::set_report(|errnum, at, n1, n2, msg| {
         if in_guest() {
-            let _ = stop::stopped(errnum as i32, at.file(), at.line(), n1, n2, msg);
+            let _ = stop::stopped(errnum as i32, cut_msg(at.file()), at.line(), n1, n2, msg);
         }
     });
     let prev = std::panic::take_hook();
@@ -44,7 +46,14 @@ pub fn hook() {
         let msg = payload
             .downcast_ref::<&str>()
             .copied()
-            .or_else(|| payload.downcast_ref::<String>().map(String::as_str));
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+            .map(cut_msg)
+            .filter(|m| !m.is_empty());
+        let file = cut_msg(file);
         let _ = stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0, msg);
     }));
 }
+
+#[cfg(test)]
+#[path = "stop.test.rs"]
+mod test;

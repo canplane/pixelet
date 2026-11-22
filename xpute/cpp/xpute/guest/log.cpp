@@ -5,7 +5,7 @@
 namespace xpute::guest {
 
 void log(abi::log::Level level, std::string_view context, std::string_view msg) noexcept {
-    (void)abi::log::log(level, context, msg);
+    (void)abi::log::log(level, cut_msg(context), cut_msg(msg));
 }
 
 } // namespace xpute::guest

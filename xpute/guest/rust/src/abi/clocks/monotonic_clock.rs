@@ -12,15 +12,18 @@ pub const WAIT_FOR: _rt::Method = 1;
 
 pub type Mark = u64;
 
-pub fn now() -> Result<u64, _rt::Errno> {
+pub fn now() -> Result<u64, _rt::XputeError> {
     let (r, data) = _rt::link::call(HANDLE, NOW, None);
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.u64(0)
+        Ok(r_.u64(0)?)
     })
 }
 
-pub fn wait_for(how_long: u64) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+/// The size of the fixed part of `wait-for`'s args.
+pub const WAIT_FOR_ARGS_SZ: usize = 8;
+
+pub fn wait_for(how_long: u64) -> impl Future<Output = Result<(), _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(
         HANDLE,
         WAIT_FOR,
@@ -30,13 +33,14 @@ pub fn wait_for(how_long: u64) -> impl Future<Output = Result<(), _rt::Errno>> +
         (),
     );
     async move {
-        let (r, _, _) = sent.await;
-        _rt::answer(r)
+        let (r, data, _) = sent.await;
+        _rt::answer(r, data.as_deref())
     }
 }
 
 mod _rt {
     pub(super) use crate::{link, wait};
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer};
 }

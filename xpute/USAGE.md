@@ -121,12 +121,12 @@ mod abi;
 use std::rc::Rc;
 
 use abi::calc;
-use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
 struct App;
 
 impl calc::Guest for App {
-    fn add(&self, a: u32, b: u32) -> Result<u32, Errno> {
+    fn add(&self, a: u32, b: u32) -> Result<u32, XputeError> {
         Ok(a.wrapping_add(b))
     }
 }

@@ -49,10 +49,61 @@ impl Lent {
         w.u32(at + 8, self.nbyte);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, buf: u64, nbyte: u32) {
+        w_.u64(at_, buf);
+        w_.u32(at_ + 8, nbyte);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Lent, _rt::Errno> {
         Ok(Lent {
             buf: r.u64(at)?,
             nbyte: r.u32(at + 8)?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ErrorPacket {
+    pub file: String,
+    pub line: u32,
+    pub msg: Option<String>,
+}
+
+impl ErrorPacket {
+    pub const SZ: usize = 24;
+    pub const ALIGN: usize = 4;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.str(at, &self.file);
+        w.u32(at + 8, self.line);
+        if let Some(v) = &self.msg {
+            w.u8(at + 12, 1);
+            w.str(at + 12 + 4, v);
+        }
+    }
+
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, file: &str, line: u32, msg: Option<&str>) {
+        w_.str(at_, file);
+        w_.u32(at_ + 8, line);
+        if let Some(v) = &msg {
+            w_.u8(at_ + 12, 1);
+            w_.str(at_ + 12 + 4, v);
+        }
+    }
+
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<ErrorPacket, _rt::Errno> {
+        Ok(ErrorPacket {
+            file: r.str(at).map(str::to_owned)?,
+            line: r.u32(at + 8)?,
+            msg: r.case(at + 12, 2).and_then(|d| {
+                if d == 0 {
+                    Ok(None)
+                } else {
+                    r.str(at + 12 + 4).map(str::to_owned).map(Some)
+                }
+            })?,
         })
     }
 }

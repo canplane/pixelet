@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -19,16 +21,22 @@ extern Side guest, host;
 Side guest([](Layout l) { return l.inbox + l.cap; }, [](std::uint64_t at) { return host.recv(at); });
 Side host([](Layout l) { return l.inbox; }, [](std::uint64_t at) { return guest.recv(at); });
 
-constexpr std::uint32_t CAP = 64;
+constexpr std::uint32_t CAP = 2048;
 
 // An interface the host implements: method 0 answers at once with a word,
-// method 1 later, and method 2 at once with a value past the cap.
+// method 1 later, method 2 at once with a value past the cap, and methods 3
+// and 4 fail at once, with a message and with none.
 constexpr Handle INTERFACE = NAMED | 1;
 
 std::optional<Tag> later;
 
 constexpr std::int32_t status(Errno e) noexcept {
     return static_cast<std::int32_t>(e);
+}
+
+// The error ENOENT made at line 7 of `a/b.rs`, with the message `msg`.
+Error made(std::string_view msg) {
+    return make_error(Errno::enoent, "a/b.rs", 7, msg);
 }
 
 class Implementation : public Object {
@@ -38,6 +46,8 @@ class Implementation : public Object {
             later = tag;
             return status(Errno::einprogress);
         }
+        if (m == 3) return store_err(ret, made("no café"));
+        if (m == 4) return store_err(ret, made(""));
         ret.start(m == 0 ? 4 : CAP);
         if (m == 0) ret.put<std::uint32_t>(0, 7);
         return 0;
@@ -83,10 +93,62 @@ XPUTE_TEST(link_task_return_answers_res_with_tag) {
         XPUTE_CHECK(f.res && f.tag == t && f.result == result);
         guest.run_due();
         XPUTE_CHECK(heard && heard->first == result);
-        std::optional<std::vector<std::uint8_t>> value;
-        if (result == 0) value = std::vector<std::uint8_t>{9, 0, 0, 0};
-        XPUTE_CHECK(heard->second == value);
+        if (result == 0) {
+            XPUTE_CHECK((heard->second == std::vector<std::uint8_t>{9, 0, 0, 0}));
+        } else {
+            Error e = answer(heard->first, heard->second).error();
+            XPUTE_CHECK(e.errnum == Errno::emsgsize && e.file.ends_with("cabi.hpp") && e.line != 0);
+        }
     }
+}
+
+// An error made at a place with a message arrives with both, and one made
+// with no message arrives with none: answered at once, later, and later while
+// its side is crossing. A packet that holds no error's is EBADMSG, and a
+// trapped link's EPIPE, which no frame carried, is made where it is read.
+XPUTE_TEST(link_err_arrives_with_its_msg) {
+    inbox();
+    // Whether `e` is ENOENT made at line 7 of `a/b.rs` with the message `msg`.
+    auto arrived = [](const Error &e, std::string_view msg) {
+        return e.errnum == Errno::enoent && e.file == "a/b.rs" && e.line == 7 && e.msg == msg;
+    };
+    auto [r3, d3] = guest.call(INTERFACE, 3, std::nullopt);
+    XPUTE_CHECK(arrived(answer(r3, d3).error(), "no café"));
+    auto [r4, d4] = guest.call(INTERFACE, 4, std::nullopt);
+    XPUTE_CHECK(arrived(answer(r4, d4).error(), ""));
+
+    for (auto [msg, crossing] : {std::pair<std::string_view, bool>{"no café", false}, {"", false}, {"no café", true}}) {
+        std::optional<std::pair<std::int32_t, std::optional<std::vector<std::uint8_t>>>> heard;
+        Tag t = guest.send(INTERFACE, 1, std::nullopt, [&](std::int32_t r, std::optional<std::vector<std::uint8_t>> d) { heard.emplace(r, std::move(d)); });
+        XPUTE_CHECK(later == t);
+        if (crossing) {
+            host.crossed([&] { host.task_err(t, made(msg)); });
+            XPUTE_CHECK(host.has_due());
+            host.run_due();
+        } else {
+            host.task_err(t, made(msg));
+        }
+        guest.run_due();
+        XPUTE_CHECK(heard && arrived(answer(heard->first, heard->second).error(), msg));
+    }
+
+    const std::uint8_t malformed[] = {0x0c, 0, 0, 0};
+    Error bad = answer(status(Errno::enoent), std::span<const std::uint8_t>(malformed)).error();
+    XPUTE_CHECK(bad.errnum == Errno::ebadmsg && bad.msg.empty());
+    Error bare = answer(status(Errno::epipe), std::nullopt).error();
+    XPUTE_CHECK(bare.errnum == Errno::epipe && bare.file.ends_with("link.cpp"));
+}
+
+// A refusal of the link's own answers in a frame as any error does: a method
+// of a named handle nothing is mounted under is ENOENT, made where the link
+// refused it.
+XPUTE_TEST(link_refusal_is_an_error) {
+    std::uint64_t outbox = inbox() + CAP;
+    auto [r, data] = guest.call(NAMED | 2, 0, std::nullopt);
+    Frame f = Frame::at(outbox);
+    XPUTE_CHECK(f.res && f.result == status(Errno::enoent) && f.pkt_len >= ErrorPacket::SZ);
+    Error e = answer(r, data).error();
+    XPUTE_CHECK(e.errnum == Errno::enoent && e.file.ends_with("link.cpp") && e.line != 0 && e.msg.empty());
 }
 
 // A cancel runs the stop its request put once, and none once the request has

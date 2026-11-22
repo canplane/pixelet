@@ -6,7 +6,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 
 #include "xpute/link/cabi.hpp"
@@ -59,10 +61,46 @@ struct Lent {
         w.put<std::uint32_t>(at + 8, this->nbyte);
     }
 
+    // Stores a record of these fields, each borrowed, as `store` stores one.
+    static void store_of(_rt::Lower &w_, std::size_t at_, std::uint64_t buf, std::uint32_t nbyte) noexcept {
+        w_.put<std::uint64_t>(at_, buf);
+        w_.put<std::uint32_t>(at_ + 8, nbyte);
+    }
+
     static Lent load(_rt::Lift &r, std::size_t at) noexcept {
         return Lent{
             .buf = r.get<std::uint64_t>(at),
             .nbyte = r.get<std::uint32_t>(at + 8),
+        };
+    }
+};
+
+struct ErrorPacket {
+    std::string file;
+    std::uint32_t line;
+    std::optional<std::string> msg;
+
+    static constexpr std::size_t SZ = 24;
+    static constexpr std::size_t ALIGN = 4;
+
+    void store(_rt::Lower &w, std::size_t at) const noexcept {
+        w.str(at, this->file);
+        w.put<std::uint32_t>(at + 8, this->line);
+        if (this->msg) { w.put<std::uint8_t>(at + 12, 1); w.str(at + 12 + 4, (*this->msg)); }
+    }
+
+    // Stores a record of these fields, each borrowed, as `store` stores one.
+    static void store_of(_rt::Lower &w_, std::size_t at_, std::string_view file, std::uint32_t line, std::optional<std::string_view> msg) noexcept {
+        w_.str(at_, file);
+        w_.put<std::uint32_t>(at_ + 8, line);
+        if (msg) { w_.put<std::uint8_t>(at_ + 12, 1); w_.str(at_ + 12 + 4, (*msg)); }
+    }
+
+    static ErrorPacket load(_rt::Lift &r, std::size_t at) noexcept {
+        return ErrorPacket{
+            .file = std::string(r.str(at)),
+            .line = r.get<std::uint32_t>(at + 8),
+            .msg = (r.case_(at + 12, 2) == 0 ? std::optional<std::string>() : std::optional<std::string>(std::string(r.str(at + 12 + 4)))),
         };
     }
 };

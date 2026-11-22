@@ -8,13 +8,16 @@ pub const HANDLE: _rt::Handle = 0x6a88bf;
 /// `declare`
 pub const DECLARE: _rt::Method = 0;
 
+/// The size of the fixed part of `declare`'s args.
+pub const DECLARE_ARGS_SZ: usize = 20;
+
 pub fn declare(
     side_: &_rt::Side,
     min_zoom: u32,
     formats: &[u32],
     shards: &[String],
-) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(
+) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(
         HANDLE,
         DECLARE,
         _rt::Packet::Args(Some((20, &|w_: &mut _rt::Lower| {
@@ -27,10 +30,10 @@ pub fn declare(
             }
         }))),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
 mod _rt {
-    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lower, Method, Packet, Side, answer};
 }

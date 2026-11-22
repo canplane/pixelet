@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -53,9 +54,12 @@ constexpr std::optional<Level> of_Level(std::uint32_t val) noexcept {
     return std::nullopt;
 }
 
+// The size of the fixed part of `log`'s args.
+inline constexpr std::size_t LOG_ARGS_SZ = 20;
+
 inline _rt::Result<void> log(::xpute::abi::log::Level level, std::string_view context, std::string_view msg) noexcept {
     auto [result_, data_] = _rt::call(HANDLE, LOG, _rt::Packet{20, [&](_rt::Lower &w_) { w_.put<std::uint8_t>(0, static_cast<std::uint8_t>(level)); w_.str(4, context); w_.str(12, msg); }});
-    return _rt::answer(result_);
+    return _rt::answer(result_, data_);
 }
 
 } // namespace xpute::abi::log

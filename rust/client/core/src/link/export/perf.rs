@@ -23,9 +23,10 @@ use crate::spec::perf::{TABLE_NAMES, limit, now, stat};
 
 use xpute_guest::clock::now;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
 /// The profiler records only while its setting is on.
-pub(super) fn start() -> Result<Result<(), ErrorCode>, Errno> {
+pub(super) fn start() -> Result<Result<(), ErrorCode>, XputeError> {
     if !settings().perf {
         return Ok(Err(ErrorCode::NotPermitted));
     }
@@ -35,13 +36,13 @@ pub(super) fn start() -> Result<Result<(), ErrorCode>, Errno> {
     Ok(Ok(()))
 }
 
-pub(super) fn stop() -> Result<(), Errno> {
+pub(super) fn stop() -> Result<(), XputeError> {
     perf_window_stop();
     Ok(())
 }
 
 /// Answers STAT's words over `window_ms` and NOW's (perf.json5).
-pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
+pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, XputeError> {
     Ok(read_timed(|| bytes_of(read::perf_read(window_ms))))
 }
 
@@ -74,7 +75,7 @@ const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_SZ as usize)
 /// the table's end names no row and asks for its newest `cnt` rows, so it
 /// counts `cnt` back from the end. The first is `from` held to the rows the
 /// table has: its oldest where `from` is a row it dropped.
-pub(super) fn table(table: u32, from: u64, cnt: u32) -> Result<Rows, Errno> {
+pub(super) fn table(table: u32, from: u64, cnt: u32) -> Result<Rows, XputeError> {
     let &(rows, end, row_sz) = TABLES.get(table as usize).ok_or(Errno::EINVAL)?;
     let (rows, end) = (rows(), end());
     let from = match from > end {
@@ -95,12 +96,12 @@ pub(super) fn table(table: u32, from: u64, cnt: u32) -> Result<Rows, Errno> {
 }
 
 /// Answers the worst frames, longest first.
-pub(super) fn worst() -> Result<Vec<u8>, Errno> {
+pub(super) fn worst() -> Result<Vec<u8>, XputeError> {
     Ok(read_timed(|| bytes_of(perf_worst())))
 }
 
 /// Answers the string table the tasks' `at_file` names point into.
-pub(super) fn strtab() -> Result<Vec<u8>, Errno> {
+pub(super) fn strtab() -> Result<Vec<u8>, XputeError> {
     Ok(read_timed(perf_strtab))
 }
 

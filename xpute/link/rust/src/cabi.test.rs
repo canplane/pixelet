@@ -9,8 +9,9 @@ use std::fmt::Write as _;
 
 use super::*;
 use crate::abi::types::{Lent, Token};
-use crate::{load_uri, store_uri};
+use crate::{answer, load_uri, store_err, store_uri};
 use xpute_golden::Golden;
+use xpute_kit::status::error::XputeError;
 
 const GOLDEN: &str = include_str!("../../spec/golden/cabi.tsv");
 
@@ -29,6 +30,23 @@ const REFUSED: [&str; 6] = [
     "0800000001000000010000001400000001000000ff",
     "080000000100000001000000140000000500000066",
 ];
+
+/// The record's error: ENOENT made at line 7 of `a/b.rs`, with a message.
+fn err() -> XputeError {
+    XputeError {
+        errnum: Errno::ENOENT,
+        file: "a/b.rs".into(),
+        line: 7,
+        msg: Some("no café".into()),
+    }
+}
+
+/// The packet of `err`'s answer, as `store_err` writes it.
+fn lower_err(buf: &mut [u8]) -> Result<usize, Errno> {
+    let mut w = Lower::new(buf, 0);
+    assert_eq!(store_err(&mut w, &err()), Errno::ENOENT as i32);
+    w.finish()
+}
 
 fn uri() -> Vec<Token> {
     vec![Token::Int(5), Token::Str("f".to_owned())]
@@ -101,6 +119,22 @@ fn lift_matches_record() {
     );
 }
 
+/// An error's answer holds the packet the record holds, and the record's
+/// packet is that error: its place and its message.
+#[test]
+fn err_matches_record() {
+    let want = Golden::load(GOLDEN).bytes("err");
+    let mut buf = vec![0xaa; want.len()];
+    assert_eq!(lower_err(&mut buf), Ok(want.len()));
+    assert_eq!(hex::encode(&buf), hex::encode(&want));
+    let e = answer(Errno::ENOENT as i32, Some(&want)).expect_err("an error");
+    let made = err();
+    assert_eq!(
+        (e.errnum, e.file, e.line, e.msg),
+        (made.errnum, made.file, made.line, made.msg)
+    );
+}
+
 /// Each recorded packet that does not hold a URI is refused as one, EBADMSG.
 #[test]
 fn refusals_match_record() {
@@ -114,11 +148,14 @@ fn refusals_match_record() {
     });
 }
 
-/// Writes the record: the packet `lower` lays, and the refused packets.
+/// Writes the record: the packet `lower` lays, the packet of `err`'s answer,
+/// and the refused packets.
 fn write() {
     let mut buf = vec![0; 4096];
     let n = lower(&mut buf).expect("the packet lowered");
     let mut out = format!("pkt\t{}\n", hex::encode(&buf[..n]));
+    let n = lower_err(&mut buf).expect("the error's packet lowered");
+    let _ = writeln!(out, "err\t{}", hex::encode(&buf[..n]));
     for (k, r) in REFUSED.iter().enumerate() {
         let _ = writeln!(out, "refused.{k}\t{r}");
     }

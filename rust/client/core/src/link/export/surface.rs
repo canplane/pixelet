@@ -15,6 +15,7 @@ use pxl_render::gpu::surface;
 use pxl_render::spec::api::surface_role;
 use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::Handle;
 
 /// The surface the link issued `.0`, closed as the UI drops it.
@@ -32,7 +33,7 @@ pub(super) fn mount() {
 }
 
 impl wit::GuestSurface for Surface {
-    fn resize(&self, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
+    fn resize(&self, width: u32, height: u32, dpr: f64) -> Result<(), XputeError> {
         with_frame(resize(self.0, width, height, dpr))
     }
 }
@@ -58,7 +59,7 @@ pub(super) fn draw_world(handle: u32) -> bool {
     true
 }
 
-fn resize(h: Handle, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
+fn resize(h: Handle, width: u32, height: u32, dpr: f64) -> Result<(), XputeError> {
     refuse_unless(dpr > 0.0, Errno::EINVAL)?;
     let role = surface::surface(h).map_or(0, |s| s.role);
     let ratio = resolution::surface_ratio(role, [width, height], dpr);

@@ -53,7 +53,8 @@ use xpute_link::abi::types::Token;
 use xpute_link::frame::{Frame, HDR_SZ};
 use xpute_link::resource::Table;
 use xpute_link::{
-    CANCEL, DROP, Handle, Lift, Lower, Method, OPEN, OPEN_AT, Object, Packet, ROOT, Tag, store_uri,
+    CANCEL, DROP, Handle, Lift, Lower, Method, OPEN, OPEN_AT, Object, Packet, ROOT, Tag, store_err,
+    store_uri,
 };
 
 use crate::event_loop::post_task;
@@ -95,7 +96,7 @@ struct Ui {
 impl Drop for Ui {
     fn drop(&mut self) {
         for t in self.pending.take() {
-            side().task_return(t, Errno::ECANCELED as i32, Packet::Args(None));
+            side().task_err(t, Errno::ECANCELED.into());
         }
         for o in self.opened.take() {
             side().drop(o);
@@ -219,10 +220,10 @@ struct Opened {
 }
 
 impl Object for Opened {
-    fn call(&self, m: Method, tag: Tag, args: Lift, _: &mut Lower) -> i32 {
+    fn call(&self, m: Method, tag: Tag, args: Lift, ret: &mut Lower) -> i32 {
         match self.ui.upgrade() {
             Some(ui) => forward(&ui, self.h, m, tag, args),
-            None => Errno::ECANCELED as i32,
+            None => store_err(ret, &Errno::ECANCELED.into()),
         }
     }
 }

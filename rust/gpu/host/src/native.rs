@@ -34,6 +34,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use xpute_host::abi::log::Level;
 use xpute_host::log::log;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::abi::types::Lent;
 use xpute_link::{Return, Side};
 
@@ -306,7 +307,7 @@ impl abi::gpu::Host for Gpu {
     }
 
     /// The guest's device, added under a handle the link issues.
-    fn get_device(&self) -> Result<u32, Errno> {
+    fn get_device(&self) -> Result<u32, XputeError> {
         let device = abi::gpu::device(self.side, Rc::new(GuestDevice(self.args.clone())));
         Ok(self.side.add(device))
     }
@@ -383,7 +384,7 @@ fn wait(task_return: Return<()>, cancel: fn(&mut Device, u64)) -> u64 {
         }
     });
     id.set(job(Box::new(move |r: Result<(), Errno>| {
-        task_return.answer(r);
+        task_return.answer(r.map_err(|e| e.into()));
     })));
     id.get()
 }

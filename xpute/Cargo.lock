@@ -282,6 +282,7 @@ dependencies = [
 name = "xpute-guest"
 version = "0.1.0"
 dependencies = [
+ "xpute-golden",
  "xpute-kit",
  "xpute-link",
 ]
@@ -290,6 +291,7 @@ dependencies = [
 name = "xpute-host"
 version = "0.1.0"
 dependencies = [
+ "xpute-golden",
  "xpute-guest",
  "xpute-kit",
  "xpute-link",

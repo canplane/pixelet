@@ -20,6 +20,7 @@ namespace xpute::abi::life {
 namespace _rt {
 using ::xpute::Errno;
 using ::xpute::Result;
+using ::xpute::make_error;
 using ::xpute::guest::mount_named;
 using ::xpute::link::Handle;
 using ::xpute::link::Lift;
@@ -27,6 +28,7 @@ using ::xpute::link::Lower;
 using ::xpute::link::Method;
 using ::xpute::link::Object;
 using ::xpute::link::Tag;
+using ::xpute::link::store_err;
 } // namespace _rt
 
 // The interface's handle, named by `xpute:life/life` (frame.json5 `NAMED`).
@@ -55,21 +57,21 @@ class Object_ final : public _rt::Object {
         switch (m_) {
         case HIDDEN: {
             _rt::Result<void> x_ = implementation_->hidden();
-            if (!x_) return static_cast<std::int32_t>(x_.error().errnum);
+            if (!x_) return _rt::store_err(ret_, x_.error());
             return 0;
         }
         case SHOWN: {
             _rt::Result<void> x_ = implementation_->shown();
-            if (!x_) return static_cast<std::int32_t>(x_.error().errnum);
+            if (!x_) return _rt::store_err(ret_, x_.error());
             return 0;
         }
         case ATTACHED: {
             _rt::Result<void> x_ = implementation_->attached();
-            if (!x_) return static_cast<std::int32_t>(x_.error().errnum);
+            if (!x_) return _rt::store_err(ret_, x_.error());
             return 0;
         }
         default:
-            return static_cast<std::int32_t>(_rt::Errno::enosys);
+            return _rt::store_err(ret_, _rt::make_error(_rt::Errno::enosys));
         }
     }
 

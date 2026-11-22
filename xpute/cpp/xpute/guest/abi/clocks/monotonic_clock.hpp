@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -46,10 +47,13 @@ inline _rt::Result<std::uint64_t> now() noexcept {
     return _rt::answer(result_, data_, [&](_rt::Lift &r_) { return r_.get<std::uint64_t>(0); });
 }
 
+// The size of the fixed part of `wait-for`'s args.
+inline constexpr std::size_t WAIT_FOR_ARGS_SZ = 8;
+
 inline _rt::Task<_rt::Result<void>> wait_for(std::uint64_t how_long) noexcept {
     auto sent_ = _rt::wait(HANDLE, WAIT_FOR, _rt::Packet{8, [&](_rt::Lower &w_) { w_.put<std::uint64_t>(0, how_long); }}, std::monostate());
     auto [result_, data_, lent_] = co_await std::move(sent_);
-    co_return _rt::answer(result_);
+    co_return _rt::answer(result_, data_);
 }
 
 } // namespace xpute::abi::clocks::monotonic_clock

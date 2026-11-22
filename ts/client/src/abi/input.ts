@@ -2,8 +2,12 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Handle, Method, Sender } from "@xpute/link/link.ts";
+import {
+  type Handle,
+  type Method,
+  type Sender,
+  answer,
+} from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/input` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5ee0f8;
@@ -39,7 +43,7 @@ export async function pan(
       w_.f64(8, dy);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function rotate(link_: Sender, rad: number): Promise<void> {
@@ -49,7 +53,7 @@ export async function rotate(link_: Sender, rad: number): Promise<void> {
       w_.f64(0, rad);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function tilt(link_: Sender, rad: number): Promise<void> {
@@ -59,7 +63,7 @@ export async function tilt(link_: Sender, rad: number): Promise<void> {
       w_.f64(0, rad);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function zoom(link_: Sender, scale: number): Promise<void> {
@@ -69,7 +73,7 @@ export async function zoom(link_: Sender, scale: number): Promise<void> {
       w_.f64(0, scale);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function drag(link_: Sender, dragging: boolean): Promise<void> {
@@ -79,7 +83,7 @@ export async function drag(link_: Sender, dragging: boolean): Promise<void> {
       w_.bool(0, dragging);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function tap(link_: Sender, x: number, y: number): Promise<void> {
@@ -90,7 +94,7 @@ export async function tap(link_: Sender, x: number, y: number): Promise<void> {
       w_.f64(8, y);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function hover(
@@ -105,12 +109,12 @@ export async function hover(
       w_.f64(8, y);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function out(link_: Sender): Promise<void> {
   const a_ = await link_.send(HANDLE, OUT, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function move(link_: Sender, x: number, y: number): Promise<void> {
@@ -121,5 +125,5 @@ export async function move(link_: Sender, x: number, y: number): Promise<void> {
       w_.i32(4, y);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }

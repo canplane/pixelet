@@ -38,16 +38,22 @@ tuple of tokens, through the root's `open`, which the implementing side answers
 from the opener mounted at the longest matching prefix. The implementing side is
 polymorphic behind the handle, so the caller never branches on what it calls.
 
-A packet holds the args, or an answer's value, in the Component Model's
-Canonical ABI layout, with four departures. A pointer is an offset into the
-packet, which is the one copy. A buffer the caller lends, WIT's `lent`
-(`link/wit/types.wit`), stays where it lies and is the callee's until the
-answer; its address is a u64 on every platform, an offset into a module's
-memory or a pointer natively, so a packet has one layout everywhere. A packet
-that does not hold what its type says is refused, EBADMSG,
-where the ABI traps. And RESULT is status alone, the value in the packet. What
-of WIT the link takes, and what it reads its own way, is the generator's to
-list ([link/gen](./link/gen/README.md)).
+A packet holds the args, an answer's value, or the rest of a failed answer's
+error, in the Component Model's Canonical ABI layout, with four departures. A
+pointer is an offset into the packet, which is the one copy. A buffer the
+caller lends, WIT's `lent` (`link/wit/types.wit`), stays where it lies and is
+the callee's until the answer; its address is a u64 on every platform, an
+offset into a module's memory or a pointer natively, so a packet has one layout
+everywhere. A packet that does not hold what its type says is refused, EBADMSG,
+where the ABI traps. And RESULT is status alone: a value is in the packet, and
+so is what an error holds beside its errno, its place and its message
+(`error-packet`), so the error the caller holds is the one that was made.
+Whoever refuses answers so, the link itself too, of a handle it does not hold
+or a packet past the cap: each is an error made where it is refused. One answer
+has no frame to carry it: a link that is trapped, or that traps as the call
+crosses, lays nothing, and its errno, EPIPE or ENOTRECOVERABLE, is made an
+error where it is read. What of WIT the link takes, and what it reads its own
+way, is the generator's to list ([link/gen](./link/gen/README.md)).
 
 A `func` answers at once, and is called. An `async func` answers later, and is
 sent: the crossing answers EINPROGRESS, and the callee answers later by a
@@ -126,24 +132,34 @@ page meets a new runtime.
 
 ## How a failure ends
 
-A failure is one error, `XputeError`, carrying an errno
-(`kit/spec/errno.json5`). What happened is its errno's kind, the gRPC and
-Abseil status code. The kind says nothing of whether the failure is fatal:
-that is the call's. A caller that holds a failure impossible makes it a
-**bug** (`bug` and `or_bug`), reported with its errno, its place, two numbers
-and an optional message before it stops.
+xpute tells three things, each its own facts and a message. An error,
+`XputeError`, is an errno (`kit/spec/errno.json5`), the place it was made, its
+file and its line, and an optional message, and goes to its caller. What
+happened is its errno's kind, the gRPC and Abseil status code. The kind says
+nothing of whether the failure is fatal: that is the call's. A caller that
+holds a failure impossible makes it a **bug** (`bug` and `or_bug`): its errno,
+its place, two numbers and an optional static message, reported before it
+stops. What is worth telling and is neither is a log record: a level, a context
+and a message. Each has the same facts in Rust, TypeScript and C++, and crosses
+the link whole.
 
-Between xpute's parts a failure moves as an `XputeError` with its optional
-message, an end as a stop or a trap report, the stop with the bug's optional
-message or that of a panic the language raised, and what is worth telling and
-is neither as a log record, a level, a context and a message (`wit/log`, in
-`wasi:logging`'s shape). Each end has its `log`: the guest's calls the import,
-and the host implements it and hands the records, with its own, to the log its
-runtime injects. The runtime alone writes them, every one, to the platform's
-output: its error stream, Android's log at the level's priority, or the
-browser's console by the level's method. The native UI end hands it the UI's
-records to write the same way (`log`); the web worker tells the page each
-record it writes, which the page does not write again.
+A message is one thing in all three: bounded text, at most `MSG_CAP` bytes
+(`kit/spec/msg.json5`), which its maker cuts at a character boundary by one
+function a language (`cut_msg`), an empty one being none; a place's file and a
+record's context are held to the same cap. What arrives is made by the same
+maker, so nothing past the cap exists on a side whatever the other sent. So
+nothing that carries a message meets one past the cap, and a frame's cap, which
+holds the largest of them, the stop's, never refuses an error's answer for what
+it says. An error moves between xpute's parts as itself; an end as a stop or a
+trap report, the stop with the bug's message or that of a panic the language
+raised; and a log record through `wit/log`, in `wasi:logging`'s shape. Each end
+has its `log`: the guest's calls the import, and the host implements it and
+hands the records, with its own, to the log its runtime injects. The runtime
+alone writes them, every one, to the platform's output: its error stream,
+Android's log at the level's priority, or the browser's console by the level's
+method. The native UI end hands it the UI's records to write the same way
+(`log`); the web worker tells the page each record it writes, which the page
+does not write again.
 
 A guest's bug is reported through `stop`, and the guest traps. A host's own
 failure is a stop on both platforms too, reported the same way, and then the

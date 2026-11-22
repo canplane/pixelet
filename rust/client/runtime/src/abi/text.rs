@@ -11,7 +11,7 @@ pub const WIDTH: _rt::Method = 0;
 pub const RASTER: _rt::Method = 1;
 
 pub trait Host {
-    fn width(&self, weight: u32, px: f64, text: _rt::Lent) -> Result<f64, _rt::Errno>;
+    fn width(&self, weight: u32, px: f64, text: _rt::Lent) -> Result<f64, _rt::XputeError>;
     #[expect(
         clippy::too_many_arguments,
         reason = "the WIT function's parameters, each its own"
@@ -26,26 +26,24 @@ pub trait Host {
         height: u32,
         x: f64,
         text: _rt::Lent,
-    ) -> Result<(), _rt::Errno>;
+    ) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
     fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
-        let mut run = || -> Result<i32, _rt::Errno> {
+        let mut run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 WIDTH => {
                     let weight = args_.u32(0)?;
                     let px = args_.f64(8)?;
                     let text = _rt::Lent::load(args_, 16)?;
-                    match self.0.width(weight, px, text) {
-                        Ok(v) => {
-                            ret_.start(8);
-                            ret_.f64(0, v);
-                            0
-                        }
-                        Err(e) => e as i32,
+                    let v = self.0.width(weight, px, text)?;
+                    {
+                        ret_.start(8);
+                        ret_.f64(0, v);
+                        0
                     }
                 }
                 RASTER => {
@@ -57,18 +55,15 @@ impl _rt::Object for _Object {
                     let height = args_.u32(44)?;
                     let x = args_.f64(48)?;
                     let text = _rt::Lent::load(args_, 56)?;
-                    match self
+                    let () = self
                         .0
-                        .raster(weight, px, color, image, width, height, x, text)
-                    {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                        .raster(weight, px, color, image, width, height, x, text)?;
+                    0
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -80,6 +75,7 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag, store_err};
 }

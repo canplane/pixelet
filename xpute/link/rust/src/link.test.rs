@@ -12,10 +12,21 @@ thread_local! {
     static HOST: Side = const { Side::new(|l| l.inbox, |at| GUEST.with(|g| g.recv(at))) };
 }
 
-const CAP: u32 = 64;
+const CAP: u32 = 2048;
+
+/// The error ENOENT made at line 7 of `a/b.rs`, with the message `msg`.
+fn made(msg: Option<&str>) -> XputeError {
+    XputeError {
+        errnum: Errno::ENOENT,
+        file: "a/b.rs".into(),
+        line: 7,
+        msg: msg.map(Into::into),
+    }
+}
 
 /// An interface the host implements: method 0 answers at once with a word,
-/// method 1 later, and method 2 at once with a value past the cap.
+/// method 1 later, method 2 at once with a value past the cap, and methods 3
+/// and 4 fail at once, with a message and with none.
 const INTERFACE: Handle = NAMED | 1;
 
 struct Implementation {
@@ -34,6 +45,8 @@ impl Object for Implementation {
                 self.later.set(Some(tag));
                 Errno::EINPROGRESS as i32
             }
+            3 => store_err(ret, &made(Some("no café"))),
+            4 => store_err(ret, &made(None)),
             _ => {
                 ret.start(CAP as usize);
                 0
@@ -113,8 +126,82 @@ fn task_return_answers_res_with_tag() {
         let f = Frame::at(inbox);
         assert_eq!((f.res, f.tag, f.result), (true, t, result));
         GUEST.with(Side::run_due);
-        assert_eq!(heard.take(), Some((result, value)));
+        let (r, data) = heard.take().expect("an answer");
+        assert_eq!(r, result);
+        match answer(r, data.as_deref()) {
+            Ok(()) => assert_eq!(data, value),
+            Err(e) => assert_eq!((e.errnum, e.msg), (Errno::EMSGSIZE, None)),
+        }
     }
+}
+
+/// An error made at a place with a message arrives with both, and one made
+/// with no message arrives with none: answered at once, later, and later
+/// while its side is crossing. A packet that holds no error's is EBADMSG.
+#[test]
+fn err_arrives_with_its_msg() {
+    let (_, later) = link();
+    let arrived = |r: i32, data: Option<&[u8]>| {
+        let e = answer(r, data).expect_err("an error");
+        (e.errnum, e.file.into_owned(), e.line, e.msg)
+    };
+    for (m, msg) in [(3, Some("no café")), (4, None)] {
+        let (r, data) = GUEST.with(|g| g.call(INTERFACE, m, Packet::Args(None)));
+        let want = (Errno::ENOENT, "a/b.rs".to_owned(), 7, msg.map(Into::into));
+        assert_eq!(arrived(r, data), want);
+    }
+    for (msg, crossing) in [
+        (Some("no café"), false),
+        (None, false),
+        (Some("no café"), true),
+    ] {
+        let heard = Rc::new(Cell::new(None));
+        let h = heard.clone();
+        let t = GUEST.with(|g| {
+            g.send(
+                INTERFACE,
+                1,
+                Packet::Args(None),
+                Some(Box::new(move |r, d| h.set(Some((r, d))))),
+            )
+        });
+        assert_eq!(later.take(), Some(t));
+        HOST.with(|h| {
+            if crossing {
+                h.crossed(|| h.task_err(t, made(msg)));
+                assert!(h.has_due(), "the error waits");
+                h.run_due();
+            } else {
+                h.task_err(t, made(msg));
+            }
+        });
+        GUEST.with(Side::run_due);
+        let (r, data) = heard.take().expect("an answer");
+        let want = (Errno::ENOENT, "a/b.rs".to_owned(), 7, msg.map(Into::into));
+        assert_eq!(arrived(r, data.as_deref()), want);
+    }
+    let e = answer(Errno::ENOENT as i32, Some(&[0x0c, 0, 0, 0])).expect_err("an error");
+    assert_eq!((e.errnum, e.msg), (Errno::EBADMSG, None));
+    // A trapped link's EPIPE, which no frame carried, is made where it is
+    // read.
+    let e = answer(Errno::EPIPE as i32, None).expect_err("an error");
+    assert_eq!(e.errnum, Errno::EPIPE);
+    assert!(e.file.ends_with("link.rs"), "{}", e.file);
+}
+
+/// A refusal of the link's own answers in a frame as any error does: a method
+/// of a named handle nothing is mounted under is ENOENT, made where the link
+/// refused it.
+#[test]
+fn refusal_is_an_error() {
+    let (inbox, _) = link();
+    let (r, data) = GUEST.with(|g| g.call(NAMED | 2, 0, Packet::Args(None)));
+    let f = Frame::at(inbox + u64::from(CAP));
+    assert_eq!((f.res, f.result), (true, Errno::ENOENT as i32));
+    assert!(f.pkt_len as usize >= ErrorPacket::SZ);
+    let e = answer(r, data).expect_err("an error");
+    assert_eq!((e.errnum, e.msg), (Errno::ENOENT, None));
+    assert!(e.file.ends_with("link.rs") && e.line != 0, "{}", e.file);
 }
 
 /// A cancel runs the stop its request put once, and none once the request

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -53,6 +54,9 @@ inline _rt::Task<_rt::Result<std::variant<std::uint32_t, ::xpute::abi::fs::types
     co_return _rt::answer(result_, data_, [&](_rt::Lift &r_) { return (r_.case_(0, 2) == 0 ? std::variant<std::uint32_t, ::xpute::abi::fs::types::ErrorCode>(std::in_place_index<0>, r_.get<std::uint32_t>(4)) : std::variant<std::uint32_t, ::xpute::abi::fs::types::ErrorCode>(std::in_place_index<1>, static_cast<::xpute::abi::fs::types::ErrorCode>(r_.case_(4, 7)))); });
 }
 
+// The size of the fixed part of `[method]file.read`'s args.
+inline constexpr std::size_t FILE_READ_ARGS_SZ = 16;
+
 template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<std::variant<std::uint32_t, ::xpute::abi::fs::types::ErrorCode>>>> file_read(_rt::Handle file_, L buf) noexcept {
     _rt::Lent buf_lent_ = _rt::lent(buf);
     auto sent_ = _rt::wait(file_, FILE_READ, _rt::Packet{16, [&](_rt::Lower &w_) { buf_lent_.store(w_, 0); }}, std::move(buf));
@@ -60,11 +64,14 @@ template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<std::variant<st
     co_return {std::move(lent_), _rt::answer(result_, data_, [&](_rt::Lift &r_) { return (r_.case_(0, 2) == 0 ? std::variant<std::uint32_t, ::xpute::abi::fs::types::ErrorCode>(std::in_place_index<0>, r_.get<std::uint32_t>(4)) : std::variant<std::uint32_t, ::xpute::abi::fs::types::ErrorCode>(std::in_place_index<1>, static_cast<::xpute::abi::fs::types::ErrorCode>(r_.case_(4, 7)))); })};
 }
 
+// The size of the fixed part of `[method]file.write`'s args.
+inline constexpr std::size_t FILE_WRITE_ARGS_SZ = 16;
+
 template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<void>>> file_write(_rt::Handle file_, L buf) noexcept {
     _rt::Lent buf_lent_ = _rt::lent(buf);
     auto sent_ = _rt::wait(file_, FILE_WRITE, _rt::Packet{16, [&](_rt::Lower &w_) { buf_lent_.store(w_, 0); }}, std::move(buf));
     auto [result_, data_, lent_] = co_await std::move(sent_);
-    co_return {std::move(lent_), _rt::answer(result_)};
+    co_return {std::move(lent_), _rt::answer(result_, data_)};
 }
 
 inline _rt::Task<_rt::Result<std::variant<std::monostate, ::xpute::abi::fs::types::ErrorCode>>> file_set_aside(_rt::Handle file_) noexcept {

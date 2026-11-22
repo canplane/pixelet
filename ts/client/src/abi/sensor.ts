@@ -6,7 +6,12 @@ import { type LocationStatus, of_LocationStatus } from "./sensor.enum.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Lift, Lower } from "@xpute/link/cabi.ts";
-import type { Handle, Method, Sender } from "@xpute/link/link.ts";
+import {
+  type Handle,
+  type Method,
+  type Sender,
+  answer,
+} from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/sensor` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5534df;
@@ -60,7 +65,7 @@ export async function pos(link_: Sender, at: Position | null): Promise<void> {
       }
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function heading(
@@ -76,7 +81,7 @@ export async function heading(
       }
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function location(
@@ -89,5 +94,5 @@ export async function location(
       w_.u8(0, status);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }

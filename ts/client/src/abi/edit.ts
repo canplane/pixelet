@@ -12,6 +12,7 @@ import {
   type Handle,
   type Method,
   type Sender,
+  answer,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/edit` (frame.json5 `NAMED`). */
@@ -46,7 +47,7 @@ export async function hold(
       w_.i32(8, scale_step);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function marker_text(link_: Sender, text: string): Promise<void> {
@@ -56,7 +57,7 @@ export async function marker_text(link_: Sender, text: string): Promise<void> {
       w_.str(0, text);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   const v_ =
@@ -69,10 +70,10 @@ export async function marker_text(link_: Sender, text: string): Promise<void> {
 
 export async function marker_cancel(link_: Sender): Promise<void> {
   const a_ = await link_.send(HANDLE, MARKER_CANCEL, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function marker_commit(link_: Sender): Promise<void> {
   const a_ = await link_.send(HANDLE, MARKER_COMMIT, null);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }

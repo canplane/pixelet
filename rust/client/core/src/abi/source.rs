@@ -14,14 +14,14 @@ pub trait Guest {
         min_zoom: u32,
         formats: Vec<u32>,
         shards: Vec<String>,
-    ) -> Result<(), _rt::Errno>;
+    ) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 DECLARE => {
                     let min_zoom = args_.u32(0)?;
@@ -31,15 +31,13 @@ impl _rt::Object for _Object {
                             .map(|i| args_.str(b + i * 8).map(str::to_owned))
                             .collect::<Result<Vec<_>, _rt::Errno>>()
                     })?;
-                    match self.0.declare(min_zoom, formats, shards) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.declare(min_zoom, formats, shards)?;
+                    0
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -52,5 +50,6 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag, store_err};
 }

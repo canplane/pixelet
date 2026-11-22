@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::msg::cut_msg;
 use xpute_link::Return;
 
 use crate::abi::log::Level;
@@ -35,6 +36,26 @@ pub struct Stop {
     pub n1: u64,
     pub n2: u64,
     pub msg: Option<String>,
+}
+
+impl Stop {
+    /// The stop of these facts, its file and its message cut as far as a
+    /// message's cap holds them (`cut_msg`), an empty message none: the one
+    /// place a stop is made on the host's side, the guest's as it came
+    /// across the link and the host's own alike.
+    pub fn new(errnum: i32, file: &str, line: u32, n1: u64, n2: u64, msg: Option<&str>) -> Stop {
+        Stop {
+            errnum,
+            file: cut_msg(file).to_owned(),
+            line,
+            n1,
+            n2,
+            msg: msg
+                .map(cut_msg)
+                .filter(|msg| !msg.is_empty())
+                .map(str::to_owned),
+        }
+    }
 }
 
 pub struct Runtime {

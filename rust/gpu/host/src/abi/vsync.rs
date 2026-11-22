@@ -23,6 +23,12 @@ impl Frame {
         w.u64(at + 8, self.gap);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, at: u64, gap: u64) {
+        w_.u64(at_, at);
+        w_.u64(at_ + 8, gap);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Frame, _rt::Errno> {
         Ok(Frame {
             at: r.u64(at)?,
@@ -38,8 +44,14 @@ pub trait Host {
 struct _Object(&'static _rt::Side, _rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(
+        &self,
+        m_: _rt::Method,
+        tag_: _rt::Tag,
+        args_: _rt::Lift,
+        ret_: &mut _rt::Lower,
+    ) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 NEXT => {
                     let after = args_.u64(0)?;
@@ -62,17 +74,17 @@ impl _rt::Object for _Object {
                                     );
                                 }
                                 Err(e) => {
-                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                    side_.task_err(tag_, e);
                                 }
                             }),
                         ),
                     );
                     _rt::Errno::EINPROGRESS as i32
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -84,5 +96,8 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{
+        Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag, store_err,
+    };
 }

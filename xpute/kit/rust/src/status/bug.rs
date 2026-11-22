@@ -6,11 +6,14 @@
 //! WebAssembly module traps, and a native build panics. The message is a
 //! static string, never one built at the bug: a full heap is itself a bug, so
 //! reporting one allocates nothing, and what varies goes in the two numbers.
+//! One past the cap is cut as the bug is made, a part of the static string
+//! itself (`cut_msg`), and an empty one is none.
 
 use core::panic::Location;
 use std::sync::OnceLock;
 
 use crate::status::errno::Errno;
+use crate::status::msg::cut_msg;
 
 pub type Report = fn(errnum: Errno, at: &Location<'_>, a: u64, b: u64, msg: Option<&'static str>);
 
@@ -58,6 +61,7 @@ fn stop(
     b: u64,
     msg: Option<&'static str>,
 ) -> ! {
+    let msg = msg.map(cut_msg).filter(|m| !m.is_empty());
     if let Some(report) = REPORT.get() {
         report(errnum, at, a, b, msg);
     }
@@ -68,7 +72,7 @@ fn stop(
     #[cfg(not(target_arch = "wasm32"))]
     std::panic::panic_any(XputeBug {
         errnum,
-        file: at.file(),
+        file: cut_msg(at.file()),
         line: at.line(),
         a,
         b,
@@ -143,3 +147,7 @@ macro_rules! ensure {
         }
     };
 }
+
+#[cfg(test)]
+#[path = "bug.test.rs"]
+mod test;

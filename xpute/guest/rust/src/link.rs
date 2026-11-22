@@ -8,7 +8,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::abi::types::Token;
 use xpute_link::frame::HDR_SZ;
 use xpute_link::layout;
@@ -43,7 +43,8 @@ thread_local! {
 }
 
 /// Lays the link over frames of `cap` bytes, a multiple of 8 that holds a
-/// frame's words, and runs nothing of the program; `enter` and `end` are the
+/// frame's words, no less than the crate's `CAP_MIN`, which `link!` holds it
+/// to, and runs nothing of the program; `enter` and `end` are the
 /// program's start and end of every entry (`boot`, `recv`). It answers where
 /// the link's layout lies: the inbox's address and a frame's cap
 /// (frame.json5 `LAYOUT`), then the inbox and the outbox.
@@ -87,7 +88,7 @@ pub fn boot(boot: impl FnOnce()) {
 pub fn mount(
     h: Handle,
     prefix: Vec<Token>,
-    open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
+    open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, XputeError> + 'static,
 ) {
     SIDE.with(|s| s.mount(h, prefix, open));
 }
@@ -103,7 +104,8 @@ pub fn add(o: Rc<dyn Object>) -> Handle {
 }
 
 /// Opens the object `uri` names on the host, and answers its handle.
-pub fn open(uri: &[Token]) -> Result<Handle, Errno> {
+#[track_caller]
+pub fn open(uri: &[Token]) -> Result<Handle, XputeError> {
     SIDE.with(|s| s.open(uri))
 }
 
@@ -139,6 +141,12 @@ pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
 /// and its return data. A later answer is found by its tag alone.
 pub fn task_return(t: Tag, result: i32, data: Args) {
     SIDE.with(|s| s.task_return(t, result, Packet::Args(data)));
+}
+
+/// Answers the request `t`, whose method answered EINPROGRESS, with the error
+/// `e` it failed with.
+pub fn task_err(t: Tag, e: XputeError) {
+    SIDE.with(|s| s.task_err(t, e));
 }
 
 /// Whether control is in the guest's own code on this thread: inside an
@@ -182,3 +190,7 @@ fn leave() {
     }
     ENTERED.set(false);
 }
+
+#[cfg(test)]
+#[path = "link.test.rs"]
+pub(crate) mod test;

@@ -72,6 +72,22 @@ impl Position {
         }
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(
+        w_: &mut _rt::Lower,
+        at_: usize,
+        lon: f64,
+        lat: f64,
+        alt_ellipsoid: Option<f64>,
+    ) {
+        w_.f64(at_, lon);
+        w_.f64(at_ + 8, lat);
+        if let Some(v) = &alt_ellipsoid {
+            w_.u8(at_ + 16, 1);
+            w_.f64(at_ + 16 + 8, *v);
+        }
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Position, _rt::Errno> {
         Ok(Position {
             lon: r.f64(at)?,
@@ -87,8 +103,11 @@ impl Position {
     }
 }
 
-pub fn pos(side_: &_rt::Side, at: Option<&Position>) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(
+/// The size of the fixed part of `pos`'s args.
+pub const POS_ARGS_SZ: usize = 40;
+
+pub fn pos(side_: &_rt::Side, at: Option<&Position>) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(
         HANDLE,
         POS,
         _rt::Packet::Args(Some((40, &|w_: &mut _rt::Lower| {
@@ -98,11 +117,14 @@ pub fn pos(side_: &_rt::Side, at: Option<&Position>) -> Result<(), _rt::Errno> {
             }
         }))),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
-pub fn heading(side_: &_rt::Side, deg: Option<f64>) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(
+/// The size of the fixed part of `heading`'s args.
+pub const HEADING_ARGS_SZ: usize = 16;
+
+pub fn heading(side_: &_rt::Side, deg: Option<f64>) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(
         HANDLE,
         HEADING,
         _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
@@ -112,21 +134,25 @@ pub fn heading(side_: &_rt::Side, deg: Option<f64>) -> Result<(), _rt::Errno> {
             }
         }))),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
-pub fn location(side_: &_rt::Side, status: LocationStatus) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(
+/// The size of the fixed part of `location`'s args.
+pub const LOCATION_ARGS_SZ: usize = 1;
+
+pub fn location(side_: &_rt::Side, status: LocationStatus) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(
         HANDLE,
         LOCATION,
         _rt::Packet::Args(Some((1, &|w_: &mut _rt::Lower| {
             w_.u8(0, status as u8);
         }))),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

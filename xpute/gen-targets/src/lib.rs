@@ -7,8 +7,9 @@
 
 use xpute_gen::spec::data::DataSpec;
 
-/// xpute's data specs: the link's frame, and the errno table.
-pub const DATA_SPECS: [DataSpec; 2] = [
+/// xpute's data specs: the link's frame, the errno table, and a message's
+/// cap.
+pub const DATA_SPECS: [DataSpec; 3] = [
     DataSpec {
         json: "link/spec/frame.json5",
         ts: Some("link/ts/src/frame.spec.ts"),
@@ -20,5 +21,11 @@ pub const DATA_SPECS: [DataSpec; 2] = [
         ts: Some("kit/ts/src/status/errno.spec.ts"),
         rs: Some("kit/rust/src/status/errno.spec.rs"),
         cpp: Some(("cpp/xpute/kit/status/errno.spec.hpp", "xpute")),
+    },
+    DataSpec {
+        json: "kit/spec/msg.json5",
+        ts: Some("kit/ts/src/status/msg.spec.ts"),
+        rs: Some("kit/rust/src/status/msg.spec.rs"),
+        cpp: Some(("cpp/xpute/kit/status/msg.spec.hpp", "xpute")),
     },
 ];

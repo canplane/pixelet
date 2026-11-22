@@ -18,7 +18,7 @@ use crate::spec::step::InvalidationReason;
 use std::collections::VecDeque;
 
 use crate::sys::io::demand::{Order, PhaseList, Source, Stream};
-use crate::sys::io::failure::{Exit, Failure};
+use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CNT};
 use crate::sys::io::policy::{self, Fault, Rank};
 use crate::sys::io::room::Refusal;
@@ -310,14 +310,14 @@ pub(crate) fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
     let (s, at) = (sched(), now());
     let Some(k) = slot_of(s, key) else { return };
     let a = end(s, k);
-    s.events.push_back(Event::End(a, at, exit, phases));
+    s.events.push_back(Event::End(a, at, exit.clone(), phases));
     let wait = match exit {
         Exit::Aborted => return,
         Exit::Ok => None,
         Exit::Refused(refused) => Some(Wait::Room(refused)),
-        Exit::Failed(f) => match policy::fault(f) {
+        Exit::Failed(f) => match policy::fault(&f) {
             Fault::Object => Some(Wait::Object),
-            fault => return hold(s, fault, f, a.start_ms, at),
+            fault => return hold(s, fault, f.errnum, a.start_ms, at),
         },
     };
     // Each of these exits means the server answered, which lifts the outage.
@@ -337,10 +337,10 @@ pub(crate) fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
 /// Holds every start back after a failure of the network or the server. An
 /// attempt that was already out when a server failure was counted fails with
 /// it, so one outage is counted once.
-fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
+fn hold(s: &mut Sched, fault: Fault, errnum: Errno, started_ms: f64, at: f64) {
     let o = &mut s.outage;
     let seed = seed_mix64(o.fail_cnt as u64, at.to_bits());
-    o.failing = Some(f.errnum);
+    o.failing = Some(errnum);
     if fault == Fault::Network {
         o.until = at + policy::backoff(1, seed).unwrap_or(0.0);
     } else if started_ms > o.struck_ms {

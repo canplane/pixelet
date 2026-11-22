@@ -80,6 +80,10 @@ void on_cancel(link::Tag t, std::function<void()> stop);
 // and its return data. A later answer is found by its tag alone.
 void task_return(link::Tag t, std::int32_t result, const link::Data &data);
 
+// Answers the request `t`, whose method answered EINPROGRESS, with the error
+// `e` it failed with.
+void task_err(link::Tag t, Error e);
+
 // Whether control is in the guest's own code: inside an entry, and not out
 // on the host through `link_out`. A program's report of its failures takes
 // only these.

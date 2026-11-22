@@ -58,6 +58,12 @@ impl LonLat {
         w.f64(at + 8, self.lat);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, lon: f64, lat: f64) {
+        w_.f64(at_, lon);
+        w_.f64(at_ + 8, lat);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<LonLat, _rt::Errno> {
         Ok(LonLat {
             lon: r.f64(at)?,
@@ -84,6 +90,22 @@ impl PivotState {
             (v).store(w, at + 8 + 8);
         }
         w.bool(at + 32, self.outside);
+    }
+
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(
+        w_: &mut _rt::Lower,
+        at_: usize,
+        ground_shown: bool,
+        lon_lat: Option<&LonLat>,
+        outside: bool,
+    ) {
+        w_.bool(at_, ground_shown);
+        if let Some(v) = &lon_lat {
+            w_.u8(at_ + 8, 1);
+            (v).store(w_, at_ + 8 + 8);
+        }
+        w_.bool(at_ + 32, outside);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<PivotState, _rt::Errno> {
@@ -118,6 +140,21 @@ impl DivisionPart {
         w.str(at + 4, &self.name);
         w.bool(at + 12, self.shown);
         w.bool(at + 13, self.area);
+    }
+
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(
+        w_: &mut _rt::Lower,
+        at_: usize,
+        subtype: u8,
+        name: &str,
+        shown: bool,
+        area: bool,
+    ) {
+        w_.u8(at_, subtype);
+        w_.str(at_ + 4, name);
+        w_.bool(at_ + 12, shown);
+        w_.bool(at_ + 13, area);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<DivisionPart, _rt::Errno> {
@@ -217,6 +254,53 @@ impl Snapshot {
         w.f64(at + 88, self.area_progress);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the WIT function's parameters, each its own"
+    )]
+    pub fn store_of(
+        w_: &mut _rt::Lower,
+        at_: usize,
+        pivot: &PivotState,
+        camera: CameraState,
+        companion_ready: bool,
+        drafting: bool,
+        tracking_mode: super::types::TrackingMode,
+        over_marker: bool,
+        settings: &[u32],
+        division: &[DivisionPart],
+        character_surfaces: &[u32],
+        stall: Option<Message>,
+        renderer_progress: f64,
+        area_progress: f64,
+    ) {
+        (pivot).store(w_, at_);
+        w_.u8(at_ + 40, camera as u8);
+        w_.bool(at_ + 41, companion_ready);
+        w_.bool(at_ + 42, drafting);
+        w_.u8(at_ + 43, tracking_mode as u8);
+        w_.bool(at_ + 44, over_marker);
+        w_.arr(at_ + 48, settings);
+        if let Some(b) = w_.list(
+            at_ + 56,
+            (division).len(),
+            DivisionPart::SZ,
+            DivisionPart::ALIGN,
+        ) {
+            for (i, x) in (division).iter().enumerate() {
+                (x).store(w_, b + i * DivisionPart::SZ);
+            }
+        }
+        w_.arr(at_ + 64, character_surfaces);
+        if let Some(v) = &stall {
+            w_.u8(at_ + 72, 1);
+            w_.u8(at_ + 72 + 1, *v as u8);
+        }
+        w_.f64(at_ + 80, renderer_progress);
+        w_.f64(at_ + 88, area_progress);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
         Ok(Snapshot {
             pivot: PivotState::load(r, at)?,
@@ -253,7 +337,10 @@ impl Snapshot {
     }
 }
 
-pub fn show(snapshot: &Snapshot) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+/// The size of the fixed part of `show`'s args.
+pub const SHOW_ARGS_SZ: usize = 96;
+
+pub fn show(snapshot: &Snapshot) -> impl Future<Output = Result<(), _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(
         HANDLE,
         SHOW,
@@ -263,12 +350,15 @@ pub fn show(snapshot: &Snapshot) -> impl Future<Output = Result<(), _rt::Errno>>
         (),
     );
     async move {
-        let (r, _, _) = sent.await;
-        _rt::answer(r)
+        let (r, data, _) = sent.await;
+        _rt::answer(r, data.as_deref())
     }
 }
 
-pub fn draft(text: &str) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+/// The size of the fixed part of `draft`'s args.
+pub const DRAFT_ARGS_SZ: usize = 8;
+
+pub fn draft(text: &str) -> impl Future<Output = Result<(), _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(
         HANDLE,
         DRAFT,
@@ -278,12 +368,18 @@ pub fn draft(text: &str) -> impl Future<Output = Result<(), _rt::Errno>> + use<>
         (),
     );
     async move {
-        let (r, _, _) = sent.await;
-        _rt::answer(r)
+        let (r, data, _) = sent.await;
+        _rt::answer(r, data.as_deref())
     }
 }
 
-pub fn view(azimuth: f64, m_per_px: f64) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+/// The size of the fixed part of `view`'s args.
+pub const VIEW_ARGS_SZ: usize = 16;
+
+pub fn view(
+    azimuth: f64,
+    m_per_px: f64,
+) -> impl Future<Output = Result<(), _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(
         HANDLE,
         VIEW,
@@ -294,13 +390,14 @@ pub fn view(azimuth: f64, m_per_px: f64) -> impl Future<Output = Result<(), _rt:
         (),
     );
     async move {
-        let (r, _, _) = sent.await;
-        _rt::answer(r)
+        let (r, data, _) = sent.await;
+        _rt::answer(r, data.as_deref())
     }
 }
 
 mod _rt {
     pub(super) use xpute_guest::wait;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer};
 }

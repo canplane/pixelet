@@ -8,6 +8,9 @@ pub const HANDLE: _rt::Handle = 0x4eccaa;
 /// `stopped`
 pub const STOPPED: _rt::Method = 0;
 
+/// The size of the fixed part of `stopped`'s args.
+pub const STOPPED_ARGS_SZ: usize = 48;
+
 pub fn stopped(
     errnum: i32,
     file: &str,
@@ -15,8 +18,8 @@ pub fn stopped(
     n1: u64,
     n2: u64,
     msg: Option<&str>,
-) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+) -> Result<(), _rt::XputeError> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         STOPPED,
         Some((48, &|w_: &mut _rt::Lower| {
@@ -31,11 +34,11 @@ pub fn stopped(
             }
         })),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
 mod _rt {
     pub(super) use crate::link;
-    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lower, Method, answer};
 }

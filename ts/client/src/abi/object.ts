@@ -7,6 +7,7 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import {
   type Callee,
@@ -14,7 +15,8 @@ import {
   type Handle,
   type LinkObject,
   type Method,
-  refusal_of,
+  err_of,
+  store_err,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/object` (frame.json5 `NAMED`). */
@@ -29,11 +31,11 @@ export interface Host {
 
 /** The object over `implementation`. */
 function object(
-  l: Pick<Callee, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "task_err" | "on_cancel">,
   implementation: Host,
 ): LinkObject {
   return {
-    call(m, tag, args, _ret) {
+    call(m, tag, args, ret) {
       try {
         switch (m) {
           case APPLY: {
@@ -55,7 +57,7 @@ function object(
               },
               (e: unknown) => {
                 if (!(e instanceof ComponentError))
-                  return l.task_return(tag, refusal_of(e));
+                  return l.task_err(tag, err_of(e));
                 const v = { tag: "err", val: e.payload as ErrorCode } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
@@ -74,10 +76,10 @@ function object(
             return ERRNO_EINPROGRESS;
           }
           default:
-            return ERRNO_ENOSYS;
+            throw new XputeError(ERRNO_ENOSYS);
         }
       } catch (e) {
-        return refusal_of(e);
+        return store_err(ret, err_of(e));
       }
     },
     drop() {},
@@ -86,7 +88,7 @@ function object(
 
 /** Mounts `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Callee, "mount_named" | "task_return" | "on_cancel">,
+  l: Pick<Callee, "mount_named" | "task_return" | "task_err" | "on_cancel">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(l, implementation));

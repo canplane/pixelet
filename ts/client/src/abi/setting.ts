@@ -11,6 +11,7 @@ import {
   type Handle,
   type Method,
   type Sender,
+  answer,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/setting` (frame.json5 `NAMED`). */
@@ -31,7 +32,7 @@ export async function set(
       w_.u32(4, val);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
   if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   const v_ =

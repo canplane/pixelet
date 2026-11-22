@@ -38,6 +38,7 @@ use xpute_guest::abi::fs::types::ErrorCode;
 use xpute_guest::link;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::abi::types::Token;
 use xpute_link::{Handle, Lend};
 
@@ -45,7 +46,7 @@ use crate::spec;
 use crate::spec::file::{format, path};
 use crate::spec::manifest::mem;
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::failure::{Exit, Failure, exit_of};
+use crate::sys::io::failure::is_aborted;
 use crate::sys::sched::{executor, invalidate};
 
 pub(crate) enum StorageRead {
@@ -66,7 +67,7 @@ pub(crate) enum StorageRead {
 pub(crate) struct File(Handle);
 
 impl File {
-    pub(crate) fn open(path: &[Token]) -> Result<File, Errno> {
+    pub(crate) fn open(path: &[Token]) -> Result<File, XputeError> {
         link::open(path).map(File)
     }
 }
@@ -129,8 +130,8 @@ pub(crate) async fn read_whole<B: Lend>(
     path: &[Token],
     most: u32,
     key: Option<u64>,
-    buf: impl FnOnce(u32) -> Result<B, Errno>,
-) -> Result<B, Errno> {
+    buf: impl FnOnce(u32) -> Result<B, XputeError>,
+) -> Result<B, XputeError> {
     let f = File::open(path)?;
     if let Some(k) = key {
         files().attempts.insert(k, f.0);
@@ -146,52 +147,54 @@ pub(crate) async fn read_whole<B: Lend>(
 async fn read_open<B: Lend>(
     f: &File,
     most: u32,
-    buf: impl FnOnce(u32) -> Result<B, Errno>,
-) -> Result<B, Errno> {
+    buf: impl FnOnce(u32) -> Result<B, XputeError>,
+) -> Result<B, XputeError> {
     let n = errno(file::file_size(f.0).await)?;
     if n > most {
-        return Err(Errno::EFBIG);
+        return Err(Errno::EFBIG.into());
     }
     let (buf, read) = file::file_read(f.0, buf(n)?).await;
     if errno(read)? != n {
-        return Err(Errno::EIO);
+        return Err(Errno::EIO.into());
     }
     errno(file::file_close(f.0).await)?;
     Ok(buf)
 }
 
-/// What an fs method came to as one errno, the number the core counts a
-/// read's failure by: the link's refusal, or the errno of the file's
-/// `error-code`.
-fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
-    r?.map_err(|e| match e {
-        ErrorCode::NoEntry => Errno::ENOENT,
-        ErrorCode::Io => Errno::EIO,
-        ErrorCode::ReadOnly => Errno::EROFS,
-        ErrorCode::Access => Errno::EACCES,
-        ErrorCode::BadMessage => Errno::EBADMSG,
-        ErrorCode::RemoteUnreachable => Errno::ENETUNREACH,
-        ErrorCode::NoObject => Errno::ENXIO,
-    })
+/// What an fs method came to as one error, whose errno the core counts a
+/// read's failure by: the error the call failed with, as it came, or one of
+/// the errno of the file's `error-code`.
+fn errno<T>(r: Result<Result<T, ErrorCode>, XputeError>) -> Result<T, XputeError> {
+    let errnum = match r? {
+        Ok(v) => return Ok(v),
+        Err(ErrorCode::NoEntry) => Errno::ENOENT,
+        Err(ErrorCode::Io) => Errno::EIO,
+        Err(ErrorCode::ReadOnly) => Errno::EROFS,
+        Err(ErrorCode::Access) => Errno::EACCES,
+        Err(ErrorCode::BadMessage) => Errno::EBADMSG,
+        Err(ErrorCode::RemoteUnreachable) => Errno::ENETUNREACH,
+        Err(ErrorCode::NoObject) => Errno::ENXIO,
+    };
+    Err(errnum.into())
 }
 
 /// What `attempt` comes to, made again each time it ends aborted
 /// (`exit_of`), as the native runtime cancels what a reload of its UI leaves
 /// of the files the UI implements, the storage file among them. The web worker
 /// dies with its page, so none of its methods ends so there.
-async fn redo<T, F: Future<Output = Result<T, Errno>>>(
+async fn redo<T, F: Future<Output = Result<T, XputeError>>>(
     mut attempt: impl FnMut() -> F,
-) -> Result<T, Errno> {
+) -> Result<T, XputeError> {
     loop {
         match attempt().await {
-            Err(e) if exit_of(Failure::from(e)) == Exit::Aborted => continue,
+            Err(e) if is_aborted(e.errnum) => continue,
             r => return r,
         }
     }
 }
 
 /// A heap buffer of `n` bytes, for a read.
-pub(crate) fn heap(n: u32) -> Result<Vec<u8>, Errno> {
+pub(crate) fn heap(n: u32) -> Result<Vec<u8>, XputeError> {
     Ok(vec![0u8; n as usize])
 }
 
@@ -214,7 +217,7 @@ async fn writer() {
     files().writing = false;
 }
 
-async fn write_whole(bytes: Box<[u8]>) -> Result<(), Errno> {
+async fn write_whole(bytes: Box<[u8]>) -> Result<(), XputeError> {
     let f = File::open(&storage_path())?;
     let (_, written) = file::file_write(f.0, bytes.into_vec()).await;
     written?;
@@ -241,11 +244,13 @@ async fn storage_read() {
     let read = match redo(|| read_whole(&path, mem::MIN_HEAP_SZ, None, heap)).await {
         Ok(bytes) => storage_of(&bytes),
         // Only an absent file means nothing was kept.
-        Err(Errno::ENOENT) => StorageRead::None,
-        // The file is too large for any heap, or its backend cannot read it
-        // as bytes.
-        Err(Errno::EFBIG | Errno::EBADMSG) => StorageRead::Refused,
-        Err(_) => StorageRead::Unreadable,
+        Err(e) => match e.errnum {
+            Errno::ENOENT => StorageRead::None,
+            // The file is too large for any heap, or its backend cannot read
+            // it as bytes.
+            Errno::EFBIG | Errno::EBADMSG => StorageRead::Refused,
+            _ => StorageRead::Unreadable,
+        },
     };
     files().storage_read = Some(read);
     invalidate(InvalidationReason::Completion);

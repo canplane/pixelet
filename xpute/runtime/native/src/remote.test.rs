@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use xpute_guest::abi::life;
 use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::frame::Frame;
 use xpute_link::{Handle, Lift, Lower, Method, NAMED, OPEN, Object, ROOT, Tag, uri};
 use xpute_runtime_native::listener;
@@ -33,15 +34,15 @@ static ANSWERS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
 struct Guest;
 
 impl life::Guest for Guest {
-    fn hidden(&self) -> Result<(), Errno> {
+    fn hidden(&self) -> Result<(), XputeError> {
         Ok(())
     }
 
-    fn shown(&self) -> Result<(), Errno> {
+    fn shown(&self) -> Result<(), XputeError> {
         Ok(())
     }
 
-    fn attached(&self) -> Result<(), Errno> {
+    fn attached(&self) -> Result<(), XputeError> {
         ATTACH_CNT.fetch_add(1, Ordering::Relaxed);
         link::send(
             UI,

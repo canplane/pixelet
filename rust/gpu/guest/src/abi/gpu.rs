@@ -43,7 +43,12 @@ impl ErrorCode {
     }
 }
 
-pub fn run<L: _rt::Lend>(recs: L) -> impl Future<Output = (L, Result<(), _rt::Errno>)> + use<L> {
+/// The size of the fixed part of `run`'s args.
+pub const RUN_ARGS_SZ: usize = 16;
+
+pub fn run<L: _rt::Lend>(
+    recs: L,
+) -> impl Future<Output = (L, Result<(), _rt::XputeError>)> + use<L> {
     let mut recs = recs;
     let recs_lent_ = _rt::Lend::lent(&mut recs);
     let sent = _rt::wait::wait(
@@ -55,23 +60,26 @@ pub fn run<L: _rt::Lend>(recs: L) -> impl Future<Output = (L, Result<(), _rt::Er
         recs,
     );
     async move {
-        let (r, _, lent) = sent.await;
-        (lent, _rt::answer(r))
+        let (r, data, lent) = sent.await;
+        (lent, _rt::answer(r, data.as_deref()))
     }
 }
 
-pub fn get_device() -> Result<u32, _rt::Errno> {
+pub fn get_device() -> Result<u32, _rt::XputeError> {
     let (r, data) = _rt::link::call(HANDLE, GET_DEVICE, None);
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.u32(0)
+        Ok(r_.u32(0)?)
     })
 }
+
+/// The size of the fixed part of `[method]device.lost`'s args.
+pub const DEVICE_LOST_ARGS_SZ: usize = 16;
 
 pub fn device_lost<L: _rt::Lend>(
     device_: _rt::Handle,
     block: L,
-) -> impl Future<Output = (L, Result<(), _rt::Errno>)> + use<L> {
+) -> impl Future<Output = (L, Result<(), _rt::XputeError>)> + use<L> {
     let mut block = block;
     let block_lent_ = _rt::Lend::lent(&mut block);
     let sent = _rt::wait::wait(
@@ -83,20 +91,20 @@ pub fn device_lost<L: _rt::Lend>(
         block,
     );
     async move {
-        let (r, _, lent) = sent.await;
-        (lent, _rt::answer(r))
+        let (r, data, lent) = sent.await;
+        (lent, _rt::answer(r, data.as_deref()))
     }
 }
 
 pub fn device_ready(
     device_: _rt::Handle,
-) -> impl Future<Output = Result<Result<(), ErrorCode>, _rt::Errno>> + use<> {
+) -> impl Future<Output = Result<Result<(), ErrorCode>, _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(device_, DEVICE_READY, None, ());
     async move {
         let (r, data, _) = sent.await;
-        _rt::answer(r).and_then(|_| {
+        _rt::answer(r, data.as_deref()).and_then(|_| {
             let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
-            r_.case(0, 2).and_then(|d| {
+            Ok(r_.case(0, 2).and_then(|d| {
                 if d == 0 {
                     Ok(Ok(()))
                 } else {
@@ -104,23 +112,24 @@ pub fn device_ready(
                         .and_then(|v| ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Err)
                 }
-            })
+            })?)
         })
     }
 }
 
 pub fn device_settled(
     device_: _rt::Handle,
-) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+) -> impl Future<Output = Result<(), _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(device_, DEVICE_SETTLED, None, ());
     async move {
-        let (r, _, _) = sent.await;
-        _rt::answer(r)
+        let (r, data, _) = sent.await;
+        _rt::answer(r, data.as_deref())
     }
 }
 
 mod _rt {
     pub(super) use xpute_guest::{link, wait};
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lend, Lift, Lower, Method, answer};
 }

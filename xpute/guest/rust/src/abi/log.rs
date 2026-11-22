@@ -56,8 +56,11 @@ impl Level {
     }
 }
 
-pub fn log(level: Level, context: &str, msg: &str) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+/// The size of the fixed part of `log`'s args.
+pub const LOG_ARGS_SZ: usize = 20;
+
+pub fn log(level: Level, context: &str, msg: &str) -> Result<(), _rt::XputeError> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         LOG,
         Some((20, &|w_: &mut _rt::Lower| {
@@ -66,11 +69,11 @@ pub fn log(level: Level, context: &str, msg: &str) -> Result<(), _rt::Errno> {
             w_.str(12, msg);
         })),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
 mod _rt {
     pub(super) use crate::link;
-    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lower, Method, answer};
 }

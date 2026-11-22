@@ -83,6 +83,21 @@ XPUTE_TEST(cabi_lift_matches_record) {
     XPUTE_CHECK(r.finish().ok());
 }
 
+// An error's answer holds the packet the record holds, and the record's
+// packet is that error: its place and its message.
+XPUTE_TEST(cabi_err_matches_record) {
+    std::vector<std::uint8_t> want = Golden::load("link/spec/golden/cabi.tsv").bytes("err");
+    Error made = make_error(Errno::enoent, "a/b.rs", 7, "no café");
+    std::vector<std::uint8_t> buf(want.size(), 0xaa);
+    Lower w(buf, 0);
+    XPUTE_CHECK(link::store_err(w, made) == static_cast<std::int32_t>(Errno::enoent));
+    Result<std::size_t> n = w.finish();
+    XPUTE_CHECK(n.ok() && *n == want.size());
+    XPUTE_CHECK_EQ(buf, want, "the error's packet lowered as other bytes");
+    Error e = link::answer(static_cast<std::int32_t>(Errno::enoent), std::span<const std::uint8_t>(want)).error();
+    XPUTE_CHECK(e.errnum == made.errnum && e.file == made.file && e.line == made.line && e.msg == made.msg);
+}
+
 // Each recorded packet that does not hold a URI is refused as one, EBADMSG.
 XPUTE_TEST(cabi_refusals_match_record) {
     Golden g = Golden::load("link/spec/golden/cabi.tsv");

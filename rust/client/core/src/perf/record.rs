@@ -275,9 +275,7 @@ pub(crate) fn perf_scratch() -> &'static mut [f64] {
 /// Records a settled task. `row` is built only while recording, and it names
 /// a failure's file through the string table it is handed. A name the table
 /// has no room for is lost, as a record a full table drops is (`truncated`).
-pub(crate) fn perf_record(
-    row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>) -> TaskRecord,
-) {
+pub(crate) fn perf_record(row: impl FnOnce(&mut dyn FnMut(&str) -> Option<u32>) -> TaskRecord) {
     let l = perf();
     if !l.recording {
         return;

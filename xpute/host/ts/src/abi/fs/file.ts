@@ -7,6 +7,7 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import {
   type Callee,
@@ -14,7 +15,8 @@ import {
   type Handle,
   type LinkObject,
   type Method,
-  refusal_of,
+  err_of,
+  store_err,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `xpute:fs/file` (frame.json5 `NAMED`). */
@@ -42,11 +44,11 @@ export interface HostFile {
 
 /** The object over `implementation`. */
 export function file(
-  l: Pick<Callee, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "task_err" | "on_cancel">,
   implementation: HostFile,
 ): LinkObject {
   return {
-    call(m, tag, args, _ret) {
+    call(m, tag, args, ret) {
       try {
         switch (m) {
           case FILE_SIZE: {
@@ -69,7 +71,7 @@ export function file(
               },
               (e: unknown) => {
                 if (!(e instanceof ComponentError))
-                  return l.task_return(tag, refusal_of(e));
+                  return l.task_err(tag, err_of(e));
                 const v = { tag: "err", val: e.payload as ErrorCode } as
                   { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
@@ -108,7 +110,7 @@ export function file(
               },
               (e: unknown) => {
                 if (!(e instanceof ComponentError))
-                  return l.task_return(tag, refusal_of(e));
+                  return l.task_err(tag, err_of(e));
                 const v = { tag: "err", val: e.payload as ErrorCode } as
                   { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
@@ -131,7 +133,7 @@ export function file(
             const stop = new AbortController();
             implementation.write(load_Lent(args, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+              (e: unknown) => l.task_err(tag, err_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
@@ -155,7 +157,7 @@ export function file(
               },
               (e: unknown) => {
                 if (!(e instanceof ComponentError))
-                  return l.task_return(tag, refusal_of(e));
+                  return l.task_err(tag, err_of(e));
                 const v = { tag: "err", val: e.payload as ErrorCode } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
@@ -192,7 +194,7 @@ export function file(
               },
               (e: unknown) => {
                 if (!(e instanceof ComponentError))
-                  return l.task_return(tag, refusal_of(e));
+                  return l.task_err(tag, err_of(e));
                 const v = { tag: "err", val: e.payload as ErrorCode } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
@@ -211,10 +213,10 @@ export function file(
             return ERRNO_EINPROGRESS;
           }
           default:
-            return ERRNO_ENOSYS;
+            throw new XputeError(ERRNO_ENOSYS);
         }
       } catch (e) {
-        return refusal_of(e);
+        return store_err(ret, err_of(e));
       }
     },
     drop() {

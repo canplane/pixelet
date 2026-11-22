@@ -178,31 +178,17 @@ fn hook() {
         let payload = info.payload();
         let (stop, cause) = match payload.downcast_ref::<XputeBug>() {
             Some(b) => (
-                Stop {
-                    errnum: b.errnum as i32,
-                    file: b.file.to_owned(),
-                    line: b.line,
-                    n1: b.a,
-                    n2: b.b,
-                    msg: b.msg.map(str::to_owned),
-                },
+                Stop::new(b.errnum as i32, b.file, b.line, b.a, b.b, b.msg),
                 format!("{} at {}:{}", link::HOST_STOPPED, b.file, b.line),
             ),
             None => {
                 let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
                 let msg = payload
                     .downcast_ref::<&str>()
-                    .map(|m| (*m).to_owned())
-                    .or_else(|| payload.downcast_ref::<String>().cloned());
+                    .copied()
+                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str));
                 (
-                    Stop {
-                        errnum: Errno::ENOTRECOVERABLE as i32,
-                        file: file.to_owned(),
-                        line,
-                        n1: 0,
-                        n2: 0,
-                        msg,
-                    },
+                    Stop::new(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0, msg),
                     format!("{}: {info}", link::HOST_STOPPED),
                 )
             }

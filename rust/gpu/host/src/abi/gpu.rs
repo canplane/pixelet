@@ -45,7 +45,7 @@ impl ErrorCode {
 
 pub trait Host {
     fn run(&self, recs: _rt::Lent, task_return: _rt::Return<()>);
-    fn get_device(&self) -> Result<u32, _rt::Errno>;
+    fn get_device(&self) -> Result<u32, _rt::XputeError>;
 }
 
 struct _Object(&'static _rt::Side, _rt::Rc<dyn Host>);
@@ -58,7 +58,7 @@ impl _rt::Object for _Object {
         args_: _rt::Lift,
         ret_: &mut _rt::Lower,
     ) -> i32 {
-        let mut run = || -> Result<i32, _rt::Errno> {
+        let mut run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 RUN => {
                     let recs = _rt::Lent::load(args_, 0)?;
@@ -72,25 +72,25 @@ impl _rt::Object for _Object {
                                     side_.task_return(tag_, 0, _rt::Packet::Args(None));
                                 }
                                 Err(e) => {
-                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                    side_.task_err(tag_, e);
                                 }
                             }),
                         ),
                     );
                     _rt::Errno::EINPROGRESS as i32
                 }
-                GET_DEVICE => match self.1.get_device() {
-                    Ok(v) => {
+                GET_DEVICE => {
+                    let v = self.1.get_device()?;
+                    {
                         ret_.start(4);
                         ret_.u32(0, v);
                         0
                     }
-                    Err(e) => e as i32,
-                },
-                _ => _rt::Errno::ENOSYS as i32,
+                }
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -108,8 +108,14 @@ pub trait HostDevice {
 struct _DeviceObject(&'static _rt::Side, _rt::Rc<dyn HostDevice>);
 
 impl _rt::Object for _DeviceObject {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(
+        &self,
+        m_: _rt::Method,
+        tag_: _rt::Tag,
+        args_: _rt::Lift,
+        ret_: &mut _rt::Lower,
+    ) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 DEVICE_LOST => {
                     let block = _rt::Lent::load(args_, 0)?;
@@ -123,7 +129,7 @@ impl _rt::Object for _DeviceObject {
                                     side_.task_return(tag_, 0, _rt::Packet::Args(None));
                                 }
                                 Err(e) => {
-                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                    side_.task_err(tag_, e);
                                 }
                             }),
                         ),
@@ -149,7 +155,7 @@ impl _rt::Object for _DeviceObject {
                                 );
                             }
                             Err(e) => {
-                                side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                side_.task_err(tag_, e);
                             }
                         }),
                     ));
@@ -164,16 +170,16 @@ impl _rt::Object for _DeviceObject {
                                 side_.task_return(tag_, 0, _rt::Packet::Args(None));
                             }
                             Err(e) => {
-                                side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                side_.task_err(tag_, e);
                             }
                         }),
                     ));
                     _rt::Errno::EINPROGRESS as i32
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -188,6 +194,9 @@ pub fn device(
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag};
+    pub(super) use xpute_link::{
+        Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag, store_err,
+    };
 }

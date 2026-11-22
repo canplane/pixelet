@@ -3,8 +3,12 @@
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 import type { TrackingMode } from "./types.enum.ts";
-import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Handle, Method, Sender } from "@xpute/link/link.ts";
+import {
+  type Handle,
+  type Method,
+  type Sender,
+  answer,
+} from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/camera` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5a7108;
@@ -21,7 +25,7 @@ export async function track(link_: Sender, mode: TrackingMode): Promise<void> {
       w_.u8(0, mode);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }
 
 export async function goto(
@@ -36,5 +40,5 @@ export async function goto(
       w_.f64(8, lat);
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }

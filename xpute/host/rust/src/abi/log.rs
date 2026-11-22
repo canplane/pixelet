@@ -57,14 +57,14 @@ impl Level {
 }
 
 pub trait Host {
-    fn log(&self, level: Level, context: String, msg: String) -> Result<(), _rt::Errno>;
+    fn log(&self, level: Level, context: String, msg: String) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 LOG => {
                     let level = args_
@@ -72,15 +72,13 @@ impl _rt::Object for _Object {
                         .and_then(|v| Level::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     let context = args_.str(4).map(str::to_owned)?;
                     let msg = args_.str(12).map(str::to_owned)?;
-                    match self.0.log(level, context, msg) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.log(level, context, msg)?;
+                    0
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -92,7 +90,8 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag, store_err};
 }
 
 /// The interfaces the world imports, each `(name, handle)`, which are

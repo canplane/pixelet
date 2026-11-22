@@ -2,8 +2,12 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Handle, Method, Sender } from "@xpute/link/link.ts";
+import {
+  type Handle,
+  type Method,
+  type Sender,
+  answer,
+} from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/source` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x6a88bf;
@@ -31,5 +35,5 @@ export async function declare(
       }
     },
   ]);
-  if (a_.result !== 0) throw new XputeError(a_.result);
+  answer(a_);
 }

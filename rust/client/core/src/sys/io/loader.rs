@@ -168,7 +168,7 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
         Some(_) => file::read_whole(&load.path(), mem::MIN_HEAP_SZ, Some(key), file::heap)
             .await
             .map(Vec::into_boxed_slice),
-        None => Err(Errno::ECANCELED),
+        None => Err(Errno::ECANCELED.into()),
     };
     end_read(key);
     let l = loader();
@@ -178,9 +178,9 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
             *l.at(kind, load) = Some(Entry::InTask);
             bytes
         }
-        Err(errnum) => {
-            let exit = exit_of(Failure::from(errnum));
-            settle(key, exit, None);
+        Err(e) => {
+            let exit = exit_of(Failure::from(e));
+            settle(key, exit.clone(), None);
             *l.at(kind, load) = if exit == Exit::Aborted {
                 None
             } else {

@@ -2,7 +2,7 @@
 
 //! How a read's attempt ended, and why a failed one failed.
 
-use core::panic::Location;
+use std::borrow::Cow;
 use std::collections::TryReserveError;
 
 use xpute_kit::status::errno::Errno;
@@ -13,7 +13,7 @@ use crate::sys::io::room::Refusal;
 
 /// How an attempt ended, as one value, so an attempt that ended well cannot
 /// carry a failure and a failed one always carries its own.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Exit {
     Ok,
     Aborted,
@@ -24,13 +24,17 @@ pub(crate) enum Exit {
     Refused(Refusal),
 }
 
-/// Why an attempt failed, in the numbers the statistics count by. A failure
-/// the core raised itself carries the source location that raised it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Why an attempt failed: the error it failed with, its errno, the number
+/// the statistics count by, the place it was made, its file and its line,
+/// and its message, the core's own or one that came across the link as its
+/// maker's side made it; and a detail the core adds.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Failure {
     pub errnum: Errno,
     pub detail: u16,
-    pub at: Option<&'static Location<'static>>,
+    pub file: Cow<'static, str>,
+    pub line: u32,
+    pub msg: Option<Box<str>>,
 }
 
 impl Exit {
@@ -47,10 +51,16 @@ impl Exit {
 /// a reload of its program leaves an open, is aborted, so its want starts
 /// again; any other failed.
 pub(crate) fn exit_of(f: Failure) -> Exit {
-    match f.errnum {
-        Errno::ECANCELED => Exit::Aborted,
-        _ => Exit::Failed(f),
+    if is_aborted(f.errnum) {
+        Exit::Aborted
+    } else {
+        Exit::Failed(f)
     }
+}
+
+/// Whether an attempt that failed with `errnum` is aborted (`exit_of`).
+pub(crate) fn is_aborted(errnum: Errno) -> bool {
+    errnum == Errno::ECANCELED
 }
 
 impl From<Result<(), Exit>> for Exit {
@@ -83,11 +93,7 @@ impl From<XputeError> for Exit {
 impl From<Errno> for Failure {
     #[track_caller]
     fn from(errnum: Errno) -> Failure {
-        Failure {
-            errnum,
-            detail: 0,
-            at: Some(Location::caller()),
-        }
+        Failure::from(XputeError::new(errnum))
     }
 }
 
@@ -96,7 +102,9 @@ impl From<XputeError> for Failure {
         Failure {
             errnum: err.errnum,
             detail: 0,
-            at: Some(err.at),
+            file: err.file,
+            line: err.line,
+            msg: err.msg,
         }
     }
 }

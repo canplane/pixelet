@@ -44,7 +44,7 @@ fn boot(_: std::path::PathBuf) -> Boot {
         stack_sz: 1 << 20,
         mounts: vec![
             Box::new(|side| side.mount_named(NAMED_ONE, Rc::new(Nothing))),
-            Box::new(|side| side.mount(OPENED, uri(&["opened"]), |_, _| Err(Errno::ENOENT))),
+            Box::new(|side| side.mount(OPENED, uri(&["opened"]), |_, _| Err(Errno::ENOENT.into()))),
         ],
         imports: &[
             ("named", NAMED_ONE),

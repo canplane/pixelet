@@ -10,11 +10,14 @@ pub const WIDTH: _rt::Method = 0;
 /// `raster`
 pub const RASTER: _rt::Method = 1;
 
+/// The size of the fixed part of `width`'s args.
+pub const WIDTH_ARGS_SZ: usize = 32;
+
 pub fn width<T0: Copy + Unpin + 'static>(
     weight: u32,
     px: f64,
     text: &mut [T0],
-) -> Result<f64, _rt::Errno> {
+) -> Result<f64, _rt::XputeError> {
     let text_lent_ = _rt::mem::lent(&text[..]);
     let (r, data) = _rt::link::call(
         HANDLE,
@@ -25,11 +28,14 @@ pub fn width<T0: Copy + Unpin + 'static>(
             text_lent_.store(w_, 16);
         })),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.f64(0)
+        Ok(r_.f64(0)?)
     })
 }
+
+/// The size of the fixed part of `raster`'s args.
+pub const RASTER_ARGS_SZ: usize = 72;
 
 #[expect(
     clippy::too_many_arguments,
@@ -44,10 +50,10 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     height: u32,
     x: f64,
     text: &mut [T1],
-) -> Result<(), _rt::Errno> {
+) -> Result<(), _rt::XputeError> {
     let image_lent_ = _rt::mem::lent(&image[..]);
     let text_lent_ = _rt::mem::lent(&text[..]);
-    let (r, _) = _rt::link::call(
+    let (r, data) = _rt::link::call(
         HANDLE,
         RASTER,
         Some((72, &|w_: &mut _rt::Lower| {
@@ -61,11 +67,12 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
             text_lent_.store(w_, 56);
         })),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
 
 mod _rt {
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer, mem};
 }

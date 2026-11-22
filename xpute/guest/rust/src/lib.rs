@@ -16,13 +16,28 @@ pub mod log;
 pub mod stop;
 pub mod wait;
 
+use xpute_kit::status::msg::MSG_CAP;
+use xpute_link::ERR_PKT_CAP;
+use xpute_link::frame::HDR_SZ;
+
+use crate::abi::stop::STOPPED_ARGS_SZ;
+
+/// The least a frame's cap may be: its words, and the largest packet of
+/// xpute's own, the stop's args whole (wit/stop), their fixed part and a file
+/// and a message as far as a message's cap, which an error's answer is
+/// within. So a bug is told, and an error answered, whatever its message.
+pub const CAP_MIN: u32 = HDR_SZ + STOPPED_ARGS_SZ as u32 + 2 * MSG_CAP;
+const _: () = assert!(HDR_SZ as usize + ERR_PKT_CAP <= CAP_MIN as usize);
+
 /// Defines the guest's three exports (link/wit/types.wit), over frames of
-/// `cap` bytes, with `boot` mounting what the guest implements and opening
+/// `cap` bytes, no less than `CAP_MIN`, which a smaller cap does not compile
+/// against, with `boot` mounting what the guest implements and opening
 /// what it calls, and `enter` and `end` starting and ending each entry. From
 /// its init on, the guest's failures are its own (stop.rs `hook`).
 #[macro_export]
 macro_rules! link {
     ($cap:expr, $boot:expr, $enter:expr, $end:expr) => {
+        const _: () = assert!($cap >= $crate::CAP_MIN);
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u64 {

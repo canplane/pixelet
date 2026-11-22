@@ -12,19 +12,20 @@
  * log.rs writes. */
 
 import type { i32, u64 } from "@xpute/kit/abi/word.ts";
-import { XputeBug, frames } from "@xpute/kit/status/bug.ts";
+import { XputeBug } from "@xpute/kit/status/bug.ts";
 import {
   ERRNO_ENOTRECOVERABLE,
   ERRNO_EPIPE,
 } from "@xpute/kit/status/errno.spec.ts";
-import { strerror } from "@xpute/kit/status/error.ts";
+import { frames, strerror } from "@xpute/kit/status/error.ts";
+import { cut_msg } from "@xpute/kit/status/msg.ts";
 import {
   type Handle,
   type Imports,
   type Method,
   Side,
 } from "@xpute/link/link.ts";
-import { init, type Stop } from "@xpute/host/runtime.ts";
+import { init, make_stop, type Stop } from "@xpute/host/runtime.ts";
 import { type Level, LEVEL_ERROR } from "@xpute/host/abi/log/log.enum.ts";
 import { tell_attached } from "./life.ts";
 import type { Instantiate, Log, Stopped, Trap } from "./message.ts";
@@ -55,11 +56,14 @@ function tell(m: Trap | Stopped | Log): void {
 /** The console's method each level is written by, in `Level`'s order. */
 const CONSOLE = ["debug", "debug", "info", "warn", "error", "error"] as const;
 
-/** Writes `msg` at `level`, about `context`, as xpute-runtime-native log.rs
- * writes the native runtime's: a log record the host hands the runtime
+/** Writes `msg` at `level`, about `context`, each cut as far as a message's
+ * cap holds it (`cut_msg`), the one place a record is made on the host's
+ * side, as xpute-runtime-native log.rs writes the native runtime's: a log record the host hands the runtime
  * (@xpute/host `Runtime`), and the stop and the trap it tells. The record is
  * told the page too (`Log`), which writes nothing of it. */
 function log(level: Level, context: string, msg: string): void {
+  context = cut_msg(context);
+  msg = cut_msg(msg);
   console[CONSOLE[level]](`[${context}] ${msg}`);
   tell({ kind: "log", level, context, msg });
 }
@@ -200,7 +204,7 @@ function hook(side: Side): (e: unknown) => void {
         : e instanceof Error
           ? e.message
           : String(e);
-    tell_stop("host", { errnum, file, line, n1, n2, msg });
+    tell_stop("host", make_stop(errnum, file, line, n1, n2, msg));
     trap(side, e);
     return true;
   };

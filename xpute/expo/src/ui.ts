@@ -30,6 +30,7 @@ import {
   type Answered,
   DROP,
   End,
+  ERR_PKT_CAP,
   type Handle,
   type Memory,
   type Method,
@@ -39,6 +40,7 @@ import {
   store_uri,
   type Tag,
 } from "@xpute/link/link.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift, Lower } from "@xpute/link/cabi.ts";
 import { frame, HDR_SZ, read as read_frame } from "@xpute/link/frame.ts";
 import { XPUTE } from "./xpute.ts";
@@ -77,12 +79,16 @@ const ui = new (class extends End implements Memory {
 /** No packet. */
 const NONE = new Uint8Array(0);
 
-/** The reader of each packet the runtime sends, and the writer of the answer
- * the UI's end gives at once, which holds no value: every method the UI
- * implements is an `async func` (xpute-runtime-native link.rs `init`), so a
- * value written there is past its room, EMSGSIZE. */
+/** The room of the answer the UI's end gives at once. Every method the UI
+ * implements is an `async func`, so that answer holds no value: it is an
+ * error's, whose packet is within this, and a value written there is past
+ * it, EMSGSIZE. */
+const RET_BUF = new Uint8Array(ERR_PKT_CAP);
+
+/** The reader of each packet the other thread sends, and the writer of the
+ * answer the UI's end gives at once (`RET_BUF`). */
 const args = new Lift(NONE);
-const ret = new Lower(NONE, 0);
+const ret = new Lower(RET_BUF, 0);
 
 /** Hands the UI's end the frame the runtime sent, its packet `pkt`, and
  * answers what the end answers (`End.input`). */
@@ -96,7 +102,7 @@ function input(
 ): i32 {
   const p = pkt ?? NONE;
   args.reset(p.buffer, p.byteOffset, p.length);
-  ret.reset(NONE.buffer, 0, 0);
+  ret.reset(RET_BUF.buffer, 0, RET_BUF.length);
   return ui.input(tag, h, m, res, result, args, ret);
 }
 
@@ -119,7 +125,9 @@ function read(batch: ArrayBuffer): void {
     const result = input(tag, h, m, res, f.result, pkt);
     if (res || h === ROOT || m === DROP || result === ERRNO_EINPROGRESS)
       continue;
-    ui.task_return(tag, ret.finish() < 0 ? ERRNO_EMSGSIZE : result);
+    const n = ret.finish();
+    if (n < 0) ui.task_err(tag, new XputeError(ERRNO_EMSGSIZE));
+    else ui.task_return(tag, result, n > 0 ? RET_BUF.slice(0, n) : null);
   }
 }
 

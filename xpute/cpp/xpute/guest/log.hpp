@@ -13,7 +13,8 @@
 
 namespace xpute::guest {
 
-// Tells the host `msg`, at `level`, about `context`. A host that hears
+// Tells the host `msg`, at `level`, about `context`, each cut as far as a
+// message's cap holds it (`cut_msg`). A host that hears
 // nothing more, the link trapped among them, has nothing to answer, so the
 // answer is not read.
 void log(abi::log::Level level, std::string_view context, std::string_view msg) noexcept;

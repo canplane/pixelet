@@ -7,12 +7,14 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Callee,
   type Handle,
   type LinkObject,
   type Method,
-  refusal_of,
+  err_of,
+  store_err,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json5 `NAMED`). */
@@ -32,7 +34,7 @@ export interface Host {
 
 /** The object over `implementation`. */
 function object(
-  l: Pick<Callee, "task_return" | "on_cancel">,
+  l: Pick<Callee, "task_return" | "task_err" | "on_cancel">,
   implementation: Host,
 ): LinkObject {
   return {
@@ -49,16 +51,16 @@ function object(
             const stop = new AbortController();
             implementation.wait_for(args.u64(0), stop.signal).then(
               () => l.task_return(tag, 0, null),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+              (e: unknown) => l.task_err(tag, err_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
           }
           default:
-            return ERRNO_ENOSYS;
+            throw new XputeError(ERRNO_ENOSYS);
         }
       } catch (e) {
-        return refusal_of(e);
+        return store_err(ret, err_of(e));
       }
     },
     drop() {},
@@ -67,7 +69,7 @@ function object(
 
 /** Mounts `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Callee, "mount_named" | "task_return" | "on_cancel">,
+  l: Pick<Callee, "mount_named" | "task_return" | "task_err" | "on_cancel">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(l, implementation));

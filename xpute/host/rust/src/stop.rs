@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::Side;
 
 use crate::abi;
@@ -25,15 +25,8 @@ impl abi::stop::Host for Report {
         n1: u64,
         n2: u64,
         msg: Option<String>,
-    ) -> Result<(), Errno> {
-        (runtime().stopped)(Stop {
-            errnum,
-            file,
-            line,
-            n1,
-            n2,
-            msg,
-        });
+    ) -> Result<(), XputeError> {
+        (runtime().stopped)(Stop::new(errnum, &file, line, n1, n2, msg.as_deref()));
         Ok(())
     }
 }
@@ -42,3 +35,7 @@ impl abi::stop::Host for Report {
 pub fn mount(side: &'static Side) {
     abi::stop::mount(side, Rc::new(Report));
 }
+
+#[cfg(test)]
+#[path = "stop.test.rs"]
+mod test;

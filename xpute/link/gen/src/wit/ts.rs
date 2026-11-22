@@ -240,20 +240,16 @@ impl Gen<'_> {
         };
         let pick = if o.methods.iter().any(|f| is_async(f)) {
             format!(
-                "l: Pick<{}, \"task_return\" | \"on_cancel\">, ",
+                "l: Pick<{}, \"task_return\" | \"task_err\" | \"on_cancel\">, ",
                 self.ts_use(link, "Callee", true)
             )
         } else {
             String::new()
         };
-        let refusal_of = self.ts_use(link, "refusal_of", false);
-        // A request's tag is read where a method answers later, the args
-        // where one takes any, and the writer of the answer where one
-        // answers a value at once; each other is named unread, as Rust's is.
-        let mut answers = false;
-        for f in &o.methods {
-            answers |= !is_async(f) && self.ret(f)?.is_some();
-        }
+        let err_of = self.ts_use(link, "err_of", false);
+        let store_err = self.ts_use(link, "store_err", false);
+        // A request's tag is read where a method answers later, and the args
+        // where one takes any; each other is named unread, as Rust's is.
         let tag = if o.methods.iter().any(|f| is_async(f)) {
             "tag"
         } else {
@@ -264,10 +260,9 @@ impl Gen<'_> {
         } else {
             "_args"
         };
-        let ret = if answers { "ret" } else { "_ret" };
         let _ = writeln!(
             out,
-            "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, {tag}, {args}, {ret}) {{\n      try {{\n        switch (m) {{",
+            "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, {tag}, {args}, ret) {{\n      try {{\n        switch (m) {{",
             if o.resource { "export " } else { "" },
             self.ts_use(link, "LinkObject", true)
         );
@@ -316,7 +311,7 @@ impl Gen<'_> {
                 if is_async(f) {
                     let _ = writeln!(
                         out,
-                        "            const stop = new AbortController();\n            {call}.then(\n              {bind} => {{\n                const v = {tag_ok} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n              (e: unknown) => {{\n                if (!(e instanceof {ce})) return l.task_return(tag, {refusal_of}(e));\n                const v = {tag_err} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}",
+                        "            const stop = new AbortController();\n            {call}.then(\n              {bind} => {{\n                const v = {tag_ok} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n              (e: unknown) => {{\n                if (!(e instanceof {ce})) return l.task_err(tag, {err_of}(e));\n                const v = {tag_err} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}",
                         self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false)
                     );
                 } else {
@@ -334,7 +329,7 @@ impl Gen<'_> {
                 let bind = if rk.is_none() { "()" } else { "(v)" };
                 let _ = writeln!(
                     out,
-                    "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, 0, {data}),\n              (e: unknown) => l.task_return(tag, {refusal_of}(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}",
+                    "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, 0, {data}),\n              (e: unknown) => l.task_err(tag, {err_of}(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}",
                     self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false)
                 );
             } else if rk.is_none() {
@@ -356,7 +351,8 @@ impl Gen<'_> {
         };
         let _ = writeln!(
             out,
-            "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n",
+            "          default:\n            throw new {}({});\n        }}\n      }} catch (e) {{\n        return {store_err}(ret, {err_of}(e));\n      }}\n    }},\n    {drop},\n  }};\n}}\n",
+            self.ts_use(TS_ERROR, "XputeError", false),
             self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false)
         );
         if !o.resource {
@@ -364,7 +360,9 @@ impl Gen<'_> {
             let pick = if pick.is_empty() {
                 format!("l: Pick<{ln}, \"mount_named\">")
             } else {
-                format!("l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"on_cancel\">")
+                format!(
+                    "l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"task_err\" | \"on_cancel\">"
+                )
             };
             let pass = if o.methods.iter().any(|f| is_async(f)) {
                 "l, "
@@ -394,7 +392,7 @@ impl Gen<'_> {
                 "link_.send(HANDLE",
             )
         };
-        let err = self.ts_use(TS_ERROR, "XputeError", false);
+        let answer = self.ts_use(link, "answer", false);
         for f in &o.methods {
             let ps = self.ts_params(f)?;
             let mut sig = vec![by.clone()];
@@ -425,7 +423,7 @@ impl Gen<'_> {
             let name = ts_name(&object_method(o, f));
             let _ = writeln!(
                 out,
-                "export async function {name}({}): Promise<{ret}> {{\n  const a_ = await {to}, {}, {});\n  if (a_.result !== 0) throw new {err}(a_.result);{take}\n}}\n",
+                "export async function {name}({}): Promise<{ret}> {{\n  const a_ = await {to}, {}, {});\n  {answer}(a_);{take}\n}}\n",
                 sig.join(", "),
                 method_const(o, f, ts_given),
                 self.ts_args(&ps)?

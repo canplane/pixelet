@@ -43,6 +43,12 @@ struct Instant {
         w.put<std::uint32_t>(at + 8, this->nanoseconds);
     }
 
+    // Stores a record of these fields, each borrowed, as `store` stores one.
+    static void store_of(_rt::Lower &w_, std::size_t at_, std::int64_t seconds, std::uint32_t nanoseconds) noexcept {
+        w_.put<std::int64_t>(at_, seconds);
+        w_.put<std::uint32_t>(at_ + 8, nanoseconds);
+    }
+
     static Instant load(_rt::Lift &r, std::size_t at) noexcept {
         return Instant{
             .seconds = r.get<std::int64_t>(at),

@@ -72,6 +72,22 @@ impl Position {
         }
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(
+        w_: &mut _rt::Lower,
+        at_: usize,
+        lon: f64,
+        lat: f64,
+        alt_ellipsoid: Option<f64>,
+    ) {
+        w_.f64(at_, lon);
+        w_.f64(at_ + 8, lat);
+        if let Some(v) = &alt_ellipsoid {
+            w_.u8(at_ + 16, 1);
+            w_.f64(at_ + 16 + 8, *v);
+        }
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Position, _rt::Errno> {
         Ok(Position {
             lon: r.f64(at)?,
@@ -88,16 +104,16 @@ impl Position {
 }
 
 pub trait Guest {
-    fn pos(&self, at: Option<Position>) -> Result<(), _rt::Errno>;
-    fn heading(&self, deg: Option<f64>) -> Result<(), _rt::Errno>;
-    fn location(&self, status: LocationStatus) -> Result<(), _rt::Errno>;
+    fn pos(&self, at: Option<Position>) -> Result<(), _rt::XputeError>;
+    fn heading(&self, deg: Option<f64>) -> Result<(), _rt::XputeError>;
+    fn location(&self, status: LocationStatus) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 POS => {
                     let at = args_.case(0, 2).and_then(|d| {
@@ -107,10 +123,8 @@ impl _rt::Object for _Object {
                             Position::load(args_, 8).map(Some)
                         }
                     })?;
-                    match self.0.pos(at) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.pos(at)?;
+                    0
                 }
                 HEADING => {
                     let deg = args_.case(0, 2).and_then(|d| {
@@ -120,24 +134,20 @@ impl _rt::Object for _Object {
                             args_.f64(8).map(Some)
                         }
                     })?;
-                    match self.0.heading(deg) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.heading(deg)?;
+                    0
                 }
                 LOCATION => {
                     let status = args_
                         .case(0, 4)
                         .and_then(|v| LocationStatus::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    match self.0.location(status) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.location(status)?;
+                    0
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -150,5 +160,6 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag, store_err};
 }

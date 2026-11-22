@@ -3,3 +3,4 @@
 pub mod bug;
 pub mod errno;
 pub mod error;
+pub mod msg;

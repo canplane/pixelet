@@ -9,11 +9,11 @@ import assert from "node:assert/strict";
 import { Golden } from "@xpute/golden";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { bytes_to_hex } from "@xpute/kit/codec/encoding.ts";
-import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { load_Lent, store_Lent, type Token } from "./abi/types.ts";
 import { Lift, Lower } from "./cabi.ts";
-import { load_uri, store_uri } from "./link.ts";
+import { answer, load_uri, store_err, store_uri } from "./link.ts";
 
 /** The record's packet: one of each number, a string, a list of numbers, a
  * URI and a lent buffer, as the Canonical ABI lays a tuple of them. */
@@ -71,6 +71,25 @@ test("the record's packet lifts as the values it was lowered from", async () => 
   assert.deepEqual(r.arr(56, Uint16Array), new Uint16Array([1, 2, 65535]));
   assert.deepEqual(load_uri(r, 64), URI);
   assert.deepEqual(load_Lent(r, 72), { buf: 4096n, nbyte: 64 });
+});
+
+test("an error's answer holds the packet the record holds, and the record's packet is that error", async () => {
+  const want = (await Golden.load("link/spec/golden/cabi.tsv")).bytes("err");
+  const made = new XputeError(ERRNO_ENOENT, "no café", ["a/b.rs", 7]);
+  const buf = new Uint8Array(want.length).fill(0xaa);
+  const w = new Lower(buf, 0);
+  assert.equal(store_err(w, made), ERRNO_ENOENT);
+  assert.equal(w.finish(), want.length);
+  assert.equal(bytes_to_hex(buf), bytes_to_hex(want));
+  assert.throws(
+    () => answer({ result: ERRNO_ENOENT, data: want }),
+    (e) =>
+      e instanceof XputeError &&
+      e.errnum === made.errnum &&
+      e.file === made.file &&
+      e.line === made.line &&
+      e.msg === made.msg,
+  );
 });
 
 test("each recorded packet that does not hold a URI is refused as one, EBADMSG", async () => {

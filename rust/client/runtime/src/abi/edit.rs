@@ -46,8 +46,16 @@ impl Tool {
     }
 }
 
-pub fn hold(side_: &_rt::Side, tool: Tool, val: u32, scale_step: i32) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(
+/// The size of the fixed part of `hold`'s args.
+pub const HOLD_ARGS_SZ: usize = 12;
+
+pub fn hold(
+    side_: &_rt::Side,
+    tool: Tool,
+    val: u32,
+    scale_step: i32,
+) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(
         HANDLE,
         HOLD,
         _rt::Packet::Args(Some((12, &|w_: &mut _rt::Lower| {
@@ -56,13 +64,16 @@ pub fn hold(side_: &_rt::Side, tool: Tool, val: u32, scale_step: i32) -> Result<
             w_.i32(8, scale_step);
         }))),
     );
-    _rt::answer(r)
+    _rt::answer(r, data)
 }
+
+/// The size of the fixed part of `marker-text`'s args.
+pub const MARKER_TEXT_ARGS_SZ: usize = 8;
 
 pub fn marker_text(
     side_: &_rt::Side,
     text: &str,
-) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
         MARKER_TEXT,
@@ -70,9 +81,9 @@ pub fn marker_text(
             w_.str(0, text);
         }))),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.case(0, 2).and_then(|d| {
+        Ok(r_.case(0, 2).and_then(|d| {
             if d == 0 {
                 Ok(Ok(()))
             } else {
@@ -80,21 +91,22 @@ pub fn marker_text(
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
-        })
+        })?)
     })
 }
 
-pub fn marker_cancel(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, MARKER_CANCEL, _rt::Packet::Args(None));
-    _rt::answer(r)
+pub fn marker_cancel(side_: &_rt::Side) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(HANDLE, MARKER_CANCEL, _rt::Packet::Args(None));
+    _rt::answer(r, data)
 }
 
-pub fn marker_commit(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, MARKER_COMMIT, _rt::Packet::Args(None));
-    _rt::answer(r)
+pub fn marker_commit(side_: &_rt::Side) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(HANDLE, MARKER_COMMIT, _rt::Packet::Args(None));
+    _rt::answer(r, data)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

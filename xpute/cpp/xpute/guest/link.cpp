@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <memory_resource>
 
+#include "xpute/guest/abi/stop.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/link/frame.hpp"
 #include "xpute/link/mem.hpp"
@@ -31,6 +32,13 @@ link::Side &side() noexcept {
     ensure(the_side != nullptr, Errno::enotrecoverable);
     return *the_side;
 }
+
+// The least a frame's cap may be: its words, and the largest packet of
+// xpute's own, the stop's args whole (`wit/stop`), their fixed part and a
+// file and a message as far as a message's cap, which an error's answer is
+// within. So a bug is told, and an error answered, whatever its message.
+constexpr std::uint32_t CAP_MIN = link::HDR_SZ + abi::stop::STOPPED_ARGS_SZ + 2 * MSG_CAP;
+static_assert(link::HDR_SZ + link::ERR_PKT_CAP <= CAP_MIN);
 
 // Whether the guest is in an entry.
 bool entered = false;
@@ -59,7 +67,7 @@ void leave() {
 } // namespace
 
 std::uint64_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept {
-    ensure(cap % 8 == 0 && cap >= link::HDR_SZ, Errno::einval, cap);
+    ensure(cap % 8 == 0 && cap >= CAP_MIN, Errno::einval, cap);
     if (the_side == nullptr) the_side = new link::Side([](link::Layout l) { return l.inbox + l.cap; }, link_out);
     // The layout (frame.json5 `LAYOUT`), then the inbox and the outbox, for as
     // long as the guest runs.
@@ -127,6 +135,10 @@ void on_cancel(link::Tag t, std::function<void()> stop) {
 
 void task_return(link::Tag t, std::int32_t result, const link::Data &data) {
     side().task_return(t, result, data);
+}
+
+void task_err(link::Tag t, Error e) {
+    side().task_err(t, std::move(e));
 }
 
 bool in_guest() noexcept {

@@ -27,8 +27,14 @@ pub trait HostFile {
 struct _FileObject(&'static _rt::Side, _rt::Rc<dyn HostFile>);
 
 impl _rt::Object for _FileObject {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(
+        &self,
+        m_: _rt::Method,
+        tag_: _rt::Tag,
+        args_: _rt::Lift,
+        ret_: &mut _rt::Lower,
+    ) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 FILE_SIZE => {
                     let side_ = self.0;
@@ -51,7 +57,7 @@ impl _rt::Object for _FileObject {
                                 );
                             }
                             Err(e) => {
-                                side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                side_.task_err(tag_, e);
                             }
                         }),
                     ));
@@ -84,7 +90,7 @@ impl _rt::Object for _FileObject {
                                     );
                                 }
                                 Err(e) => {
-                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                    side_.task_err(tag_, e);
                                 }
                             }),
                         ),
@@ -103,7 +109,7 @@ impl _rt::Object for _FileObject {
                                     side_.task_return(tag_, 0, _rt::Packet::Args(None));
                                 }
                                 Err(e) => {
-                                    side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                    side_.task_err(tag_, e);
                                 }
                             }),
                         ),
@@ -129,7 +135,7 @@ impl _rt::Object for _FileObject {
                                 );
                             }
                             Err(e) => {
-                                side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                side_.task_err(tag_, e);
                             }
                         }),
                     ));
@@ -154,16 +160,16 @@ impl _rt::Object for _FileObject {
                                 );
                             }
                             Err(e) => {
-                                side_.task_return(tag_, e as i32, _rt::Packet::Args(None));
+                                side_.task_err(tag_, e);
                             }
                         }),
                     ));
                     _rt::Errno::EINPROGRESS as i32
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -178,6 +184,9 @@ pub fn file(
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag};
+    pub(super) use xpute_link::{
+        Handle, Lift, Lower, Method, Object, Packet, Return, Side, Tag, store_err,
+    };
 }

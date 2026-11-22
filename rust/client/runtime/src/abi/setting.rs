@@ -8,11 +8,14 @@ pub const HANDLE: _rt::Handle = 0x6f63cb;
 /// `set`
 pub const SET: _rt::Method = 0;
 
+/// The size of the fixed part of `set`'s args.
+pub const SET_ARGS_SZ: usize = 8;
+
 pub fn set(
     side_: &_rt::Side,
     key: u32,
     val: u32,
-) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
         SET,
@@ -21,9 +24,9 @@ pub fn set(
             w_.u32(4, val);
         }))),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.case(0, 2).and_then(|d| {
+        Ok(r_.case(0, 2).and_then(|d| {
             if d == 0 {
                 Ok(Ok(()))
             } else {
@@ -31,11 +34,12 @@ pub fn set(
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
-        })
+        })?)
     })
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

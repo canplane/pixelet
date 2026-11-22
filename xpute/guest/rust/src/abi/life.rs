@@ -13,33 +13,33 @@ pub const SHOWN: _rt::Method = 1;
 pub const ATTACHED: _rt::Method = 2;
 
 pub trait Guest {
-    fn hidden(&self) -> Result<(), _rt::Errno>;
-    fn shown(&self) -> Result<(), _rt::Errno>;
-    fn attached(&self) -> Result<(), _rt::Errno>;
+    fn hidden(&self) -> Result<(), _rt::XputeError>;
+    fn shown(&self) -> Result<(), _rt::XputeError>;
+    fn attached(&self) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, _: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, _: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
-                HIDDEN => match self.0.hidden() {
-                    Ok(()) => 0,
-                    Err(e) => e as i32,
-                },
-                SHOWN => match self.0.shown() {
-                    Ok(()) => 0,
-                    Err(e) => e as i32,
-                },
-                ATTACHED => match self.0.attached() {
-                    Ok(()) => 0,
-                    Err(e) => e as i32,
-                },
-                _ => _rt::Errno::ENOSYS as i32,
+                HIDDEN => {
+                    let () = self.0.hidden()?;
+                    0
+                }
+                SHOWN => {
+                    let () = self.0.shown()?;
+                    0
+                }
+                ATTACHED => {
+                    let () = self.0.attached()?;
+                    0
+                }
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -52,5 +52,6 @@ mod _rt {
     pub(super) use crate::link;
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag, store_err};
 }

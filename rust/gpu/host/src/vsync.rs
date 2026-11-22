@@ -47,7 +47,7 @@ impl abi::vsync::Host for Vsync {
         let id = NEXT.replace(NEXT.get() + 1);
         task_return.on_cancel(move || {
             if let Some((_, r)) = WAITING.with_borrow_mut(|w| w.remove(&id)) {
-                r.answer(Err(Errno::ECANCELED));
+                r.answer(Err(Errno::ECANCELED.into()));
             }
         });
         WAITING.with_borrow_mut(|w| w.insert(id, (after, task_return)));

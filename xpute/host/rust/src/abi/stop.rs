@@ -17,14 +17,14 @@ pub trait Host {
         n1: u64,
         n2: u64,
         msg: Option<String>,
-    ) -> Result<(), _rt::Errno>;
+    ) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 STOPPED => {
                     let errnum = args_.i32(0)?;
@@ -39,15 +39,13 @@ impl _rt::Object for _Object {
                             args_.str(36).map(str::to_owned).map(Some)
                         }
                     })?;
-                    match self.0.stopped(errnum, file, line, n1, n2, msg) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.stopped(errnum, file, line, n1, n2, msg)?;
+                    0
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -59,7 +57,8 @@ pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Side, Tag, store_err};
 }
 
 /// The interfaces the world imports, each `(name, handle)`, which are

@@ -86,7 +86,7 @@ impl TaskRecord {
         at: f64,
         exit: Exit,
         phases: Option<PhaseList>,
-        name_at: &mut dyn FnMut(&'static str) -> Option<u32>,
+        name_at: &mut dyn FnMut(&str) -> Option<u32>,
     ) -> TaskRecord {
         let mut row = TaskRecord {
             stream: a.stream as u32 as f64,
@@ -98,7 +98,7 @@ impl TaskRecord {
             outcome: exit.outcome() as u32 as f64,
             ..TaskRecord::default()
         };
-        match exit {
+        match &exit {
             Exit::Failed(fail) => {
                 row.fail = f64::from(fail.errnum as i32);
                 row.detail = fail.detail as f64;
@@ -106,15 +106,12 @@ impl TaskRecord {
             Exit::Refused(_) => row.fail = f64::from(Errno::ENOMEM as i32),
             Exit::Ok | Exit::Aborted => {}
         }
-        if let Some(at) = match exit {
-            Exit::Failed(fail) => fail.at,
-            Exit::Ok | Exit::Aborted | Exit::Refused(_) => None,
-        } {
-            if let Some(off) = name_at(at.file()) {
+        if let Exit::Failed(fail) = exit {
+            if let Some(off) = name_at(&fail.file) {
                 row.at_file = f64::from(off);
-                row.at_file_sz = at.file().len() as f64;
+                row.at_file_sz = fail.file.len() as f64;
             }
-            row.at_line = at.line() as f64;
+            row.at_line = f64::from(fail.line);
         }
         for (k, (name, val)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
             row.phase_ids[k] = name as u32 as f64;

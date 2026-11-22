@@ -13,6 +13,7 @@ use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::{Return, Side};
 
 use crate::abi::clocks::monotonic_clock;
@@ -31,7 +32,7 @@ pub fn mark(at: Instant) -> u64 {
 struct Monotonic;
 
 impl monotonic_clock::Host for Monotonic {
-    fn now(&self) -> Result<u64, Errno> {
+    fn now(&self) -> Result<u64, XputeError> {
         Ok(mark(Instant::now()))
     }
 
@@ -44,7 +45,7 @@ impl monotonic_clock::Host for Monotonic {
             let timer = timer.clone();
             move || {
                 if let Some(r) = timer.get().and_then(runtime().clear) {
-                    r.answer(Err(Errno::ECANCELED));
+                    r.answer(Err(Errno::ECANCELED.into()));
                 }
             }
         });
@@ -58,7 +59,7 @@ impl monotonic_clock::Host for Monotonic {
 struct System;
 
 impl system_clock::Host for System {
-    fn now(&self) -> Result<SystemInstant, Errno> {
+    fn now(&self) -> Result<SystemInstant, XputeError> {
         let t = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default();

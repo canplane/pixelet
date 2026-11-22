@@ -9,8 +9,9 @@ use crate::domain::setting::are_settings_loaded;
 use crate::domain::setting::settings_mut;
 use crate::perf::window::perf_follow;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
-pub(super) fn set(key: u32, val: u32) -> Result<Result<(), ErrorCode>, Errno> {
+pub(super) fn set(key: u32, val: u32) -> Result<Result<(), ErrorCode>, XputeError> {
     // A change made before the settings' slot is read would be overwritten
     // by the read, so it is refused until then.
     if !are_settings_loaded() {

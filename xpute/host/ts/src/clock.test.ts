@@ -10,6 +10,7 @@ import {
 import { HANDLE, WAIT_FOR } from "./abi/clocks/monotonic_clock.ts";
 import { Lift, Lower } from "@xpute/link/cabi.ts";
 import { type LinkObject, type Side, type Tag } from "@xpute/link/link.ts";
+import type { XputeError } from "@xpute/kit/status/error.ts";
 import { mount_clock } from "./clock.ts";
 
 afterEach(() => {
@@ -29,6 +30,7 @@ function mounted(): {
   mount_clock({
     mount_named: (h: number, o: LinkObject) => named.set(h, o),
     task_return: (t: Tag, result: number) => answers.push([t, result]),
+    task_err: (t: Tag, e: XputeError) => answers.push([t, e.errnum]),
     on_cancel: (t: Tag, stop: () => void) => stops.set(t, stop),
   } as unknown as Side);
   return { clock: named.get(HANDLE)!, answers, stops };

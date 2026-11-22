@@ -37,15 +37,19 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   (`rust/tool/src/bin/rule.rs`) holds change only on the user's word.
 - What goes wrong is an error or a bug, and what is worth telling and is
   neither is a log record. An error is an errno, the place it was made and an
-  optional message, as a kernel's is: across a boundary its status (a frame's
-  RESULT), inside a language the error object (`XputeError`, C++'s
-  `xpute::Error`), returned in Rust and C++ and thrown in TypeScript, for the
-  caller to judge. A bug is a broken invariant: the same, at most two numbers,
-  handed to the report installed from above, and the part stops; a panic the
-  language raises is one too. A log record is a level, a context and a message,
-  handed to the log the part's environment gives it. No part writes to the
-  platform's output; that is the environment's alone, as a shell prints what a
-  kernel returns.
+  optional message, as a kernel's is: inside a language the error object
+  (`XputeError`, C++'s `xpute::Error`), returned in Rust and C++ and thrown in
+  TypeScript, for the caller to judge; across a boundary its errno is the
+  status (a frame's RESULT) and its place and message the answer's packet, so
+  the caller holds the error that was made. A bug is a broken invariant: the
+  same, at most two numbers, its message static, handed to the report
+  installed from above, and the part stops; a panic the language raises is
+  one too. A log record is a level, a context and a message, handed to the log
+  the part's environment gives it. Each has the same facts in every language.
+  A message is bounded text: its maker cuts one past the cap at a character
+  boundary by the kit's `cut_msg`, an empty one is none, and nothing downstream
+  holds a cap of its own for one. No part writes to the platform's output;
+  that is the environment's alone, as a shell prints what a kernel returns.
 - What depends on a platform lives in the one part that is the platform's
   (xpute's runtime, pixelet's `service/platform/`); every other part is
   portable, using no platform API beyond its language's standard library.

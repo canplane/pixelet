@@ -4,17 +4,24 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import {
+  ERRNO_EBADMSG,
+  ERRNO_EPIPE,
   ERRNO_EINPROGRESS,
   ERRNO_EMSGSIZE,
+  ERRNO_ENOENT,
 } from "@xpute/kit/status/errno.spec.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { type Frame, frame, HDR_SZ, lay, read } from "./frame.ts";
 import { LAYOUT, OPEN_AT } from "./frame.spec.ts";
 import {
+  answer,
   CANCEL,
   NAMED,
   pkt_of,
   ROOT,
   Side,
+  store_err,
   store_uri,
   type Tag,
   uri,
@@ -22,11 +29,16 @@ import {
 import { Table } from "./resource.ts";
 
 const INBOX = 4 * LAYOUT.WORDS;
-const CAP = 64;
+const CAP = 2048;
 const OUTBOX = INBOX + CAP;
 
+/** The error ENOENT made at line 7 of `a/b.rs`, with the message `msg`. */
+const made = (msg: string | null) =>
+  new XputeError(ERRNO_ENOENT, msg, ["a/b.rs", 7]);
+
 /** An interface the host implements: method 0 answers at once with a word,
- * method 1 later, and method 2 at once with a value past the cap. */
+ * method 1 later, method 2 at once with a value past the cap, and methods 3
+ * and 4 fail at once, with a message and with none. */
 const INTERFACE = (NAMED | 1) >>> 0;
 
 /** The host's side over a guest that only lays its link and keeps each
@@ -56,6 +68,8 @@ function link(): {
         later = tag;
         return ERRNO_EINPROGRESS;
       }
+      if (m === 3) return store_err(ret, made("no café"));
+      if (m === 4) return store_err(ret, made(null));
       ret.start(m === 0 ? 4 : CAP);
       if (m === 0) ret.u32(0, 7);
       return 0;
@@ -110,6 +124,82 @@ test("a later answer is marked RES and carries the request's tag", () => {
     const f = frames.pop()!;
     assert.deepEqual([f.res, f.tag, f.result], [true, tag, result]);
   }
+});
+
+test("an error made at a place with a message arrives with both, and one made with no message arrives with none", () => {
+  const { side, view, frames, later } = link();
+  const mem = new Uint8Array(view.buffer);
+  /** The error the answer laid at `at` is, as its caller is thrown it. */
+  const arrived = (at: number): XputeError => {
+    const f = read(view, at, frame());
+    const data =
+      f.pkt_len === 0 ? null : mem.slice(at + HDR_SZ, at + HDR_SZ + f.pkt_len);
+    try {
+      answer({ result: f.result, data });
+    } catch (e) {
+      if (e instanceof XputeError) return e;
+    }
+    throw new Error("no error");
+  };
+  const request = (tag: Tag, method: number) => {
+    lay(view, OUTBOX, {
+      tag,
+      res: false,
+      handle: INTERFACE,
+      method,
+      result: 0,
+      pkt_len: 0,
+    });
+    return side.recv(BigInt(OUTBOX));
+  };
+  const facts = (e: XputeError) => [e.errnum, e.file, e.line, e.msg];
+  for (const [method, msg] of [
+    [3, "no café"],
+    [4, null],
+  ] as const) {
+    assert.equal(request(5, method), ERRNO_ENOENT);
+    assert.deepEqual(facts(arrived(OUTBOX)), [ERRNO_ENOENT, "a/b.rs", 7, msg]);
+  }
+  for (const msg of ["no café", null]) {
+    assert.equal(request(7, 1), ERRNO_EINPROGRESS);
+    side.task_err(later(), made(msg));
+    assert.equal(frames.pop()!.res, true);
+    assert.deepEqual(facts(arrived(INBOX)), [ERRNO_ENOENT, "a/b.rs", 7, msg]);
+  }
+  // A packet that holds no error's is EBADMSG, and a trapped link's EPIPE,
+  // which no frame carried, is made where it is read.
+  const read_of = (result: number, data: U8Array | null): XputeError => {
+    try {
+      answer({ result, data });
+    } catch (e) {
+      if (e instanceof XputeError) return e;
+    }
+    throw new Error("no error");
+  };
+  const bad = read_of(ERRNO_ENOENT, new Uint8Array([0x0c, 0, 0, 0]));
+  assert.deepEqual([bad.errnum, bad.msg], [ERRNO_EBADMSG, null]);
+  const bare = read_of(ERRNO_EPIPE, null);
+  assert.equal(bare.errnum, ERRNO_EPIPE);
+  assert.ok(bare.file.endsWith("link.ts"), bare.file);
+
+  // A refusal of the link's own answers in a frame as any error does: a
+  // method of a named handle nothing is mounted under is ENOENT, made where
+  // the link refused it.
+  lay(view, OUTBOX, {
+    tag: 9,
+    res: false,
+    handle: (NAMED | 2) >>> 0,
+    method: 0,
+    result: 0,
+    pkt_len: 0,
+  });
+  assert.equal(side.recv(BigInt(OUTBOX)), ERRNO_ENOENT);
+  const f = read(view, OUTBOX, frame());
+  assert.deepEqual([f.res, f.result], [true, ERRNO_ENOENT]);
+  const refused = arrived(OUTBOX);
+  assert.deepEqual([refused.errnum, refused.msg], [ERRNO_ENOENT, null]);
+  assert.ok(refused.file.endsWith("link.ts"), refused.file);
+  assert.ok(refused.line > 0);
 });
 
 test("a cancel runs the stop its request put once, and none once the request has answered", () => {

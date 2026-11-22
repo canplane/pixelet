@@ -21,6 +21,7 @@ use super::{
 
 /// The Rust modules the bindings take items from, beside the link's crate.
 const RS_ERRNO: &str = "xpute_kit::status::errno";
+const RS_ERROR: &str = "xpute_kit::status::error";
 
 /// The object over an object's implementation, a name of the
 /// generator's alone, which its leading `_` keeps from every WIT name.
@@ -254,13 +255,13 @@ impl Gen<'_> {
     }
 
     /// The Rust of the answer's decoding, from the result `r` and the return
-    /// data `data`.
+    /// data `data`: its value, or the error it failed with.
     fn rs_answer(&self, k: &Option<Kind>, data: &str) -> Result<String, String> {
         let answer = self.rs_use(self.link_rs, "answer");
         Ok(match k {
-            None => format!("{answer}(r)"),
+            None => format!("{answer}(r, {data})"),
             Some(k) => format!(
-                "{answer}(r).and_then(|_| {{ let r_ = {}::new({data}.ok_or({}::EBADMSG)?); {} }})",
+                "{answer}(r, {data}).and_then(|_| {{ let r_ = {}::new({data}.ok_or({}::EBADMSG)?); Ok({}?) }})",
                 self.rs_use(self.link_rs, "Lift"),
                 self.rs_use(RS_ERRNO, "Errno"),
                 self.rs_load("r_", "0", k)?
@@ -279,6 +280,7 @@ impl Gen<'_> {
     ) -> Result<(), String> {
         let (t, obj) = (side_trait(o, side_name), object_struct(o));
         let errno = self.rs_use(RS_ERRNO, "Errno");
+        let error = self.rs_use(RS_ERROR, "XputeError");
         let rc = self.rs_use("std::rc", "Rc");
         let _ = writeln!(out, "pub trait {t} {{");
         for f in &o.methods {
@@ -300,7 +302,7 @@ impl Gen<'_> {
             } else {
                 let _ = writeln!(
                     out,
-                    "{}    fn {name}(&self, {}) -> Result<{ret}, {errno}>;",
+                    "{}    fn {name}(&self, {}) -> Result<{ret}, {error}>;",
                     many_args(ps.len() + 1, "    "),
                     ps.join(", ")
                 );
@@ -318,17 +320,13 @@ impl Gen<'_> {
         } else {
             "_"
         };
-        // The writer of the answer is taken where a method answers a value at
-        // once.
+        // The writer of the answer, which a refusal writes its message with,
+        // is the run's too where a method answers a value at once.
         let mut answers = false;
         for f in &o.methods {
             answers |= !is_async(f) && self.ret(f)?.is_some();
         }
-        let (ret, run) = if answers {
-            ("ret_", "let mut run")
-        } else {
-            ("_", "let run")
-        };
+        let run = if answers { "let mut run" } else { "let run" };
         // A host's object that answers later holds the side it is mounted on.
         let holds = side.is_none() && o.methods.iter().any(|f| is_async(f));
         let (fields, imp, made) = if holds {
@@ -345,7 +343,7 @@ impl Gen<'_> {
         };
         let _ = writeln!(
             out,
-            "}}\n\nstruct {obj}({fields});\n\nimpl {} for {obj} {{\n    fn call(&self, m_: {}, {tag}: {}, {args}: {}, {ret}: &mut {}) -> i32 {{\n        {run} = || -> Result<i32, {errno}> {{\n            Ok(match m_ {{",
+            "}}\n\nstruct {obj}({fields});\n\nimpl {} for {obj} {{\n    fn call(&self, m_: {}, {tag}: {}, {args}: {}, ret_: &mut {}) -> i32 {{\n        {run} = || -> Result<i32, {error}> {{\n            Ok(match m_ {{",
             self.rs_use(self.link_rs, "Object"),
             self.rs_use(self.link_rs, "Method"),
             self.rs_use(self.link_rs, "Tag"),
@@ -384,7 +382,7 @@ impl Gen<'_> {
                             String::new(),
                             format!("{link}::on_cancel(tag_, stop)"),
                             format!("{link}::task_return(tag_, 0, {later})"),
-                            format!("{link}::task_return(tag_, e as i32, None)"),
+                            format!("{link}::task_err(tag_, e)"),
                         )
                     }
                     None => {
@@ -393,7 +391,7 @@ impl Gen<'_> {
                             "let side_ = self.0;\n                    ".to_string(),
                             "side_.on_cancel(tag_, stop)".to_string(),
                             format!("side_.task_return(tag_, 0, {packet}::Args({later}))"),
-                            format!("side_.task_return(tag_, e as i32, {packet}::Args(None))"),
+                            "side_.task_err(tag_, e)".to_string(),
                         )
                     }
                 };
@@ -408,7 +406,7 @@ impl Gen<'_> {
             } else {
                 let _ = writeln!(
                     out,
-                    "                    match {imp}.{name}({}) {{\n                        Ok({v}) => {},\n                        Err(e) => e as i32,\n                    }}\n                }}",
+                    "                    let {v} = {imp}.{name}({})?;\n                    {}\n                }}",
                     names.trim_end_matches(", "),
                     self.rs_put(&rk)?
                 );
@@ -416,7 +414,8 @@ impl Gen<'_> {
         }
         let _ = writeln!(
             out,
-            "                _ => {errno}::ENOSYS as i32,\n            }})\n        }};\n        run().unwrap_or_else(|e| e as i32)\n    }}\n}}\n"
+            "                _ => return Err({errno}::ENOSYS.into()),\n            }})\n        }};\n        run().unwrap_or_else(|e| {}(ret_, &e))\n    }}\n}}\n",
+            self.rs_use(self.link_rs, "store_err")
         );
         let object = self.rs_use(self.link_rs, "Object");
         match (o.resource, side) {
@@ -458,7 +457,7 @@ impl Gen<'_> {
     /// a side given where `side` is none: its methods, by a handle, a
     /// singleton's its interface's named one.
     fn rs_import(&self, o: &Obj, side: Option<&str>, out: &mut String) -> Result<(), String> {
-        let errno = self.rs_use(RS_ERRNO, "Errno");
+        let error = self.rs_use(RS_ERROR, "XputeError");
         for f in &o.methods {
             let ps = self.kinds(f)?;
             let lents: Vec<String> = params(f)
@@ -541,15 +540,23 @@ impl Gen<'_> {
                 .collect();
             let c = method_const(o, f, rs_given);
             let name = rs_name(&object_method(o, f));
+            if !ps.is_empty() {
+                let (_, sz) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
+                let _ = writeln!(
+                    out,
+                    "/// The size of the fixed part of `{}`'s args.\npub const {c}_ARGS_SZ: usize = {sz};\n",
+                    f.name
+                );
+            }
             if is_async(f) {
                 let (output, kept, give) = match &lent {
                     Some(l) => (
-                        format!("(L, Result<{ret}, {errno}>)"),
+                        format!("(L, Result<{ret}, {error}>)"),
                         l.clone(),
                         format!("(lent, {})", self.rs_answer(&rk, "data.as_deref()")?),
                     ),
                     None => (
-                        format!("Result<{ret}, {errno}>"),
+                        format!("Result<{ret}, {error}>"),
                         "()".into(),
                         self.rs_answer(&rk, "data.as_deref()")?,
                     ),
@@ -568,11 +575,10 @@ impl Gen<'_> {
                 };
                 let _ = writeln!(
                     out,
-                    "{}pub fn {name}{generic}({}) -> impl Future<Output = {output}> + use<{}> {{\n    {lend}\n    let sent = {sent};\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n",
+                    "{}pub fn {name}{generic}({}) -> impl Future<Output = {output}> + use<{}> {{\n    {lend}\n    let sent = {sent};\n    async move {{\n        let (r, data, {}) = sent.await;\n        {give}\n    }}\n}}\n",
                     many_args(sig.len(), ""),
                     sig.join(", "),
                     if lents.is_empty() { "" } else { "L" },
-                    if rk.is_some() { "data" } else { "_" },
                     if lent.is_some() { "lent" } else { "_" }
                 );
             } else {
@@ -586,10 +592,9 @@ impl Gen<'_> {
                 };
                 let _ = writeln!(
                     out,
-                    "{}pub fn {name}{generic}({}) -> Result<{ret}, {errno}> {{\n    {lend}let (r, {}) = {call};\n    {}\n}}\n",
+                    "{}pub fn {name}{generic}({}) -> Result<{ret}, {error}> {{\n    {lend}let (r, data) = {call};\n    {}\n}}\n",
                     many_args(sig.len(), ""),
                     sig.join(", "),
-                    if rk.is_some() { "data" } else { "_" },
                     self.rs_answer(&rk, "data")?
                 );
             }
@@ -729,6 +734,36 @@ impl Gen<'_> {
                                 &format!("&self.{}", rs_name(f)),
                                 k
                             )?
+                        );
+                    }
+                    // The same record from fields the caller holds, which it
+                    // need not copy into one to store.
+                    let params: String = fields
+                        .iter()
+                        .map(|(f, k)| format!(", {}: {}", rs_name(f), self.rs_ty(k, false)))
+                        .collect();
+                    let _ = writeln!(
+                        out,
+                        "    }}\n\n    /// Stores a record of these fields, each borrowed, as `store` stores one.\n{}    pub fn store_of(w_: &mut {}, at_: usize{params}) {{",
+                        many_args(fields.len() + 2, "    "),
+                        lower()
+                    );
+                    for ((f, k), &off) in fields.iter().zip(&offs) {
+                        let n = rs_name(f);
+                        // A string's, a list's, a record's or a variant's
+                        // field is a borrow already.
+                        let e = match k {
+                            Kind::Str
+                            | Kind::Array(_)
+                            | Kind::List(_)
+                            | Kind::Record(_)
+                            | Kind::Variant(_) => n,
+                            _ => format!("&{n}"),
+                        };
+                        let _ = writeln!(
+                            out,
+                            "        {}",
+                            self.rs_store("w_", &plus("at_", off), &e, k)?
                         );
                     }
                     let _ = writeln!(

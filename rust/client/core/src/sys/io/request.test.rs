@@ -7,6 +7,7 @@ use super::*;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::host::set_clock;
+use crate::sys::io::failure::Failure;
 use crate::sys::io::param::RETRY_ATTEMPT_CNT;
 
 /// Opens the scheduler with room for every test's wants in each stream.
@@ -84,11 +85,7 @@ fn ok(key: u64) {
 }
 
 fn failed(key: u64, errnum: Errno) {
-    let fail = Failure {
-        errnum,
-        detail: 0,
-        at: None,
-    };
+    let fail = Failure::from(errnum);
     end_read(key);
     settle(key, Exit::Failed(fail), None);
 }

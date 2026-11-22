@@ -11,7 +11,8 @@ import type { Side } from "@xpute/link/link.ts";
 import { runtime } from "./runtime.ts";
 
 /** Hands its runtime a record of the host's, or of what it implements:
- * `msg`, at `level`, about `context`. */
+ * `msg`, at `level`, about `context`. The runtime's writer is the one place
+ * a record is made on the host's side, and cuts it. */
 export function log(level: Level, context: string, msg: string): void {
   runtime().log(level, context, msg);
 }

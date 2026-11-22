@@ -25,91 +25,75 @@ pub const OUT: _rt::Method = 7;
 pub const MOVE: _rt::Method = 8;
 
 pub trait Guest {
-    fn pan(&self, dx: f64, dy: f64) -> Result<(), _rt::Errno>;
-    fn rotate(&self, rad: f64) -> Result<(), _rt::Errno>;
-    fn tilt(&self, rad: f64) -> Result<(), _rt::Errno>;
-    fn zoom(&self, scale: f64) -> Result<(), _rt::Errno>;
-    fn drag(&self, dragging: bool) -> Result<(), _rt::Errno>;
-    fn tap(&self, x: f64, y: f64) -> Result<(), _rt::Errno>;
-    fn hover(&self, x: f64, y: f64) -> Result<(), _rt::Errno>;
-    fn out(&self) -> Result<(), _rt::Errno>;
-    fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::Errno>;
+    fn pan(&self, dx: f64, dy: f64) -> Result<(), _rt::XputeError>;
+    fn rotate(&self, rad: f64) -> Result<(), _rt::XputeError>;
+    fn tilt(&self, rad: f64) -> Result<(), _rt::XputeError>;
+    fn zoom(&self, scale: f64) -> Result<(), _rt::XputeError>;
+    fn drag(&self, dragging: bool) -> Result<(), _rt::XputeError>;
+    fn tap(&self, x: f64, y: f64) -> Result<(), _rt::XputeError>;
+    fn hover(&self, x: f64, y: f64) -> Result<(), _rt::XputeError>;
+    fn out(&self) -> Result<(), _rt::XputeError>;
+    fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::XputeError>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, _: &mut _rt::Lower) -> i32 {
-        let run = || -> Result<i32, _rt::Errno> {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: _rt::Lift, ret_: &mut _rt::Lower) -> i32 {
+        let run = || -> Result<i32, _rt::XputeError> {
             Ok(match m_ {
                 PAN => {
                     let dx = args_.f64(0)?;
                     let dy = args_.f64(8)?;
-                    match self.0.pan(dx, dy) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.pan(dx, dy)?;
+                    0
                 }
                 ROTATE => {
                     let rad = args_.f64(0)?;
-                    match self.0.rotate(rad) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.rotate(rad)?;
+                    0
                 }
                 TILT => {
                     let rad = args_.f64(0)?;
-                    match self.0.tilt(rad) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.tilt(rad)?;
+                    0
                 }
                 ZOOM => {
                     let scale = args_.f64(0)?;
-                    match self.0.zoom(scale) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.zoom(scale)?;
+                    0
                 }
                 DRAG => {
                     let dragging = args_.bool(0)?;
-                    match self.0.drag(dragging) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.drag(dragging)?;
+                    0
                 }
                 TAP => {
                     let x = args_.f64(0)?;
                     let y = args_.f64(8)?;
-                    match self.0.tap(x, y) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.tap(x, y)?;
+                    0
                 }
                 HOVER => {
                     let x = args_.f64(0)?;
                     let y = args_.f64(8)?;
-                    match self.0.hover(x, y) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.hover(x, y)?;
+                    0
                 }
-                OUT => match self.0.out() {
-                    Ok(()) => 0,
-                    Err(e) => e as i32,
-                },
+                OUT => {
+                    let () = self.0.out()?;
+                    0
+                }
                 MOVE => {
                     let x = args_.i32(0)?;
                     let y = args_.i32(4)?;
-                    match self.0.r#move(x, y) {
-                        Ok(()) => 0,
-                        Err(e) => e as i32,
-                    }
+                    let () = self.0.r#move(x, y)?;
+                    0
                 }
-                _ => _rt::Errno::ENOSYS as i32,
+                _ => return Err(_rt::Errno::ENOSYS.into()),
             })
         };
-        run().unwrap_or_else(|e| e as i32)
+        run().unwrap_or_else(|e| _rt::store_err(ret_, &e))
     }
 }
 
@@ -122,5 +106,6 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag};
+    pub(super) use xpute_kit::status::error::XputeError;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Tag, store_err};
 }

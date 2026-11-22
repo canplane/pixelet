@@ -35,6 +35,13 @@ impl Rows {
         w.arr(at + 16, &self.bytes);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, first_seq: u64, end_seq: u64, bytes: &[u8]) {
+        w_.u64(at_, first_seq);
+        w_.u64(at_ + 8, end_seq);
+        w_.arr(at_ + 16, bytes);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Rows, _rt::Errno> {
         Ok(Rows {
             first_seq: r.u64(at)?,
@@ -44,11 +51,11 @@ impl Rows {
     }
 }
 
-pub fn start(side_: &_rt::Side) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+pub fn start(side_: &_rt::Side) -> Result<Result<(), super::types::ErrorCode>, _rt::XputeError> {
     let (r, data) = side_.call(HANDLE, START, _rt::Packet::Args(None));
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.case(0, 2).and_then(|d| {
+        Ok(r_.case(0, 2).and_then(|d| {
             if d == 0 {
                 Ok(Ok(()))
             } else {
@@ -56,16 +63,19 @@ pub fn start(side_: &_rt::Side) -> Result<Result<(), super::types::ErrorCode>, _
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
-        })
+        })?)
     })
 }
 
-pub fn stop(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, STOP, _rt::Packet::Args(None));
-    _rt::answer(r)
+pub fn stop(side_: &_rt::Side) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(HANDLE, STOP, _rt::Packet::Args(None));
+    _rt::answer(r, data)
 }
 
-pub fn stats(side_: &_rt::Side, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno> {
+/// The size of the fixed part of `stats`'s args.
+pub const STATS_ARGS_SZ: usize = 16;
+
+pub fn stats(side_: &_rt::Side, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
         STATS,
@@ -76,13 +86,16 @@ pub fn stats(side_: &_rt::Side, window_ms: Option<f64>) -> Result<Vec<u8>, _rt::
             }
         }))),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.arr::<u8>(0)
+        Ok(r_.arr::<u8>(0)?)
     })
 }
 
-pub fn table(side_: &_rt::Side, table: u32, from: u64, cnt: u32) -> Result<Rows, _rt::Errno> {
+/// The size of the fixed part of `table`'s args.
+pub const TABLE_ARGS_SZ: usize = 24;
+
+pub fn table(side_: &_rt::Side, table: u32, from: u64, cnt: u32) -> Result<Rows, _rt::XputeError> {
     let (r, data) = side_.call(
         HANDLE,
         TABLE,
@@ -92,29 +105,30 @@ pub fn table(side_: &_rt::Side, table: u32, from: u64, cnt: u32) -> Result<Rows,
             w_.u32(16, cnt);
         }))),
     );
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        Rows::load(r_, 0)
+        Ok(Rows::load(r_, 0)?)
     })
 }
 
-pub fn worst(side_: &_rt::Side) -> Result<Vec<u8>, _rt::Errno> {
+pub fn worst(side_: &_rt::Side) -> Result<Vec<u8>, _rt::XputeError> {
     let (r, data) = side_.call(HANDLE, WORST, _rt::Packet::Args(None));
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.arr::<u8>(0)
+        Ok(r_.arr::<u8>(0)?)
     })
 }
 
-pub fn strtab(side_: &_rt::Side) -> Result<Vec<u8>, _rt::Errno> {
+pub fn strtab(side_: &_rt::Side) -> Result<Vec<u8>, _rt::XputeError> {
     let (r, data) = side_.call(HANDLE, STRTAB, _rt::Packet::Args(None));
-    _rt::answer(r).and_then(|_| {
+    _rt::answer(r, data).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
-        r_.arr::<u8>(0)
+        Ok(r_.arr::<u8>(0)?)
     })
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, Packet, Side, answer};
 }

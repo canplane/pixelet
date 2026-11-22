@@ -7,7 +7,9 @@ the web (`wasm32-unknown-unknown`) and as a library of a native crate.
 
 The guest's three exports are defined by one macro, `link!`, given four things.
 The first is a frame's cap in bytes, a multiple of 8 that holds a frame's words
-(`HDR_SZ`) and the largest packet the program lays or takes. The second is its
+(`HDR_SZ`) and the largest packet the program lays or takes, no less than
+xpute's own largest, the stop's (`CAP_MIN`, which a smaller cap does not
+compile against). The second is its
 boot, which mounts what it implements and opens what it calls. The last two are
 the program's start and end of every entry: `enter` runs as each entry begins,
 and `end` as it ends, answering whether it left work, in which case the entry
@@ -36,14 +38,14 @@ entry with:
 ```rust
 use std::rc::Rc;
 use xpute_guest::abi::life;
-use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
 struct Program;
 
 impl life::Guest for Program {
-    fn hidden(&self) -> Result<(), Errno> { /* save */ Ok(()) }
-    fn shown(&self) -> Result<(), Errno> { Ok(()) }
-    fn attached(&self) -> Result<(), Errno> { /* tell the UI where all stands */ Ok(()) }
+    fn hidden(&self) -> Result<(), XputeError> { /* save */ Ok(()) }
+    fn shown(&self) -> Result<(), XputeError> { Ok(()) }
+    fn attached(&self) -> Result<(), XputeError> { /* tell the UI where all stands */ Ok(()) }
 }
 
 xpute_guest::link!(4096, || life::mount(Rc::new(Program)), || {}, || false);

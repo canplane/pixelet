@@ -54,3 +54,29 @@ export function load_Lent(r: Lift, at: number): Lent {
     nbyte: r.u32(at + 8),
   };
 }
+
+export interface ErrorPacket {
+  file: string;
+  line: number;
+  msg: string | null;
+}
+
+export const ERROR_PACKET_SZ = 24;
+export const ERROR_PACKET_ALIGN = 4;
+
+export function store_ErrorPacket(w: Lower, at: number, v: ErrorPacket): void {
+  w.str(at, v.file);
+  w.u32(at + 8, v.line);
+  if (v.msg !== null) {
+    w.u8(at + 12, 1);
+    w.str(at + 12 + 4, v.msg);
+  }
+}
+
+export function load_ErrorPacket(r: Lift, at: number): ErrorPacket {
+  return {
+    file: r.str(at),
+    line: r.u32(at + 8),
+    msg: r.case(at + 12, 2) === 0 ? null : r.str(at + 12 + 4),
+  };
+}

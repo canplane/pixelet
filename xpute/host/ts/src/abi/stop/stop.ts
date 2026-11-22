@@ -4,12 +4,14 @@
 
 import type { u64 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Callee,
   type Handle,
   type LinkObject,
   type Method,
-  refusal_of,
+  err_of,
+  store_err,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `xpute:stop/stop` (frame.json5 `NAMED`). */
@@ -32,7 +34,7 @@ export interface Host {
 /** The object over `implementation`. */
 function object(implementation: Host): LinkObject {
   return {
-    call(m, _tag, args, _ret) {
+    call(m, _tag, args, ret) {
       try {
         switch (m) {
           case STOPPED: {
@@ -47,10 +49,10 @@ function object(implementation: Host): LinkObject {
             return 0;
           }
           default:
-            return ERRNO_ENOSYS;
+            throw new XputeError(ERRNO_ENOSYS);
         }
       } catch (e) {
-        return refusal_of(e);
+        return store_err(ret, err_of(e));
       }
     },
     drop() {},

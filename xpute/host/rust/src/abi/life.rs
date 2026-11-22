@@ -12,23 +12,23 @@ pub const SHOWN: _rt::Method = 1;
 /// `attached`
 pub const ATTACHED: _rt::Method = 2;
 
-pub fn hidden(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, HIDDEN, _rt::Packet::Args(None));
-    _rt::answer(r)
+pub fn hidden(side_: &_rt::Side) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(HANDLE, HIDDEN, _rt::Packet::Args(None));
+    _rt::answer(r, data)
 }
 
-pub fn shown(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, SHOWN, _rt::Packet::Args(None));
-    _rt::answer(r)
+pub fn shown(side_: &_rt::Side) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(HANDLE, SHOWN, _rt::Packet::Args(None));
+    _rt::answer(r, data)
 }
 
-pub fn attached(side_: &_rt::Side) -> Result<(), _rt::Errno> {
-    let (r, _) = side_.call(HANDLE, ATTACHED, _rt::Packet::Args(None));
-    _rt::answer(r)
+pub fn attached(side_: &_rt::Side) -> Result<(), _rt::XputeError> {
+    let (r, data) = side_.call(HANDLE, ATTACHED, _rt::Packet::Args(None));
+    _rt::answer(r, data)
 }
 
 mod _rt {
-    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Method, Packet, Side, answer};
 }
 

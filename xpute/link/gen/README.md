@@ -33,7 +33,7 @@ a part of WIT, refuses the rest by name, and reads some of it its own way.
 | `record`, `variant`, `enum`, a type alias | taken |
 | `list<T>` | taken; a list of numbers crosses as its bytes, a typed array in TypeScript |
 | `option<T>` | taken, but no option of an option: TypeScript's none is one null |
-| `result<T, E>` | taken, either side empty; any failure outside its error case is the frame's status, an errno |
+| `result<T, E>` | taken, either side empty; any failure outside its error case is the frame's status, an errno, the rest of the error its packet |
 | `char`, `tuple`, `flags`, `future`, `stream`, `error-context` | refused |
 | `func`, and a resource's method | a method answered inside the crossing |
 | `async func` | a method answered later, by a frame of its own that carries the request's tag; the component model's async ABI is not used |

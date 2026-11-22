@@ -11,30 +11,31 @@ use crate::domain::control::input::{
 };
 use crate::pointer;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 
-pub(super) fn pan(dx: f64, dy: f64) -> Result<(), Errno> {
+pub(super) fn pan(dx: f64, dy: f64) -> Result<(), XputeError> {
     camera_pan(dx, dy);
     Ok(())
 }
 
-pub(super) fn rotate(rad: f64) -> Result<(), Errno> {
+pub(super) fn rotate(rad: f64) -> Result<(), XputeError> {
     camera_rotate(rad);
     Ok(())
 }
 
-pub(super) fn tilt(rad: f64) -> Result<(), Errno> {
+pub(super) fn tilt(rad: f64) -> Result<(), XputeError> {
     camera_tilt(rad);
     Ok(())
 }
 
-pub(super) fn zoom(scale: f64) -> Result<(), Errno> {
+pub(super) fn zoom(scale: f64) -> Result<(), XputeError> {
     refuse_unless(scale > 0.0, Errno::EINVAL)?;
     camera_zoom(scale);
     Ok(())
 }
 
 /// A hand dragging the view points at nothing the tool could place.
-pub(super) fn drag(dragging: bool) -> Result<(), Errno> {
+pub(super) fn drag(dragging: bool) -> Result<(), XputeError> {
     camera_drag(dragging);
     if dragging {
         clear_hover_coord();
@@ -42,7 +43,7 @@ pub(super) fn drag(dragging: bool) -> Result<(), Errno> {
     Ok(())
 }
 
-pub(super) fn tap(x: f64, y: f64) -> Result<(), Errno> {
+pub(super) fn tap(x: f64, y: f64) -> Result<(), XputeError> {
     let [x, y] = tap_ndc(x, y);
     pointer::tap(x, y);
     // A tap leaves its hover only under a pointer that stays over the world,
@@ -53,18 +54,18 @@ pub(super) fn tap(x: f64, y: f64) -> Result<(), Errno> {
     Ok(())
 }
 
-pub(super) fn hover(x: f64, y: f64) -> Result<(), Errno> {
+pub(super) fn hover(x: f64, y: f64) -> Result<(), XputeError> {
     camera_hover(x, y);
     Ok(())
 }
 
-pub(super) fn out() -> Result<(), Errno> {
+pub(super) fn out() -> Result<(), XputeError> {
     camera_out();
     clear_hover();
     Ok(())
 }
 
-pub(super) fn r#move(x: i32, y: i32) -> Result<(), Errno> {
+pub(super) fn r#move(x: i32, y: i32) -> Result<(), XputeError> {
     camera_keys(x, y);
     Ok(())
 }

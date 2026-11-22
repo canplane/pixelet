@@ -23,6 +23,12 @@ impl Frame {
         w.u64(at + 8, self.gap);
     }
 
+    /// Stores a record of these fields, each borrowed, as `store` stores one.
+    pub fn store_of(w_: &mut _rt::Lower, at_: usize, at: u64, gap: u64) {
+        w_.u64(at_, at);
+        w_.u64(at_ + 8, gap);
+    }
+
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Frame, _rt::Errno> {
         Ok(Frame {
             at: r.u64(at)?,
@@ -31,7 +37,10 @@ impl Frame {
     }
 }
 
-pub fn next(after: u64) -> impl Future<Output = Result<Frame, _rt::Errno>> + use<> {
+/// The size of the fixed part of `next`'s args.
+pub const NEXT_ARGS_SZ: usize = 8;
+
+pub fn next(after: u64) -> impl Future<Output = Result<Frame, _rt::XputeError>> + use<> {
     let sent = _rt::wait::wait(
         HANDLE,
         NEXT,
@@ -42,9 +51,9 @@ pub fn next(after: u64) -> impl Future<Output = Result<Frame, _rt::Errno>> + use
     );
     async move {
         let (r, data, _) = sent.await;
-        _rt::answer(r).and_then(|_| {
+        _rt::answer(r, data.as_deref()).and_then(|_| {
             let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
-            Frame::load(r_, 0)
+            Ok(Frame::load(r_, 0)?)
         })
     }
 }
@@ -52,5 +61,6 @@ pub fn next(after: u64) -> impl Future<Output = Result<Frame, _rt::Errno>> + use
 mod _rt {
     pub(super) use xpute_guest::wait;
     pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_kit::status::error::XputeError;
     pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer};
 }

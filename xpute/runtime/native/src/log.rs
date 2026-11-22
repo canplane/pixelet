@@ -8,6 +8,7 @@
 //! process's error stream elsewhere, which has no levels.
 
 use xpute_host::abi::log::Level;
+use xpute_kit::status::msg::cut_msg;
 
 /// Android's priority of each level, in `Level`'s order.
 #[cfg(target_os = "android")]
@@ -20,9 +21,12 @@ const PRIORITY: [ndk_sys::android_LogPriority; 6] = [
     ndk_sys::android_LogPriority::ANDROID_LOG_FATAL,
 ];
 
-/// Writes `msg` at `level`, about `context`.
+/// Writes `msg` at `level`, about `context`, each cut as far as a message's
+/// cap holds it (`cut_msg`): the one place a record is made on the host's
+/// side, the guest's as its host hands it on, the host's, the runtime's own
+/// and the UI's.
 pub(crate) fn log(level: Level, context: &str, msg: &str) {
-    let line = format!("[{context}] {msg}");
+    let line = format!("[{}] {}", cut_msg(context), cut_msg(msg));
     #[cfg(target_os = "android")]
     {
         let line = std::ffi::CString::new(line.replace('\0', " ")).unwrap_or_default();

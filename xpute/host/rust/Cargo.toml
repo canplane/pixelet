@@ -25,6 +25,8 @@ xpute-link.workspace = true
 # (src/clock.test.rs).
 xpute-guest.workspace = true
 xpute-runtime-native.workspace = true
+# The stop's test reads the record a message's cut is held to.
+xpute-golden.workspace = true
 
 # A process starts one runtime and links one guest, so the test is a binary of
 # its own, on the runtime's process tests' app (xpute-runtime-native

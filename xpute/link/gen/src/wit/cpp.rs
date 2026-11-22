@@ -209,12 +209,6 @@ impl Header<'_> {
         )
     }
 
-    /// The result of the errno `e`, an expression of `Errno`.
-    fn refusal(&self, e: &str) -> String {
-        self.include("cstdint");
-        format!("static_cast<std::int32_t>({e})")
-    }
-
     /// A discriminant's C++ type, of `n` cases.
     fn discriminant_type(&self, n: usize) -> Result<&'static str, String> {
         self.include("cstdint");
@@ -422,11 +416,11 @@ impl Header<'_> {
 
     /// The Canonical ABI's members of the type `n`, beside its fields: its
     /// layout, its store, whose statements are `store`, and its load's head.
-    fn cabi(&self, n: &str, sz: usize, align: usize, store: &str) -> String {
+    fn cabi(&self, n: &str, sz: usize, align: usize, store: &str, store_of: &str) -> String {
         self.include("cstddef");
         let (lower, lift) = (self.rt_use(CABI, "Lower"), self.rt_use(CABI, "Lift"));
         format!(
-            "    static constexpr std::size_t SZ = {sz};\n    static constexpr std::size_t ALIGN = {align};\n\n    void store({lower} &w, std::size_t at) const noexcept {{\n{store}    }}\n\n    static {n} load({lift} &r, std::size_t at) noexcept {{\n"
+            "    static constexpr std::size_t SZ = {sz};\n    static constexpr std::size_t ALIGN = {align};\n\n    void store({lower} &w, std::size_t at) const noexcept {{\n{store}    }}\n\n{store_of}    static {n} load({lift} &r, std::size_t at) noexcept {{\n"
         )
     }
 
@@ -502,10 +496,32 @@ impl Header<'_> {
                             self.store("w", &plus("at", off), &format!("this->{}", name(f)), k)?
                         );
                     }
+                    // The same record from fields the caller holds, which
+                    // it need not copy into one to store.
+                    let params: String = fields
+                        .iter()
+                        .map(|(f, k)| {
+                            let t = self.borrowed(k)?;
+                            let gap = if t.ends_with('&') { "" } else { " " };
+                            Ok(format!(", {t}{gap}{}", name(f)))
+                        })
+                        .collect::<Result<_, String>>()?;
+                    let mut store_of = format!(
+                        "    // Stores a record of these fields, each borrowed, as `store` stores one.\n    static void store_of({} &w_, std::size_t at_{params}) noexcept {{\n",
+                        self.rt_use(CABI, "Lower")
+                    );
+                    for ((f, k), &off) in fields.iter().zip(&offs) {
+                        let _ = writeln!(
+                            store_of,
+                            "        {}",
+                            self.store("w_", &plus("at_", off), &name(f), k)?
+                        );
+                    }
+                    store_of.push_str("    }\n\n");
                     let _ = writeln!(
                         out,
                         "\n{}        return {n}{{",
-                        self.cabi(&n, sz, align, &store)
+                        self.cabi(&n, sz, align, &store, &store_of)
                     );
                     for ((f, k), &off) in fields.iter().zip(&offs) {
                         let _ = writeln!(
@@ -569,7 +585,7 @@ impl Header<'_> {
                         out,
                         "\n    std::variant<{}> variant;\n\n{}        switch (r.case_(at, {})) {{",
                         alternatives.join(", "),
-                        self.cabi(&n, sz, align, &store),
+                        self.cabi(&n, sz, align, &store, ""),
                         cases.len()
                     );
                     for (k, (c, kd)) in cases.iter().enumerate() {
@@ -643,7 +659,7 @@ impl Header<'_> {
     fn answer(&self, k: &Option<Kind>) -> Result<String, String> {
         let answer = self.rt_use(LINK, "answer");
         Ok(match k {
-            None => format!("{answer}(result_)"),
+            None => format!("{answer}(result_, data_)"),
             Some(k) => format!(
                 "{answer}(result_, data_, [&]({} &r_) {{ return {}; }})",
                 self.rt_use(CABI, "Lift"),
@@ -667,14 +683,17 @@ impl Header<'_> {
     }
 
     /// The C++ that answers `x_`, an async method's `Result` of `k`, later:
-    /// its refusal, or its value written as the answer's frame is laid.
+    /// its error, or its value, written as the answer's frame is laid.
     fn task_return(&self, k: &Option<Kind>) -> Result<String, String> {
         let task_return = self.rt_use(GUEST_LINK, "task_return");
-        let refusal = self.refusal("x_.error().errnum");
+        let refuse = format!(
+            "if (!x_) return {}(tag_, x_.error());",
+            self.rt_use(GUEST_LINK, "task_err")
+        );
         Ok(match k {
-            None => format!("{task_return}(tag_, x_ ? 0 : {refusal}, std::nullopt);"),
+            None => format!("{refuse}\n                {task_return}(tag_, 0, std::nullopt);"),
             Some(k) => format!(
-                "if (!x_) return {task_return}(tag_, {refusal}, std::nullopt);\n                const auto &v_ = *x_;\n                {task_return}(tag_, 0, {}{{{}, [&]({} &w_) {{ {} }}}});",
+                "{refuse}\n                const auto &v_ = *x_;\n                {task_return}(tag_, 0, {}{{{}, [&]({} &w_) {{ {} }}}});",
                 self.rt_use(LINK, "Packet"),
                 self.layout(k)?.0,
                 self.rt_use(CABI, "Lower"),
@@ -768,7 +787,6 @@ impl Header<'_> {
             let ps = self.kinds(f)?;
             let _ = writeln!(out, "        case {}: {{", method_const(o, f, given));
             if !ps.is_empty() {
-                let ebadmsg = self.refusal(&format!("{}::ebadmsg", self.rt_use(ERROR, "Errno")));
                 let (offs, _) = self
                     .g
                     .tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
@@ -780,7 +798,11 @@ impl Header<'_> {
                         self.load("args_", &at.to_string(), k)?
                     );
                 }
-                let _ = writeln!(out, "            if (!args_.finish()) return {ebadmsg};");
+                let _ = writeln!(
+                    out,
+                    "            if (auto read_ = args_.finish(); !read_) return {}(ret_, read_.error());",
+                    self.rt_use(LINK, "store_err")
+                );
             }
             let args: Vec<String> = ps
                 .iter()
@@ -794,7 +816,6 @@ impl Header<'_> {
                 .collect();
             let rk = self.g.ret(f)?;
             let m = name(method_name(f));
-            let refusal = self.refusal("x_.error().errnum");
             if is_async(f) {
                 let ret = rk.as_ref().map_or(Ok("void".into()), |k| self.ty(k))?;
                 let args: String = args.iter().map(|a| format!("{a}, ")).collect();
@@ -810,17 +831,20 @@ impl Header<'_> {
             } else {
                 let _ = writeln!(
                     out,
-                    "            {} x_ = implementation_->{m}({});\n            if (!x_) return {refusal};\n            {}return 0;\n        }}",
+                    "            {} x_ = implementation_->{m}({});\n            if (!x_) return {}(ret_, x_.error());\n            {}return 0;\n        }}",
                     self.result(&rk)?,
                     args.join(", "),
+                    self.rt_use(LINK, "store_err"),
                     self.put(&rk)?
                 );
             }
         }
         let _ = writeln!(
             out,
-            "        default:\n            return {};\n        }}\n    }}\n\n  private:\n    std::unique_ptr<{t}> implementation_;\n}};\n",
-            self.errno("enosys")
+            "        default:\n            return {}(ret_, {}({}::enosys));\n        }}\n    }}\n\n  private:\n    std::unique_ptr<{t}> implementation_;\n}};\n",
+            self.rt_use(LINK, "store_err"),
+            self.rt_use(ERROR, "make_error"),
+            self.rt_use(ERROR, "Errno")
         );
         if o.resource {
             let _ = writeln!(
@@ -907,6 +931,17 @@ impl Header<'_> {
             let c = method_const(o, f, given);
             let m = name(&object_method(o, f));
             let rk = self.g.ret(f)?;
+            if !ps.is_empty() {
+                self.include("cstddef");
+                let (_, sz) = self
+                    .g
+                    .tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
+                let _ = writeln!(
+                    out,
+                    "// The size of the fixed part of `{}`'s args.\ninline constexpr std::size_t {c}_ARGS_SZ = {sz};\n",
+                    f.name
+                );
+            }
             if is_async(f) {
                 self.include("utility");
                 let result = self.result(&rk)?;

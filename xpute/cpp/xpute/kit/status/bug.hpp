@@ -8,7 +8,8 @@
 // aborts where it runs in none. The message is a static string, never one
 // built at the bug, as `std::bad_alloc::what()` is: a full heap is itself a
 // bug, so reporting one allocates nothing, and what varies goes in the two
-// numbers. A failed check of libc++'s own is told with libc++'s message,
+// numbers. One past the cap is cut as the bug is made, a view of the static
+// string itself (`cut_msg`), and an empty one is none. A failed check of libc++'s own is told with libc++'s message,
 // written into static storage at the stop (bug.cpp `abort_bug`), as a Rust
 // panic `bug` did not raise is told with its own.
 
@@ -17,6 +18,7 @@
 #include <cstdint>
 #include <optional>
 #include <source_location>
+#include <string_view>
 #include <utility>
 
 #include "errno.spec.hpp"
@@ -28,21 +30,21 @@
 
 namespace xpute {
 
-using Report = void (*)(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b, const char *msg);
+using Report = void (*)(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b, std::string_view msg);
 
 // Installs the function a bug is reported to. Only the first call takes
 // effect.
 void set_report(Report report) noexcept;
 
-// `msg` is what a person reads of the bug, or null.
-[[noreturn]] void bug(Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, const char *msg = nullptr, std::source_location at = std::source_location::current()) noexcept;
+// `msg` is what a person reads of the bug, or empty.
+[[noreturn]] void bug(Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, std::string_view msg = {}, std::source_location at = std::source_location::current()) noexcept;
 
 inline void ensure(bool cond, Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, std::source_location at = std::source_location::current()) noexcept {
-    if (!cond) bug(errnum, a, b, nullptr, at);
+    if (!cond) bug(errnum, a, b, {}, at);
 }
 
 template <class T> T or_bug(std::optional<T> v, Errno errnum, std::source_location at = std::source_location::current()) noexcept {
-    if (!v) bug(errnum, 0, 0, nullptr, at);
+    if (!v) bug(errnum, 0, 0, {}, at);
     return *v;
 }
 

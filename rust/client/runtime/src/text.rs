@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 
 use pxl_spec::color::Rgba;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::XputeError;
 use xpute_link::abi::types::Lent;
 use xpute_link::{Side, mem};
 
@@ -59,7 +60,7 @@ fn text_of(lent: &Lent) -> Result<&'static str, Errno> {
 struct Device;
 
 impl text::Host for Device {
-    fn width(&self, weight: u32, px: f64, text: Lent) -> Result<f64, Errno> {
+    fn width(&self, weight: u32, px: f64, text: Lent) -> Result<f64, XputeError> {
         let system = system()?;
         let text = text_of(&text)?;
         // SAFETY: the bytes of `text`, which outlive the call.
@@ -77,7 +78,7 @@ impl text::Host for Device {
         height: u32,
         x: f64,
         text: Lent,
-    ) -> Result<(), Errno> {
+    ) -> Result<(), XputeError> {
         let system = system()?;
         let text = text_of(&text)?;
         let len = width

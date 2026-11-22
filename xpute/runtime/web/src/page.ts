@@ -31,6 +31,7 @@ import {
   CANCEL,
   DROP,
   End,
+  ERR_PKT_CAP,
   type Handle,
   type Method,
   type Packet,
@@ -38,6 +39,7 @@ import {
   ROOT,
   type Tag,
 } from "@xpute/link/link.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift, Lower } from "@xpute/link/cabi.ts";
 import { sender } from "@xpute/link/wait.ts";
 import type { UiStop } from "@xpute/host/runtime.ts";
@@ -89,12 +91,16 @@ const ui = new (class extends End {
 /** No packet. */
 const NONE = new Uint8Array(0);
 
-/** The reader of each packet the worker posts, and the writer of the answer
- * the UI's end gives at once, which holds no value: every method the UI
- * implements is an `async func` (worker.ts `enter`), so a value written there
- * is past its room, EMSGSIZE. */
+/** The room of the answer the UI's end gives at once. Every method the UI
+ * implements is an `async func`, so that answer holds no value: it is an
+ * error's, whose packet is within this, and a value written there is past
+ * it, EMSGSIZE. */
+const RET_BUF = new Uint8Array(ERR_PKT_CAP);
+
+/** The reader of each packet the other thread sends, and the writer of the
+ * answer the UI's end gives at once (`RET_BUF`). */
 const args = new Lift(NONE);
-const ret = new Lower(NONE, 0);
+const ret = new Lower(RET_BUF, 0);
 
 /** Hands the UI's end the frame the worker posted, its packet `pkt`, and
  * answers what the end answers (`End.input`). */
@@ -108,7 +114,7 @@ function input(
 ): i32 {
   const p = pkt ?? NONE;
   args.reset(p.buffer, p.byteOffset, p.length);
-  ret.reset(NONE.buffer, 0, 0);
+  ret.reset(RET_BUF.buffer, 0, RET_BUF.length);
   return ui.input(tag, h, m, res, result, args, ret);
 }
 
@@ -121,7 +127,9 @@ const HEAR: {
   request: (m) => {
     const result = input(m.tag, m.h, m.m, false, 0, m.pkt);
     if (result === ERRNO_EINPROGRESS) return;
-    ui.task_return(m.tag, ret.finish() < 0 ? ERRNO_EMSGSIZE : result);
+    const n = ret.finish();
+    if (n < 0) ui.task_err(m.tag, new XputeError(ERRNO_EMSGSIZE));
+    else ui.task_return(m.tag, result, n > 0 ? RET_BUF.slice(0, n) : null);
   },
   answer: (m) => void input(m.tag, ROOT, 0, true, m.result, m.pkt),
   open: (m) => ui.open_at(m.k, m.h, m.uri),

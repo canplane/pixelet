@@ -40,6 +40,12 @@
 //   marked RES, with its result and its return data as the packet. A call's
 //   return data is readable until the next crossing; a send's answer gets a
 //   copy, which it owns.
+// - An answer whose result is an errno carries the rest of its error, its
+//   place and its message, as its packet (`types.wit` `error-packet`), so the
+//   caller's error is the one that was made (`store_err`, `answer`),
+//   whoever refused: an implementation, or the link itself, of a handle it
+//   does not hold or a packet past the cap. A trapped link lays no frame, so
+//   its EPIPE alone is made where it is read.
 //
 // C++ is written for the guest alone, so a packet is always one its side
 // writes: none crosses here already written, as one the UI sent does on a
@@ -75,6 +81,7 @@ namespace xpute::link {
 
 using Token = ::xpute::abi::link::types::Token;
 using Lent = ::xpute::abi::link::types::Lent;
+using ErrorPacket = ::xpute::abi::link::types::ErrorPacket;
 
 using Tag = std::uint32_t;
 using Method = std::uint32_t;
@@ -124,8 +131,8 @@ using Data = std::optional<Packet>;
 // its answer's value (`ret`), it answers its result, a status (link.ts
 // `LinkObject`). The reader and the writer are over the frame the request
 // came in, so a method that answers a value writes it once its args are
-// read, starting the packet (`Lower::start`), and one that writes none
-// answers no packet.
+// read, starting the packet (`Lower::start`), one that fails its error
+// (`store_err`), and one that writes none answers no packet.
 class Object {
   public:
     virtual ~Object() = default;
@@ -254,9 +261,15 @@ class Side {
     // `result` and its return data, as the component model's `task.return`.
     // A later answer is found by its tag alone. While this side is crossing,
     // its packet is written now and laid after the work at hand (`run_due`);
-    // a packet past the cap is answered EMSGSIZE with no data, as one laid at
-    // once is.
+    // a packet past the cap is answered EMSGSIZE, as one laid at once is.
     void task_return(Tag t, std::int32_t result, const Data &data);
+
+    // Answers the request `t`, whose method answered EINPROGRESS, with the
+    // error `e` it failed with, as `task_return` answers its value. While
+    // this side is crossing, the error itself waits and is laid after the
+    // work at hand, so answering one allocates nothing, as an error answered
+    // at once does not.
+    void task_err(Tag t, Error e);
 
     // The frame the other side laid at `at`: a later answer, made due, or a
     // method, run by its object, its answer laid in the frame it came in.
@@ -277,12 +290,18 @@ class Side {
         std::optional<std::vector<std::uint8_t>> data;
     };
 
-    // A later answer given while this side is crossing: its request, result
-    // and packet, written.
-    struct Completion {
-        Tag tag;
+    // A later answer's result and packet, written.
+    struct Written {
         std::int32_t result;
         std::optional<std::vector<std::uint8_t>> pkt;
+    };
+
+    // A later answer given while this side is crossing: its request, and
+    // what is written of it, or the error it failed with, which holds what
+    // its packet is made of.
+    struct Completion {
+        Tag tag;
+        Result<Written> answer;
     };
 
     std::int32_t run(Handle h, Method m, Tag tag, Lift args, Lower &ret);
@@ -290,6 +309,7 @@ class Side {
     Tag tag() noexcept;
     Result<void> lay(std::uint64_t at, Frame words, const Args &pkt);
     std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> out(Tag tag, Handle h, Method m, bool res, std::int32_t result, const Args &pkt);
+    void out_err(Tag t, const Error &e);
 
     std::optional<Layout> layout_;
     // The box this side lays its frames in.
@@ -330,16 +350,29 @@ void store_uri(Lower &w, std::size_t at, std::span<const Token> uri);
 // packet is `r`'s to report (`Lift::finish`).
 std::vector<Token> load_uri(Lift &r, std::size_t at);
 
-// A method's result, its status: answered, or the errno it failed with (a
-// refusal, or a method's errno where its WIT has no `result`). Its value, if
-// it has one, is in its return data.
-Result<void> answer(std::int32_t result) noexcept;
+// The most bytes an error's answer holds as its packet: its fixed part, and
+// its file and its message, each as far as a message's cap. A frame's cap
+// holds one (`guest/link.cpp` `init`), so no error's answer is past it.
+inline constexpr std::size_t ERR_PKT_CAP = ErrorPacket::SZ + 2 * MSG_CAP;
+
+// Writes the error `e` as an answer at once: the rest of it as the packet
+// (`types.wit` `error-packet`). It answers the answer's result, the error's
+// errno.
+std::int32_t store_err(Lower &w, const Error &e) noexcept;
+
+// A method's result, its status, with its return data `data`: answered, its
+// value, if it has one, in its return data; or the error it failed with (a
+// refusal, or a method's error where its WIT has no `result`), the one that
+// was made, with the place and the message the data holds (`store_err`).
+// Data that holds no error's packet is EBADMSG. A trapped link's EPIPE alone
+// holds no data, no frame having crossed, and its error is made here.
+Result<void> answer(std::int32_t result, std::optional<std::span<const std::uint8_t>> data) noexcept;
 
 // A method's result and the value `load` reads from its return data `data`
 // (`Lift`), refused EBADMSG where it has none or does not hold the value.
 template <class D, class F>
 auto answer(std::int32_t result, const std::optional<D> &data, F &&load) -> Result<decltype(load(std::declval<Lift &>()))> {
-    if (Result<void> a = answer(result); !a) return a.error();
+    if (Result<void> a = answer(result, data); !a) return a.error();
     if (!data) return make_error(Errno::ebadmsg);
     Lift r{std::span<const std::uint8_t>(*data)};
     auto v = load(r);

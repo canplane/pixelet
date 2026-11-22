@@ -16,5 +16,9 @@ path = "src/lib.rs"
 xpute-kit.workspace = true
 xpute-link.workspace = true
 
+[dev-dependencies]
+# The tests read the record a message's cut is held to.
+xpute-golden.workspace = true
+
 [lints]
 workspace = true
