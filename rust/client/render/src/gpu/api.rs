@@ -1829,6 +1829,25 @@ impl Gpu {
         call::copy_texture_to_texture(&mut self.s().stream, encoder, src, dst, size);
     }
 
+    /// Copies `layer_cnt` layers of one texel of `src` into buffer `dst` from its first byte,
+    /// a layer every `row_sz` bytes, the bytes a row of a layered copy takes.
+    pub fn copy_texel_to_buf(
+        &self,
+        encoder: Id,
+        src: &encode::TexelCopyTexture,
+        dst: Id,
+        row_sz: u32,
+        layer_cnt: u32,
+    ) {
+        let to = encode::TexelCopyBuffer {
+            buffer: dst,
+            offset: 0,
+            bytes_per_row: row_sz,
+            rows_per_image: 1,
+        };
+        call::copy_texture_to_buffer(&mut self.s().stream, encoder, src, &to, [1, 1, layer_cnt]);
+    }
+
     #[track_caller]
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
         let colors = [d.color, d.second].map(|view| encode::ColorAttachment {
@@ -2194,6 +2213,31 @@ impl Gpu {
         // does not read while the mapping is out.
         let into = unsafe { mem::bytes(addr, length) };
         call::map_async(&mut self.s().stream, id, off, into, fence, ticket);
+    }
+}
+
+/// A buffer's mapping back into the core's memory (`Gpu::map_read`), one out at a time,
+/// which its holder keeps track of: the fence and result the host writes, and the ticket
+/// the last mapping was asked with, which the fence holds once that mapping lands.
+#[derive(Default)]
+pub struct Mapping {
+    fence: Box<[u32; 2]>,
+    ticket: u32,
+}
+
+impl Mapping {
+    /// Asks to map `length` bytes of buffer `id`, from its first, to `addr`.
+    pub fn ask(&mut self, g: &Gpu, id: Id, length: u32, addr: u64) {
+        self.ticket = self.ticket.wrapping_add(1);
+        g.map_read(id, 0, length, addr, &self.fence, self.ticket);
+    }
+
+    /// Whether the mapping asked last has landed, and where it has, whether its bytes are
+    /// in. Its holder asks this only while a mapping it asked is out.
+    pub fn landed(&self) -> Option<bool> {
+        // SAFETY: the mapping's fence, boxed in place; the host stores into it only atomically.
+        let signaled = unsafe { signaled(core::ptr::addr_of!(self.fence[0]), self.ticket) };
+        signaled.then(|| self.fence[1] == result::OK)
     }
 }
 

@@ -3,10 +3,17 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./lane.ts";
+import {
+  coordinate,
+  type FrameGroup,
+  GROUPS,
+  n1,
+  valueText,
+  zoomName,
+} from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
-import { failText } from "./report.ts";
+import { failText, pointerRows } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
 import { alpha, COLOR } from "@/ui/shared/component/theme.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
@@ -58,18 +65,12 @@ const hitKindText = (k: number) => {
   return kind === undefined ? "-" : HIT_KIND_TEXT[kind];
 };
 
-/** A coordinate in units, to three decimals: enough for an eighth of a unit,
- * the side of the finest cell (z27). Trailing zeros are dropped. */
-const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
-const coordinate = (x: number, y: number, z: number) =>
-  Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
-
 /**
  * Where the camera's eye, its pivot and the pointer are at this moment, not
  * over the window. Each is a coordinate in units, and the pivot is also given
- * on the Earth. The pointer is shown twice: what it meets at the zooms the
- * eye draws, and where the tool in hand would strike there. When a hover
- * would do nothing, the two show where they part.
+ * on the Earth. The pointer is shown twice: what its pixel draws, as the GPU's
+ * ray left it there (`pointerRows`), and where the tool in hand would strike
+ * there. When a hover would do nothing, the two show where they part.
  */
 export function PerfView({ v }: { v: Gauge["view"] }) {
   const picked = !Number.isNaN(v.hit_kind);
@@ -88,8 +89,9 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
       <Row k="ele" v={meters(v.pivot_ele)} />
       <Head>Pointer</Head>
-      <Row k="coord" v={coordinate(v.hover_x, v.hover_y, v.hover_z)} />
-      <Row k="drawn at" v={zoomName(v.cell_zoom)} />
+      {pointerRows(v).map((r) => (
+        <Row key={r.k} k={r.k} v={r.v} warn={r.warn} />
+      ))}
       <Row
         k="hit"
         v={

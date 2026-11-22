@@ -455,7 +455,8 @@ Rust, word for word, over a real world's buffers
 (`rust/client/render/tests/`). Positions are integers on both sides, and any
 value a rule of the world's state would divide by or take the root of is
 rounded once on the CPU and handed to the GPU. A drawing's floats may still
-part, and nothing reads them back.
+part, and no rule of the world reads them back: the profiler alone reads a
+ray's distance, to say where a pixel's ray ended.
 
 ### What is not a layer
 

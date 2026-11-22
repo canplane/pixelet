@@ -14,6 +14,9 @@ use crate::domain::control::navigation;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::query::unknown;
 use crate::domain::scene::marker::{self, MarkerHit};
+use crate::domain::scene::resolution;
+use crate::domain::view::frame::pose;
+use pxl_render::ray::RayPixel;
 
 /// What a tap on a scene marker does with the tool held.
 enum MarkerTap {
@@ -46,6 +49,27 @@ pub(crate) fn hover(x: f64, y: f64) {
         Some(_) => edit::point_at(x, y),
         None => edit::hover_at(x, y),
     }
+}
+
+/// The drawn pixel the pointer is on, with the view's ray through its middle,
+/// its origin then its unit direction (`pose::ray_of`), as the renderer is
+/// asked that ray's words back (pxl-render ray/readback.rs). The cast aims a
+/// pixel's ray through its middle moved by that cast's jitter (pxl-render
+/// grid.wgsl `px_tan`), which the core does not know, so the ray the GPU
+/// walked lies within half a drawn pixel of this one. None while the pointer
+/// is off the screen, or with no drawn world.
+pub(crate) fn ray_px() -> Option<RayPixel> {
+    let [x, y] = edit::pointer_ndc()?;
+    let size = resolution::drawn_size()?;
+    let at = |ndc: f64, n: u32| (((ndc + 1.0) / 2.0 * f64::from(n)) as u32).min(n - 1);
+    let px = [at(x, size[0]), at(-y, size[1])];
+    let middle = |k: usize| (f64::from(px[k]) + 0.5) / f64::from(size[k]) * 2.0 - 1.0;
+    let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
+    pose::ray_of(middle(0), -middle(1), &mut origin, &mut dir);
+    Some(RayPixel {
+        px,
+        ray: [origin[0], origin[1], origin[2], dir[0], dir[1], dir[2]],
+    })
 }
 
 /// Whether the pointer is over a marker a tap would act on.

@@ -260,6 +260,14 @@ pub(crate) fn drawn_scale() -> f64 {
         })
 }
 
+/// The size the world is drawn at, in pixels, across then down. None before
+/// the world's surface has its targets.
+pub(crate) fn drawn_size() -> Option<[u32; 2]> {
+    world()
+        .filter(|s| s.depth != 0)
+        .map(|s| [s.width, s.height])
+}
+
 /// The device pixels per CSS pixel at which a display of `dpr` is drawn
 /// whole.
 fn device(dpr: f64) -> f64 {

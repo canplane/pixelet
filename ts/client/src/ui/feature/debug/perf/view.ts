@@ -14,6 +14,7 @@ import {
   type ViewSection,
   type Worst,
 } from "@/service/core/perf.ts";
+import { hover } from "@/service/core/input.ts";
 import type { LongFrame } from "@/service/platform/types.ts";
 import { longFramesClear, longFramesSince } from "./long-frame.ts";
 
@@ -81,6 +82,31 @@ export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
     tasks: s.tasks,
     view: s.view,
   };
+}
+
+const AT_POLL_MS = 50;
+const AT_WAIT_MS = 2_000;
+
+/**
+ * The view once it holds what the drawn pixel under (`x`, `y`) draws, a
+ * point in the view's logical pixels. The pointer is hovered there, and the
+ * view is read, each read asking the pixel's words back, until it holds those
+ * of a frame no older than the last one drawn when it was hovered (`NOW.view`
+ * `hover_frame`). Null where none land within `AT_WAIT_MS`, as where no world
+ * is drawn at that pixel.
+ */
+export async function perfViewReadAt(
+  x: f64,
+  y: f64,
+): Promise<ViewSection | null> {
+  hover(x, y);
+  const draw = await read("draw");
+  for (let waited = 0; waited < AT_WAIT_MS; waited += AT_POLL_MS) {
+    await new Promise((landed) => setTimeout(landed, AT_POLL_MS));
+    const view = await read("view");
+    if (view.hover_frame >= draw.frame_cnt) return view;
+  }
+  return null;
 }
 
 export async function perfReportRead(): Promise<PerfReport> {

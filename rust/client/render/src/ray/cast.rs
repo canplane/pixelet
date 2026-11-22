@@ -28,6 +28,7 @@ use xpute_kit::status::errno::Errno;
 use super::RayPass;
 use super::count::{self, CountBuffer, Counter, RayCount};
 use super::raster::Raster;
+use super::readback::{RayPixel, RayWords, Readback};
 use super::schedule::{CastRead, Schedule};
 use crate::frame::shader::floor;
 use crate::frame::shader::group::{
@@ -322,6 +323,8 @@ pub(super) struct CastBuffer {
     /// Counts what the eye's and the light's casts walked and reused, while the setting asks
     /// (ray/count.rs).
     counter: Counter,
+    /// Reads back the words of the ray at a pixel a reader asks (ray/readback.rs).
+    readback: Readback,
 }
 
 /// What a cast's head told the node cache to forget (pxl-engine `node_cache::HDR_WORDS`),
@@ -469,6 +472,7 @@ impl RayPass {
         let light_slide = pipelines.build_compute(g, COMPUTE_LIGHT_SLIDE);
         let raster = Raster::new(g, pipelines);
         let counter = Counter::new(g);
+        let readback = Readback::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffer {
@@ -582,6 +586,7 @@ impl RayPass {
             raster,
             px_group: api::Group::default(),
             counter,
+            readback,
         };
         self.cast = Some(c);
     }
@@ -1874,6 +1879,31 @@ impl RayPass {
 
     pub fn take_cnts(&mut self) -> Option<RayCount> {
         self.cast.as_mut().and_then(|c| c.counter.take())
+    }
+
+    /// The words that landed of the ray at `at`, a pixel of the world surface's `rays`, with
+    /// those the frame numbered `drawn`, the last encoded, left there copied out where they
+    /// are not the ones held (`Readback::ray_words`). They are copied only where `g` is
+    /// there, the stream being the core's to write, the rays hold what that frame's cast
+    /// read (`Schedule::rays_hold_read`) and they hold that pixel.
+    pub fn ray_words(
+        &mut self,
+        g: Option<&Gpu>,
+        rays: Id,
+        drawn: f64,
+        at: RayPixel,
+    ) -> Option<RayWords> {
+        let c = self.cast.as_mut()?;
+        let held = c.schedule.rays_hold_read() && at.px[0] < c.size[0] && at.px[1] < c.size[1];
+        c.readback
+            .ray_words(g.filter(|_| held).map(|g| (g, rays)), drawn, at)
+    }
+
+    /// Lets go of the words read back (`Readback::forget`).
+    pub fn forget_words(&mut self) {
+        if let Some(c) = self.cast.as_mut() {
+            c.readback.forget();
+        }
     }
 
     pub fn light_casts(&self) -> bool {

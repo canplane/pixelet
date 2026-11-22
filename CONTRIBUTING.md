@@ -67,7 +67,9 @@ a run at another deployment or other ports only by the variables
 
 A page leaves a helper in the browser console. `pxl.perf` is the profiler:
 `report()` summarizes where the frames' time went and `trace()` saves a trace
-for ui.perfetto.dev.
+for ui.perfetto.dev. `pxl.view.at(x, y)` says what is drawn at a point of the
+view: the cell the GPU's ray met there, with its
+asset, face, zoom and distance, and how the world answers that cell.
 
 ## Running natively
 

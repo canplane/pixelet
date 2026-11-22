@@ -277,6 +277,14 @@ impl Schedule {
         self.plan = Plan::PLAIN;
     }
 
+    /// Whether the rays hold what this frame's cast read, once the frame is planned: it had a
+    /// world to cast in and was not dropped. Each drawn pixel's words are then of a ray from
+    /// this frame's eye through that pixel, whether this frame cast it or it stands from an
+    /// earlier one, at that frame's jitter.
+    pub(super) fn rays_hold_read(&self) -> bool {
+        self.read
+    }
+
     /// The last frame's plan.
     pub(super) fn last(&self) -> &Plan {
         &self.plan

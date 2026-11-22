@@ -10,6 +10,7 @@ mod cast;
 mod count;
 mod ground;
 mod raster;
+mod readback;
 mod schedule;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
@@ -24,6 +25,7 @@ pub use cast::{Cast, LightRead, ObjectTable};
 pub use count::{CAST, LANES_AT, RAY_CNT_CNT, RAYS, RayCount, cnt_at};
 use ground::GroundBuffer;
 pub use ground::{BrickWrite, GroundInput, TerrainUpload, TerrainWrite};
+pub use readback::{RayPixel, RayWords};
 
 /// Whether a frame of `kind` writes the pixels' rays again. A `cast` frame
 /// casts them whole; a `px` frame casts them again over the samples the

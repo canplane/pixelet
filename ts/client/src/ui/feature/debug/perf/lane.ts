@@ -31,6 +31,12 @@ const MIB = 1048576;
 
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
+/** A coordinate in units, to three decimals: enough for an eighth of a unit,
+ * the side of the finest cell (z27). Trailing zeros are dropped. */
+const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
+export const coordinate = (x: number, y: number, z: number) =>
+  Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
+
 /** The names of each list lane's slots, in slot order. */
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASES,

@@ -6,12 +6,11 @@
 //! `put` (perf/word.rs).
 
 use crate::domain::control::camera::controller;
+use crate::domain::control::edit::{self, collision};
+use crate::domain::layer::Answer;
 use crate::domain::query;
 use crate::domain::query::HitKind;
-use crate::domain::query::Ray;
 use crate::domain::view::frame::coord;
-use crate::domain::view::frame::pose;
-use crate::domain::view::observation;
 use crate::frame::refused_frames;
 use crate::perf::frame::{FrameSample, GPU_SPAN_CNT, RaySample};
 use crate::perf::record::{
@@ -25,16 +24,20 @@ use crate::perf::section::{
 };
 use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
+use crate::pointer;
 use crate::spec;
 use crate::spec::perf::{limit, now, stat};
 use crate::sys::io::failure::Outcome;
+use pxl_engine::{answer, ray};
 use pxl_global::Global;
 use pxl_render::gpu::api;
+use pxl_render::ray::RayWords;
 use pxl_render::renderer;
 use pxl_render::spec::span::FrameKind;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::adapter::epsg4326;
-use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use xpute_guest::clock::now;
 
 const REASON_CAP: usize = limit::REASON_CAP as usize;
@@ -277,26 +280,65 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TaskSection {
     section
 }
 
+/// What a ray's words say it met (pxl-engine ray.rs), with where its cell is
+/// read from.
+struct Hit {
+    point: Q3,
+    dist: f64,
+    asset: u32,
+    cell_zoom: Zoom,
+    face: u32,
+    fill: u32,
+    faces: u32,
+    /// What the world answers of the cell now, or none for a cell coarser
+    /// than any the query is asked.
+    answer: Option<Answer<u32>>,
+}
+
+/// What the ray of `w` met, or none where it met nothing. The point is the
+/// ray through the pixel's middle (`pointer::ray_px`) at the GPU's distance:
+/// the cast aimed its ray within half a drawn pixel of that one, by a jitter
+/// the core does not know, so the point lies within half a drawn pixel of
+/// what the ray met. The world is asked at that point: of the cell of the
+/// ray's zoom half its box's side in from the face there, along the face's
+/// axis (pxl-render screen_ray.wgsl `hit_of`).
+fn hit(w: &RayWords) -> Option<Hit> {
+    let [asset, face, cell_zoom, fill] = ray::first_fields(w.words[0]);
+    if asset == Sentinel::Void as u32 {
+        return None;
+    }
+    let dist = f64::from(f32::from_bits(w.words[1]));
+    let [ox, oy, oz, dx, dy, dz] = w.at.ray;
+    let point = [ox + dx * dist, oy + dy * dist, oz + dz * dist];
+    let side = units(cell_zoom);
+    let mut inside = point;
+    let inward = if face & 1 == 1 { 0.5 } else { -0.5 };
+    inside[(face / 2) as usize] += inward * side * f64::from(answer::side(fill));
+    let node = (cell_zoom, inside.map(|v| libm::floor(v / side) as i32));
+    Some(Hit {
+        point: coord::world_to_canonical(&point),
+        dist,
+        asset,
+        cell_zoom,
+        face,
+        // The word's share as an asset's word holds it, which reads 0 as all eight.
+        fill: answer::fill_eighths(fill << answer::FILL_SHIFT),
+        faces: w.words[ray::FACE_WORD as usize],
+        answer: (cell_zoom >= query::zoom_range()[0]).then(|| query::World::now().asset(node)),
+    })
+}
+
 fn view() -> ViewSection {
-    use crate::domain::control::edit::{self, collision};
+    // What the pointer's pixel draws: the words of the ray there, read back,
+    // once they have landed, which their frame names.
+    let read = pointer::ray_px().and_then(renderer::ray_words);
+    let hit = read.as_ref().and_then(hit);
+    let (hover, cell_zoom) = (
+        hit.as_ref().map(|m| m.point),
+        hit.as_ref().map(|m| m.cell_zoom),
+    );
+    let of = |f: &dyn Fn(&Hit) -> f64| hit.as_ref().map_or(f64::NAN, f);
     let pointed = edit::pointer_ndc();
-    // What the pointer's ray meets exactly, at the zooms the eye asks for,
-    // whatever the tool could strike there, and the zoom the rays draw it at.
-    let met = pointed.and_then(|[x, y]| {
-        let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
-        pose::ray_of(x, y, &mut origin, &mut dir);
-        let ray = Ray {
-            origin,
-            dir,
-            t_max: observation::eye_draw_dist().unwrap_or(0.0),
-        };
-        let hit = query::World::now().first_hit(&ray).val().flatten()?;
-        Some((
-            coord::world_to_canonical(&hit.point),
-            query::cell_zoom_read(hit.point)?,
-        ))
-    });
-    let (hover, cell_zoom) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the held tool strikes there, picked the way the hover picks it.
     let picked = pointed.and_then(|[x, y]| edit::pick::pick_at(x, y));
     let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
@@ -335,7 +377,23 @@ fn view() -> ViewSection {
         hover_x,
         hover_y,
         hover_z,
+        hover_frame: read.map_or(f64::NAN, |w| w.frame),
+        hover_dist: of(&|m| m.dist),
+        hover_asset: of(&|m| f64::from(m.asset)),
         cell_zoom: zoom(cell_zoom),
+        hover_face: of(&|m| f64::from(m.face)),
+        hover_fill: of(&|m| f64::from(m.fill)),
+        hover_faces: of(&|m| f64::from(m.faces)),
+        hover_answer: of(&|m| {
+            m.answer.map_or(f64::NAN, |a| {
+                f64::from(match a {
+                    Answer::Exact(_) => spec::perf::Answer::Exact,
+                    Answer::Coarser(..) => spec::perf::Answer::Coarser,
+                    Answer::Lack(_) => spec::perf::Answer::Lack,
+                } as u8)
+            })
+        }),
+        hover_lack_zoom: of(&|m| zoom(m.answer.and_then(|a| a.lack()).map(|l| l.zoom))),
         hit_kind,
         pick_zoom: zoom(picked.as_ref().map(|p| p.zoom())),
         ray_zoom: zoom(picked.as_ref().and_then(|p| p.ray_zoom)),

@@ -34,7 +34,9 @@ A ray leaves four words: the asset with its face, zoom and fill eighths; the
 distance; the asset ids a coarse cell folds; and, of the face's edges and
 corners, where a cell rises and which edges meet the air (pxl-engine
 `face.rs`). The screen pass paints them with the one function
-every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`).
+every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`). The profiler's
+read of a pixel copies that pixel's words out, and they land an entry or two
+later (`ray/readback.rs`).
 
 Two debug views read the cast. In the ray steps view (pxl-engine `eye::STEPS`)
 the third word holds, in place of the asset ids, the steps a ray took on its way

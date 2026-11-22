@@ -50,6 +50,34 @@ export function name_HitKind(val: HitKind): string {
   }
 }
 
+/** How the world answers a cell (NOW.view `hover_answer`; pxl-core domain/layer/answer.rs `Answer`): from the exact tile, from a coarser one with the tile it lacked, or not at all, with that tile. */
+export const ANSWERS = ["exact", "coarser", "lack"] as const;
+
+export type Answer =
+  typeof ANSWER_EXACT | typeof ANSWER_COARSER | typeof ANSWER_LACK;
+export const ANSWER_EXACT = 0;
+export const ANSWER_COARSER = 1;
+export const ANSWER_LACK = 2;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_Answer(val: number): Answer | null {
+  return val === ANSWER_EXACT || val === ANSWER_COARSER || val === ANSWER_LACK
+    ? val
+    : null;
+}
+
+/** The member's name, as its source spells it. */
+export function name_Answer(val: Answer): string {
+  switch (val) {
+    case ANSWER_EXACT:
+      return "exact";
+    case ANSWER_COARSER:
+      return "coarser";
+    case ANSWER_LACK:
+      return "lack";
+  }
+}
+
 export const LIMIT = {
   REASON_CAP: 4 as number,
   /** A reason's words: its fail, its detail and how many (STREAM_STAT.reasons). */
@@ -326,7 +354,7 @@ export const NOW = {
   },
   /** Where the camera, its pivot and the pointer are as the read finds them, recording or not: `eye_x`..`eye_z`, `dist`, `pivot_x`..`pivot_z`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, angles in radians, `pivot_lon` and `pivot_lat` in degrees and `pivot_ele` in meters, a zoom as its number, and NaN where there is none.
    * The eye is where the camera looks from and the pivot the point it turns about, under the eye in the first-person camera, where the character stands (pxl-core domain/control/camera/controller.rs `pose`, `pivot`).
-   * The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell_zoom` the zoom the eye's rays draw there (pxl-core domain/query/support.rs `cell_zoom_read`).
+   * The hover is what the pointer's pixel draws, the GPU's own answer: the words of the ray at that drawn pixel, read back (pxl-engine ray.rs, pxl-render ray/readback.rs). The read of the view is what asks them, recording or not: they land an entry or two later, a later read holds them, and each field is NaN until those of the pixel the pointer is on have landed. `hover_frame` is the renderer's number of the frame that left them (DRAW `frame_cnt`), which may be a frame or two behind the one on the screen while frames are drawn. The rest are NaN where the ray met nothing: `hover_x`..`hover_z` the point `hover_dist` units, the GPU's distance, along the ray through the pixel's middle, which lies within half a drawn pixel of what the ray met, as the cast aims its ray by a jitter the core does not know; `hover_asset` the asset id of the cell it stopped on, `cell_zoom` the cell's zoom, `hover_face` the face it entered through, 2·axis plus one where it went up the axis, `hover_fill` the eighths of its cube the cell keeps, and `hover_faces` the word of what lies around that face (pxl-engine `face::word`). `hover_answer` is where that cell is read from, an index into ANSWER: what the world's one query answers at that point, of the cell of `cell_zoom` just inside the face there, as the read finds the world, not as it was at that frame (pxl-core domain/query.rs `World::asset`), and `hover_lack_zoom` the zoom of the tile that answer lacked, NaN where it is exact.
    * The pick is what the tool held strikes there (pxl-core domain/control/edit/pick.rs `pick_at`): `hit_kind` what it met, an index into HIT_KIND; `pick_zoom` the zoom of the box struck and `ray_zoom` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-core domain/control/edit.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/edit/collision.rs `is_placement_blocked`). */
   view: {
     AT: 12 as number,
@@ -345,19 +373,27 @@ export const NOW = {
     hover_x: 12 as number,
     hover_y: 13 as number,
     hover_z: 14 as number,
-    cell_zoom: 15 as number,
-    hit_kind: 16 as number,
-    pick_zoom: 17 as number,
-    ray_zoom: 18 as number,
-    folded: 19 as number,
-    place_x: 20 as number,
-    place_y: 21 as number,
-    place_z: 22 as number,
-    place_zoom: 23 as number,
-    blocked: 24 as number,
-    WORDS: 25 as number,
+    hover_frame: 15 as number,
+    hover_dist: 16 as number,
+    hover_asset: 17 as number,
+    cell_zoom: 18 as number,
+    hover_face: 19 as number,
+    hover_fill: 20 as number,
+    hover_faces: 21 as number,
+    hover_answer: 22 as number,
+    hover_lack_zoom: 23 as number,
+    hit_kind: 24 as number,
+    pick_zoom: 25 as number,
+    ray_zoom: 26 as number,
+    folded: 27 as number,
+    place_x: 28 as number,
+    place_y: 29 as number,
+    place_z: 30 as number,
+    place_zoom: 31 as number,
+    blocked: 32 as number,
+    WORDS: 33 as number,
   },
-  WORDS: 37 as number,
+  WORDS: 45 as number,
 } as const;
 
 /** The tables the profiler keeps, each read by sequence (perf.wit `table`): the frames and the tasks, oldest first. A task's row never changes once it has landed; a frame's is written again a frame or two later, as its GPU read and its ray counts land (FRAME). */

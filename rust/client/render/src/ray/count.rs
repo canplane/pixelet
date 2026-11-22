@@ -11,7 +11,7 @@
 use pxl_engine::{count, node_cache, raster, ray};
 use xpute_link::mem;
 
-use crate::gpu::api::{Gpu, buffer_usage, bytes, result, signaled, word_sz};
+use crate::gpu::api::{Gpu, Mapping, buffer_usage, bytes, word_sz};
 
 const WORDS: usize = count::WORDS as usize;
 
@@ -71,11 +71,7 @@ pub(super) struct Counter {
     copied: bool,
     mapped: bool,
     read_cnts: Box<[u32; WORDS]>,
-    /// The host writes the mapping's fence and result here. The fence
-    /// holds `ticket`, the number the last mapping was asked with, once that
-    /// mapping lands.
-    mapping: Box<[u32; 2]>,
-    ticket: u32,
+    mapping: Mapping,
     ray_cnts: Option<RayCount>,
 }
 
@@ -96,8 +92,7 @@ impl Counter {
             copied: false,
             mapped: false,
             read_cnts: Box::new([0; WORDS]),
-            mapping: Box::new([0; 2]),
-            ticket: 0,
+            mapping: Mapping::default(),
             ray_cnts: None,
         }
     }
@@ -177,11 +172,11 @@ impl Counter {
     /// (`take`). It runs in each entry the counts may land in (pxl-render
     /// `renderer::take_reads`) and in `back`.
     pub(super) fn land(&mut self) {
-        // SAFETY: the mapping's fence, boxed in place; the host stores into it only atomically.
-        let signaled = unsafe { signaled(core::ptr::addr_of!(self.mapping[0]), self.ticket) };
-        if self.mapped && signaled {
+        if self.mapped
+            && let Some(ok) = self.mapping.landed()
+        {
             self.mapped = false;
-            if self.mapping[1] == result::OK {
+            if ok {
                 let (l, f) = (&self.read_cnts, self.copying);
                 let mut cnts = [0.0; RAY_CNT_CNT];
                 for cast_idx in 0..count::CAST_CNT {
@@ -212,15 +207,7 @@ impl Counter {
         if self.copied && !self.mapped {
             (self.copied, self.mapped) = (false, true);
             let addr = mem::addr(&*self.read_cnts);
-            self.ticket = self.ticket.wrapping_add(1);
-            g.map_read(
-                self.read,
-                0,
-                word_sz(WORDS),
-                addr,
-                &self.mapping,
-                self.ticket,
-            );
+            self.mapping.ask(g, self.read, word_sz(WORDS), addr);
         }
     }
 

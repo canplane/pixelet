@@ -235,3 +235,28 @@ pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
     let fill = asset >> answer::FILL_SHIFT & ((1 << FILL_BITS) - 1);
     answer::val(asset) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | fill << FILL_SHIFT
 }
+
+/// A first word's fields, as `first_word` packs them: the value, the face, the zoom, and the
+/// eighths of its cube the cell keeps, 0 for all eight.
+pub const fn first_fields(w: u32) -> [u32; 4] {
+    [
+        answer::val(w),
+        w >> FACE_SHIFT & ((1 << FACE_BITS) - 1),
+        w >> ZOOM_SHIFT & ((1 << ZOOM_BITS) - 1),
+        w >> FILL_SHIFT & ((1 << FILL_BITS) - 1),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `first_fields` reads back what `first_word` packed.
+    #[test]
+    fn first_fields_are_the_first_words() {
+        for (asset, face, zoom, k) in [(1, 0, 0, 0), (0xffff, 5, 27, 7), (300, 3, 21, 4)] {
+            let w = first_word(answer::fill_word(asset, k), face, zoom);
+            assert_eq!(first_fields(w), [asset, face, zoom, k]);
+        }
+    }
+}

@@ -94,7 +94,7 @@ struct State {
     tool: Tool,
     hover: Hover,
     /// Where the pointer is on the screen, in NDC, whether or not it strikes
-    /// anything. perf/read.rs `view` casts its own ray there.
+    /// anything. pointer.rs `ray_px` names the drawn pixel there.
     pointer_ndc: Option<[f64; 2]>,
 }
 

@@ -78,7 +78,7 @@ use crate::pass::shadow::{self, Shadow};
 use crate::pass::skinned_mesh::SkinnedPass;
 use crate::pass::sky::SkyPass;
 use crate::pass::star::StarPass;
-use crate::ray::{Cast, GroundInput, RayCount, RayPass};
+use crate::ray::{Cast, GroundInput, RayCount, RayPass, RayPixel, RayWords};
 use crate::spec::api::surface_role;
 use crate::spec::span::{FrameKind, GPU_SPAN_PER_PX, GpuSpanName};
 
@@ -1023,7 +1023,12 @@ impl Renderer {
         let lists_changed = uniforms_changed || !update.changes.is_empty() || update.reordered;
         read.read(input.character_surfaces);
 
+        let rays = world.rays;
         targets(g, world);
+        // The words read back are of the rays they were copied from.
+        if world.rays != rays {
+            self.screen.forget_words();
+        }
         let animated = input.animated;
         self.prepare(g, world, &input, cast.as_ref());
         // The cast takes the light's box as the map is aimed, or zeros where
@@ -1752,8 +1757,11 @@ fn targets(g: &Gpu, s: &mut Surface) {
             s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
             s.history_view[k] = g.view(s.history[k], false, 0, 1, 0, 1);
         }
-        // The rays are written by the cast and read by the screen pass.
-        let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
+        // The rays are written by the cast and read by the screen pass, and
+        // a pixel's are copied out where one is read back (ray/readback.rs).
+        let rays = texture_usage::STORAGE_BINDING
+            | texture_usage::TEXTURE_BINDING
+            | texture_usage::COPY_SRC;
         s.rays = g.texture(width, height, ray::WORDS, Format::R32uint, 1, rays);
         s.rays_view = g.view(s.rays, true, 0, 1, 0, ray::WORDS);
     }
@@ -1856,6 +1864,19 @@ pub fn take_reads() {
     if let Some(r) = RENDERER.get(|| None).as_mut() {
         r.screen.land_cnts();
     }
+}
+
+/// The words that landed of the ray at `at`, a drawn pixel of the world
+/// surface, read back from the GPU (ray/readback.rs): those the last frame
+/// encoded left there, or, until those land, the ones an earlier frame left,
+/// which their frame names, or none. The read is what asks: where the words
+/// held are not the last frame's, that pixel is copied out now, in an encoder
+/// of its own submitted in this entry, and a later read answers it. It runs
+/// in an entry outside a frame's.
+pub fn ray_words(at: RayPixel) -> Option<RayWords> {
+    let world = surfaces().find(|s| s.role == surface_role::WORLD)?;
+    let r = RENDERER.get(|| None).as_mut()?;
+    r.screen.ray_words(gpu(), world.rays, drawn_frame_cnt(), at)
 }
 
 /// Applies the lists' frees, uploads and rewrites to the upload table, and

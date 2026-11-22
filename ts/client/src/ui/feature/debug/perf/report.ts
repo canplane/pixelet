@@ -18,6 +18,7 @@ import type {
 } from "@/service/core/perf.ts";
 import {
   bitsOf,
+  coordinate,
   effectsMs,
   LIST_NAMES,
   n1,
@@ -26,9 +27,11 @@ import {
   stageMs,
   tris,
   valueText,
+  zoomName,
 } from "./lane.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
+import { ANSWER_EXACT, ANSWERS } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { LIGHT_CHANGEDS } from "@/abi/span.spec.ts";
 import { type LongFrame } from "@/service/platform/types.ts";
@@ -90,6 +93,61 @@ function viewText(v: ViewSection, gpuPx: f64): string {
     gpuPx > 0 ? valueText("gpu_px", gpuPx) : "-"
   }`;
 }
+
+/** A face as a ray numbers it (pxl-engine `ray::face`), named by its outward
+ * normal. */
+const FACE_NAMES = ["+x", "-x", "+y", "-y", "+z", "-z"];
+
+/**
+ * What the pointer's pixel draws, a name and its text each: the words the
+ * GPU's ray left at that drawn pixel, read back (`NOW.view`'s hover). Every row is "-" until the words of the pixel the
+ * pointer is on have landed, and every row but `frame`, the frame they are
+ * of, where the ray met nothing. `read from` is the world as it answers that cell now.
+ */
+export function pointerRows(
+  v: ViewSection,
+): { k: string; v: string; warn?: boolean }[] {
+  const hit = !Number.isNaN(v.hover_asset);
+  const or = (text: string) => (hit ? text : "-");
+  const answer = ANSWERS[v.hover_answer];
+  return [
+    {
+      k: "coord",
+      v:
+        hit || Number.isNaN(v.hover_frame)
+          ? coordinate(v.hover_x, v.hover_y, v.hover_z)
+          : "nothing met",
+    },
+    { k: "distance", v: or(`${n1(v.hover_dist)} u`) },
+    { k: "asset", v: or(String(v.hover_asset)) },
+    { k: "drawn at", v: zoomName(v.cell_zoom) },
+    {
+      k: "face",
+      v: or(`${FACE_NAMES[v.hover_face]} 0x${v.hover_faces.toString(16)}`),
+    },
+    { k: "fill", v: or(`${v.hover_fill}/8`) },
+    {
+      k: "read from",
+      v:
+        answer === undefined
+          ? "-"
+          : v.hover_answer === ANSWER_EXACT
+            ? answer
+            : `${answer}, ${zoomName(v.hover_lack_zoom)} lacked`,
+      warn: answer !== undefined && v.hover_answer !== ANSWER_EXACT,
+    },
+    {
+      k: "frame",
+      v: Number.isNaN(v.hover_frame) ? "-" : String(v.hover_frame),
+    },
+  ];
+}
+
+/** `pointerRows` as the report's line. */
+export const pointerText = (v: ViewSection) =>
+  `  pointer ${pointerRows(v)
+    .map((r) => `${r.k} ${r.v}`)
+    .join("  ")}`;
 
 const counted = (rows: { name: string; n: f64 }[]) =>
   rows
@@ -260,6 +318,7 @@ function windowSection(report: PerfReport): string[] {
     `  spans   p95 ${spans || "-"} ms   (n: the frames a read timed that ran each)`,
     ...raysText(frames.rayCount),
     viewText(report.view, frames.gpuPx),
+    pointerText(report.view),
     // Steps are listed one by one, because a cooperative scheduler is only as
     // cooperative as its longest step.
     `  steps   ${steps}   (ms a run and max, since the recording started)`,
