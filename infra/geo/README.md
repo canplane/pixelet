@@ -3,8 +3,8 @@
 `db-geo` is a local copy of three public sources, Overture Maps, GEDTM30's
 elevation and OpenStreetMap's land polygons, in one PostGIS instance. The
 terrain, place and division bakes read it and nothing else, and forward search
-reads it live, so the database says exactly what it holds: which version of
-each source, over which part of the world. Three ingests fill it, run by hand
+reads it live, so the database says what it holds: which shards were
+ingested, and at which version of each source. Three ingests fill it, run by hand
 when a source or the coverage changes.
 
 Overture's ingest takes its latest release when it runs, and the elevation's
@@ -30,9 +30,9 @@ it fills.
 | OSM land polygons | `osm_land_polygons`                                                                                                                                            | the table's own comment |
 
 `overture_catalog` has one row for each table and shard, and `elevation_catalog`
-one row for each shard. Each row holds the `version`, the `accessed_at` and a
-count: of features for Overture, of blocks for the elevation. When a set is
-baked, these rows and the coast's pin are copied into its `manifest.json`, which
+one row for each shard. Each row holds the `version` the shard was last
+ingested at, the `accessed_at` and a count: of features for Overture, of blocks
+for the elevation. When a set is baked, these rows and the coast's pin are copied into its `manifest.json`, which
 records what the set was baked from. An Overture row is its GERS id, its
 properties as the release holds them, its release and its geometry; a column a
 reader filters on is generated from the properties.
@@ -57,9 +57,14 @@ copy, and filling it again takes hours.
 
 **Overture.** A run takes the types it names, or all of them, and the shards it
 names, or the coverage's. It writes each type into its table in place: a
-feature already held takes the release's version, and a feature the release no
-longer has is removed from the shard its lower-left corner lies in. With
-`--whole`, each table is built anew from every shard and swapped in. Each type
+feature held at another release takes this one's version, one held at this
+release is left, and a feature the release no longer has, meeting a shard's
+apron, is removed unless its lower-left corner lies on another shard's own
+ground, whose run removes it. A shard's apron lies over its neighbors' ground,
+so shards ingested one by one at a release equal the shards ingested together,
+and until every shard is at it a shard ingested earlier is stale where it meets
+a later one. With `--whole`, each table is built anew from every shard and
+swapped in, as a change to how a row is made needs. Each type
 is written in one transaction together with its catalog rows, so a type stopped
 partway leaves nothing of itself behind. The `overturemaps` CLI, pinned in the
 tools' image, downloads each type's GeoParquet to `overture/raw/`, where it is

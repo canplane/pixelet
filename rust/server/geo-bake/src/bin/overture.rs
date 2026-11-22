@@ -4,8 +4,8 @@
 //! each feature, once, with its properties as the release holds them and its geometry. A
 //! table holds every feature that meets an ingested shard's apron, and which shards are
 //! ingested is the catalog's alone to say. A shard is a tile at `SHARD_ZOOM` of the coverage
-//! (`pxl-geo-bake coverage.rs`); what it holds depends on it alone, so shards ingested one by
-//! one equal the shards ingested together.
+//! (`pxl-geo-bake coverage.rs`), and an ingest writes all its leaves read, its apron with it,
+//! which lies over its neighbors' ground.
 //!
 //! The official `overturemaps` CLI, through its public commands alone, downloads a type's
 //! GeoParquet over the shards to do, one rectangle of them a call, kept in `raw/` under a name
@@ -15,9 +15,12 @@
 //! catalog rows, so it is whole or absent. A run takes the types it is given (`--type`, every
 //! one when none is), each with its own table and catalog rows, so one type can move to a new
 //! release while the others stay. It writes the shards it is given into each table as it is:
-//! a feature already held takes the release's version, and one the release does not have any
-//! more is removed. `--whole` makes each table anew from every shard, beside the live one, and
-//! swaps it in.
+//! a feature held at another release takes this one's version, one held at this release is
+//! left, and one the release does not have any more, meeting a shard's apron, is removed
+//! unless its lower-left corner lies on another shard's own ground, whose run removes it. So
+//! shards ingested one by one at a release equal the shards ingested together, and until
+//! every shard is at it a shard ingested earlier is stale where it meets a later one.
+//! `--whole` makes each table anew from every shard, beside the live one, and swaps it in.
 //!
 //! When to run which is the user's to say: the catalog records each shard's release and when
 //! it was ingested, and decides nothing. The release is the latest, as the CLI names it when the
@@ -329,7 +332,7 @@ fn run() -> Result<(), String> {
         let rows = if whole {
             build_and_swap(&mut client, ty, &shards, &release, &accessed_at)?
         } else {
-            add(&mut client, ty, &shards, &release, &accessed_at)?
+            add(&mut client, ty, &shards, &all, &release, &accessed_at)?
         };
         client
             .batch_execute(&format!("DROP TABLE {}", staging(ty)))
@@ -341,7 +344,7 @@ fn run() -> Result<(), String> {
             .batch_execute(&format!("VACUUM (ANALYZE, PARALLEL 0) {}", ty.table))
             .map_err(|e| e.to_string())?;
         println!(
-            "[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching",
+            "[ingest/{}] {rows} features written for {} shards in {:.0}s, {fetched:.0}s of it fetching",
             ty.table,
             shards.len(),
             started.elapsed().as_secs_f64()
@@ -637,8 +640,8 @@ fn feats(ty: &Type, into: &str, release: &str) -> String {
 
 /// The catalog rows of the shards written. A shard's count is the features meeting it, so the
 /// sum over shards exceeds the table's rows. Each shard's row records, and decides nothing by,
-/// the release it holds, when it was ingested, and its features. A shard ingested again
-/// replaces its row.
+/// the release the shard was last ingested at, when, and its features then. A shard ingested
+/// again replaces its row.
 fn catalog(
     tx: &mut Transaction,
     ty: &Type,
@@ -725,13 +728,17 @@ fn build_and_swap(
     ))
 }
 
-/// Writes the shards into the table as it is, with their catalog rows, in one transaction: a
-/// feature already held takes the release's version, and one of an older release whose
-/// lower-left corner lies in a shard, apron aside, is gone from this release and is removed.
+/// Writes the shards into the table as it is, with their catalog rows, in one transaction. A
+/// feature held at another release takes this one's version; one held at this release is the
+/// same feature and is left. A feature of another release that meets a shard's apron is gone
+/// from this release, and is removed unless its lower-left corner lies in the own ground of
+/// another of the coverage's shards, `all`, whose run removes it. A shard that comes back
+/// empty while it would remove features fails the run.
 fn add(
     client: &mut Client,
     ty: &Type,
     shards: &[&Shard],
+    all: &[Shard],
     release: &str,
     accessed_at: &str,
 ) -> Result<i64, String> {
@@ -740,32 +747,59 @@ fn add(
     let rows = tx
         .execute(
             &format!(
-                "{} ON CONFLICT (gers_id) DO UPDATE SET properties = EXCLUDED.properties, release = EXCLUDED.release, geom = EXCLUDED.geom",
-                feats(ty, ty.table, release)
+                "{} ON CONFLICT (gers_id) DO UPDATE SET properties = EXCLUDED.properties, release = EXCLUDED.release, geom = EXCLUDED.geom
+                 WHERE {}.release <> EXCLUDED.release",
+                feats(ty, ty.table, release),
+                ty.table
             ),
             &[],
         )
         .map_err(db)? as i64;
-    let delete = format!(
-        "DELETE FROM {} WHERE release <> $1 AND geom && ST_MakeEnvelope($2, $3, $4, $5, 3857)
-           AND ST_XMin(geom) >= $2 AND ST_YMin(geom) >= $3 AND ST_XMin(geom) < $4 AND ST_YMin(geom) < $5",
+    // $2..$5 the shard's apron, $6..$9 the other shards' own grounds, a column a side. `&&`
+    // compares boxes rounded outward, so the exact test follows it: a row a meter past the
+    // apron is staged under no shard (`Shard::meets`), and is not this run's to remove.
+    let older = format!(
+        "FROM {} WHERE release <> $1 AND geom && ST_MakeEnvelope($2, $3, $4, $5, 3857)
+           AND ST_XMax(geom) >= $2 AND ST_YMax(geom) >= $3 AND ST_XMin(geom) <= $4 AND ST_YMin(geom) <= $5
+           AND NOT EXISTS (SELECT 1 FROM unnest($6::float8[], $7::float8[], $8::float8[], $9::float8[]) AS own(l, b, r, t)
+             WHERE ST_XMin(geom) >= own.l AND ST_YMin(geom) >= own.b AND ST_XMin(geom) < own.r AND ST_YMin(geom) < own.t)",
         ty.table
     );
     let staged = format!("SELECT count(*) FROM {} WHERE shard = $1", staging(ty));
-    let mut removed = 0;
+    // Every shard is counted before any is cleared, so shards whose aprons share ground are
+    // refused alike, in whatever order they are named.
     for s in shards {
-        let [left, bottom, right, top] = s.own;
-        let older = tx
-            .execute(&delete, &[&release, &left, &bottom, &right, &top])
-            .map_err(db)?;
+        let ([left, bottom, right, top], [lefts, bottoms, rights, tops]) =
+            (s.merc, own_of_others(all, s));
+        let older_cnt: i64 = tx
+            .query_one(
+                &format!("SELECT count(*) {older}"),
+                &[
+                    &release, &left, &bottom, &right, &top, &lefts, &bottoms, &rights, &tops,
+                ],
+            )
+            .map_err(db)?
+            .get(0);
         let staged_cnt: i64 = tx.query_one(&staged, &[&s.name]).map_err(db)?.get(0);
-        if staged_cnt == 0 && older > 0 {
+        if staged_cnt == 0 && older_cnt > 0 {
             return Err(format!(
-                "{}: {} came back empty and holds {older} features of an older release; nothing written",
+                "{}: {} came back empty and holds {older_cnt} features of an older release; nothing written",
                 ty.table, s.name
             ));
         }
-        removed += older;
+    }
+    let mut removed = 0;
+    for s in shards {
+        let ([left, bottom, right, top], [lefts, bottoms, rights, tops]) =
+            (s.merc, own_of_others(all, s));
+        removed += tx
+            .execute(
+                &format!("DELETE {older}"),
+                &[
+                    &release, &left, &bottom, &right, &top, &lefts, &bottoms, &rights, &tops,
+                ],
+            )
+            .map_err(db)?;
     }
     println!(
         "[ingest/{}] {removed} features gone from {release}",
@@ -774,6 +808,17 @@ fn add(
     catalog(&mut tx, ty, shards, release, accessed_at).map_err(db)?;
     tx.commit().map_err(db)?;
     Ok(rows)
+}
+
+/// The own grounds of the coverage's shards but `s`, a side each: their lefts, bottoms,
+/// rights and tops.
+fn own_of_others(all: &[Shard], s: &Shard) -> [Vec<f64>; 4] {
+    std::array::from_fn(|side| {
+        all.iter()
+            .filter(|o| o.name != s.name)
+            .map(|o| o.own[side])
+            .collect()
+    })
 }
 
 /// A shard as a feature is tested against: what it holds (`Node::apron_rect`, its
