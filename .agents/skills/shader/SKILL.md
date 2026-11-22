@@ -56,7 +56,7 @@ forward.
 
 ```sh
 cd ts/tool/shader
-CARGO_TARGET_DIR=<root>/rust/target/session/<id> ../../../script/perf/mac.py pnpm exec vite --host --port <port> --strictPort
+../../../script/perf/mac.py pnpm exec vite --host --port <port> --strictPort
 open -g -a Safari http://127.0.0.1:<port>/probe.html
 ```
 

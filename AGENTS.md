@@ -221,8 +221,10 @@
   experiment's data too, goes under the checkout's `tmp/`. Whoever makes a
   temporary folder, a worktree or a server removes it when done, and deletes
   only what it made.
-- Cargo builds into `<root>/rust/target/session/$CLAUDE_CODE_SESSION_ID`,
-  written absolute.
+- A session has one cargo target, `rust/target/session/<its id>`, which its
+  start sets for the commands it runs, make's too, and fills from what is
+  built (`.agents/hooks/target`). No command or brief names another target,
+  and none removes one.
 - A Rust test that opens a device's GPU holds the device itself (pxl-gpu-host
   `lock.test.rs`); every other command that uses a device's GPU or starts or
   stops an app on it (the shader probe and its test, an install, a test run in a

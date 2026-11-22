@@ -1,0 +1,68 @@
+#!/bin/bash
+# SessionStart: gives the session its cargo target and fills it.
+#
+# The cargo a session's commands run, make's too, builds into
+# rust/target/session/<the session's id> of the main checkout, set here as
+# CARGO_TARGET_DIR. A target that does not exist yet is cloned (APFS
+# clonefile, `cp -c`) from the fullest one there is, another session's or the
+# checkout's own rust/target, so no session builds from nothing. A session
+# target nothing was built in for three days goes.
+
+in=$(cat)
+sid=$(jq -r '.session_id // empty' <<<"$in")
+top=${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$in")}
+[ -n "$sid" ] && [ -d "$top" ] || exit 0
+# The main checkout, where a worktree's session builds too.
+common=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+root=${common%/.git}
+[ -d "$root/rust" ] || exit 0
+all=$root/rust/target/session
+dst=$all/$sid
+
+line=$(printf 'export CARGO_TARGET_DIR=%q' "$dst")
+if [ -n "$CLAUDE_ENV_FILE" ] && ! grep -qsxF "$line" "$CLAUDE_ENV_FILE"; then
+  echo "$line" >> "$CLAUDE_ENV_FILE"
+fi
+
+# How much a target holds: the packages built in it, whatever the profile or
+# the platform (cargo lays each under a `build` folder).
+units() { (cd "$1" && find . -maxdepth 4 -type d -path '*/build/*' -not -path '*/build/*/*' -not -path './session/*' 2>/dev/null | wc -l); }
+
+# A target is in use while a build or a session's start touched it within
+# three days: cargo writes under its profile folders, a platform's too, on
+# every build. A clone
+# a start left unfinished an hour ago is that start's, and goes.
+[ -d "$dst" ] && touch "$dst"
+for d in "$all"/*/; do
+  d=${d%/}
+  [ -d "$d" ] && [ "$d" != "$dst" ] || continue
+  case $d in
+    *.seeding) [ -n "$(find "$d" -maxdepth 0 -mmin +60 2>/dev/null)" ] && rm -rf "$d" ;;
+    *) [ -z "$(find "$d" -maxdepth 3 -mtime -3 -print -quit 2>/dev/null)" ] && rm -rf "$d" ;;
+  esac
+done
+
+[ -e "$dst" ] && exit 0
+src= most=0
+for d in "$all"/*/ "$root/rust/target/"; do
+  d=${d%/}
+  [ -d "$d" ] || continue
+  case $d in *.seeding) continue ;; esac
+  n=$(units "$d")
+  [ "$n" -gt "$most" ] && most=$n src=$d
+done
+[ -n "$src" ] || exit 0
+
+# Cloned beside its place and moved in only whole, so a target is never half
+# there; a start that finds another's clone under way leaves it to that one.
+mkdir -p "$all" && mkdir "$dst.seeding" 2>/dev/null || exit 0
+whole=1
+for e in "$src"/* "$src"/.rustc_info.json; do
+  [ -e "$e" ] && [ "$e" != "$all" ] || continue
+  cp -c -R "$e" "$dst.seeding/" 2>/dev/null || whole=
+done
+if [ -n "$whole" ] && [ ! -e "$dst" ]; then
+  mv "$dst.seeding" "$dst" 2>/dev/null
+fi
+rm -rf "$dst.seeding"
+exit 0
