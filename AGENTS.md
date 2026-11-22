@@ -167,7 +167,8 @@
 - No procedure is made up: a change to performance is the performance skill's,
   a measurement the measure skill's, a squash or a deploy the deploy skill's,
   a native build the device-build skill's, a shader change the shader skill's,
-  a document the write-documents skill's, and a skill's order holds within its
+  what the app draws at a point the inspect skill's, a document the
+  write-documents skill's, and a skill's order holds within its
   task.
 - A task is divided into problems that stand apart, and one is finished before
   the next is touched: its form stands with no residue, which a review asked
